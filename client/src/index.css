@@ -1,0 +1,22 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  color-scheme: dark;
+  background-color: #050505; /* 統一背景色 */
+}
+
+body {
+  margin: 0;
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden; /* 徹底禁止出現左右捲動條 */
+}
+
+#root {
+  width: 100%;
+}
+
+/* 讓圖片和圖表容器不會撐破螢幕 */
+* {
+  box-sizing: border-box;
+}

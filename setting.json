@@ -1,0 +1,16 @@
+{
+  "cSpell.words": [
+    "baudrate",
+    "dotenv",
+    "autoflush",
+    "fastapi",
+    "uvicorn",
+    "pyserial",
+    "sqlalchemy",
+    "kson",
+    "CHAMBER",
+    "sessionmaker",
+    "onupdate"
+  ],
+  "python.analysis.typeCheckingMode": "off"
+}

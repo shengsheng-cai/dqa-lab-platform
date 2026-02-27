@@ -1,0 +1,63 @@
+# Continue 插件相關 (務必加入)
+.continue/
+
+# Python 相關
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# 資料庫 (不追蹤本地測試數據)
+*.db
+*.sqlite3
+*.sqlite
+
+# 環境變數 (保護敏感資訊)
+.env
+*.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 前端 (Node/Vite)
+node_modules/
+client/node_modules/
+client/dist/
+client/dist-ssr/
+client/.vite/
+client/.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 數位孿生專案特定檔案
+.socat_info.log
+simulator/__pycache__/
+simulator/venv/
+
+# IDE、系統與臨時檔案
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+**/.DS_Store
+*.tmp
+*.bak
+*.pid
+*.seed
+*.pid.lock
+
+# 測試與日誌
+test_*.py
+*_test.py
+*.log
+*.info
+
+# 開發筆記類與上下文檔案
+docs/notes/
+docs/ai_context.md
