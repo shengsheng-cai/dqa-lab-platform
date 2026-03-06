@@ -1,1 +1,0 @@
-`Frontend source code for DQA Lab Digital Twin. Please refer to the root README for instructions.`

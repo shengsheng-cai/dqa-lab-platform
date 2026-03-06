@@ -24,17 +24,17 @@ dev:
 	@echo "🚀 系統全面啟動中..."
 	@bash dev_start.sh
 
-# 3. 清理流程：更強準終止程序與回收資源
+# 3. 清理流程：強制終止所有程序並回收資源
 clean:
 	@echo "🧹 正在執行深度清理..."
-	# 終止後端 uvicorn 與所有 python 程序
-	-@pkill -9 -f "uvicorn" || true
-	-@pkill -9 -f "python3 simulator/main.py" || true
-	# 終止前端 Vite 服務 (node)
-	-@pkill -9 -f "node.*vite" || true
-	# 終止虛擬串口 socat
-	-@pkill -9 -f "socat" || true
-	# 刪除暫存日誌與暫存檔
+	@echo "  → 終止後端與模擬器..."
+	-@pkill -9 -f "uvicorn"
+	-@pkill -9 -f "python3 simulator/main.py"
+	@echo "  → 終止前端 Vite..."
+	-@pkill -9 -f "node.*vite"
+	@echo "  → 終止虛擬串口 socat..."
+	-@pkill -9 -f "socat"
+	@echo "  → 刪除暫存檔..."
 	@rm -f .socat_info.log .serial_ports.tmp .backend.log
 	@echo "✨ 清理完成，開發環境已重置。"
 
