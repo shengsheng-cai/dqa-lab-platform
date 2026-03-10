@@ -1,7 +1,7 @@
 /* 容器：扣除 App.jsx 導航列高度 */
 .sop-page-layout {
     display: flex;
-    height: 100%; /* 承接 App.jsx main 的 flex:1 */
+    height: 100%;
     width: 100%;
     background-color: #0d1117;
     overflow: hidden;
@@ -15,38 +15,19 @@
     display: flex;
     flex-direction: column;
     gap: 15px;
-    height: 100%;           /* 新增 */
-    overflow-y: auto;       /* 新增 */
-    box-sizing: border-box; /* 新增 */
+    height: 100%;
+    overflow-y: auto;
+    box-sizing: border-box;
 }
-
-.brand-box { margin-bottom: 10px; }
-.main-title { color: #58a6ff; font-size: 22px; margin: 0; }
-.status-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
-.status-dot { width: 10px; height: 10px; border-radius: 50%; background: #484f58; }
-.status-dot.running { background: #3fb950; box-shadow: 0 0 10px #3fb950; }
-.status-label { font-weight: bold; font-size: 14px; color: #8b949e; }
-.update-time { font-size: 11px; color: #484f58; margin-left: auto; }
-
-/* 數據卡片樣式 */
-.info-card {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 12px;
-    padding: 20px;
-}
-.info-card label { color: #8b949e; font-size: 12px; font-weight: 600; letter-spacing: 1px; }
-.value-pv { font-size: 60px; font-weight: 800; text-align: right; line-height: 1.1; }
-.value-large { font-size: 26px; font-weight: 700; margin-top: 8px; color: #fff; }
-.temp-card .value-pv { color: #ff7b72; }
-.humi-card .value-pv { color: #a5d6ff; }
-.unit { font-size: 20px; color: #484f58; margin-left: 5px; }
 
 /* 右側 60% */
 .control-side {
     width: 60%;
     background: #010409;
     padding: 30px;
+    height: 100%;           /* 讓 scroll-wrapper 有參照高度 */
+    overflow: hidden;       /* 自身不捲動，由 scroll-wrapper 負責 */
+    box-sizing: border-box;
 }
 
 .scroll-wrapper {
@@ -54,8 +35,46 @@
     overflow-y: auto;
 }
 
-/* 右側卡片樣式 */
-.operation-box, .sop-item-card {
+/* ── Brand ── */
+.brand-box { margin-bottom: 10px; }
+.main-title { color: #58a6ff; font-size: 22px; margin: 0; }
+.status-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.update-time { font-size: 11px; color: #484f58; margin-left: auto; }
+
+/* ── 狀態指示燈（補齊所有狀態顏色） ── */
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #484f58;    /* 預設 OFFLINE */
+}
+.status-dot.idle      { background: #8b949e; }
+.status-dot.running   { background: #3fb950; box-shadow: 0 0 10px #3fb950; }
+.status-dot.paused    { background: #f0a500; }
+.status-dot.finishing { background: #58a6ff; }
+.status-dot.emergency { background: #f85149; box-shadow: 0 0 10px #f85149; }
+
+/* ── 數據卡片 ── */
+.info-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 20px;
+}
+.info-card label {
+    color: #8b949e;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+.value-pv  { font-size: 60px; font-weight: 800; text-align: right; line-height: 1.1; }
+.value-large { font-size: 26px; font-weight: 700; margin-top: 8px; color: #fff; }
+.temp-card .value-pv { color: #ff7b72; }
+.humi-card .value-pv { color: #a5d6ff; }
+.unit { font-size: 20px; color: #484f58; margin-left: 5px; }
+
+/* ── 右側卡片 ── */
+.operation-box {
     background: #161b22;
     border: 1px solid #30363d;
     border-radius: 12px;
@@ -64,33 +83,34 @@
 }
 
 .box-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
-.pulse-icon { width: 10px; height: 10px; background: #58a6ff; border-radius: 50%; animation: blink 2s infinite; }
-.task-desc { color: #8b949e; font-size: 14px; }
+.box-header h2 { margin: 0; font-size: 14px; color: #cdd9e5; }
+.pulse-icon {
+    width: 10px;
+    height: 10px;
+    background: #58a6ff;
+    border-radius: 50%;
+    animation: blink 2s infinite;
+}
+.task-desc { color: #8b949e; font-size: 14px; margin: 0 0 4px; }
 
-/* 按鈕風格 */
+/* ── 控制按鈕 ── */
 .btn-group-row { display: flex; gap: 10px; margin-top: 20px; }
-.ctrl-btn { flex: 1; padding: 14px; border: none; border-radius: 8px; color: #fff; font-weight: bold; cursor: pointer; }
-.amber { background: #d29922; }
-.grey { background: #30363d; }
-.red { background: #da3633; }
-
-.list-label { color: #8b949e; font-size: 14px; margin-bottom: 15px; }
-.sop-name { color: #58a6ff; margin: 0 0 10px 0; }
-.sop-desc { color: #8b949e; font-size: 13px; line-height: 1.5; }
-.btn-launch {
-    width: 100%;
-    margin-top: 20px;
+.ctrl-btn {
+    flex: 1;
     padding: 14px;
-    background: #238636;
-    color: white;
     border: none;
     border-radius: 8px;
+    color: #fff;
     font-weight: bold;
     cursor: pointer;
+    transition: opacity .15s;
 }
-.btn-launch:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+.amber { background: #d29922; }
+.grey  { background: #30363d; }
+.red   { background: #da3633; }
 
+/* ── 動畫 ── */
 @keyframes blink {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    50%       { opacity: 0.3; }
 }
