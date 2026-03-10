@@ -117,12 +117,22 @@ async def get_device_history(device_id: str):
     if not started_at:
         return []
 
+    # 統一轉成 naive datetime（去掉時區），避免 SQLite 比對格式不符
+    if isinstance(started_at, str):
+        started_at_dt = datetime.datetime.fromisoformat(
+            started_at.replace("Z", "")
+        ).replace(tzinfo=None)
+    else:
+        started_at_dt = (
+            started_at.replace(tzinfo=None) if started_at.tzinfo else started_at
+        )
+
     with SessionLocal() as db:
         rows = (
             db.query(DeviceData)
             .filter(
                 DeviceData.device_id == device_id,
-                DeviceData.timestamp >= started_at,
+                DeviceData.timestamp >= started_at_dt,
             )
             .order_by(DeviceData.timestamp.asc())
             .all()
@@ -275,15 +285,19 @@ async def normal_stop(device_id: str):
 
 async def data_simulator():
     """物理模擬器 — 5 台各自獨立運作，每 10 秒寫一次資料庫"""
-    write_counter = 0
+    write_counters: dict = {}  # 每台設備獨立計數器
 
     while True:
         cache = app.state.AICM_CACHE
         with SessionLocal() as db:
             try:
+                needs_commit = False
                 for device_id, item in cache.items():
                     status = item.get("status", "OFFLINE")
                     current_temp = item.get("temperature", 25.0)
+
+                    if device_id not in write_counters:
+                        write_counters[device_id] = 0
 
                     if status == "RUNNING":
                         standard_id = item.get("standard_id", "IEC60068_CYCLE")
@@ -326,37 +340,38 @@ async def data_simulator():
                             current_temp + random.uniform(-0.05, 0.05), 2
                         )
 
-                    write_counter += 1
-                    if write_counter >= 10 and status in [
-                        "RUNNING",
-                        "FINISHING",
-                        "PAUSED",
-                        "EMERGENCY",
-                    ]:
-                        db.add(
-                            DeviceData(
-                                device_id=device_id,
-                                temperature=item["temperature"],
-                                humidity=item.get("humidity", 55.0),
-                                timestamp=datetime.datetime.now(),
+                    # 每台設備獨立計數，滿 10 秒才寫入
+                    if status in ["RUNNING", "FINISHING", "PAUSED", "EMERGENCY"]:
+                        write_counters[device_id] += 1
+                        if write_counters[device_id] >= 10:
+                            db.add(
+                                DeviceData(
+                                    device_id=device_id,
+                                    temperature=item["temperature"],
+                                    humidity=item.get("humidity", 55.0),
+                                    timestamp=datetime.datetime.now(),
+                                )
                             )
-                        )
-                        # 同步更新 DeviceState，確保重啟後能恢復正確狀態
-                        state = db.get(DeviceState, device_id)
-                        if state is None:
-                            state = DeviceState(device_id=device_id)
-                            db.add(state)
-                        state.status = item.get("status", "IDLE")
-                        state.temperature = item.get("temperature", 25.0)
-                        state.humidity = item.get("humidity", 55.0)
-                        state.running_sop_id = item.get("running_sop_id")
-                        state.running_sop_name = item.get("running_sop_name")
-                        state.standard_id = item.get("standard_id")
-                        state.updated_at = datetime.datetime.now(datetime.timezone.utc)
+                            state = db.get(DeviceState, device_id)
+                            if state is None:
+                                state = DeviceState(device_id=device_id)
+                                db.add(state)
+                            state.status = item.get("status", "IDLE")
+                            state.temperature = item.get("temperature", 25.0)
+                            state.humidity = item.get("humidity", 55.0)
+                            state.running_sop_id = item.get("running_sop_id")
+                            state.running_sop_name = item.get("running_sop_name")
+                            state.standard_id = item.get("standard_id")
+                            state.updated_at = datetime.datetime.now(
+                                datetime.timezone.utc
+                            )
+                            write_counters[device_id] = 0
+                            needs_commit = True
+                    else:
+                        write_counters[device_id] = 0
 
-                if write_counter >= 10:
+                if needs_commit:
                     db.commit()
-                    write_counter = 0
 
             except Exception as e:
                 print(f"Simulator Error: {e}")
