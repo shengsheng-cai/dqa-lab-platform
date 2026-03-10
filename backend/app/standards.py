@@ -651,6 +651,26 @@ STANDARD_TREE: Dict[str, Any] = {
                         "reference": "EN 50155:2017 Table 1 OT4",
                         "steps": _steps_single_temp(-40.0, 16, "low"),
                     },
+                    "OT5_Low_Cold": {
+                        "sop_id": "en50155_2017_ot5_low",
+                        "name": "OT5 低溫冷測：-40°C，16h（非通電）",
+                        "test_type": "chamber",
+                        "version": "EN 50155:2017",
+                        "description": "OT5 等級低溫。-40°C 持續 16 小時，非通電。ST1/ST2 不適用。",
+                        "high_temperature": None,
+                        "low_temperature": -40.0,
+                        "target_temperature": -40.0,
+                        "ramp_rate": 1.0,
+                        "dwell_time_hours": 16,
+                        "cycles": 1,
+                        "humidity_rh_percent": None,
+                        "humidity_control": False,
+                        "power_on": False,
+                        "temp_tolerance": 2.0,
+                        "humi_tolerance": 5.0,
+                        "reference": "EN 50155:2017 Table 1 OT5",
+                        "steps": _steps_single_temp(-40.0, 16, "low"),
+                    },
                     "OT5_High_Dry_Heat": {
                         "sop_id": "en50155_2017_ot5_high",
                         "name": "OT5 高溫乾熱：+85°C，16h（非通電）",
@@ -1153,6 +1173,26 @@ STANDARD_TREE: Dict[str, Any] = {
                         "reference": "DNVGL-CG-0339:2015 Table 2 Class C Sec.3[7]（強制）",
                         "steps": _steps_single_temp(55.0, 16, "high"),
                     },
+                    "ClassD_Dry_Heat": {
+                        "sop_id": "dnv_24_classd_dry",
+                        "name": "Class D 乾熱：+70°C，16h（露天甲板）",
+                        "test_type": "chamber",
+                        "version": "DNV Std.Cert.2.4",
+                        "description": "舊版 DNV 2.4 Class D 乾熱，+70°C。",
+                        "high_temperature": 70.0,
+                        "low_temperature": None,
+                        "target_temperature": 70.0,
+                        "ramp_rate": 1.0,
+                        "dwell_time_hours": 16,
+                        "cycles": 1,
+                        "humidity_rh_percent": None,
+                        "humidity_control": False,
+                        "power_on": True,
+                        "temp_tolerance": 2.0,
+                        "humi_tolerance": 10.0,
+                        "reference": "DNV Std.Cert.2.4 Section 3.7 Class D",
+                        "steps": _steps_single_temp(70.0, 16, "high"),
+                    },
                     "ClassC_Cold": {
                         "sop_id": "dnv_cg0339_classc_cold",
                         "name": "Class C 冷測：-25°C，2h（無加熱遮蔽位置）【強制】",
@@ -1575,6 +1615,8 @@ def _build_flat_standards() -> Dict[str, Any]:
         for ver_key, ver_data in std_data["versions"].items():
             for test_key, test_data in ver_data["tests"].items():
                 sop_id = test_data["sop_id"]
+                if sop_id in flat:
+                    print(f"⚠️ WARNING: duplicate sop_id '{sop_id}' in STANDARD_TREE")
                 flat[sop_id] = {
                     **test_data,
                     "standard_id": sop_id,
