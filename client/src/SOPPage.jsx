@@ -3,7 +3,6 @@ import axios from "axios";
 import {
   ComposedChart,
   Line,
-  ReferenceLine,
   CartesianGrid,
   XAxis,
   YAxis,
@@ -30,9 +29,8 @@ const SAFETY_CHECKS = [
 ];
 
 const ACTIVE_STATUSES = ["RUNNING", "PAUSED"];
-const MAX_CHART_POINTS = 60;
 
-// 把 full_time 轉成測試開始後的「經過分鐘數」（整數）
+// 把 full_time 轉成測試開始後的「經過分鐘數」
 function toElapsedMin(startedAt, fullTime) {
   if (!startedAt || !fullTime) return null;
   try {
@@ -44,21 +42,20 @@ function toElapsedMin(startedAt, fullTime) {
   }
 }
 
-// 格式化分鐘數為 "0h00m" 字串（X 軸顯示用）
+// 格式化分鐘數為 "0h00m" 字串
 function fmtMin(min) {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}m` : `${m}m`;
 }
 
-// 從 SOP 參數生成完整 SP（目標設定值）曲線，每分鐘一點
-// 回傳 Array<{ min, sp_temp, sp_humi }>
+// 從 SOP 參數生成完整 SP 目標曲線，每分鐘一點
 function generateSP(sop) {
   if (!sop) return [];
-  const ramp = sop.ramp_rate || 1; // °C/min
+  const ramp = sop.ramp_rate || 1;
   const high = sop.high_temperature ?? sop.target_temperature ?? 25;
   const low = sop.low_temperature ?? 25;
-  const dwell = (sop.dwell_time_hours || 1) * 60; // 分鐘
+  const dwell = (sop.dwell_time_hours || 1) * 60;
   const cycles = sop.cycles || 1;
   const ambientTemp = 25;
   const humiVal = sop.humidity_rh_percent ?? null;
@@ -84,7 +81,6 @@ function generateSP(sop) {
   const isCycle = cycles > 1 && sop.low_temperature != null;
 
   if (isCycle) {
-    // 循環測試：升溫 → 高溫停留 → 降溫 → 低溫停留，重複 N 次
     pushRamp(ambientTemp, high);
     for (let c = 0; c < cycles; c++) {
       pushDwell(high, dwell);
@@ -92,18 +88,16 @@ function generateSP(sop) {
       pushDwell(low, dwell);
       if (c < cycles - 1) pushRamp(low, high);
     }
-    // 最後降回室溫
     pushRamp(low, ambientTemp);
   } else {
-    // 單次測試：升溫 → 停留 → 降回室溫
-    const startTemp = low < ambientTemp ? ambientTemp : ambientTemp;
+    // 修正：單次測試正確選擇起始溫度
+    const startTemp = low < ambientTemp ? low : ambientTemp;
     const targetTemp = high !== ambientTemp ? high : low;
     pushRamp(startTemp, targetTemp);
     pushDwell(targetTemp, dwell);
     pushRamp(targetTemp, ambientTemp);
   }
 
-  // 加上濕度欄位，並格式化 min 為顯示字串
   return pts.map((p) => ({
     ...p,
     sp_temp: Math.round(p.sp_temp * 10) / 10,
@@ -121,16 +115,18 @@ const STATUS_CONFIG = {
   EMERGENCY: { color: "#f85149", bg: "#2d0f0f" },
 };
 
-// ── 各設備獨立 state 初始值 ──────────────────────────────
+// 各設備獨立 state 初始值
 const initDeviceState = () => ({
   activeSop: null,
   completedSteps: {},
   savedExecutionId: null,
   safetyChecked: [false, false, false, false],
-  tempHistory: [],
-  tick: 0,
-  chartHistory: [], // 從 history API 撈取的 PV 資料（每分鐘一筆）
+  chartHistory: [],
   chartStartedAt: null,
+  // 法規選擇也放入 per-device state，切換設備不互相干擾
+  selectedStd: null,
+  selectedVer: null,
+  selectedTest: null,
 });
 
 const ConditionCard = ({ test }) => {
@@ -291,7 +287,7 @@ const SelectGroup = ({ step, title, items, selected, onSelect, accent }) => {
   );
 };
 
-// 合併 SP 曲線與 PV 實際資料，以 min 為 key
+// 合併 SP 曲線與 PV 實際資料
 function mergeSpPv(spData, pvData) {
   const map = {};
   spData.forEach((p) => {
@@ -309,14 +305,10 @@ function mergeSpPv(spData, pvData) {
 const TempChart = ({ sop, pvData, startedAt }) => {
   const spData = React.useMemo(() => generateSP(sop), [sop]);
 
-  // 把 pvData 的 full_time 轉成 min
   const pvWithMin = React.useMemo(() => {
     if (!pvData || !startedAt) return [];
     return pvData
-      .map((p) => ({
-        ...p,
-        min: toElapsedMin(startedAt, p.full_time),
-      }))
+      .map((p) => ({ ...p, min: toElapsedMin(startedAt, p.full_time) }))
       .filter((p) => p.min != null);
   }, [pvData, startedAt]);
 
@@ -341,11 +333,8 @@ const TempChart = ({ sop, pvData, startedAt }) => {
       </div>
     );
 
-  // Brush 預設顯示最近 120 分鐘
   const brushEnd = merged.length - 1;
   const brushStart = Math.max(0, brushEnd - 119);
-
-  // 溫度 Y 軸 domain：涵蓋 SP 最高/最低 ± 10
   const spTemps = spData.map((p) => p.sp_temp);
   const tempMin = Math.min(...spTemps) - 10;
   const tempMax = Math.max(...spTemps) + 10;
@@ -375,7 +364,6 @@ const TempChart = ({ sop, pvData, startedAt }) => {
             fill: "#484f58",
           }}
         />
-        {/* 左 Y 軸：溫度 */}
         <YAxis
           yAxisId="temp"
           orientation="left"
@@ -384,7 +372,6 @@ const TempChart = ({ sop, pvData, startedAt }) => {
           width={32}
           tickFormatter={(v) => `${v}°`}
         />
-        {/* 右 Y 軸：濕度 */}
         <YAxis
           yAxisId="humi"
           orientation="right"
@@ -419,7 +406,6 @@ const TempChart = ({ sop, pvData, startedAt }) => {
           travellerWidth={5}
           style={{ fontSize: 8 }}
         />
-        {/* SP 溫度（虛線，灰色） */}
         <Line
           yAxisId="temp"
           type="linear"
@@ -432,7 +418,6 @@ const TempChart = ({ sop, pvData, startedAt }) => {
           isAnimationActive={false}
           connectNulls
         />
-        {/* PV 溫度（實線，紅色） */}
         <Line
           yAxisId="temp"
           type="monotone"
@@ -444,7 +429,6 @@ const TempChart = ({ sop, pvData, startedAt }) => {
           isAnimationActive={false}
           connectNulls
         />
-        {/* SP 濕度（虛線，深藍） */}
         {sop?.humidity_control && (
           <Line
             yAxisId="humi"
@@ -459,7 +443,6 @@ const TempChart = ({ sop, pvData, startedAt }) => {
             connectNulls
           />
         )}
-        {/* PV 濕度（實線，藍色） */}
         <Line
           yAxisId="humi"
           type="monotone"
@@ -480,19 +463,12 @@ const TempChart = ({ sop, pvData, startedAt }) => {
 const SOPPage = () => {
   const [selectedDevice, setSelectedDevice] = useState("KSON_CH01");
   const [allDevices, setAllDevices] = useState({});
-
-  // 每台設備各自獨立的 state，用 deviceId 為 key
   const [deviceStates, setDeviceStates] = useState(() =>
     Object.fromEntries(DEVICE_IDS.map((id) => [id, initDeviceState()])),
   );
-
   const [emergencyFlash, setEmergencyFlash] = useState(false);
   const [standardTree, setStandardTree] = useState({});
-  const [selectedStd, setSelectedStd] = useState(null);
-  const [selectedVer, setSelectedVer] = useState(null);
-  const [selectedTest, setSelectedTest] = useState(null);
 
-  // 當前設備的資料與 state
   const data = allDevices[selectedDevice] || {
     status: "OFFLINE",
     temperature: 0.0,
@@ -514,6 +490,8 @@ const SOPPage = () => {
   const doneCnt = Object.values(ds.completedSteps).filter(Boolean).length;
   const allStepsDone = ds.activeSop && doneCnt === totalSteps;
 
+  // 從 per-device state 讀取法規選擇
+  const { selectedStd, selectedVer, selectedTest } = ds;
   const stdData = selectedStd ? standardTree[selectedStd] : null;
   const verData = selectedVer ? stdData?.versions?.[selectedVer] : null;
   const testData = selectedTest ? verData?.tests?.[selectedTest] : null;
@@ -523,10 +501,7 @@ const SOPPage = () => {
   const testItems = verData
     ? Object.entries(verData.tests).map(([k, v]) => [k, v.name])
     : [];
-  const targetTemp =
-    ds.activeSop?.low_temperature ?? ds.activeSop?.high_temperature ?? null;
 
-  // 更新指定設備的部分 state
   const updateDS = (deviceId, patch) => {
     setDeviceStates((prev) => ({
       ...prev,
@@ -549,10 +524,10 @@ const SOPPage = () => {
     axios
       .get(`${API}/api/sop/standards/tree`)
       .then((r) => setStandardTree(r.data))
-      .catch((e) => console.error(e));
+      .catch((e) => console.error("[SOPPage] standards tree:", e));
   }, []);
 
-  // 每秒輪詢所有設備狀態
+  // 每秒輪詢設備狀態，整分時補撈 history
   useEffect(() => {
     const t = setInterval(() => {
       axios
@@ -564,7 +539,6 @@ const SOPPage = () => {
           });
           setAllDevices(map);
 
-          // 恢復 activeSop（重啟後從後端 active_sop_json 還原）
           setDeviceStates((prev) => {
             const next = { ...prev };
             DEVICE_IDS.forEach((id) => {
@@ -572,50 +546,20 @@ const SOPPage = () => {
               if (!current) return;
               const prevDS = prev[id];
               let restoredSop = prevDS.activeSop;
+
+              // 從 DB 恢復 activeSop
               if (!restoredSop && current.active_sop_json) {
                 try {
                   const parsed = JSON.parse(current.active_sop_json);
                   if (!parsed.steps || parsed.steps.length === 0) {
-                    parsed.steps = [
-                      {
-                        step_id: 1,
-                        name: "設備開機與預檢",
-                        description:
-                          "確認電源、保險絲、水箱水位正常，記錄初始外觀狀態。",
-                        optional: false,
-                      },
-                      {
-                        step_id: 2,
-                        name: "設定測試參數",
-                        description:
-                          "確認目標溫度、速率、時間等參數已正確設定。",
-                        optional: false,
-                      },
-                      {
-                        step_id: 3,
-                        name: "啟動並監控測試",
-                        description: "按下 RUN 鍵，監控溫度曲線是否正常。",
-                        optional: false,
-                      },
-                      {
-                        step_id: 4,
-                        name: "測試完成確認",
-                        description: "確認測試完成，設備無異常，拍照記錄。",
-                        optional: false,
-                      },
-                      {
-                        step_id: 5,
-                        name: "儲存測試紀錄",
-                        description: "點擊儲存按鈕，下載 CSV 測試報告。",
-                        optional: false,
-                      },
-                    ];
+                    parsed.steps = _defaultSteps();
                   }
                   restoredSop = parsed;
                 } catch {
                   /* ignore */
                 }
               }
+              // 停止後清除
               if (
                 !current.active_sop_json &&
                 prevDS.activeSop &&
@@ -628,11 +572,11 @@ const SOPPage = () => {
             return next;
           });
 
-          // 每分鐘整點（秒數 0~4）更新 selectedDevice 的 PV 圖表資料
+          // 整分時補撈選中設備的 history
           const now = new Date();
           if (now.getSeconds() < 5) {
             const selDevice = map[selectedDevice];
-            if (selDevice && selDevice.started_at) {
+            if (selDevice?.started_at) {
               axios
                 .get(`${API}/api/devices/${selectedDevice}/history`)
                 .then((res) => {
@@ -652,46 +596,66 @@ const SOPPage = () => {
         .catch(() => {});
     }, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [selectedDevice]);
 
-  // 切換設備或 started_at 改變時，重撈 PV 圖表資料
+  // 切換設備或 started_at 變化時重撈 history
+  const startedAt = allDevices[selectedDevice]?.started_at;
   useEffect(() => {
-    const selDevice = allDevices[selectedDevice];
-    const startedAt = selDevice?.started_at;
     if (!startedAt) {
-      setDeviceStates((prev) => ({
-        ...prev,
-        [selectedDevice]: {
-          ...prev[selectedDevice],
-          chartHistory: [],
-          chartStartedAt: null,
-        },
-      }));
+      updateDS(selectedDevice, { chartHistory: [], chartStartedAt: null });
       return;
     }
     axios
       .get(`${API}/api/devices/${selectedDevice}/history`)
       .then((res) => {
-        setDeviceStates((prev) => ({
-          ...prev,
-          [selectedDevice]: {
-            ...prev[selectedDevice],
-            chartHistory: res.data,
-            chartStartedAt: startedAt,
-          },
-        }));
+        updateDS(selectedDevice, {
+          chartHistory: res.data,
+          chartStartedAt: startedAt,
+        });
       })
       .catch(() => {});
-  }, [selectedDevice, allDevices[selectedDevice]?.started_at]);
+  }, [selectedDevice, startedAt]);
 
-  const handleSelectStd = (key) => {
-    setSelectedStd(key);
-    setSelectedVer(null);
-    setSelectedTest(null);
+  // 法規選擇（寫入 per-device state）
+  const handleSelectStd = (key) =>
+    updateDS(selectedDevice, {
+      selectedStd: key,
+      selectedVer: null,
+      selectedTest: null,
+    });
+  const handleSelectVer = (key) =>
+    updateDS(selectedDevice, { selectedVer: key, selectedTest: null });
+  const handleSelectTest = (key) =>
+    updateDS(selectedDevice, { selectedTest: key });
+
+  // 步驟依序鎖定邏輯
+  const steps = ds.activeSop?.steps || [];
+
+  const isStepUnlocked = (stepIndex) => {
+    if (stepIndex === 0) return true;
+    const prevStep = steps[stepIndex - 1];
+    if (prevStep.optional) return isStepUnlocked(stepIndex - 1);
+    return !!ds.completedSteps[prevStep.step_id];
   };
-  const handleSelectVer = (key) => {
-    setSelectedVer(key);
-    setSelectedTest(null);
+
+  const toggleStep = async (stepId, stepIndex) => {
+    const newCompleted = { ...ds.completedSteps };
+    if (newCompleted[stepId]) {
+      // 取消：連鎖清除此步驟及後續所有步驟
+      steps.slice(stepIndex).forEach((s) => delete newCompleted[s.step_id]);
+    } else {
+      newCompleted[stepId] = true;
+    }
+    updateDS(selectedDevice, { completedSteps: newCompleted });
+
+    // 同步後端 progress
+    try {
+      await axios.post(`${API}/api/devices/${selectedDevice}/progress`, {
+        completed: Object.values(newCompleted).filter(Boolean).length,
+      });
+    } catch (e) {
+      console.error("[SOPPage] progress sync:", e);
+    }
   };
 
   const startSop = async () => {
@@ -710,40 +674,7 @@ const SOPPage = () => {
       } catch {
         /* 備案 */
       }
-      if (steps.length === 0) {
-        steps = [
-          {
-            step_id: 1,
-            name: "設備開機與預檢",
-            description: "確認電源、保險絲、水箱水位正常，記錄初始外觀狀態。",
-            optional: false,
-          },
-          {
-            step_id: 2,
-            name: "設定測試參數",
-            description: "確認目標溫度、速率、時間等參數已正確設定。",
-            optional: false,
-          },
-          {
-            step_id: 3,
-            name: "啟動並監控測試",
-            description: "按下 RUN 鍵，監控溫度曲線是否正常。",
-            optional: false,
-          },
-          {
-            step_id: 4,
-            name: "測試完成確認",
-            description: "確認測試完成，設備無異常，拍照記錄。",
-            optional: false,
-          },
-          {
-            step_id: 5,
-            name: "儲存測試紀錄",
-            description: "點擊儲存按鈕，下載 CSV 測試報告。",
-            optional: false,
-          },
-        ];
-      }
+      if (steps.length === 0) steps = _defaultSteps();
       updateDS(selectedDevice, {
         activeSop: { ...testData, steps },
         completedSteps: {},
@@ -755,27 +686,33 @@ const SOPPage = () => {
   };
 
   const handleAction = async (type) => {
-    await axios.post(`${API}/api/stop/${selectedDevice}/${type}`);
-    if (type === "normal" || type === "emergency") {
-      updateDS(selectedDevice, {
-        activeSop: null,
-        completedSteps: {},
-        savedExecutionId: null,
-        safetyChecked: [false, false, false, false],
-      });
+    try {
+      await axios.post(`${API}/api/stop/${selectedDevice}/${type}`);
+      if (type === "normal" || type === "emergency") {
+        updateDS(selectedDevice, {
+          activeSop: null,
+          completedSteps: {},
+          savedExecutionId: null,
+          safetyChecked: [false, false, false, false],
+        });
+      }
+    } catch (e) {
+      console.error("[SOPPage] action:", e);
     }
   };
 
   const saveExecution = async () => {
     try {
-      const steps = ds.activeSop.steps.map((s) => ({
+      const stepPayload = ds.activeSop.steps.map((s) => ({
         step_id: s.step_id,
         completed: !!ds.completedSteps[s.step_id],
         parameters: null,
       }));
       const res = await axios.post(`${API}/api/sop-executions/`, {
         sop_id: ds.activeSop.sop_id,
-        steps,
+        device_id: selectedDevice,
+        test_started_at: data.started_at || null,
+        steps: stepPayload,
       });
       updateDS(selectedDevice, { savedExecutionId: res.data.id });
     } catch {
@@ -874,18 +811,7 @@ const SOPPage = () => {
           </div>
         </div>
 
-        <div
-          className="info-card temp-card"
-          style={{ borderLeft: "3px solid #ff7b72" }}
-        >
-          <label>TEMP PV</label>
-          <div className="value-pv">
-            {data.temperature.toFixed(2)}
-            <span className="unit">°C</span>
-          </div>
-        </div>
-
-        {/* 執行資訊（測試進行中才顯示） */}
+        {/* 執行資訊面板（測試進行中才顯示） */}
         {isActive &&
           ds.activeSop &&
           data.started_at &&
@@ -894,10 +820,9 @@ const SOPPage = () => {
             const startedAt = new Date(data.started_at);
             const now = new Date();
             const elapsedMin = Math.floor((now - startedAt) / 60000);
-            const totalMin = (() => {
-              const spData = generateSP(sop);
-              return spData.length > 0 ? spData[spData.length - 1].min : 0;
-            })();
+            const spData = generateSP(sop);
+            const totalMin =
+              spData.length > 0 ? spData[spData.length - 1].min : 0;
             const endTime = new Date(startedAt.getTime() + totalMin * 60000);
             const freeTimeMin = Math.max(0, totalMin - elapsedMin);
             const freeH = Math.floor(freeTimeMin / 60);
@@ -916,10 +841,7 @@ const SOPPage = () => {
                 "Free Time",
                 `${String(freeH).padStart(4, "0")}:${String(freeM).padStart(2, "0")}`,
               ],
-              [
-                "Cycle",
-                `${String(Math.min(doneCnt + 1, cycles)).padStart(4, "0")}/${String(cycles).padStart(4, "0")}`,
-              ],
+              ["Cycle", `0001/${String(cycles).padStart(4, "0")}`],
               ["Now Time", fmt(now)],
               ["End Time", fmt(endTime)],
             ];
@@ -963,6 +885,7 @@ const SOPPage = () => {
             );
           })()}
 
+        {/* 趨勢圖 */}
         <div className="info-card" style={{ padding: "14px 16px 10px" }}>
           <div
             style={{
@@ -987,21 +910,11 @@ const SOPPage = () => {
             startedAt={ds.chartStartedAt}
           />
         </div>
-
-        <div
-          className="info-card humi-card"
-          style={{ borderLeft: "3px solid #a5d6ff" }}
-        >
-          <label>HUMI PV</label>
-          <div className="value-pv">
-            {data.humidity.toFixed(1)}
-            <span className="unit">%</span>
-          </div>
-        </div>
       </aside>
 
       <main className="control-side">
         <div className="scroll-wrapper">
+          {/* 系統控制面板 */}
           <section
             className="operation-box"
             style={
@@ -1076,6 +989,7 @@ const SOPPage = () => {
             </div>
           </section>
 
+          {/* 步驟確認（執行中） */}
           {isActive && ds.activeSop && (
             <section
               className="operation-box"
@@ -1088,63 +1002,65 @@ const SOPPage = () => {
               <p style={{ color: "#8b949e", fontSize: 12, marginBottom: 14 }}>
                 請依序確認每個步驟已完成：
               </p>
-              {(ds.activeSop.steps || []).map((step) => (
-                <label
-                  key={step.step_id}
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: 10,
-                    marginBottom: 12,
-                    cursor: "pointer",
-                    color: ds.completedSteps[step.step_id]
-                      ? "#57ab5a"
-                      : "#cdd9e5",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!ds.completedSteps[step.step_id]}
-                    onChange={() =>
-                      updateDS(selectedDevice, {
-                        completedSteps: {
-                          ...ds.completedSteps,
-                          [step.step_id]: !ds.completedSteps[step.step_id],
-                        },
-                      })
-                    }
+              {steps.map((step, idx) => {
+                const unlocked = isStepUnlocked(idx);
+                const checked = !!ds.completedSteps[step.step_id];
+                return (
+                  <label
+                    key={step.step_id}
                     style={{
-                      marginTop: 3,
-                      accentColor: "#57ab5a",
-                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      marginBottom: 12,
+                      cursor: unlocked ? "pointer" : "not-allowed",
+                      color: checked
+                        ? "#57ab5a"
+                        : unlocked
+                          ? "#cdd9e5"
+                          : "#484f58",
+                      opacity: unlocked ? 1 : 0.4,
                     }}
-                  />
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 12 }}>
-                      Step {step.step_id}. {step.name}
-                      {step.optional && (
-                        <span
-                          style={{
-                            marginLeft: 6,
-                            fontSize: 10,
-                            padding: "1px 6px",
-                            background: "#21262d",
-                            color: "#8b949e",
-                            borderRadius: 4,
-                          }}
-                        >
-                          Optional
-                        </span>
-                      )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!unlocked}
+                      onChange={() => unlocked && toggleStep(step.step_id, idx)}
+                      style={{
+                        marginTop: 3,
+                        accentColor: "#57ab5a",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 12 }}>
+                        Step {step.step_id}. {step.name}
+                        {step.optional && (
+                          <span
+                            style={{
+                              marginLeft: 6,
+                              fontSize: 10,
+                              padding: "1px 6px",
+                              background: "#21262d",
+                              color: "#8b949e",
+                              borderRadius: 4,
+                            }}
+                          >
+                            Optional
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        style={{ fontSize: 11, color: "#8b949e", marginTop: 2 }}
+                      >
+                        {step.description}
+                      </div>
                     </div>
-                    <div
-                      style={{ fontSize: 11, color: "#8b949e", marginTop: 2 }}
-                    >
-                      {step.description}
-                    </div>
-                  </div>
-                </label>
-              ))}
+                  </label>
+                );
+              })}
+              {/* 進度條 */}
               <div style={{ marginTop: 8, marginBottom: 4 }}>
                 <div
                   style={{
@@ -1235,6 +1151,7 @@ const SOPPage = () => {
             </section>
           )}
 
+          {/* 法規選擇（待機中） */}
           {!isActive && (
             <>
               <section
@@ -1308,7 +1225,7 @@ const SOPPage = () => {
                       accent="#57ab5a"
                       items={testItems}
                       selected={selectedTest}
-                      onSelect={setSelectedTest}
+                      onSelect={handleSelectTest}
                     />
                   </>
                 )}
@@ -1399,5 +1316,41 @@ const SOPPage = () => {
     </div>
   );
 };
+
+// 預設步驟（備案用）
+function _defaultSteps() {
+  return [
+    {
+      step_id: 1,
+      name: "設備開機與預檢",
+      description: "確認電源、保險絲、水箱水位正常，記錄初始外觀狀態。",
+      optional: false,
+    },
+    {
+      step_id: 2,
+      name: "設定測試參數",
+      description: "確認目標溫度、速率、時間等參數已正確設定。",
+      optional: false,
+    },
+    {
+      step_id: 3,
+      name: "啟動並監控測試",
+      description: "按下 RUN 鍵，監控溫度曲線是否正常。",
+      optional: false,
+    },
+    {
+      step_id: 4,
+      name: "測試完成確認",
+      description: "確認測試完成，設備無異常，拍照記錄。",
+      optional: false,
+    },
+    {
+      step_id: 5,
+      name: "儲存測試紀錄",
+      description: "點擊儲存按鈕，下載 CSV 測試報告。",
+      optional: false,
+    },
+  ];
+}
 
 export default SOPPage;
