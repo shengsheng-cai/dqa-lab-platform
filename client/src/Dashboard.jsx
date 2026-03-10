@@ -212,10 +212,20 @@ const Dashboard = () => {
   const [executions, setExecutions] = useState([]);
 
   useEffect(() => {
+    // Timer 1：每秒更新溫濕度數字與設備狀態
     const fetchDevices = async () => {
       try {
         const res = await axios.get(`${API}/api/devices`);
         setDevices(res.data);
+      } catch (err) {}
+    };
+    const tickInterval = setInterval(fetchDevices, 1000);
+    fetchDevices();
+
+    // Timer 2：每 60 秒存一個點進趨勢圖
+    const appendHistory = async () => {
+      try {
+        const res = await axios.get(`${API}/api/devices`);
         setHistoryMap((prev) => {
           const next = { ...prev };
           res.data.forEach((d) => {
@@ -233,9 +243,13 @@ const Dashboard = () => {
         });
       } catch (err) {}
     };
-    const interval = setInterval(fetchDevices, 1000);
-    fetchDevices();
-    return () => clearInterval(interval);
+    const historyInterval = setInterval(appendHistory, 60000);
+    appendHistory();
+
+    return () => {
+      clearInterval(tickInterval);
+      clearInterval(historyInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -376,6 +390,10 @@ const Dashboard = () => {
               stroke="#30363d"
               tick={{ fontSize: 10, fill: "#484f58" }}
               hide={(historyMap[trendDevice] || []).length < 2}
+              tickFormatter={(t) => {
+                const d = new Date(t);
+                return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+              }}
             />
             <YAxis
               stroke="#30363d"
