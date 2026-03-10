@@ -1,4 +1,13 @@
-from sqlalchemy import create_engine, String, Integer, Float, DateTime, Text
+from sqlalchemy import (
+    create_engine,
+    String,
+    Integer,
+    Float,
+    DateTime,
+    Text,
+    Boolean,
+    ForeignKey,
+)
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Mapped, mapped_column
 import datetime
 from typing import Optional
@@ -38,8 +47,13 @@ class SopExecution(Base):
     sop_id: Mapped[str] = mapped_column(String, index=True)
     device_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     operator: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    test_started_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    test_ended_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # 修正：由 String 改為 DateTime，與 DeviceState.started_at 型別一致
+    test_started_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    test_ended_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
@@ -50,9 +64,13 @@ class StepRecord(Base):
     __tablename__ = "step_records"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    execution_id: Mapped[int] = mapped_column(Integer, index=True)
+    # 修正：加上 ForeignKey 約束，防止孤兒資料
+    execution_id: Mapped[int] = mapped_column(
+        ForeignKey("sop_executions.id"), index=True
+    )
     step_id: Mapped[int] = mapped_column(Integer)
-    completed: Mapped[int] = mapped_column(Integer)
+    # 修正：改為 Boolean，語意更清晰
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
     parameters: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     photos: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -87,8 +105,11 @@ class DeviceState(Base):
     started_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
     )
+    # 修正：加上 onupdate，UPDATE 時自動刷新時間戳
     updated_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime,
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
 
