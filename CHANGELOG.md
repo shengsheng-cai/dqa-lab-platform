@@ -4,6 +4,19 @@
 
 ---
 
+## 2026-03-10（續2）
+
+- **fix**: `Dashboard.jsx` `minHeight: 100vh` 改為 `height: 100% + overflowY: auto`，修復儀表板無法向下捲動
+- **fix**: `SOPPage.css` `monitor-side` 新增 `height: 100%`、`overflow-y: auto`、`box-sizing: border-box`，修復左側面板無法向下捲動
+- **fix**: `index.css` `#root` 新增 `height: 100vh`、`display: flex`、`flex-direction: column`，修復高度鏈中斷
+- **feat**: `SOPPage.jsx` `TempChart` 全面重寫，改為 SP 目標曲線（灰虛線）+ PV 實際曲線（紅實線）疊加顯示，X 軸為完整測試時長
+- **feat**: `SOPPage.jsx` 新增 `generateSP()` 函式，依 `ramp_rate` / `high_temperature` / `low_temperature` / `dwell_time_hours` / `cycles` 計算完整目標曲線；循環測試幾次畫幾個波
+- **feat**: `SOPPage.jsx` `TempChart` 支援雙 Y 軸（溫度左、濕度右）、Brush 縮放，預設顯示最近 120 分鐘
+- **feat**: `SOPPage.jsx` 左側新增執行資訊面板（Pgm / Step / Free Time / Cycle / Now Time / End Time），對應 KSON 溫箱面板格式，測試進行中才顯示
+- **feat**: `SOPPage.jsx` 圖表資料來源改為 history API（每分鐘一點），切換設備時重撈，每分鐘整點自動 append
+
+---
+
 ## 2026-03-10
 
 - **feat**: `models.py` `DeviceState` 新增 `completed_steps`（Integer，預設 0）欄位

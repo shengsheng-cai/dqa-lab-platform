@@ -4,7 +4,7 @@
 
 ---
 
-## 當前狀態快照（2026-03-10）
+## 當前狀態快照（2026-03-10 續2）
 
 ### 已完成模組
 
@@ -16,27 +16,22 @@
 | SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取 |
 | CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，PASS/FAIL 工程師人工判定 |
 | 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
+| 歷史資料 API | `backend/app/main.py` | `GET /api/devices/{id}/history`，從 started_at 至今每分鐘聚合 |
 | 儀表板 | `client/src/Dashboard.jsx` | 六狀態顏色、趨勢圖可切換 5 台設備（每分鐘一點）、步驟進度條、執行紀錄列表 |
-| SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇、步驟依序追蹤（連鎖清除）、安全確認、重啟後恢復步驟清單 |
+| SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇、步驟依序追蹤、SP+PV 波型曲線、執行資訊面板、安全確認、重啟後恢復 |
 | 異常看板 | `client/src/Errorlog.jsx` | 統計卡片 + 完整紀錄列表 |
 | QA 報告模板 | `docs/templates/` | 對外 Word 模板 |
 
 ### 下一步待開發（依優先度）
 
-1. **DeviceCard 倒數計時器與預計結束時間**
-   - `started_at` 已寫入 DB（SOP 啟動時立即記錄）
-   - 預計結束時間 = `started_at` + `duration_hours`（從 `active_sop_json` 讀取）
-   - Dashboard DeviceCard 顯示倒數計時與 End Time
+1. **Dashboard 設備切換按鈕恢復**
+   - 趨勢圖右上角加回 CH01~CH05 切換按鈕（DeviceCard 點擊已可切換，但右上角快捷按鈕遺失）
 
-2. **SOPPage 左側執行細節面板**
-   - Pgm / Step / Free Time / Cycle / End Time
-   - 對應 KSON 溫箱面板顯示格式
-
-3. **Reports 頁面前端元件**
+2. **Reports 頁面前端元件**
    - 後端 API 已完成（`/api/reports/list`、`/api/reports/csv/{id}`）
    - 只需要前端獨立頁面
 
-4. **步驟軟體確認 vs 現場確認（規劃中）**
+3. **步驟軟體確認 vs 現場確認（規劃中）**
    - 軟體確認型：系統根據即時數據判斷是否正常，異常時顯示警告
    - 現場確認型：操作員親自到場後勾選
    - 需在 `standards.py` 每個步驟加上類型標記與檢查條件
@@ -112,6 +107,7 @@ make clean && rm backend/test.db && python backend/init_db.py && make dev
 - **主題**：GitHub dark 統一風格。
 - **響應式**：確保 15 吋 MacBook 不產生捲軸。
 - **輪詢策略**：溫濕度數字每 1 秒更新；趨勢圖每 60 秒存一點。
+- **捲動架構**：`#root` flex column + `height: 100vh`；`<main>` overflow hidden；各頁面自己管理內部捲動（Dashboard: `overflowY: auto`；SOPPage: monitor-side `overflow-y: auto` + scroll-wrapper `overflow-y: auto`）
 
 ---
 
