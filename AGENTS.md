@@ -4,37 +4,56 @@
 
 ---
 
-## 當前狀態快照（2026-03-10 續2）
+## 當前狀態快照（2026-03-10 Code Review）
 
 ### 已完成模組
 
 | 模組 | 位置 | 說明 |
 |------|------|------|
-| 物理模擬引擎 | `backend/app/main.py` | 升降溫斜率、每 10 秒寫 DB、ISO 17025 永久保存 |
-| 設備狀態持久化 | `backend/app/main.py` + `models.py` | DeviceState 表、重啟後自動恢復 RUNNING 狀態與步驟清單 |
-| 環境測試標準 | `backend/app/standards.py` | 三層 STANDARD_TREE，6 法規 62 條件 |
-| SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取 |
-| CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，PASS/FAIL 工程師人工判定 |
-| 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
+| 物理模擬引擎 | `backend/app/main.py` | 升降溫斜率、每 10 秒寫 DB、ISO 17025 永久保存、每台設備獨立 DB session |
+| 設備狀態持久化 | `backend/app/main.py` + `models.py` | DeviceState 表、updated_at 自動更新、重啟後自動恢復 RUNNING 狀態與步驟清單 |
+| 環境測試標準 | `backend/app/standards.py` | 三層 STANDARD_TREE，6 法規 **64** 條件（新增 EN50155 OT5 低溫、DNV Std.Cert.2.4 ClassC/D 乾熱）；`_build_flat_standards()` 重複 sop_id 警告 |
+| SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取；`create_execution` flush+單次 commit；支援 device_id / operator / test_started_at |
+| CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，PASS/FAIL 工程師人工判定；`_fmt_dt()` 安全格式化；RFC 5987 檔名；key 名稱 `dwell_time_hours` / `humidity_rh_percent` 已修正 |
+| 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs；`created_at` 為 DateTime，ISO 8601 序列化 |
 | 歷史資料 API | `backend/app/main.py` | `GET /api/devices/{id}/history`，從 started_at 至今每分鐘聚合 |
-| 儀表板 | `client/src/Dashboard.jsx` | 六狀態顏色、趨勢圖可切換 5 台設備（每分鐘一點）、步驟進度條、執行紀錄列表 |
-| SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇、步驟依序追蹤、SP+PV 波型曲線、執行資訊面板、安全確認、重啟後恢復 |
-| 異常看板 | `client/src/Errorlog.jsx` | 統計卡片 + 完整紀錄列表 |
+| 儀表板 | `client/src/Dashboard.jsx` | 六狀態顏色、趨勢圖雙 Y 軸可切換 5 台（每分鐘一點，切換時補撈 history API）、步驟進度條（total_steps 由後端解析）、執行紀錄列表（30s 刷新）|
+| SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇（per-device 獨立 state）、步驟依序追蹤（勾選同步後端）、SP+PV 波型曲線、執行資訊面板、安全確認、重啟後恢復 |
+| 異常看板 | `client/src/Errorlog.jsx` | 統計卡片 + 完整紀錄列表；`height: 100%` 修正版面溢出；10s 自動刷新；`fmtDatetime()` 支援 ISO 8601 |
 | QA 報告模板 | `docs/templates/` | 對外 Word 模板 |
+
+### 已知修正項目（本次 Code Review 完成）
+
+| 檔案 | 修正 |
+|------|------|
+| `models.py` | `test_started_at/ended_at` DateTime、`StepRecord.execution_id` ForeignKey、`completed` Boolean、`updated_at` onupdate |
+| `main.py` | lifespan 取代 on_event、`_now_utc()` 統一時間戳、`ProgressPayload` 修正 422、`total_steps` 回傳、每台獨立 session、FINISHING 清空 sop 欄位 |
+| `sop.py` | `import datetime` 移頂層、`create_execution` 補欄位、flush+單次 commit |
+| `reports.py` | `dwell_time_hours`/`humidity_rh_percent` key 修正、`_fmt_dt()` helper、直接 sop_id 查詢、移除備用區間、RFC 5987 檔名 |
+| `errors.py` | `created_at` DateTime + ISO 8601 序列化 |
+| `standards.py` | 重複 sop_id 警告、補 OT5 低溫、補 DNV ClassC/D 乾熱 |
+| `SOPPage.jsx` | 步驟依序鎖定、取消連鎖清除、progress API 同步、per-device 法規 state、generateSP startTemp 修正 |
+| `Dashboard.jsx` | 切換設備補撈 history、雙 Y 軸、執行紀錄 30s 刷新 |
+| `Errorlog.jsx` | `minHeight` → `height: 100%`、ISO 8601 時間、10s 自動刷新 |
+| `SOPPage.css` | `.control-side` 補 `height: 100%` / `overflow: hidden` |
+| `index.css` | 統一背景色、`#root` flex column |
 
 ### 下一步待開發（依優先度）
 
-1. **Dashboard 設備切換按鈕恢復**
-   - 趨勢圖右上角加回 CH01~CH05 切換按鈕（DeviceCard 點擊已可切換，但右上角快捷按鈕遺失）
-
-2. **Reports 頁面前端元件**
+1. **Reports 頁面前端元件**
    - 後端 API 已完成（`/api/reports/list`、`/api/reports/csv/{id}`）
    - 只需要前端獨立頁面
 
-3. **步驟軟體確認 vs 現場確認（規劃中）**
+2. **步驟軟體確認 vs 現場確認（規劃中）**
    - 軟體確認型：系統根據即時數據判斷是否正常，異常時顯示警告
    - 現場確認型：操作員親自到場後勾選
    - 需在 `standards.py` 每個步驟加上類型標記與檢查條件
+
+3. **Alembic 資料庫遷移**
+   - 目前 DB 結構變更需整個重建，Phase 3 真實硬體上線前必須完成
+
+4. **AI 輔助模組**
+   - 治具管理助手、設備排程預估、法規諮詢助手
 
 ### 已刪除 / 整理的檔案
 - `backend/app/database.py` — 已刪，功能在 models.py
@@ -55,11 +74,11 @@ OFFLINE（串口斷線）
 | 表格 | 說明 |
 |------|------|
 | `device_data` | 歷史溫濕度，每 10 秒，永久保存 |
-| `device_states` | 設備狀態持久化，含 status / temperature / active_sop_json / completed_steps / started_at |
-| `sop_executions` | 執行歷程主表，含 operator / device_id / test_started_at / test_ended_at |
-| `step_records` | 每步驟完成狀態 |
+| `device_states` | 設備狀態持久化，含 status / temperature / active_sop_json / completed_steps / started_at / updated_at（自動更新）|
+| `sop_executions` | 執行歷程主表，含 operator / device_id / test_started_at（DateTime）/ test_ended_at（DateTime）|
+| `step_records` | 每步驟完成狀態（execution_id ForeignKey、completed Boolean）|
 | `sop_templates` | 自訂 SOP |
-| `error_logs` | 緊急停止事件紀錄 |
+| `error_logs` | 緊急停止事件紀錄（created_at DateTime，ISO 8601 序列化）|
 
 ### DB 結構變更注意事項
 ```bash
@@ -68,8 +87,16 @@ make clean && rm backend/test.db && python backend/init_db.py && make dev
 > ⚠️ 真實硬體在跑時不可刪 DB，需改用 Alembic 遷移（Phase 3 前完成）
 
 ### 報告架構
-- 內部：CSV（系統自動，ISO 17025，工程師自存）
+- 內部：CSV（系統自動，ISO 17025，工程師自存，RFC 5987 檔名）
 - 對外：`QA_Test_Report_Template.docx`（工程師填入 + 主管簽名）
+
+### 常見欄位命名規範（避免再犯）
+| 正確 key | 錯誤 key |
+|----------|----------|
+| `dwell_time_hours` | `dwell_time` |
+| `humidity_rh_percent` | `humidity` |
+| `temp_tolerance` | — |
+| `humi_tolerance` | — |
 
 ---
 
@@ -94,10 +121,11 @@ make clean && rm backend/test.db && python backend/init_db.py && make dev
 
 - **斜率控制**：從 `get_ramp_rate()` 動態讀取各標準速率限制。
 - **收斂演算法**：目標值與實測值接近時引入 Jitter 模擬真實物理行為。
+- **時間戳**：統一使用 `_now_utc()` 產生 UTC-aware datetime，避免 naive/aware 混用。
 - **狀態機行為**：
   - `EMERGENCY`：停止輸出，微幅抖動，自動寫入 error_logs。
   - `PAUSED`：鎖定當前數值，暫停演算法。
-  - `FINISHING`：執行降溫收尾，引導至 25°C 後回 `IDLE`。
+  - `FINISHING`：執行降溫收尾，引導至 25°C 後回 `IDLE`，清空 `running_sop_id / standard_id`。
 
 ---
 
@@ -106,8 +134,9 @@ make clean && rm backend/test.db && python backend/init_db.py && make dev
 - **佈局策略**：40/60 雙欄式（SOPPage）。
 - **主題**：GitHub dark 統一風格。
 - **響應式**：確保 15 吋 MacBook 不產生捲軸。
-- **輪詢策略**：溫濕度數字每 1 秒更新；趨勢圖每 60 秒存一點。
-- **捲動架構**：`#root` flex column + `height: 100vh`；`<main>` overflow hidden；各頁面自己管理內部捲動（Dashboard: `overflowY: auto`；SOPPage: monitor-side `overflow-y: auto` + scroll-wrapper `overflow-y: auto`）
+- **輪詢策略**：溫濕度數字每 1 秒更新；趨勢圖每 60 秒存一點；執行紀錄每 30 秒刷新；異常看板每 10 秒刷新。
+- **捲動架構**：`#root` flex column + `height: 100vh`；`<main>` overflow hidden；各頁面自己管理內部捲動（Dashboard: `overflowY: auto`；SOPPage: monitor-side `overflow-y: auto` + scroll-wrapper `overflow-y: auto`；Errorlog: `height: 100% + overflowY: auto`）
+- **per-device state**：SOPPage 的法規選擇（selectedStd/Ver/Test）、步驟勾選、safetyChecked、chartHistory 都儲存在 `deviceStates[deviceId]`，切換設備不互相干擾。
 
 ---
 
