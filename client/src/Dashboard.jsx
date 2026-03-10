@@ -37,15 +37,47 @@ const card = {
   padding: "20px 24px",
 };
 
+// ── 倒數計時 hook ─────────────────────────────────────────
+const useCountdown = (estimatedEndAt) => {
+  const [remaining, setRemaining] = useState(null);
+
+  useEffect(() => {
+    if (!estimatedEndAt) {
+      setRemaining(null);
+      return;
+    }
+
+    const calc = () => {
+      const diff = new Date(estimatedEndAt) - new Date();
+      setRemaining(Math.max(0, Math.floor(diff / 1000)));
+    };
+
+    calc();
+    const timer = setInterval(calc, 1000);
+    return () => clearInterval(timer);
+  }, [estimatedEndAt]);
+
+  if (remaining === null) return null;
+
+  const h = Math.floor(remaining / 3600);
+  const m = Math.floor((remaining % 3600) / 60);
+  const s = remaining % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
+
 // ── 單台設備卡片 ──────────────────────────────────────────
 const DeviceCard = ({ device, selected, onClick }) => {
   const sc = STATUS_CONFIG[device.status] || STATUS_CONFIG.OFFLINE;
   const isActive = ["RUNNING", "PAUSED", "FINISHING", "EMERGENCY"].includes(
     device.status,
   );
+  const showCountdown = ["RUNNING", "PAUSED"].includes(device.status);
   const totalSteps = device.total_steps || 0;
   const completedSteps = device.completed_steps || 0;
   const progressPct = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+  const countdown = useCountdown(
+    showCountdown ? device.estimated_end_at : null,
+  );
 
   return (
     <div
@@ -169,7 +201,7 @@ const DeviceCard = ({ device, selected, onClick }) => {
         {isActive ? device.running_sop_name : "STANDBY (IDLE)"}
       </div>
 
-      {/* 步驟進度條：total_steps 由後端回傳，修正原本永遠不顯示的問題 */}
+      {/* 步驟進度條 */}
       {isActive && totalSteps > 0 && (
         <div>
           <div
@@ -208,6 +240,35 @@ const DeviceCard = ({ device, selected, onClick }) => {
               }}
             />
           </div>
+        </div>
+      )}
+
+      {/* 倒數計時器 */}
+      {showCountdown && countdown !== null && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "6px 10px",
+            background: "#0d1117",
+            borderRadius: 6,
+            border: "1px solid #21262d",
+          }}
+        >
+          <span style={{ fontSize: 10, color: "#484f58", letterSpacing: 1 }}>
+            剩餘時間
+          </span>
+          <span
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              fontFamily: "monospace",
+              color: countdown === "00:00:00" ? "#f85149" : sc.color,
+            }}
+          >
+            {countdown}
+          </span>
         </div>
       )}
     </div>
@@ -432,8 +493,6 @@ const Dashboard = () => {
                 stroke="#30363d"
                 tick={{ fontSize: 10, fill: "#484f58" }}
               />
-              {/* 溫度 Y 軸（左） */}
-              // 改成
               <YAxis
                 yAxisId="temp"
                 orientation="left"
@@ -452,7 +511,6 @@ const Dashboard = () => {
                 tickFormatter={(v) => `${v}°`}
                 width={42}
               />
-              {/* 濕度 Y 軸（右），避免與溫度共用同一刻度 */}
               <YAxis
                 yAxisId="humi"
                 orientation="right"
