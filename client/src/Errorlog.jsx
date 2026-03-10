@@ -3,31 +3,51 @@ import axios from "axios";
 
 const API = "http://localhost:8000";
 
+// ISO 8601 或一般時間字串統一格式化為 YYYY-MM-DD HH:MM:SS
+function fmtDatetime(str) {
+  if (!str) return "—";
+  try {
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+  } catch {
+    return str;
+  }
+}
+
+const card = {
+  background: "#161b22",
+  border: "1px solid #30363d",
+  borderRadius: 12,
+  padding: "20px 24px",
+};
+
 const ErrorLog = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // 載入後每 10 秒自動刷新
   useEffect(() => {
-    axios
-      .get(`${API}/api/errors/`)
-      .then((r) => setLogs(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const fetchLogs = () => {
+      axios
+        .get(`${API}/api/errors/`)
+        .then((r) => setLogs(r.data))
+        .catch((err) => console.error("[ErrorLog] fetch:", err))
+        .finally(() => setLoading(false));
+    };
+    fetchLogs();
+    const t = setInterval(fetchLogs, 10000);
+    return () => clearInterval(t);
   }, []);
-
-  const card = {
-    background: "#161b22",
-    border: "1px solid #30363d",
-    borderRadius: 12,
-    padding: "20px 24px",
-  };
 
   return (
     <div
       style={{
         backgroundColor: "#0d1117",
         color: "#cdd9e5",
-        minHeight: "100vh",
+        // 修正：height + overflowY 取代 minHeight，避免撐破 App.jsx 的 overflow:hidden
+        height: "100%",
+        overflowY: "auto",
         padding: "24px 28px",
         fontFamily: "system-ui, -apple-system, sans-serif",
         boxSizing: "border-box",
@@ -116,7 +136,7 @@ const ErrorLog = () => {
               marginTop: 8,
             }}
           >
-            {logs.length > 0 ? logs[0].created_at : "—"}
+            {logs.length > 0 ? fmtDatetime(logs[0].created_at) : "—"}
           </div>
         </div>
         <div style={{ ...card, borderLeft: "3px solid #8b949e" }}>
@@ -265,7 +285,7 @@ const ErrorLog = () => {
                     {log.note || "—"}
                   </td>
                   <td style={{ padding: "10px 12px", color: "#484f58" }}>
-                    {log.created_at}
+                    {fmtDatetime(log.created_at)}
                   </td>
                 </tr>
               ))}
