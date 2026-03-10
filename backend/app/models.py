@@ -83,6 +83,7 @@ class DeviceState(Base):
     running_sop_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     standard_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     active_sop_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    completed_steps: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
     )

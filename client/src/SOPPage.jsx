@@ -840,6 +840,14 @@ const SOPPage = () => {
                     newCompleted[step.step_id] = true;
                   }
                   updateDS(selectedDevice, { completedSteps: newCompleted });
+                  // 同步後端 completed_steps
+                  const count =
+                    Object.values(newCompleted).filter(Boolean).length;
+                  axios
+                    .post(`${API}/api/devices/${selectedDevice}/progress`, {
+                      completed: count,
+                    })
+                    .catch(() => {});
                 };
 
                 return (

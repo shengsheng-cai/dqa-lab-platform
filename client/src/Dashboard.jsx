@@ -138,7 +138,7 @@ const DeviceCard = ({ device }) => {
         </div>
       </div>
 
-      {/* 執行中任務 */}
+      {/* 執行中任務 + 步驟進度 */}
       <div
         style={{
           padding: "8px 12px",
@@ -150,6 +150,55 @@ const DeviceCard = ({ device }) => {
         }}
       >
         {isActive ? device.running_sop_name : "STANDBY (IDLE)"}
+        {isActive &&
+          (() => {
+            const totalSteps = (() => {
+              try {
+                const sop = JSON.parse(device.active_sop_json || "{}");
+                return sop.steps?.length || 0;
+              } catch {
+                return 0;
+              }
+            })();
+            const completed = device.completed_steps || 0;
+            if (totalSteps === 0) return null;
+            return (
+              <div style={{ marginTop: 6 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 4,
+                    fontSize: 11,
+                    color: "#8b949e",
+                  }}
+                >
+                  <span>步驟進度</span>
+                  <span
+                    style={{
+                      color: completed === totalSteps ? "#57ab5a" : "#cdd9e5",
+                    }}
+                  >
+                    {completed} / {totalSteps}
+                  </span>
+                </div>
+                <div
+                  style={{ height: 3, background: "#21262d", borderRadius: 2 }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${(completed / totalSteps) * 100}%`,
+                      background:
+                        completed === totalSteps ? "#57ab5a" : sc.color,
+                      borderRadius: 2,
+                      transition: "width .3s",
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
       </div>
     </div>
   );

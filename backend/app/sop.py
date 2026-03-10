@@ -149,6 +149,7 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
         state.running_sop_name = sop_name
         state.standard_id = sop_id
         state.active_sop_json = active_sop_json
+        state.completed_steps = 0
         state.updated_at = dt.datetime.now(dt.timezone.utc)
         db.commit()
 
