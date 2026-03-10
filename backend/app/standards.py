@@ -9,10 +9,24 @@
 - IEC 60068-2-30:2005 (Test Db: Damp Heat Cyclic)
 - EN 50155:2017       (OT1~OT6, ST0/ST1/ST2, Rapid Temp Variation)
 - IEC 61850-3 Ed.1:2002 / Ed.2:2013 (Class C1/C2/C3)
-- DNVGL-CG-0339:2019  (Location Class A/B/C/D)
+- DNVGL-CG-0339:2015  (Location Class A/B/C/D)
 - DNV Std.Cert.2.4    (舊版 Class A/B/C/D)
 - KEMA KEUR + IEC/CENELEC
 - IEC 61162-1:2016 (NMEA 0183) / IEC 61162-3:2010 (NMEA 2000)
+
+ramp_rate 說明：
+  ✅ 法規明文規定：
+    - EN 50155:2017 乾熱/冷測：1°C/min（法規曲線圖明文，DQA 內部 PPT 確認）
+    - EN 50155:2017 RTV：≥20°C/min（法規明文）
+    - DNVGL-CG-0339:2015 乾熱/冷測：1°C/min（Sec.3 [7][9] 明文）
+    - IEC 60945:2002 (NMEA)：1°C/min（Sec.8.1 明文）
+    - IEC 60068-2-14 Test Nb：1~15°C/min（法規允許範圍）
+    - IEC 60068-2-14 Test Na：轉換 <30 秒（非速率概念，設 30.0）
+  ⚠️ 待確認（付費文件無法取得，暫用公司預設值）：
+    - IEC 60068-2-1/2 (Ab/Ad/Ba/Bb)：3.0°C/min（公司規定，法規無明確規定）
+    - IEC 60068-2-30 (Db)：2.0°C/min（IEC 60068-2-30 程序控制，非獨立速率）
+    - IEC 61850-3：2.0°C/min（待確認）
+    - KEMA：2.0°C/min（待確認）
 """
 
 from typing import Dict, List, Any, Optional
@@ -152,7 +166,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -40.0,
                         "target_temperature": -40.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 3.0,  # ⚠️ 待確認，法規無明確規定，暫用公司規定值
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -172,7 +186,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -55.0,
                         "target_temperature": -55.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 3.0,  # ⚠️ 待確認，法規無明確規定，暫用公司規定值
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -192,7 +206,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -25.0,
                         "target_temperature": -25.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 3.0,  # ⚠️ 待確認，法規無明確規定，暫用公司規定值
                         "dwell_time_hours": 2,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -218,7 +232,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 85.0,
                         "low_temperature": None,
                         "target_temperature": 85.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 3.0,  # ⚠️ 待確認，法規無明確規定，暫用公司規定值
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -238,7 +252,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 125.0,
                         "low_temperature": None,
                         "target_temperature": 125.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 3.0,  # ⚠️ 待確認，法規無明確規定，暫用公司規定值
                         "dwell_time_hours": 2,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -258,7 +272,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 3.0,  # ⚠️ 待確認，法規無明確規定，暫用公司規定值
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -284,7 +298,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 85.0,
                         "low_temperature": -40.0,
                         "target_temperature": 85.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ✅ 法規明文允許範圍 1~15°C/min，此為慣用值
                         "dwell_time_hours": 1,
                         "cycles": 5,
                         "humidity_rh_percent": None,
@@ -304,7 +318,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": -25.0,
                         "target_temperature": 70.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ✅ 法規明文允許範圍 1~15°C/min，此為慣用值
                         "dwell_time_hours": 1,
                         "cycles": 3,
                         "humidity_rh_percent": None,
@@ -324,7 +338,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 125.0,
                         "low_temperature": -55.0,
                         "target_temperature": 125.0,
-                        "ramp_rate": 30.0,
+                        "ramp_rate": 30.0,  # ✅ 法規明文：轉換 <30 秒，非線性速率概念
                         "dwell_time_hours": 0.5,
                         "cycles": 5,
                         "humidity_rh_percent": None,
@@ -344,7 +358,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 85.0,
                         "low_temperature": -40.0,
                         "target_temperature": 85.0,
-                        "ramp_rate": 30.0,
+                        "ramp_rate": 30.0,  # ✅ 法規明文：轉換 <30 秒，非線性速率概念
                         "dwell_time_hours": 0.5,
                         "cycles": 5,
                         "humidity_rh_percent": None,
@@ -370,7 +384,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 55.0,
                         "low_temperature": 25.0,
                         "target_temperature": 55.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，IEC 60068-2-30 為程序控制（3h升溫），非獨立速率
                         "dwell_time_hours": 12,
                         "cycles": 6,
                         "humidity_rh_percent": 95.0,
@@ -390,7 +404,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 40.0,
                         "low_temperature": 25.0,
                         "target_temperature": 40.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，IEC 60068-2-30 為程序控制（3h升溫），非獨立速率
                         "dwell_time_hours": 12,
                         "cycles": 2,
                         "humidity_rh_percent": 93.0,
@@ -421,11 +435,11 @@ STANDARD_TREE: Dict[str, Any] = {
                         "name": "OT1 高溫乾熱：+55°C，16h（非通電）",
                         "test_type": "chamber",
                         "version": "EN 50155:2017",
-                        "description": "OT1 等級（乘客車廂/駕駛室）。高溫上限 +55°C，持續 16 小時，非通電。低溫另測。",
+                        "description": "OT1 等級（乘客車廂/駕駛室）。高溫上限 +55°C，持續 16 小時，非通電。",
                         "high_temperature": 55.0,
                         "low_temperature": None,
                         "target_temperature": 55.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min（DQA PPT 確認）
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -445,7 +459,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -25.0,
                         "target_temperature": -25.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min（DQA PPT 確認）
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -465,7 +479,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 55.0,
                         "low_temperature": None,
                         "target_temperature": 55.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -485,7 +499,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -40.0,
                         "target_temperature": -40.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -505,7 +519,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -525,7 +539,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -25.0,
                         "target_temperature": -25.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -545,7 +559,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 85.0,
                         "low_temperature": None,
                         "target_temperature": 85.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
                         "dwell_time_hours": 0.17,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -566,7 +580,7 @@ STANDARD_TREE: Dict[str, Any] = {
                             {
                                 "step_id": 2,
                                 "name": "升溫至 OT3+15°C = +85°C",
-                                "description": "通電狀態，升溫至 85°C，速率 ≤5°C/min。確認設備在升溫過程中功能正常。",
+                                "description": "通電狀態，升溫至 85°C，速率 1°C/min。確認設備在升溫過程中功能正常。",
                                 "requires_photo": False,
                                 "requires_parameters": False,
                                 "optional": False,
@@ -606,7 +620,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -626,7 +640,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -40.0,
                         "target_temperature": -40.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -646,7 +660,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 85.0,
                         "low_temperature": None,
                         "target_temperature": 85.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -666,7 +680,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 85.0,
                         "low_temperature": None,
                         "target_temperature": 85.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -686,7 +700,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -40.0,
                         "target_temperature": -40.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -706,7 +720,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": -25.0,
                         "target_temperature": 70.0,
-                        "ramp_rate": 20.0,
+                        "ramp_rate": 20.0,  # ✅ 法規明文：≥20°C/min
                         "dwell_time_hours": 0.25,
                         "cycles": 3,
                         "humidity_rh_percent": None,
@@ -726,7 +740,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 55.0,
                         "low_temperature": 25.0,
                         "target_temperature": 55.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ IEC 60068-2-30 程序控制（3h升溫），非獨立速率
                         "dwell_time_hours": 12,
                         "cycles": 2,
                         "humidity_rh_percent": 93.0,
@@ -752,7 +766,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 55.0,
                         "low_temperature": None,
                         "target_temperature": 55.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155 曲線圖明文：1°C/min（同 2017 版）
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -772,7 +786,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -792,7 +806,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 85.0,
                         "low_temperature": None,
                         "target_temperature": 85.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -812,7 +826,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -40.0,
                         "target_temperature": -40.0,
-                        "ramp_rate": 5.0,
+                        "ramp_rate": 1.0,  # ✅ EN 50155 曲線圖明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -847,7 +861,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 55.0,
                         "low_temperature": None,
                         "target_temperature": 55.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -867,7 +881,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -10.0,
                         "target_temperature": -10.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -887,7 +901,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 55.0,
                         "low_temperature": 25.0,
                         "target_temperature": 55.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，IEC 60068-2-30 程序控制
                         "dwell_time_hours": 12,
                         "cycles": 6,
                         "humidity_rh_percent": 95.0,
@@ -907,7 +921,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -927,7 +941,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -25.0,
                         "target_temperature": -25.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -947,7 +961,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -967,7 +981,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -40.0,
                         "target_temperature": -40.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -993,7 +1007,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1013,7 +1027,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -40.0,
                         "target_temperature": -40.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1035,20 +1049,20 @@ STANDARD_TREE: Dict[str, Any] = {
         "label": "DNV 船舶設備環境認證",
         "description": "DNV（Det Norske Veritas）船舶自動化儀器設備認證。依船上安裝位置分 Class A/B/C/D。容差：溫度 ±2°C，濕度 ±10%RH。",
         "versions": {
-            "DNVGL-CG-0339:2019": {
-                "label": "DNVGL-CG-0339:2019（現行版）",
-                "description": "現行版（2019年更新）。Class A/B：乾熱為主，冷測可選。Class C/D：乾熱 + 冷測均強制要求。容差：溫度 ±2°C，濕度 ±10%RH。",
+            "DNVGL-CG-0339:2015": {
+                "label": "DNVGL-CG-0339:2015（現行版）",
+                "description": "現行版（2015年）。Class A/B：乾熱為主，冷測可選。Class C/D：乾熱 + 冷測均強制要求。容差：溫度 ±2°C，濕度 ±10%RH。",
                 "tests": {
                     "ClassA_Dry_Heat": {
                         "sop_id": "dnv_cg0339_classa_dry",
                         "name": "Class A 乾熱：+55°C，16h（機艙/控制室）",
                         "test_type": "chamber",
-                        "version": "DNVGL-CG-0339:2019",
+                        "version": "DNVGL-CG-0339:2015",
                         "description": "Class A：機艙、控制室、住艙等有溫度控制的室內環境（環境溫度 0°C ~ +45°C）。乾熱測試 +55°C，冷測可選不強制。",
                         "high_temperature": 55.0,
                         "low_temperature": None,
                         "target_temperature": 55.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 1.0,  # ✅ DNVGL-CG-0339 Sec.3 [7] 明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1056,19 +1070,19 @@ STANDARD_TREE: Dict[str, Any] = {
                         "power_on": True,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 10.0,
-                        "reference": "DNVGL-CG-0339:2019 Table 2 Class A Sec.3[7]",
+                        "reference": "DNVGL-CG-0339:2015 Table 2 Class A Sec.3[7]",
                         "steps": _steps_single_temp(55.0, 16, "high"),
                     },
                     "ClassA_Damp_Heat": {
                         "sop_id": "dnv_cg0339_classa_damp",
                         "name": "Class A 濕熱（穩態）：+40°C，93%RH，4 天",
                         "test_type": "chamber",
-                        "version": "DNVGL-CG-0339:2019",
-                        "description": "Class A 濕熱：穩態濕熱（非循環），+40°C，93%RH，持續 96 小時（4 天）。依 IEC 60068-2-78 Test Cab 執行。Class A 選擇穩態或循環其一。",
+                        "version": "DNVGL-CG-0339:2015",
+                        "description": "Class A 濕熱：穩態濕熱（非循環），+40°C，93%RH，持續 96 小時（4 天）。依 IEC 60068-2-78 Test Cab 執行。",
                         "high_temperature": 40.0,
                         "low_temperature": None,
                         "target_temperature": 40.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 1.0,  # ✅ DNVGL-CG-0339 Sec.3 [7] 明文：1°C/min
                         "dwell_time_hours": 96,
                         "cycles": 1,
                         "humidity_rh_percent": 93.0,
@@ -1076,19 +1090,19 @@ STANDARD_TREE: Dict[str, Any] = {
                         "power_on": False,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 10.0,
-                        "reference": "DNVGL-CG-0339:2019 Sec.3[8.2] + IEC 60068-2-78 Test Cab",
+                        "reference": "DNVGL-CG-0339:2015 Sec.3[8.2] + IEC 60068-2-78 Test Cab",
                         "steps": _steps_single_temp(40.0, 96, "high"),
                     },
                     "ClassB_Dry_Heat": {
                         "sop_id": "dnv_cg0339_classb_dry",
                         "name": "Class B 乾熱：+70°C，16h（箱體內部）",
                         "test_type": "chamber",
-                        "version": "DNVGL-CG-0339:2019",
+                        "version": "DNVGL-CG-0339:2015",
                         "description": "Class B：泵室、貨艙、無加熱艙室等無直接天候暴露的位置。乾熱 +70°C，冷測不強制但建議執行。",
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 1.0,  # ✅ DNVGL-CG-0339 Sec.3 [7] 明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1096,19 +1110,19 @@ STANDARD_TREE: Dict[str, Any] = {
                         "power_on": True,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 10.0,
-                        "reference": "DNVGL-CG-0339:2019 Table 2 Class B Sec.3[7]",
+                        "reference": "DNVGL-CG-0339:2015 Table 2 Class B Sec.3[7]",
                         "steps": _steps_single_temp(70.0, 16, "high"),
                     },
                     "ClassB_Damp_Heat_Cyclic": {
                         "sop_id": "dnv_cg0339_classb_damp",
                         "name": "Class B 濕熱循環：25°C ↔ 55°C，95%RH，2 循環",
                         "test_type": "chamber",
-                        "version": "DNVGL-CG-0339:2019",
+                        "version": "DNVGL-CG-0339:2015",
                         "description": "Class B 濕熱循環（結露），依 IEC 60068-2-30 Test Db 執行，2 循環，第一循環通電。",
                         "high_temperature": 55.0,
                         "low_temperature": 25.0,
                         "target_temperature": 55.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ IEC 60068-2-30 程序控制（3h升溫），非獨立速率
                         "dwell_time_hours": 12,
                         "cycles": 2,
                         "humidity_rh_percent": 95.0,
@@ -1116,19 +1130,19 @@ STANDARD_TREE: Dict[str, Any] = {
                         "power_on": True,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 10.0,
-                        "reference": "DNVGL-CG-0339:2019 Sec.3[8.3] + IEC 60068-2-30 Test Db",
+                        "reference": "DNVGL-CG-0339:2015 Sec.3[8.3] + IEC 60068-2-30 Test Db",
                         "steps": _steps_cycle(25.0, 55.0, 2, 95.0),
                     },
                     "ClassC_Dry_Heat": {
                         "sop_id": "dnv_cg0339_classc_dry",
-                        "name": "Class C 乾熱：+70°C，16h（露天甲板）",
+                        "name": "Class C 乾熱：+55°C，16h（無加熱遮蔽位置）",
                         "test_type": "chamber",
-                        "version": "DNVGL-CG-0339:2019",
-                        "description": "Class C：露天甲板、無加熱但有遮蔽的位置。乾熱 +70°C 強制，冷測 -25°C 強制。",
-                        "high_temperature": 70.0,
+                        "version": "DNVGL-CG-0339:2015",
+                        "description": "Class C：泵室、無加熱遮蔽位置。乾熱 +55°C 強制，冷測 -25°C 強制。",
+                        "high_temperature": 55.0,
                         "low_temperature": None,
-                        "target_temperature": 70.0,
-                        "ramp_rate": 3.0,
+                        "target_temperature": 55.0,
+                        "ramp_rate": 1.0,  # ✅ DNVGL-CG-0339 Sec.3 [7] 明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1136,39 +1150,39 @@ STANDARD_TREE: Dict[str, Any] = {
                         "power_on": True,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 10.0,
-                        "reference": "DNVGL-CG-0339:2019 Table 2 Class C Sec.3[7]（強制）",
-                        "steps": _steps_single_temp(70.0, 16, "high"),
+                        "reference": "DNVGL-CG-0339:2015 Table 2 Class C Sec.3[7]（強制）",
+                        "steps": _steps_single_temp(55.0, 16, "high"),
                     },
                     "ClassC_Cold": {
                         "sop_id": "dnv_cg0339_classc_cold",
-                        "name": "Class C 冷測：-25°C，16h（露天甲板）【強制】",
+                        "name": "Class C 冷測：-25°C，2h（無加熱遮蔽位置）【強制】",
                         "test_type": "chamber",
-                        "version": "DNVGL-CG-0339:2019",
-                        "description": "Class C 冷測為強制項目（Class A/B 可選，C/D 強制）。-25°C 持續 16 小時。",
+                        "version": "DNVGL-CG-0339:2015",
+                        "description": "Class C 冷測為強制項目。依法規 Sec.3 [9.2.4]，測試時間為 2 小時（test interval = 2 hours）。",
                         "high_temperature": None,
                         "low_temperature": -25.0,
                         "target_temperature": -25.0,
-                        "ramp_rate": 3.0,
-                        "dwell_time_hours": 16,
+                        "ramp_rate": 1.0,  # ✅ DNVGL-CG-0339 Sec.3 [9] 明文：1°C/min
+                        "dwell_time_hours": 2,
                         "cycles": 1,
                         "humidity_rh_percent": None,
                         "humidity_control": False,
                         "power_on": False,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 10.0,
-                        "reference": "DNVGL-CG-0339:2019 Table 2 Class C Sec.3[9]（強制）",
-                        "steps": _steps_single_temp(-25.0, 16, "low"),
+                        "reference": "DNVGL-CG-0339:2015 Table 2 Class C Sec.3[9]（強制）",
+                        "steps": _steps_single_temp(-25.0, 2, "low"),
                     },
                     "ClassD_Dry_Heat": {
                         "sop_id": "dnv_cg0339_classd_dry",
-                        "name": "Class D 乾熱：+70°C，16h（水下/極端環境）【強制】",
+                        "name": "Class D 乾熱：+70°C，16h（露天甲板）【強制】",
                         "test_type": "chamber",
-                        "version": "DNVGL-CG-0339:2019",
-                        "description": "Class D：水下應用、機艙地板下方等極端環境。乾熱 +70°C + 冷測 -40°C 均強制。",
+                        "version": "DNVGL-CG-0339:2015",
+                        "description": "Class D：露天甲板、桅杆等直接暴露天候位置。乾熱 +70°C + 冷測 -25°C 均強制。",
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 1.0,  # ✅ DNVGL-CG-0339 Sec.3 [7] 明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1176,45 +1190,45 @@ STANDARD_TREE: Dict[str, Any] = {
                         "power_on": True,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 10.0,
-                        "reference": "DNVGL-CG-0339:2019 Table 2 Class D Sec.3[7]（強制）",
+                        "reference": "DNVGL-CG-0339:2015 Table 2 Class D Sec.3[7]（強制）",
                         "steps": _steps_single_temp(70.0, 16, "high"),
                     },
                     "ClassD_Cold": {
                         "sop_id": "dnv_cg0339_classd_cold",
-                        "name": "Class D 冷測：-40°C，16h（水下/極端環境）【強制】",
+                        "name": "Class D 冷測：-25°C，2h（露天甲板）【強制】",
                         "test_type": "chamber",
-                        "version": "DNVGL-CG-0339:2019",
-                        "description": "Class D 最嚴苛冷測，-40°C 持續 16 小時，強制項目。",
+                        "version": "DNVGL-CG-0339:2015",
+                        "description": "Class D 冷測強制項目，-25°C，測試時間 2 小時。",
                         "high_temperature": None,
-                        "low_temperature": -40.0,
-                        "target_temperature": -40.0,
-                        "ramp_rate": 3.0,
-                        "dwell_time_hours": 16,
+                        "low_temperature": -25.0,
+                        "target_temperature": -25.0,
+                        "ramp_rate": 1.0,  # ✅ DNVGL-CG-0339 Sec.3 [9] 明文：1°C/min
+                        "dwell_time_hours": 2,
                         "cycles": 1,
                         "humidity_rh_percent": None,
                         "humidity_control": False,
                         "power_on": False,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 10.0,
-                        "reference": "DNVGL-CG-0339:2019 Table 2 Class D Sec.3[9]（強制）",
-                        "steps": _steps_single_temp(-40.0, 16, "low"),
+                        "reference": "DNVGL-CG-0339:2015 Table 2 Class D Sec.3[9]（強制）",
+                        "steps": _steps_single_temp(-25.0, 2, "low"),
                     },
                 },
             },
             "DNV Std.Cert.2.4": {
                 "label": "DNV Std.Cert.2.4（舊版，仍廣泛使用）",
-                "description": "舊版 DNV 2.4 認證，許多現有設備仍持此版認證。與 CG-0339 的主要差別在於測試程序細節。",
+                "description": "舊版 DNV 2.4 認證，許多現有設備仍持此版認證。",
                 "tests": {
                     "ClassA_Dry_Heat": {
                         "sop_id": "dnv_24_classa_dry",
-                        "name": "Class A 乾熱：+55°C（機艙/控制室）",
+                        "name": "Class A 乾熱：+55°C，16h（機艙/控制室）",
                         "test_type": "chamber",
                         "version": "DNV Std.Cert.2.4",
                         "description": "舊版 DNV 2.4 Class A 乾熱，+55°C。",
                         "high_temperature": 55.0,
                         "low_temperature": None,
                         "target_temperature": 55.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 1.0,  # ✅ DNV 系列一致：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1227,14 +1241,14 @@ STANDARD_TREE: Dict[str, Any] = {
                     },
                     "ClassB_Dry_Heat": {
                         "sop_id": "dnv_24_classb_dry",
-                        "name": "Class B 乾熱：+70°C（箱體內部）",
+                        "name": "Class B 乾熱：+70°C，16h（箱體內部）",
                         "test_type": "chamber",
                         "version": "DNV Std.Cert.2.4",
                         "description": "舊版 DNV 2.4 Class B 乾熱，+70°C。",
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 3.0,
+                        "ramp_rate": 1.0,  # ✅ DNV 系列一致：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1247,15 +1261,15 @@ STANDARD_TREE: Dict[str, Any] = {
                     },
                     "ClassC_Cold": {
                         "sop_id": "dnv_24_classc_cold",
-                        "name": "Class C 冷測：-25°C（露天甲板）【強制】",
+                        "name": "Class C 冷測：-25°C，2h【強制】",
                         "test_type": "chamber",
                         "version": "DNV Std.Cert.2.4",
-                        "description": "舊版 DNV 2.4 Class C 冷測，-25°C 強制。",
+                        "description": "舊版 DNV 2.4 Class C 冷測，-25°C 強制，2 小時。",
                         "high_temperature": None,
                         "low_temperature": -25.0,
                         "target_temperature": -25.0,
-                        "ramp_rate": 3.0,
-                        "dwell_time_hours": 16,
+                        "ramp_rate": 1.0,  # ✅ DNV 系列一致：1°C/min
+                        "dwell_time_hours": 2,
                         "cycles": 1,
                         "humidity_rh_percent": None,
                         "humidity_control": False,
@@ -1263,19 +1277,19 @@ STANDARD_TREE: Dict[str, Any] = {
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 10.0,
                         "reference": "DNV Std.Cert.2.4 Section 3.9 Class C",
-                        "steps": _steps_single_temp(-25.0, 16, "low"),
+                        "steps": _steps_single_temp(-25.0, 2, "low"),
                     },
                     "ClassD_Cold": {
                         "sop_id": "dnv_24_classd_cold",
-                        "name": "Class D 冷測：-40°C（水下/極端環境）【強制】",
+                        "name": "Class D 冷測：-25°C，2h【強制】",
                         "test_type": "chamber",
                         "version": "DNV Std.Cert.2.4",
-                        "description": "舊版 DNV 2.4 Class D 冷測，-40°C 強制。",
+                        "description": "舊版 DNV 2.4 Class D 冷測，-25°C 強制，2 小時。",
                         "high_temperature": None,
-                        "low_temperature": -40.0,
-                        "target_temperature": -40.0,
-                        "ramp_rate": 3.0,
-                        "dwell_time_hours": 16,
+                        "low_temperature": -25.0,
+                        "target_temperature": -25.0,
+                        "ramp_rate": 1.0,  # ✅ DNV 系列一致：1°C/min
+                        "dwell_time_hours": 2,
                         "cycles": 1,
                         "humidity_rh_percent": None,
                         "humidity_control": False,
@@ -1283,7 +1297,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 10.0,
                         "reference": "DNV Std.Cert.2.4 Section 3.9 Class D",
-                        "steps": _steps_single_temp(-40.0, 16, "low"),
+                        "steps": _steps_single_temp(-25.0, 2, "low"),
                     },
                 },
             },
@@ -1309,7 +1323,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1329,7 +1343,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -25.0,
                         "target_temperature": -25.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1349,7 +1363,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 40.0,
                         "low_temperature": None,
                         "target_temperature": 40.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，付費文件無法取得
                         "dwell_time_hours": 96,
                         "cycles": 1,
                         "humidity_rh_percent": 93.0,
@@ -1369,7 +1383,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": -25.0,
                         "target_temperature": 70.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 2.0,  # ⚠️ 待確認，IEC 60068-2-14 Nb 允許 1~15°C/min
                         "dwell_time_hours": 1,
                         "cycles": 3,
                         "humidity_rh_percent": None,
@@ -1393,7 +1407,7 @@ STANDARD_TREE: Dict[str, Any] = {
         "versions": {
             "IEC 61162-1:2016 / IEC 60945 (NMEA 0183)": {
                 "label": "IEC 61162-1:2016 / IEC 60945（NMEA 0183，現行版）",
-                "description": "NMEA 0183 單向串列通訊設備。環境測試依 IEC 60945:2002（Maritime Navigation Equipment 通用要求）執行。溫度範圍 -15°C ~ +55°C（暴露裝置至 +70°C）。",
+                "description": "NMEA 0183 單向串列通訊設備。環境測試依 IEC 60945:2002 執行。溫度範圍 -15°C ~ +55°C（暴露裝置至 +70°C）。",
                 "tests": {
                     "Dry_Heat_+55_Protected": {
                         "sop_id": "nmea_0183_dry_+55",
@@ -1404,7 +1418,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 55.0,
                         "low_temperature": None,
                         "target_temperature": 55.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 1.0,  # ✅ IEC 60945:2002 Sec.8.1 明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1412,7 +1426,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "power_on": True,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 5.0,
-                        "reference": "IEC 60945:2002 + IEC 61162-1:2016 Section 5",
+                        "reference": "IEC 60945:2002 Sec.8.1 + IEC 61162-1:2016",
                         "steps": _steps_single_temp(55.0, 16, "high"),
                     },
                     "Dry_Heat_+70_Exposed": {
@@ -1424,7 +1438,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 70.0,
                         "low_temperature": None,
                         "target_temperature": 70.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 1.0,  # ✅ IEC 60945:2002 Sec.8.1 明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1432,19 +1446,19 @@ STANDARD_TREE: Dict[str, Any] = {
                         "power_on": True,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 5.0,
-                        "reference": "IEC 60945:2002 Exposed Equipment + IEC 61162-1:2016",
+                        "reference": "IEC 60945:2002 Sec.8.1 + IEC 61162-1:2016",
                         "steps": _steps_single_temp(70.0, 16, "high"),
                     },
                     "Cold_-15": {
                         "sop_id": "nmea_0183_cold_-15",
-                        "name": "低溫儲存：-15°C，16h（IEC 60068-2-1 Test Ab）",
+                        "name": "低溫儲存：-15°C，16h",
                         "test_type": "chamber",
                         "version": "IEC 61162-1:2016 / IEC 60945",
                         "description": "航海電子設備低溫儲存，-15°C 持續 16 小時，非通電。",
                         "high_temperature": None,
                         "low_temperature": -15.0,
                         "target_temperature": -15.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 1.0,  # ✅ IEC 60945:2002 Sec.8.1 明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1452,39 +1466,39 @@ STANDARD_TREE: Dict[str, Any] = {
                         "power_on": False,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 5.0,
-                        "reference": "IEC 60945:2002 + IEC 61162-1:2016 + IEC 60068-2-1",
+                        "reference": "IEC 60945:2002 Sec.8.4 + IEC 61162-1:2016",
                         "steps": _steps_single_temp(-15.0, 16, "low"),
                     },
                     "Damp_Heat": {
                         "sop_id": "nmea_0183_damp",
-                        "name": "濕熱穩態：+40°C，93%RH，4 天（IEC 60068-2-78）",
+                        "name": "濕熱穩態：+40°C，93%RH，16h（IEC 60945 單循環）",
                         "test_type": "chamber",
                         "version": "IEC 61162-1:2016 / IEC 60945",
-                        "description": "航海電子設備濕熱測試，海洋高濕環境，+40°C，93%RH，持續 96 小時。",
+                        "description": "航海電子設備濕熱測試，+40°C，93%RH，持續 10~16 小時（IEC 60945 Sec.8.3 單循環）。",
                         "high_temperature": 40.0,
                         "low_temperature": None,
                         "target_temperature": 40.0,
-                        "ramp_rate": 2.0,
-                        "dwell_time_hours": 96,
+                        "ramp_rate": 1.0,  # ✅ IEC 60945:2002 Sec.8.1 明文：1°C/min
+                        "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": 93.0,
                         "humidity_control": True,
                         "power_on": False,
                         "temp_tolerance": 2.0,
                         "humi_tolerance": 5.0,
-                        "reference": "IEC 60945:2002 Clause 8.8 + IEC 60068-2-78",
-                        "steps": _steps_single_temp(40.0, 96, "high"),
+                        "reference": "IEC 60945:2002 Sec.8.3 + IEC 61162-1:2016",
+                        "steps": _steps_single_temp(40.0, 16, "high"),
                     },
                     "Temp_Cycle": {
                         "sop_id": "nmea_0183_cycle",
-                        "name": "溫度循環：-15°C ↔ +55°C，2°C/min，3 循環",
+                        "name": "溫度循環：-15°C ↔ +55°C，3 循環",
                         "test_type": "chamber",
                         "version": "IEC 61162-1:2016 / IEC 60945",
                         "description": "航海電子設備溫度循環，模擬航行中溫度變化，3 循環，每端停留 60 分鐘。",
                         "high_temperature": 55.0,
                         "low_temperature": -15.0,
                         "target_temperature": 55.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 1.0,  # ✅ IEC 60945:2002 Sec.8.1 明文：1°C/min
                         "dwell_time_hours": 1,
                         "cycles": 3,
                         "humidity_rh_percent": None,
@@ -1510,7 +1524,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": 55.0,
                         "low_temperature": None,
                         "target_temperature": 55.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 1.0,  # ✅ IEC 60945:2002 Sec.8.1 明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1530,7 +1544,7 @@ STANDARD_TREE: Dict[str, Any] = {
                         "high_temperature": None,
                         "low_temperature": -15.0,
                         "target_temperature": -15.0,
-                        "ramp_rate": 2.0,
+                        "ramp_rate": 1.0,  # ✅ IEC 60945:2002 Sec.8.1 明文：1°C/min
                         "dwell_time_hours": 16,
                         "cycles": 1,
                         "humidity_rh_percent": None,
@@ -1563,12 +1577,11 @@ def _build_flat_standards() -> Dict[str, Any]:
                 sop_id = test_data["sop_id"]
                 flat[sop_id] = {
                     **test_data,
-                    # 補齊舊欄位名稱
                     "standard_id": sop_id,
                     "standard_family": std_key,
                     "standard_version": ver_key,
                     "number_of_cycles": test_data.get("cycles", 1),
-                    "ramp_rate_max": test_data.get("ramp_rate", 3.0),
+                    "ramp_rate_max": test_data.get("ramp_rate", 1.0),
                     "dwell_time_hours": test_data.get("dwell_time_hours", 1),
                 }
     return flat
@@ -1583,14 +1596,12 @@ STANDARDS_AND_SOPS: Dict[str, Any] = _build_flat_standards()
 
 
 def get_standard(sop_id: str) -> Dict[str, Any]:
-    """依 sop_id 取得測試條件（向後相容）"""
     return STANDARDS_AND_SOPS.get(sop_id, {})
 
 
 def get_ramp_rate(sop_id: str) -> float:
-    """取得升降溫速率（°C/min）"""
     std = get_standard(sop_id)
-    return std.get("ramp_rate", 2.0)
+    return std.get("ramp_rate", 1.0)
 
 
 def get_all_standards() -> list:
@@ -1598,7 +1609,6 @@ def get_all_standards() -> list:
 
 
 def get_sop_by_standard(sop_id: str) -> Optional[Dict[str, Any]]:
-    """依 sop_id 取得完整 SOP 定義（向後相容）"""
     std = get_standard(sop_id)
     if not std:
         return None
@@ -1613,5 +1623,4 @@ def get_sop_by_standard(sop_id: str) -> Optional[Dict[str, Any]]:
 
 
 def get_standard_tree() -> Dict[str, Any]:
-    """取得完整三層標準樹（供前端 UI 使用）"""
     return STANDARD_TREE
