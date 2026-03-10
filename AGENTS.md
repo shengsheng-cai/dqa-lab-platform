@@ -4,7 +4,7 @@
 
 ---
 
-## 當前狀態快照（2026-03-06）
+## 當前狀態快照（2026-03-10）
 
 ### 已完成模組
 
@@ -13,39 +13,33 @@
 | 物理模擬引擎 | `backend/app/main.py` | 升降溫斜率、每 10 秒寫 DB、ISO 17025 永久保存 |
 | 設備狀態持久化 | `backend/app/main.py` + `models.py` | DeviceState 表、重啟後自動恢復 RUNNING 狀態與步驟清單 |
 | 環境測試標準 | `backend/app/standards.py` | 三層 STANDARD_TREE，6 法規 62 條件 |
-| SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取（sop_execution.py 已合併） |
+| SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取 |
 | CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，PASS/FAIL 工程師人工判定 |
 | 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
-| 儀表板 | `client/src/Dashboard.jsx` | 六狀態顏色、趨勢圖可切換 5 台設備、執行紀錄列表 |
-| SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇、步驟追蹤、安全確認、重啟後恢復步驟清單 |
+| 儀表板 | `client/src/Dashboard.jsx` | 六狀態顏色、趨勢圖可切換 5 台設備（每分鐘一點）、步驟進度條、執行紀錄列表 |
+| SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇、步驟依序追蹤（連鎖清除）、安全確認、重啟後恢復步驟清單 |
 | 異常看板 | `client/src/Errorlog.jsx` | 統計卡片 + 完整紀錄列表 |
 | QA 報告模板 | `docs/templates/` | 對外 Word 模板 |
 
 ### 下一步待開發（依優先度）
 
-1. **Dashboard DeviceCard 步驟進度顯示（X/X）**
-   - `DeviceState` 加 `completed_steps` 欄位
-   - 新增 `POST /api/devices/{id}/progress` API
-   - SOPPage 勾選步驟時呼叫此 API
-   - DeviceCard 顯示 `completed_steps / total_steps`
-   - 停止時清零，重啟時保留
+1. **DeviceCard 倒數計時器與預計結束時間**
+   - `started_at` 已寫入 DB（SOP 啟動時立即記錄）
+   - 預計結束時間 = `started_at` + `duration_hours`（從 `active_sop_json` 讀取）
+   - Dashboard DeviceCard 顯示倒數計時與 End Time
 
-2. **SOPPage 步驟依序邏輯**
-   - 目前步驟可自由勾選，需改為依序
-   - 取消某步驟 → 之後步驟連鎖取消並鎖住
-   - 移除啟動時自動勾選 Step 1、2 的邏輯
-   - Optional 步驟可跳過，不影響下一步解鎖
+2. **SOPPage 左側執行細節面板**
+   - Pgm / Step / Free Time / Cycle / End Time
+   - 對應 KSON 溫箱面板顯示格式
 
-3. **步驟軟體確認 vs 現場確認（規劃中）**
+3. **Reports 頁面前端元件**
+   - 後端 API 已完成（`/api/reports/list`、`/api/reports/csv/{id}`）
+   - 只需要前端獨立頁面
+
+4. **步驟軟體確認 vs 現場確認（規劃中）**
    - 軟體確認型：系統根據即時數據判斷是否正常，異常時顯示警告
    - 現場確認型：操作員親自到場後勾選
-   - 需在 standards.py 每個步驟加上類型標記與檢查條件
-
-4. **DeviceCard 倒數計時器與預計結束時間**
-
-5. **SOPPage 左側執行細節面板（Pgm / Step / Free Time / Cycle / End Time）**
-
-6. **Reports 頁面前端元件**
+   - 需在 `standards.py` 每個步驟加上類型標記與檢查條件
 
 ### 已刪除 / 整理的檔案
 - `backend/app/database.py` — 已刪，功能在 models.py
@@ -66,11 +60,17 @@ OFFLINE（串口斷線）
 | 表格 | 說明 |
 |------|------|
 | `device_data` | 歷史溫濕度，每 10 秒，永久保存 |
-| `device_states` | 設備狀態持久化，含 status / temperature / active_sop_json / completed_steps（待加）|
+| `device_states` | 設備狀態持久化，含 status / temperature / active_sop_json / completed_steps / started_at |
 | `sop_executions` | 執行歷程主表，含 operator / device_id / test_started_at / test_ended_at |
 | `step_records` | 每步驟完成狀態 |
 | `sop_templates` | 自訂 SOP |
 | `error_logs` | 緊急停止事件紀錄 |
+
+### DB 結構變更注意事項
+```bash
+make clean && rm backend/test.db && python backend/init_db.py && make dev
+```
+> ⚠️ 真實硬體在跑時不可刪 DB，需改用 Alembic 遷移（Phase 3 前完成）
 
 ### 報告架構
 - 內部：CSV（系統自動，ISO 17025，工程師自存）
@@ -81,7 +81,7 @@ OFFLINE（串口斷線）
 ## 1. 系統架構理論
 
 - **解耦設計**：前端 React 只負責狀態呈現，不直接控制硬體；後端 FastAPI 透過異步處理確保 I/O 不阻塞；物理模擬器作為獨立 Process 運作。
-- **數位雙生**：非單純數據呈現，需透過 `simulator/main.py` 模擬設備物理慣性（溫度平衡、熱損失）。
+- **數位雙生**：非單純數據呈現，需透過模擬器模擬設備物理慣性（溫度平衡、熱損失）。
 - **設計原則**：軟體應主動監控設備狀態並提示操作員異常，區分「軟體可驗證」步驟與「需現場確認」步驟。
 
 ---
@@ -90,15 +90,14 @@ OFFLINE（串口斷線）
 
 - **通訊協議**：模擬 KSON AICM 工業協議，採 RS-232 串口模式。
 - **虛擬橋接 (socat)**：建立 `/dev/ttys000` 與 `/dev/ttys001` 對。
-  - PTY_A（模擬器端）：接收寫入並回傳模擬數據。
-  - PTY_B（API 監聽端）：Phase 3 由 `serial_reader.py` 進行異步讀取（目前未啟用）。
 - **數據流**：`Simulator → socat → AICM_CACHE → FastAPI → React Frontend`
+- Phase 3 由 `serial_reader.py` 進行異步讀取（目前未啟用）
 
 ---
 
 ## 3. 物理模擬引擎理論
 
-- **斜率控制**：模擬溫箱升降溫速度，從 `get_ramp_rate()` 動態讀取各標準速率限制。
+- **斜率控制**：從 `get_ramp_rate()` 動態讀取各標準速率限制。
 - **收斂演算法**：目標值與實測值接近時引入 Jitter 模擬真實物理行為。
 - **狀態機行為**：
   - `EMERGENCY`：停止輸出，微幅抖動，自動寫入 error_logs。
@@ -109,22 +108,19 @@ OFFLINE（串口斷線）
 
 ## 4. 前端 UI/UX 規範
 
-- **佈局策略**：40/60 雙欄式。
-  - 40% 左側：即時趨勢圖（Recharts）與數值監控。
-  - 60% 右側：SOP 流程控制與參數設定區。
+- **佈局策略**：40/60 雙欄式（SOPPage）。
 - **主題**：GitHub dark 統一風格。
 - **響應式**：確保 15 吋 MacBook 不產生捲軸。
+- **輪詢策略**：溫濕度數字每 1 秒更新；趨勢圖每 60 秒存一點。
 
 ---
 
 ## 5. 自動化指令
 
 ```bash
-make install          # 安裝所有依賴
+make install               # 安裝所有依賴
 python backend/init_db.py  # 首次初始化資料庫（或 DB 結構變更後重建）
-make dev              # 啟動全部服務
-make clean            # 深度清理殘留程序
-make logs             # 查看 socat log
+make dev                   # 啟動全部服務
+make clean                 # 深度清理殘留程序
+make logs                  # 查看 socat log
 ```
-
-> ⚠️ DB 結構變更後需要：`make clean && rm backend/test.db && python backend/init_db.py && make dev`
