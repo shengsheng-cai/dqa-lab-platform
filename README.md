@@ -66,7 +66,7 @@ python backend/init_db.py
 make dev
 ```
 
-> ⚠️ DB 結構有變更時：`make clean && rm backend/test.db && python backend/init_db.py && make dev`
+> ⚠️ DB 結構有變更時：改 `models.py` → `alembic revision --autogenerate -m "描述"` → `alembic upgrade head`（需在 `backend/` 目錄下執行）
 
 啟動後開啟 `http://localhost:5173`，或前往 `http://localhost:5173/sop` 執行測試。
 

@@ -3,7 +3,13 @@
 所有版本修改紀錄集中於此，依日期倒序排列。
 
 ---
+## 2026-03-10（續4）
 
+**後端基礎建設**
+- **feat**: 導入 Alembic 資料庫遷移管理，取代手動刪除重建 DB 的流程
+- **feat**: 建立 initial schema 基準版本（`a517a1796fda`），涵蓋全部 6 張資料表
+- **docs**: DB 結構變更流程：改 `models.py` → `alembic revision --autogenerate` → `alembic upgrade head`
+- 
 ## 2026-03-10（續3）
 
 **Dashboard.jsx**
