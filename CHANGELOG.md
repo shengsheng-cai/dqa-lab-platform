@@ -3,6 +3,38 @@
 所有版本修改紀錄集中於此，依日期倒序排列。
 
 ---
+
+## 2026-03-10（續5）
+
+**Dashboard + 後端**
+- **feat**: `main.py` 新增 `_calc_estimated_end_at()`，依 SOP 總時長（ramp + dwell × cycles）計算預估結束時間
+- **feat**: `/api/devices` 回傳新增 `estimated_end_at`（ISO 8601），RUNNING/PAUSED 時計算，其他狀態回傳 null
+- **feat**: `Dashboard.jsx` DeviceCard 新增倒數計時器（`useCountdown` hook），每秒更新，歸零後顯示紅色 00:00:00
+- **chore**: `backend/requirements.txt` 補上 alembic
+- **chore**: `backend/init_db.py` 加上 Alembic 使用提示註解
+```
+
+---
+
+**README.md** 找到：
+```
+- **儀表板** — 即時溫濕度監控（每秒更新）、趨勢圖雙 Y 軸（溫度/濕度獨立刻度，每分鐘一點，完整測試時長 + Brush 縮放）、步驟進度條、六種狀態顏色區分
+```
+改成：
+```
+- **儀表板** — 即時溫濕度監控（每秒更新）、趨勢圖雙 Y 軸（溫度/濕度獨立刻度，每分鐘一點，完整測試時長 + Brush 縮放）、步驟進度條、倒數計時器、六種狀態顏色區分
+```
+
+---
+
+**architecture.md** 找到：
+```
+| 儀表板 | ✅ | 即時監控、趨勢圖雙 Y 軸（完整測試時長 + Brush 縮放，buffer 5760 點）、六種狀態、執行紀錄列表（30s 刷新）|
+```
+改成：
+```
+| 儀表板 | ✅ | 即時監控、趨勢圖雙 Y 軸（完整測試時長 + Brush 縮放，buffer 5760 點）、六種狀態、執行紀錄列表（30s 刷新）、DeviceCard 倒數計時器 |
+
 ## 2026-03-10（續4）
 
 **後端基礎建設**

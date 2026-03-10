@@ -124,7 +124,7 @@
 | 模組 | 狀態 | 說明 |
 |------|------|------|
 | 前端路由 | ✅ | App.jsx 統一管理 |
-| 儀表板 | ✅ | 即時監控、趨勢圖雙 Y 軸（完整測試時長 + Brush 縮放，buffer 5760 點）、六種狀態、執行紀錄列表（30s 刷新）|
+| 儀表板 | ✅ | 即時監控、趨勢圖雙 Y 軸（完整測試時長 + Brush 縮放，buffer 5760 點）、六種狀態、執行紀錄列表（30s 刷新）、DeviceCard 倒數計時器|
 | DeviceCard 步驟進度 | ✅ | completed_steps / total_steps 進度條，total_steps 由後端解析回傳 |
 | SOP 三步驟法規選擇 | ✅ | 法規→版本→測試條件，動態載入，per-device 獨立 state |
 | SELECT DEVICE 即時狀態 | ✅ | 每顆按鈕反映各設備即時狀態顏色 |
