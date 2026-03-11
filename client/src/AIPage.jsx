@@ -2,6 +2,46 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 const API_BASE = "http://localhost:8000";
 const STORAGE_KEY = "dqa_ai_chat_history";
+const MAX_HISTORY = 50;
+
+// ── 簡體中文特徵字偵測 ───────────────────────────────────────
+const SIMPLIFIED_CHARS =
+  "设备测试标准规范环境温湿电压电流频率认证报告执行确认检查记录";
+function hasSimplified(text) {
+  return SIMPLIFIED_CHARS.split("").some((c) => text.includes(c));
+}
+
+// ── localStorage 安全存入（容量保護）────────────────────────
+function saveMessages(msgs) {
+  const trimmed = msgs.slice(-MAX_HISTORY);
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  } catch {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed.slice(-20)));
+    } catch {}
+  }
+}
+
+// ── 對話匯出 .txt ────────────────────────────────────────────
+function exportChat(messages) {
+  const lines = messages.map((m) => {
+    const role = m.role === "user" ? "【使用者】" : "【AI 助手】";
+    const time = m.elapsed ? ` (⏱ ${m.elapsed}s)` : "";
+    return `${role}${time}\n${cleanText(m.content)}\n`;
+  });
+  const header = `DQA Lab 法規諮詢對話紀錄\n匯出時間：${new Date().toLocaleString("zh-TW")}\n${"─".repeat(40)}\n\n`;
+  const blob = new Blob([header + lines.join("\n")], {
+    type: "text/plain;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  a.href = url;
+  a.download = `dqa_chat_${date}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ── 前處理：清除 code block 標籤 ────────────────────────────
 function cleanText(text) {
@@ -92,7 +132,7 @@ function inlineMarkdown(text) {
   return parts;
 }
 
-// ── 預設快速提問（靜態，對話前顯示）────────────────────────
+// ── 預設快速提問 ─────────────────────────────────────────────
 const DEFAULT_QUESTIONS = [
   "我有鐵路車載電子設備，需要哪些環境測試？",
   "IEC 60068 和 EN 50155 有什麼差別？",
@@ -102,9 +142,50 @@ const DEFAULT_QUESTIONS = [
   "KEMA KEUR 適用於什麼類型的設備？",
 ];
 
+// ── 可折疊 AI 泡泡 ───────────────────────────────────────────
+const COLLAPSE_HEIGHT = 300;
+
+function CollapsibleBubble({ children }) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflow, setOverflow] = useState(false);
+  const innerRef = useRef(null);
+
+  useEffect(() => {
+    if (innerRef.current) {
+      setOverflow(innerRef.current.scrollHeight > COLLAPSE_HEIGHT);
+    }
+  }, [children]);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div
+        ref={innerRef}
+        style={{
+          maxHeight: overflow && !expanded ? COLLAPSE_HEIGHT : undefined,
+          overflow: "hidden",
+          transition: "max-height .3s ease",
+        }}
+      >
+        {children}
+      </div>
+      {overflow && (
+        <div style={expanded ? styles.collapseBarExpanded : styles.collapseBar}>
+          <button
+            style={styles.collapseBtn}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? "收合 ▲" : "顯示更多 ▼"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 單則訊息元件 ─────────────────────────────────────────────
-function MessageBubble({ m }) {
+function MessageBubble({ m, onRetry }) {
   const [copied, setCopied] = useState(false);
+  const simplified = m.role === "assistant" && hasSimplified(m.content);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(cleanText(m.content)).then(() => {
@@ -125,7 +206,7 @@ function MessageBubble({ m }) {
       >
         <div style={m.role === "user" ? styles.userBubble : styles.aiBubble}>
           {m.role === "assistant" ? (
-            renderMarkdown(m.content)
+            <CollapsibleBubble>{renderMarkdown(m.content)}</CollapsibleBubble>
           ) : (
             <p style={{ margin: 0 }}>{m.content}</p>
           )}
@@ -139,6 +220,19 @@ function MessageBubble({ m }) {
               <span style={{ ...styles.elapsed, color: "#f85149" }}>
                 已停止
               </span>
+            )}
+            {simplified && (
+              <>
+                <span style={{ ...styles.elapsed, color: "#e3b341" }}>
+                  ⚠️ 含簡體
+                </span>
+                <button
+                  style={{ ...styles.copyBtn, color: "#e3b341" }}
+                  onClick={onRetry}
+                >
+                  重新用繁體回答
+                </button>
+              </>
             )}
             <button
               style={{
@@ -171,66 +265,83 @@ export default function AIPage() {
   const [loading, setLoading] = useState(false);
   const [streamText, setStreamText] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  // 動態追問狀態
-  const [suggestions, setSuggestions] = useState(null); // null = 顯示預設；string[] = 動態追問
+  const [suggestions, setSuggestions] = useState(null);
   const [suggestLoading, setSuggestLoading] = useState(false);
+  const prevSuggestionsRef = useRef(null); // 保留上一輪建議，失敗時恢復
 
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const textareaRef = useRef(null);
   const abortControllerRef = useRef(null);
   const streamTextRef = useRef("");
   const startTimeRef = useRef(null);
 
+  // ── localStorage 同步（含容量保護）──────────────────────────
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-    } catch {}
+    saveMessages(messages);
   }, [messages]);
 
+  // ── 自動捲到底 ──────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamText]);
 
-  // ── 產生動態追問建議 ────────────────────────────────────────
-  const generateSuggestions = useCallback(async (currentMessages) => {
-    setSuggestLoading(true);
-    setSuggestions(null);
-    try {
-      // 取最近 6 則對話作為上下文，避免 prompt 過長
-      const recentHistory = currentMessages.slice(-6).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-      const prompt =
-        "根據以上對話內容，產生 3 個使用者接下來可能想追問的問題。" +
-        '只回傳 JSON 陣列，不要其他文字，格式：["問題一","問題二","問題三"]';
+  // ── textarea auto-resize ─────────────────────────────────────
+  const handleInputChange = (e) => {
+    setInput(e.target.value);
+    const el = e.target;
+    el.style.height = "auto";
+    const lineHeight = 22;
+    const minH = lineHeight * 3;
+    const maxH = lineHeight * 8;
+    el.style.height = Math.min(Math.max(el.scrollHeight, minH), maxH) + "px";
+  };
 
-      const res = await fetch(`${API_BASE}/api/ai/standards-query`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt, history: recentHistory }),
-      });
-      if (!res.ok) throw new Error("建議產生失敗");
-      const data = await res.json();
-      const raw = data.reply || "";
-      // 嘗試解析 JSON，失敗就回預設
-      const match = raw.match(/\[[\s\S]*\]/);
-      if (match) {
-        const parsed = JSON.parse(match[0]);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setSuggestions(parsed.slice(0, 3));
-          return;
+  // ── 產生追問建議 ─────────────────────────────────────────────
+  const generateSuggestions = useCallback(
+    async (currentMessages) => {
+      setSuggestLoading(true);
+      const prev = suggestions; // 保留當前建議
+      try {
+        const recentHistory = currentMessages.slice(-6).map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+        const prompt =
+          "根據以上對話內容，產生 3 個使用者接下來可能想追問的問題，必須與環境測試法規相關。" +
+          '只回傳 JSON 陣列，不要其他文字，格式：["問題一","問題二","問題三"]';
+
+        const res = await fetch(`${API_BASE}/api/ai/standards-query`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: prompt, history: recentHistory }),
+        });
+        if (!res.ok) throw new Error("建議產生失敗");
+        const data = await res.json();
+        const raw = data.reply || "";
+        const match = raw.match(/\[[\s\S]*\]/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const next = parsed.slice(0, 3);
+            prevSuggestionsRef.current = next;
+            setSuggestions(next);
+            return;
+          }
         }
+        throw new Error("解析失敗");
+      } catch (err) {
+        console.warn("[AIPage] 追問建議產生失敗，保留上一輪", err);
+        // 失敗時恢復上一輪建議，而不是回預設
+        setSuggestions(prevSuggestionsRef.current);
+      } finally {
+        setSuggestLoading(false);
       }
-    } catch (err) {
-      console.warn("[AIPage] 追問建議產生失敗，回預設", err);
-    } finally {
-      setSuggestLoading(false);
-    }
-    // 失敗時維持 null（顯示預設）
-  }, []);
+    },
+    [suggestions],
+  );
 
+  // ── 停止串流 ─────────────────────────────────────────────────
   const stopStream = () => {
     const currentText = streamTextRef.current;
     const elapsed = startTimeRef.current
@@ -249,24 +360,27 @@ export default function AIPage() {
     inputRef.current?.focus();
   };
 
+  // ── 送出訊息 ─────────────────────────────────────────────────
   const sendMessage = useCallback(
     async (text) => {
       const msg = text || input.trim();
       if (!msg || loading) return;
       setInput("");
+      // 重置 textarea 高度
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
 
       const newMessages = [...messages, { role: "user", content: msg }];
       setMessages(newMessages);
       setLoading(true);
+      setSuggestLoading(true); // 送出時立刻顯示 loading
+      setSuggestions(null);
       setStreamText("");
       streamTextRef.current = "";
       startTimeRef.current = Date.now();
 
-      const history = newMessages.slice(0, -1).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-
+      const history = newMessages
+        .slice(0, -1)
+        .map((m) => ({ role: m.role, content: m.content }));
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
@@ -301,10 +415,10 @@ export default function AIPage() {
             { role: "assistant", content: fullText, elapsed },
           ];
           setMessages(finalMessages);
-          // 串流完成後，非同步產生追問建議
           generateSuggestions(finalMessages);
         }
       } catch (err) {
+        setSuggestLoading(false);
         if (err.name !== "AbortError") {
           setMessages((prev) => [
             ...prev,
@@ -327,9 +441,28 @@ export default function AIPage() {
     [messages, input, loading, generateSuggestions],
   );
 
+  // ── 簡體重問 ─────────────────────────────────────────────────
+  const retryInTraditional = useCallback(
+    (msgIndex) => {
+      // 找到這則 AI 回覆對應的使用者問題
+      let userMsg = "";
+      for (let i = msgIndex - 1; i >= 0; i--) {
+        if (messages[i].role === "user") {
+          userMsg = messages[i].content;
+          break;
+        }
+      }
+      if (userMsg)
+        sendMessage(`[請務必使用繁體中文回覆，不可有任何簡體字] ${userMsg}`);
+    },
+    [messages, sendMessage],
+  );
+
+  // ── 清除對話 ─────────────────────────────────────────────────
   const clearChat = () => {
     setMessages([]);
     setSuggestions(null);
+    prevSuggestionsRef.current = null;
     setInput("");
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -344,9 +477,9 @@ export default function AIPage() {
     }
   };
 
-  // 目前顯示的問題列表
   const currentQuestions = suggestions ?? DEFAULT_QUESTIONS;
   const isDynamic = suggestions !== null;
+  const hasMessages = messages.length > 0;
 
   return (
     <div style={styles.page}>
@@ -358,7 +491,7 @@ export default function AIPage() {
           minWidth: sidebarOpen ? 240 : 36,
         }}
       >
-        {/* 頂部：標題 + 重置 + 收合 */}
+        {/* 頂部 */}
         <div style={styles.sidebarHeader}>
           {sidebarOpen && (
             <span style={styles.sidebarTitle}>
@@ -366,11 +499,13 @@ export default function AIPage() {
             </span>
           )}
           <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
-            {/* 重置回預設按鈕，只在顯示動態追問時出現 */}
             {sidebarOpen && isDynamic && (
               <button
                 style={styles.resetBtn}
-                onClick={() => setSuggestions(null)}
+                onClick={() => {
+                  setSuggestions(null);
+                  prevSuggestionsRef.current = null;
+                }}
                 title="回到預設問題"
               >
                 ↺
@@ -386,9 +521,8 @@ export default function AIPage() {
           </div>
         </div>
 
-        {sidebarOpen && (
+        {sidebarOpen ? (
           <>
-            {/* 產生追問建議中的 loading */}
             {suggestLoading ? (
               <div style={styles.suggestLoading}>
                 <span style={{ ...styles.dot, animationDelay: "0ms" }} />
@@ -406,12 +540,14 @@ export default function AIPage() {
                     ...styles.quickBtn,
                     borderLeft: isDynamic ? "2px solid #58a6ff33" : "none",
                     paddingLeft: isDynamic ? 8 : 10,
+                    cursor: loading ? "not-allowed" : "pointer",
+                    opacity: loading ? 0.5 : 1,
                   }}
                   onClick={() => sendMessage(q)}
                   disabled={loading}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#21262d")
-                  }
+                  onMouseEnter={(e) => {
+                    if (!loading) e.currentTarget.style.background = "#21262d";
+                  }}
                   onMouseLeave={(e) =>
                     (e.currentTarget.style.background = "transparent")
                   }
@@ -421,7 +557,30 @@ export default function AIPage() {
               ))
             )}
 
-            <div style={{ marginTop: "auto", paddingTop: 16 }}>
+            <div
+              style={{
+                marginTop: "auto",
+                paddingTop: 16,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              {/* 匯出按鈕：有對話才顯示 */}
+              {hasMessages && (
+                <button
+                  style={styles.exportBtn}
+                  onClick={() => exportChat(messages)}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "#1c2d1c")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
+                >
+                  📥 匯出對話
+                </button>
+              )}
               <button
                 style={styles.clearBtn}
                 onClick={clearChat}
@@ -439,6 +598,34 @@ export default function AIPage() {
               <span style={{ color: "#3fb950" }}>●</span> qwen2.5:7b（本機）
             </div>
           </>
+        ) : (
+          /* 收合狀態：顯示圖示 + tooltip */
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              alignItems: "center",
+              paddingTop: 4,
+            }}
+          >
+            {currentQuestions.map((q, i) => (
+              <button
+                key={i}
+                style={{
+                  ...styles.iconBtn,
+                  cursor: loading ? "not-allowed" : "pointer",
+                }}
+                onClick={() => {
+                  setSidebarOpen(true);
+                }}
+                title={q}
+                disabled={loading}
+              >
+                {isDynamic ? "💡" : "⚡"}
+              </button>
+            ))}
+          </div>
         )}
       </aside>
 
@@ -457,7 +644,11 @@ export default function AIPage() {
           )}
 
           {messages.map((m, i) => (
-            <MessageBubble key={i} m={m} />
+            <MessageBubble
+              key={i}
+              m={m}
+              onRetry={() => retryInTraditional(i)}
+            />
           ))}
 
           {loading && streamText && (
@@ -487,10 +678,13 @@ export default function AIPage() {
         {/* ── 輸入區 ── */}
         <div style={styles.inputArea}>
           <textarea
-            ref={inputRef}
-            style={styles.textarea}
+            ref={(el) => {
+              inputRef.current = el;
+              textareaRef.current = el;
+            }}
+            style={{ ...styles.textarea, minHeight: 66 }}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder="描述你的產品與測試需求，按 Enter 送出（Shift+Enter 換行）..."
             rows={3}
@@ -594,7 +788,6 @@ const styles = {
     lineHeight: 1,
     flexShrink: 0,
     transition: "background .15s",
-    title: "回到預設問題",
   },
   quickBtn: {
     background: "transparent",
@@ -604,10 +797,30 @@ const styles = {
     textAlign: "left",
     padding: "8px 10px",
     borderRadius: 6,
-    cursor: "pointer",
     lineHeight: 1.5,
     transition: "all .15s",
     width: "100%",
+  },
+  iconBtn: {
+    background: "transparent",
+    border: "none",
+    fontSize: 14,
+    padding: "4px",
+    borderRadius: 4,
+    lineHeight: 1,
+    transition: "background .15s",
+  },
+  exportBtn: {
+    background: "transparent",
+    border: "1px solid #1c4a1c",
+    color: "#3fb950",
+    fontSize: 12,
+    padding: "6px 12px",
+    borderRadius: 6,
+    cursor: "pointer",
+    width: "100%",
+    transition: "all .15s",
+    whiteSpace: "nowrap",
   },
   clearBtn: {
     background: "transparent",
@@ -636,6 +849,27 @@ const styles = {
     alignItems: "center",
     gap: 4,
     padding: "12px 10px",
+  },
+  collapseBar: {
+    position: "relative",
+    textAlign: "center",
+    paddingTop: 8,
+    background: "linear-gradient(to bottom, transparent, #161b22 60%)",
+    marginTop: -40,
+  },
+  collapseBarExpanded: {
+    textAlign: "center",
+    paddingTop: 8,
+  },
+  collapseBtn: {
+    background: "#21262d",
+    border: "1px solid #30363d",
+    color: "#58a6ff",
+    fontSize: 11,
+    padding: "3px 12px",
+    borderRadius: 10,
+    cursor: "pointer",
+    transition: "background .15s",
   },
   main: {
     flex: 1,
@@ -691,6 +925,7 @@ const styles = {
     gap: 10,
     marginTop: 4,
     paddingLeft: 4,
+    flexWrap: "wrap",
   },
   elapsed: { fontSize: 11, color: "#8b949e" },
   copyBtn: {
@@ -742,6 +977,8 @@ const styles = {
     outline: "none",
     fontFamily: "inherit",
     lineHeight: 1.6,
+    overflow: "hidden",
+    transition: "height .1s ease",
   },
   sendBtn: {
     background: "#238636",
@@ -751,7 +988,6 @@ const styles = {
     fontSize: 14,
     padding: "10px 20px",
     borderRadius: 8,
-    cursor: "pointer",
     whiteSpace: "nowrap",
     transition: "opacity .15s",
     height: 42,
