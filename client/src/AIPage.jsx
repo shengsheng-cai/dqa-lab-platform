@@ -4,6 +4,11 @@ const API_BASE = "http://localhost:8000";
 const STORAGE_KEY = "dqa_ai_chat_history";
 const MAX_HISTORY = 50;
 
+// ── 繁體中文強制前綴（只在送給 API 時加，不存入 messages）────
+// BUG FIX: 前綴只附加在送出給 Ollama 的 message 欄位，
+//          絕對不存入 messages state，避免多輪對話後不斷累積。
+const TC_PREFIX = "[請用繁體中文回覆，不可有任何簡體字] ";
+
 // ── 簡體中文特徵字偵測 ───────────────────────────────────────
 const SIMPLIFIED_CHARS =
   "设备测试标准规范环境温湿电压电流频率认证报告执行确认检查记录";
@@ -208,6 +213,7 @@ function MessageBubble({ m, onRetry }) {
           {m.role === "assistant" ? (
             <CollapsibleBubble>{renderMarkdown(m.content)}</CollapsibleBubble>
           ) : (
+            // messages.content 存的是原始使用者輸入，不含前綴，直接顯示即可
             <p style={{ margin: 0 }}>{m.content}</p>
           )}
         </div>
@@ -226,6 +232,12 @@ function MessageBubble({ m, onRetry }) {
                 <span style={{ ...styles.elapsed, color: "#e3b341" }}>
                   ⚠️ 含簡體
                 </span>
+                {/*
+                  BUG FIX: onRetry 呼叫 retryInTraditional(i)，
+                  該函式從 messages[i-1] 取出乾淨的 user content（不含前綴），
+                  再呼叫 sendMessage()，sendMessage 內部才加前綴送給 API。
+                  因此這裡不需要也不應該在按鈕層手動拼接前綴。
+                */}
                 <button
                   style={{ ...styles.copyBtn, color: "#e3b341" }}
                   onClick={onRetry}
@@ -267,7 +279,7 @@ export default function AIPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [suggestions, setSuggestions] = useState(null);
   const [suggestLoading, setSuggestLoading] = useState(false);
-  const prevSuggestionsRef = useRef(null); // 保留上一輪建議，失敗時恢復
+  const prevSuggestionsRef = useRef(null);
 
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -301,10 +313,11 @@ export default function AIPage() {
   const generateSuggestions = useCallback(
     async (currentMessages) => {
       setSuggestLoading(true);
-      const prev = suggestions; // 保留當前建議
       try {
         const recentHistory = currentMessages.slice(-6).map((m) => ({
           role: m.role,
+          // BUG FIX: m.content 已是乾淨字串（不含 TC_PREFIX），
+          //          直接送給建議 API 即可，不需要再加前綴。
           content: m.content,
         }));
         const prompt =
@@ -332,7 +345,6 @@ export default function AIPage() {
         throw new Error("解析失敗");
       } catch (err) {
         console.warn("[AIPage] 追問建議產生失敗，保留上一輪", err);
-        // 失敗時恢復上一輪建議，而不是回預設
         setSuggestions(prevSuggestionsRef.current);
       } finally {
         setSuggestLoading(false);
@@ -361,26 +373,37 @@ export default function AIPage() {
   };
 
   // ── 送出訊息 ─────────────────────────────────────────────────
+  // BUG FIX 核心：
+  //   - `rawMsg`：使用者原始輸入，存入 messages state 及 history，不含前綴
+  //   - `apiMsg`：送給 Ollama 的 message 欄位，加上 TC_PREFIX 防止語言飄移
+  //   - history 組建時從 messages state 讀取（均為乾淨字串），不會疊加前綴
   const sendMessage = useCallback(
     async (text) => {
-      const msg = text || input.trim();
-      if (!msg || loading) return;
+      // rawMsg = 使用者輸入的原始文字，不含任何前綴
+      const rawMsg = (text !== undefined ? text : input).trim();
+      if (!rawMsg || loading) return;
+
       setInput("");
-      // 重置 textarea 高度
       if (textareaRef.current) textareaRef.current.style.height = "auto";
 
-      const newMessages = [...messages, { role: "user", content: msg }];
+      // 存入 messages 的 user content 永遠是乾淨的 rawMsg
+      const newMessages = [...messages, { role: "user", content: rawMsg }];
       setMessages(newMessages);
       setLoading(true);
-      setSuggestLoading(true); // 送出時立刻顯示 loading
+      setSuggestLoading(true);
       setSuggestions(null);
       setStreamText("");
       streamTextRef.current = "";
       startTimeRef.current = Date.now();
 
+      // history 從 messages state 建立，content 均為乾淨字串（不含前綴）
       const history = newMessages
         .slice(0, -1)
         .map((m) => ({ role: m.role, content: m.content }));
+
+      // apiMsg 才加上繁體中文強制前綴，只用於本次 API 請求
+      const apiMsg = TC_PREFIX + rawMsg;
+
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
@@ -388,7 +411,8 @@ export default function AIPage() {
         const res = await fetch(`${API_BASE}/api/ai/standards-query-stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: msg, history }),
+          // 送給後端的 message 含前綴，但 history 裡的內容乾淨
+          body: JSON.stringify({ message: apiMsg, history }),
           signal: controller.signal,
         });
         if (!res.ok) throw new Error("串流請求失敗");
@@ -442,18 +466,22 @@ export default function AIPage() {
   );
 
   // ── 簡體重問 ─────────────────────────────────────────────────
+  // BUG FIX:
+  //   messages[i] 是含簡體的 AI 回覆，messages[i-1] 是對應的 user 訊息。
+  //   由於 messages 裡的 user content 已是乾淨字串（不含前綴），
+  //   直接把它傳給 sendMessage 即可。
+  //   sendMessage 內部會自動加上 TC_PREFIX 再送給 API，不會在這裡重複疊加。
   const retryInTraditional = useCallback(
     (msgIndex) => {
-      // 找到這則 AI 回覆對應的使用者問題
       let userMsg = "";
       for (let i = msgIndex - 1; i >= 0; i--) {
         if (messages[i].role === "user") {
-          userMsg = messages[i].content;
+          userMsg = messages[i].content; // 乾淨的原始輸入，無前綴
           break;
         }
       }
-      if (userMsg)
-        sendMessage(`[請務必使用繁體中文回覆，不可有任何簡體字] ${userMsg}`);
+      // 直接把乾淨的 userMsg 傳入，sendMessage 會在內部加 TC_PREFIX
+      if (userMsg) sendMessage(userMsg);
     },
     [messages, sendMessage],
   );
@@ -566,7 +594,6 @@ export default function AIPage() {
                 gap: 6,
               }}
             >
-              {/* 匯出按鈕：有對話才顯示 */}
               {hasMessages && (
                 <button
                   style={styles.exportBtn}
@@ -599,7 +626,6 @@ export default function AIPage() {
             </div>
           </>
         ) : (
-          /* 收合狀態：顯示圖示 + tooltip */
           <div
             style={{
               display: "flex",
@@ -616,9 +642,7 @@ export default function AIPage() {
                   ...styles.iconBtn,
                   cursor: loading ? "not-allowed" : "pointer",
                 }}
-                onClick={() => {
-                  setSidebarOpen(true);
-                }}
+                onClick={() => setSidebarOpen(true)}
                 title={q}
                 disabled={loading}
               >
