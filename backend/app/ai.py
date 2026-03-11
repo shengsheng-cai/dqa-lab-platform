@@ -1,5 +1,7 @@
 import httpx
+import json
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 from .standards import get_standard_tree
@@ -21,6 +23,8 @@ def _build_system_prompt() -> str:
         "以下是本系統支援的所有環境測試標準，請根據使用者描述的產品與需求，推薦最適合的法規、版本與測試條件。",
         "無論使用者用什麼語言提問，請一律使用繁體中文回覆，不可使用簡體中文。",
         "只能從以下清單中推薦，不可推薦清單以外的標準。",
+        "",
+        "=== 支援的環境測試標準 ===",
     ]
 
     for std_key, std_data in tree.items():
@@ -71,7 +75,7 @@ async def standards_query(req: QueryRequest):
     for h in req.history:
         messages.append(h)
 
-    messages.append({"role": "user", "content": req.message})
+    messages.append({"role": "user", "content": f"[請用繁體中文回應]{req.message}"})
 
     async with httpx.AsyncClient(timeout=180.0) as client:
         response = await client.post(
@@ -87,3 +91,40 @@ async def standards_query(req: QueryRequest):
 
     reply = data["message"]["content"]
     return QueryResponse(reply=reply)
+
+
+@router.post("/standards-query-stream")
+async def standards_query_stream(req: QueryRequest):
+    """
+    串流版法規諮詢，逐字回傳 Ollama 輸出。
+    前端使用 fetch + ReadableStream 讀取。
+    """
+    system_prompt = _build_system_prompt()
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for h in req.history:
+        messages.append(h)
+    messages.append({"role": "user", "content": req.message})
+
+    async def generate():
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            async with client.stream(
+                "POST",
+                OLLAMA_URL,
+                json={
+                    "model": OLLAMA_MODEL,
+                    "messages": messages,
+                    "stream": True,
+                },
+            ) as response:
+                async for line in response.aiter_lines():
+                    if line.strip():
+                        try:
+                            data = json.loads(line)
+                            token = data.get("message", {}).get("content", "")
+                            if token:
+                                yield token
+                        except Exception:
+                            pass
+
+    return StreamingResponse(generate(), media_type="text/plain")

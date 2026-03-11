@@ -8,6 +8,7 @@ import {
 import Dashboard from "./Dashboard";
 import SOPPage from "./SOPPage";
 import ErrorLog from "./ErrorLog";
+import AIPage from "./AIPage";
 
 const NavBar = () => {
   const location = useLocation();
@@ -54,6 +55,9 @@ const NavBar = () => {
       <Link to="/errors" style={linkStyle("/errors")}>
         異常看板
       </Link>
+      <Link to="/ai" style={linkStyle("/ai")}>
+        AI 諮詢
+      </Link>
     </nav>
   );
 };
@@ -75,6 +79,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/sop" element={<SOPPage />} />
             <Route path="/errors" element={<ErrorLog />} />
+            <Route path="/ai" element={<AIPage />} />
           </Routes>
         </main>
       </div>
