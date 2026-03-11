@@ -36,7 +36,7 @@
 - **執行資訊面板** — Pgm / Step / Free Time / Cycle / Now Time / End Time，對應 KSON 溫箱面板格式
 - **AI 法規諮詢** — 自然語言描述需求，串流逐字回覆，支援中途停止、複製、計時、對話持久化、智慧捲動、動態追問建議
 - **物理模擬引擎** — 即時升降溫斜率模擬，遵守各標準速率限制，每 10 秒寫 DB，依 ISO/IEC 17025:2017 §7.5 & §8.4 永久保存
-- **異常看板** — 緊急停止自動寫入事件紀錄，記錄當下溫濕度與執行中 SOP，每 10 秒自動刷新
+- **異常看板** — 緊急停止自動寫入事件紀錄，記錄當下溫濕度與執行中 SOP，每 60 秒自動刷新
 - **ISO 17025 測試報告** — 7 節格式，big5 編碼，PASS/FAIL 由授權工程師人工判定
 - **重啟恢復** — 伺服器重啟後自動恢復 RUNNING 狀態、步驟進度與 SOP 資料
 
@@ -97,7 +97,7 @@ make dev
 後端：FastAPI、Pydantic v2、SQLAlchemy 2.0、asyncio、SQLite、httpx、Alembic
 前端：React 18、Vite、Recharts、Axios
 AI：Ollama（本機）、qwen2.5:7b
-環境：Python 3.9+、Node.js 16+、macOS/Linux（需要 socat）
+環境：Python 3.9+、Node.js 18+、macOS/Linux（需要 socat）
 
 ## 延伸文件
 
