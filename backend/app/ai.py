@@ -7,7 +7,7 @@ from .standards import get_standard_tree
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
-OLLAMA_MODEL = "qwen2.5:14b"
+OLLAMA_MODEL = "qwen2.5:7b"
 
 
 def _build_system_prompt() -> str:
