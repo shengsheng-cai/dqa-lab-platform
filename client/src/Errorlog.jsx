@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
 const API = "http://localhost:8000";
@@ -25,7 +25,6 @@ const card = {
 const ErrorLog = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const prevCountRef = useRef(0);
 
   // 異常紀錄：改為每 60 秒刷新（原本 10 秒）
   // 異常事件由後端 EMERGENCY 動作寫入，前端只需定時同步，60 秒已足夠
