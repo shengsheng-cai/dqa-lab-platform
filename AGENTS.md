@@ -18,10 +18,10 @@
 | 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
 | 歷史資料 API | `backend/app/main.py` | `GET /api/devices/{id}/history`，從 started_at 至今每分鐘聚合 |
 | AI 法規諮詢後端 | `backend/app/ai.py` | `POST /api/ai/standards-query`（非串流）、`POST /api/ai/standards-query-stream`（串流），Ollama qwen2.5:7b，多輪對話，強制繁體中文 |
-| AI 法規諮詢前端 | `client/src/AIPage.jsx` | 串流逐字輸出、Markdown 渲染、快速提問側欄（可收合）、中途停止保留內容、複製回覆、回覆計時、localStorage 持久化、智慧捲動（不強制跟隨） |
-| 儀表板 | `client/src/Dashboard.jsx` | 六狀態、趨勢圖雙 Y 軸可切換 5 台、步驟進度條、倒數計時器、執行紀錄列表（30s 刷新）|
+| AI 法規諮詢前端 | `client/src/AIPage.jsx` | 串流逐字輸出、Markdown 渲染、快速提問側欄（可收合）、中途停止保留內容、複製回覆、回覆計時、localStorage 持久化、智慧捲動（不強制跟隨）、追問建議動態產生 |
+| 儀表板 | `client/src/Dashboard.jsx` | 六狀態、趨勢圖雙 Y 軸可切換 5 台、步驟進度條、倒數計時器、執行紀錄列表（60s 刷新）|
 | SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇（per-device）、步驟依序追蹤、SP+PV 波型曲線、執行資訊面板 |
-| 異常看板 | `client/src/Errorlog.jsx` | 統計卡片 + 完整紀錄列表，10s 自動刷新 |
+| 異常看板 | `client/src/Errorlog.jsx` | 統計卡片 + 完整紀錄列表，60s 自動刷新 |
 | QA 報告模板 | `docs/templates/` | 對外 Word 模板 |
 
 ### 下一步待開發（依優先度）
@@ -50,6 +50,17 @@
 | 自動捲動 | `userScrolledUpRef` 追蹤使用者是否往上捲；距底部 > 80px 停止強制跟隨；送出時呼叫 `scrollToBottomForce()` 重置 |
 | 簡體偵測 | `SIMPLIFIED_ONLY Set`，只含繁體絕對不出現的字；排除繁簡共用字（如温、湿） |
 | 追問建議 | `generateSuggestions` prompt 同樣加 `TC_PREFIX`，防止建議欄出現簡體 |
+
+### 前端輪詢策略（實際程式碼）
+| 元件 | 輪詢內容 | 頻率 |
+|------|---------|------|
+| `Dashboard.jsx` | 設備狀態（`/api/devices`） | 每 10 秒 |
+| `Dashboard.jsx` | 趨勢圖資料點 | 每分鐘存一點（整分鐘判斷）|
+| `Dashboard.jsx` | 執行紀錄列表（`/api/reports/list`） | 每 60 秒 |
+| `SOPPage.jsx` | 設備狀態（`/api/devices`） | 每 1 秒 |
+| `SOPPage.jsx` | 設備歷史資料（`/api/devices/{id}/history`） | 切換設備或 started_at 變化時、整分鐘補撈 |
+| `Errorlog.jsx` | 異常紀錄（`/api/errors/`） | 每 60 秒 |
+| `AIPage.jsx` | 無輪詢，事件驅動 | — |
 
 ### 狀態機（6 種）
 ```
@@ -115,7 +126,6 @@ alembic upgrade head
 
 - **佈局策略**：40/60 雙欄式（SOPPage）。
 - **主題**：GitHub dark 統一風格。
-- **輪詢策略**：溫濕度數字每 1 秒更新；趨勢圖每 60 秒存一點；執行紀錄每 30 秒刷新；異常看板每 10 秒刷新。
 - **捲動架構**：`#root` flex column + `height: 100vh`；各頁面自己管理內部捲動。
 - **per-device state**：SOPPage 的法規選擇、步驟勾選、safetyChecked、chartHistory 都儲存在 `deviceStates[deviceId]`，切換設備不互相干擾。
 - **AIPage 串流架構**：`fetch` + `ReadableStream`；`streamTextRef`（ref）追蹤即時內容供 `stopStream()` 讀取，避免 closure 問題；`startTimeRef` 計算回覆耗時。
