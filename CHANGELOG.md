@@ -6,14 +6,34 @@
 
 ## 2026-03-11
 
-**AI 輔助模組 — 法規諮詢助手（後端）**
+**AI 輔助模組 — 法規諮詢助手（後端 + 前端完整交付）**
 
-- **feat**: 新增 `backend/app/ai.py`，實作 `POST /api/ai/standards-query` 端點
+後端
+
+- **feat**: 新增 `backend/app/ai.py`，實作 `POST /api/ai/standards-query` 端點（非串流）
+- **feat**: 新增 `POST /api/ai/standards-query-stream` 串流端點，使用 FastAPI `StreamingResponse` + Ollama `stream: true`
 - **feat**: `_build_system_prompt()` 將 STANDARD_TREE 64 個測試條件摘要嵌入 system prompt
-- **feat**: 串接本機 Ollama `qwen2.5:7b`，支援多輪對話（history 帶入）
+- **feat**: 串接本機 Ollama `qwen2.5:7b`，支援多輪對話（history 陣列帶入）
 - **feat**: `main.py` 註冊 `ai_router`
+- **fix**: system prompt 強化繁體中文指令（4 條明確規則：禁簡體、禁 code block、限定推薦清單、強制語言）
+- **fix**: user message 前加入 `[請用繁體中文回覆]` 前綴，解決長對話後語言飄移問題
 - **fix**: `dev_start.sh` 後端改用 `../venv/bin/uvicorn`，確保 httpx 等套件正確載入
 - **chore**: `backend/requirements.txt` 補上 `httpx`
+
+前端
+
+- **feat**: 新增 `client/src/AIPage.jsx`，完整法規諮詢對話介面
+- **feat**: 串流輸出 — 使用 `fetch` + `ReadableStream` 逐字顯示，等待時跳動點點，回覆中閃爍游標 `▍`
+- **feat**: Markdown 渲染 — 支援標題、條列、數字清單、`**bold**`、`` `code` ``
+- **feat**: code block 過濾 — `cleanText()` 自動移除 ` ```plaintext ` 等模型輸出標籤
+- **feat**: 快速提問按鈕 — 6 個預設問題，點擊直接送出
+- **feat**: 中途停止 — 送出後按鈕切換為「⏹ 停止」，使用 `AbortController` 中斷串流，已輸出內容透過 `streamTextRef` 保留並存入對話紀錄
+- **feat**: 複製回覆按鈕 — 每則 AI 回覆底部顯示「複製」，點擊後顯示「✓ 已複製」2 秒
+- **feat**: 回覆計時 — 每則 AI 回覆底部顯示 `⏱ Xs` 花費秒數
+- **feat**: 對話紀錄 localStorage 儲存 — 重開瀏覽器對話還在，清除對話同時清 storage
+- **feat**: 左側欄收合 — 側欄頂部右上角 `◀ ▶` 按鈕，動畫滑入滑出（width 240 ↔ 36）
+- **feat**: 對話區獨立捲動 — `chatArea` 獨立 overflow，可自由往上捲動歷史，輸入框固定底部
+- **feat**: `App.jsx` 新增 `/ai` 路由與導覽列「AI 諮詢」連結；修正 `marginRight:a 16` typo
 
 ---
 

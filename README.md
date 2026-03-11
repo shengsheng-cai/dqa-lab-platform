@@ -18,7 +18,7 @@
 
 ## AI 輔助模組
 
-**法規諮詢助手**（已完成後端）— 使用者以自然語言描述產品與目標，LLM 對應建議法規版本與測試條件，適用於開案前初步評估。串接本機 Ollama `qwen2.5:7b`，不依賴雲端，資料不出內網。
+**法規諮詢助手**（✅ 已完成）— 使用者以自然語言描述產品與目標，LLM 對應建議法規版本與測試條件，適用於開案前初步評估。串接本機 Ollama `qwen2.5:7b`，不依賴雲端，資料不出內網。支援串流逐字輸出、多輪對話、對話記錄持久化。
 
 **治具管理助手**（規劃中）— 使用者描述待測產品與需求，LLM 推理對應所需治具組合，自動產出借用申請送管理者確認。
 
@@ -34,6 +34,7 @@
 - **SOP 步驟依序確認** — 步驟必須依序勾選，取消時連鎖清除後續，Optional 步驟可跳過，每次勾選即時同步後端
 - **完整波型曲線** — SP 目標曲線（虛線）與 PV 實際曲線（實線）疊加顯示，X 軸為完整測試時長
 - **執行資訊面板** — Pgm / Step / Free Time / Cycle / Now Time / End Time，對應 KSON 溫箱面板格式
+- **AI 法規諮詢** — 自然語言描述需求，串流逐字回覆，支援中途停止、複製、計時、對話持久化
 - **物理模擬引擎** — 即時升降溫斜率模擬，遵守各標準速率限制，每 10 秒寫 DB，依 ISO/IEC 17025:2017 §7.5 & §8.4 永久保存
 - **異常看板** — 緊急停止自動寫入事件紀錄，記錄當下溫濕度與執行中 SOP，每 10 秒自動刷新
 - **ISO 17025 測試報告** — 7 節格式，big5 編碼，PASS/FAIL 由授權工程師人工判定
@@ -65,7 +66,7 @@ make dev
 
 > ⚠️ DB 結構有變更時：改 `models.py` → `alembic revision --autogenerate -m "描述"` → `alembic upgrade head`（需在 `backend/` 目錄下執行）
 
-啟動後開啟 `http://localhost:5173`，或前往 `http://localhost:5173/sop` 執行測試。
+啟動後開啟 `http://localhost:5173`，或前往 `http://localhost:5173/sop` 執行測試，`http://localhost:5173/ai` 使用 AI 法規諮詢。
 
 互動式 API 文件：`http://localhost:8000/docs`
 
@@ -88,11 +89,12 @@ make dev
 | POST | `/api/stop/{device_id}/emergency` | 緊急停止 |
 | POST | `/api/stop/{device_id}/pause` | 暫停切換（RUNNING ↔ PAUSED） |
 | POST | `/api/stop/{device_id}/normal` | 正常停止（自動降溫回 IDLE） |
-| POST | `/api/ai/standards-query` | AI 法規諮詢（自然語言 → 推薦法規與測試條件） |
+| POST | `/api/ai/standards-query` | AI 法規諮詢（非串流） |
+| POST | `/api/ai/standards-query-stream` | AI 法規諮詢（串流，前端主要使用） |
 
 ## 技術堆棧
 
-後端：FastAPI、Pydantic v2、SQLAlchemy 2.0、asyncio、SQLite、httpx
+後端：FastAPI、Pydantic v2、SQLAlchemy 2.0、asyncio、SQLite、httpx、Alembic
 前端：React 18、Vite、Recharts、Axios
 AI：Ollama（本機）、qwen2.5:7b
 環境：Python 3.9+、Node.js 16+、macOS/Linux（需要 socat）

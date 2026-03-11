@@ -17,7 +17,8 @@
 | CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，PASS/FAIL 工程師人工判定 |
 | 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
 | 歷史資料 API | `backend/app/main.py` | `GET /api/devices/{id}/history`，從 started_at 至今每分鐘聚合 |
-| AI 法規諮詢後端 | `backend/app/ai.py` | `POST /api/ai/standards-query`，串接本機 Ollama qwen2.5:7b，多輪對話，繁體中文 |
+| AI 法規諮詢後端 | `backend/app/ai.py` | `POST /api/ai/standards-query`（非串流）、`POST /api/ai/standards-query-stream`（串流），Ollama qwen2.5:7b，多輪對話，強制繁體中文 |
+| AI 法規諮詢前端 | `client/src/AIPage.jsx` | 串流逐字輸出、Markdown 渲染、快速提問側欄（可收合）、中途停止保留內容、複製回覆、回覆計時、localStorage 持久化 |
 | 儀表板 | `client/src/Dashboard.jsx` | 六狀態、趨勢圖雙 Y 軸可切換 5 台、步驟進度條、倒數計時器、執行紀錄列表（30s 刷新）|
 | SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇（per-device）、步驟依序追蹤、SP+PV 波型曲線、執行資訊面板 |
 | 異常看板 | `client/src/Errorlog.jsx` | 統計卡片 + 完整紀錄列表，10s 自動刷新 |
@@ -25,27 +26,23 @@
 
 ### 下一步待開發（依優先度）
 
-1. **AI 法規諮詢前端（AIPage.jsx）**
-   - 對話介面 + Markdown 渲染
-   - 串流輸出（Ollama stream: true）
-   - 快速提問按鈕
-   - 點擊推薦條件跳轉 SOPPage 自動帶入
-   - 對話紀錄儲存 + 匯出
+1. **AI 治具管理助手**（`/api/ai/fixture-recommend`）— 後端 + 前端，構思中
 
-2. **AI 治具管理助手**（`/api/ai/fixture-recommend`）
+2. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
 
-3. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
+3. **步驟軟體確認 vs 現場確認**（Phase 3 前再做）
 
-4. **步驟軟體確認 vs 現場確認**（Phase 3 前再做）
-
-5. **Phase 3**：多台設備架構、治具資料庫、認證系統、RS-485 真實通訊
+4. **Phase 3**：多台設備架構、治具資料庫、認證系統、RS-485 真實通訊
 
 ### AI 模組技術規格
 - 模型：`qwen2.5:7b`（本機 Ollama，`http://localhost:11434`）
 - 備用：`qwen2.5:14b`（需關閉其他應用釋放記憶體）
 - timeout：180 秒
-- system prompt：內建 STANDARD_TREE 64 個測試條件摘要，強制繁體中文回覆
+- 端點：`/api/ai/standards-query`（非串流）、`/api/ai/standards-query-stream`（串流，前端主要使用）
+- system prompt：4 條語言規則（禁簡體、禁 code block、限定推薦清單、強制繁體中文），內建 STANDARD_TREE 64 個測試條件摘要
+- user message 前綴：`[請用繁體中文回覆]`，防止長對話語言飄移
 - 多輪對話：history 陣列帶入
+- 前端儲存：`localStorage`，key = `dqa_ai_chat_history`
 
 ### 狀態機（6 種）
 ```
@@ -114,6 +111,7 @@ alembic upgrade head
 - **輪詢策略**：溫濕度數字每 1 秒更新；趨勢圖每 60 秒存一點；執行紀錄每 30 秒刷新；異常看板每 10 秒刷新。
 - **捲動架構**：`#root` flex column + `height: 100vh`；各頁面自己管理內部捲動。
 - **per-device state**：SOPPage 的法規選擇、步驟勾選、safetyChecked、chartHistory 都儲存在 `deviceStates[deviceId]`，切換設備不互相干擾。
+- **AIPage 串流架構**：`fetch` + `ReadableStream`；`streamTextRef`（ref）追蹤即時內容供 `stopStream()` 讀取，避免 closure 問題；`startTimeRef` 計算回覆耗時。
 
 ---
 
