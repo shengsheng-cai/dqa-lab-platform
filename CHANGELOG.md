@@ -4,6 +4,19 @@
 
 ---
 
+## 2026-03-11
+
+**AI 輔助模組 — 法規諮詢助手（後端）**
+
+- **feat**: 新增 `backend/app/ai.py`，實作 `POST /api/ai/standards-query` 端點
+- **feat**: `_build_system_prompt()` 將 STANDARD_TREE 64 個測試條件摘要嵌入 system prompt
+- **feat**: 串接本機 Ollama `qwen2.5:7b`，支援多輪對話（history 帶入）
+- **feat**: `main.py` 註冊 `ai_router`
+- **fix**: `dev_start.sh` 後端改用 `../venv/bin/uvicorn`，確保 httpx 等套件正確載入
+- **chore**: `backend/requirements.txt` 補上 `httpx`
+
+---
+
 ## 2026-03-10
 
 **後端**
