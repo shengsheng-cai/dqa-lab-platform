@@ -34,7 +34,6 @@ const ErrorLog = () => {
         .get(`${API}/api/errors/`)
         .then((r) => {
           setLogs(r.data);
-          prevCountRef.current = r.data.length;
         })
         .catch((err) => console.error("[ErrorLog] fetch:", err))
         .finally(() => setLoading(false));
