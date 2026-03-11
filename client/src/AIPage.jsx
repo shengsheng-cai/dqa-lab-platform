@@ -402,8 +402,11 @@ export default function AIPage() {
           //          直接送給建議 API 即可，不需要再加前綴。
           content: m.content,
         }));
+        // 追問建議 prompt 同樣加上繁體前綴，避免模型回傳簡體建議文字
         const prompt =
+          TC_PREFIX +
           "根據以上對話內容，產生 3 個使用者接下來可能想追問的問題，必須與環境測試法規相關。" +
+          "所有問題必須使用繁體中文，不可有任何簡體字。" +
           '只回傳 JSON 陣列，不要其他文字，格式：["問題一","問題二","問題三"]';
 
         const res = await fetch(`${API_BASE}/api/ai/standards-query`, {
