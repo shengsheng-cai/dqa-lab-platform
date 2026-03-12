@@ -1040,7 +1040,6 @@ const styles = {
     color: "#6e7681",
     lineHeight: 1.5,
     marginTop: 6,
-    paddingLeft: 4,
     borderLeft: "2px solid #21262d",
     paddingLeft: 8,
   },
