@@ -97,7 +97,8 @@ function generateSP(sop) {
   return pts.map((p) => ({
     ...p,
     sp_temp: Math.round(p.sp_temp * 10) / 10,
-    sp_humi: humiVal,
+    // 溫度低於 0°C 時無法控濕，sp_humi 設為 null
+    sp_humi: p.sp_temp < 0 ? null : humiVal,
     label: fmtMin(p.min),
   }));
 }
@@ -140,8 +141,10 @@ const ConditionCard = ({ test }) => {
     [
       "濕度設定",
       test.humidity_rh_percent != null
-        ? `${test.humidity_rh_percent} %RH`
-        : "N/A",
+        ? test.low_temperature != null && test.low_temperature < 0
+          ? `${test.humidity_rh_percent} %RH（低溫段 <0°C 無濕度）`
+          : `${test.humidity_rh_percent} %RH`
+        : "N/A（無濕度控制）",
     ],
     ["通電狀態", test.power_on ? "通電 (Powered)" : "非通電 (Unpowered)"],
     ["溫度容差", `± ${test.temp_tolerance} °C`],
@@ -460,6 +463,7 @@ const SOPPage = () => {
   );
   const [emergencyFlash, setEmergencyFlash] = useState(false);
   const [standardTree, setStandardTree] = useState({});
+  const [treeLoaded, setTreeLoaded] = useState(false); // 標準樹是否已載入完成
   const [startError, setStartError] = useState(""); // 啟動錯誤訊息（取代 alert）
 
   // 防止整分鐘補撈 history 重複觸發（3秒輪詢下仍可能在同一分鐘觸發多次）
@@ -516,8 +520,14 @@ const SOPPage = () => {
   useEffect(() => {
     axios
       .get(`${API}/api/sop/standards/tree`)
-      .then((r) => setStandardTree(r.data))
-      .catch((e) => console.error("[SOPPage] standards tree:", e));
+      .then((r) => {
+        setStandardTree(r.data);
+        setTreeLoaded(true);
+      })
+      .catch((e) => {
+        console.error("[SOPPage] standards tree:", e);
+        setTreeLoaded(true); // 即使失敗也結束 loading，不卡死畫面
+      });
   }, []);
 
   useEffect(() => {
@@ -1154,17 +1164,25 @@ const SOPPage = () => {
                   <span>🔬</span>
                   <h2>選擇測試標準</h2>
                 </div>
-                <SelectGroup
-                  step={1}
-                  title="選擇法規"
-                  accent="#58a6ff"
-                  items={Object.entries(standardTree).map(([k, v]) => [
-                    k,
-                    v.label,
-                  ])}
-                  selected={selectedStd}
-                  onSelect={handleSelectStd}
-                />
+                {!treeLoaded ? (
+                  <div
+                    style={{ color: "#484f58", fontSize: 12, padding: "8px 0" }}
+                  >
+                    ⏳ 載入標準資料中...
+                  </div>
+                ) : (
+                  <SelectGroup
+                    step={1}
+                    title="選擇法規"
+                    accent="#58a6ff"
+                    items={Object.entries(standardTree).map(([k, v]) => [
+                      k,
+                      v.label,
+                    ])}
+                    selected={selectedStd}
+                    onSelect={handleSelectStd}
+                  />
+                )}
                 {stdData && (
                   <>
                     <div
