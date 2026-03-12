@@ -30,7 +30,6 @@ const SAFETY_CHECKS = [
 
 const ACTIVE_STATUSES = ["RUNNING", "PAUSED"];
 
-// 把 full_time 轉成測試開始後的「經過分鐘數」
 function toElapsedMin(startedAt, fullTime) {
   if (!startedAt || !fullTime) return null;
   try {
@@ -42,14 +41,12 @@ function toElapsedMin(startedAt, fullTime) {
   }
 }
 
-// 格式化分鐘數為 "0h00m" 字串
 function fmtMin(min) {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}m` : `${m}m`;
 }
 
-// 從 SOP 參數生成完整 SP 目標曲線，每分鐘一點
 function generateSP(sop) {
   if (!sop) return [];
   const ramp = sop.ramp_rate || 1;
@@ -90,7 +87,6 @@ function generateSP(sop) {
     }
     pushRamp(low, ambientTemp);
   } else {
-    // 修正：單次測試正確選擇起始溫度
     const startTemp = low < ambientTemp ? low : ambientTemp;
     const targetTemp = high !== ambientTemp ? high : low;
     pushRamp(startTemp, targetTemp);
@@ -115,7 +111,6 @@ const STATUS_CONFIG = {
   EMERGENCY: { color: "#f85149", bg: "#2d0f0f" },
 };
 
-// 各設備獨立 state 初始值
 const initDeviceState = () => ({
   activeSop: null,
   completedSteps: {},
@@ -123,7 +118,6 @@ const initDeviceState = () => ({
   safetyChecked: [false, false, false, false],
   chartHistory: [],
   chartStartedAt: null,
-  // 法規選擇也放入 per-device state，切換設備不互相干擾
   selectedStd: null,
   selectedVer: null,
   selectedTest: null,
@@ -287,7 +281,6 @@ const SelectGroup = ({ step, title, items, selected, onSelect, accent }) => {
   );
 };
 
-// 合併 SP 曲線與 PV 實際資料
 function mergeSpPv(spData, pvData) {
   const map = {};
   spData.forEach((p) => {
@@ -459,7 +452,6 @@ const TempChart = ({ sop, pvData, startedAt }) => {
   );
 };
 
-// ── 主元件 ────────────────────────────────────────────────
 const SOPPage = () => {
   const [selectedDevice, setSelectedDevice] = useState("KSON_CH01");
   const [allDevices, setAllDevices] = useState({});
@@ -468,6 +460,10 @@ const SOPPage = () => {
   );
   const [emergencyFlash, setEmergencyFlash] = useState(false);
   const [standardTree, setStandardTree] = useState({});
+  const [startError, setStartError] = useState(""); // 啟動錯誤訊息（取代 alert）
+
+  // 防止整分鐘補撈 history 重複觸發（3秒輪詢下仍可能在同一分鐘觸發多次）
+  const lastHistoryMinuteRef = useRef(-1);
 
   const data = allDevices[selectedDevice] || {
     status: "OFFLINE",
@@ -490,7 +486,6 @@ const SOPPage = () => {
   const doneCnt = Object.values(ds.completedSteps).filter(Boolean).length;
   const allStepsDone = ds.activeSop && doneCnt === totalSteps;
 
-  // 從 per-device state 讀取法規選擇
   const { selectedStd, selectedVer, selectedTest } = ds;
   const stdData = selectedStd ? standardTree[selectedStd] : null;
   const verData = selectedVer ? stdData?.versions?.[selectedVer] : null;
@@ -509,7 +504,6 @@ const SOPPage = () => {
     }));
   };
 
-  // EMERGENCY 閃爍
   useEffect(() => {
     if (!isEmergency) {
       setEmergencyFlash(false);
@@ -519,7 +513,6 @@ const SOPPage = () => {
     return () => clearInterval(t);
   }, [isEmergency]);
 
-  // 載入標準樹
   useEffect(() => {
     axios
       .get(`${API}/api/sop/standards/tree`)
@@ -527,7 +520,6 @@ const SOPPage = () => {
       .catch((e) => console.error("[SOPPage] standards tree:", e));
   }, []);
 
-  // 每秒輪詢設備狀態，整分時補撈 history
   useEffect(() => {
     const t = setInterval(() => {
       axios
@@ -547,19 +539,19 @@ const SOPPage = () => {
               const prevDS = prev[id];
               let restoredSop = prevDS.activeSop;
 
-              // 從 DB 恢復 activeSop
               if (!restoredSop && current.active_sop_json) {
                 try {
                   const parsed = JSON.parse(current.active_sop_json);
                   if (!parsed.steps || parsed.steps.length === 0) {
-                    parsed.steps = _defaultSteps();
+                    console.warn(
+                      "[SOPPage] active_sop_json 沒有 steps，請確認後端 SOP 資料完整性",
+                    );
                   }
                   restoredSop = parsed;
                 } catch {
                   /* ignore */
                 }
               }
-              // 停止後清除
               if (
                 !current.active_sop_json &&
                 prevDS.activeSop &&
@@ -572,9 +564,14 @@ const SOPPage = () => {
             return next;
           });
 
-          // 整分時補撈選中設備的 history
+          // 整分時補撈 history，用 lastHistoryMinuteRef 確保每分鐘只打一次
           const now = new Date();
-          if (now.getSeconds() < 5) {
+          const currentMinute = now.getHours() * 60 + now.getMinutes();
+          if (
+            now.getSeconds() < 10 &&
+            currentMinute !== lastHistoryMinuteRef.current
+          ) {
+            lastHistoryMinuteRef.current = currentMinute;
             const selDevice = map[selectedDevice];
             if (selDevice?.started_at) {
               axios
@@ -594,11 +591,10 @@ const SOPPage = () => {
           }
         })
         .catch(() => {});
-    }, 1000);
+    }, 3000); // ← 改為 3 秒，原本 1 秒
     return () => clearInterval(t);
   }, [selectedDevice]);
 
-  // 切換設備或 started_at 變化時重撈 history
   const startedAt = allDevices[selectedDevice]?.started_at;
   useEffect(() => {
     if (!startedAt) {
@@ -616,7 +612,6 @@ const SOPPage = () => {
       .catch(() => {});
   }, [selectedDevice, startedAt]);
 
-  // 法規選擇（寫入 per-device state）
   const handleSelectStd = (key) =>
     updateDS(selectedDevice, {
       selectedStd: key,
@@ -628,7 +623,6 @@ const SOPPage = () => {
   const handleSelectTest = (key) =>
     updateDS(selectedDevice, { selectedTest: key });
 
-  // 步驟依序鎖定邏輯
   const steps = ds.activeSop?.steps || [];
 
   const isStepUnlocked = (stepIndex) => {
@@ -641,14 +635,12 @@ const SOPPage = () => {
   const toggleStep = async (stepId, stepIndex) => {
     const newCompleted = { ...ds.completedSteps };
     if (newCompleted[stepId]) {
-      // 取消：連鎖清除此步驟及後續所有步驟
       steps.slice(stepIndex).forEach((s) => delete newCompleted[s.step_id]);
     } else {
       newCompleted[stepId] = true;
     }
     updateDS(selectedDevice, { completedSteps: newCompleted });
 
-    // 同步後端 progress
     try {
       await axios.post(`${API}/api/devices/${selectedDevice}/progress`, {
         completed: Object.values(newCompleted).filter(Boolean).length,
@@ -660,6 +652,7 @@ const SOPPage = () => {
 
   const startSop = async () => {
     if (!testData) return;
+    setStartError("");
     try {
       await axios.post(`${API}/api/sop/start`, {
         sop_id: testData.sop_id,
@@ -674,14 +667,19 @@ const SOPPage = () => {
       } catch {
         /* 備案 */
       }
-      if (steps.length === 0) steps = _defaultSteps();
+      if (steps.length === 0) {
+        console.warn("[SOPPage] 後端沒有回傳 steps，請確認 SOP 資料完整性");
+        setStartError("⚠️ SOP 步驟資料不完整，請確認後端 SOP 設定後重試。");
+        return;
+      }
       updateDS(selectedDevice, {
         activeSop: { ...testData, steps },
         completedSteps: {},
         savedExecutionId: null,
       });
-    } catch {
-      alert("啟動程序失敗，請確認後端是否正常運作。");
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || "未知錯誤";
+      setStartError(`❌ 啟動程序失敗：${msg}。請確認後端是否正常運作。`);
     }
   };
 
@@ -695,6 +693,7 @@ const SOPPage = () => {
           savedExecutionId: null,
           safetyChecked: [false, false, false, false],
         });
+        setStartError("");
       }
     } catch (e) {
       console.error("[SOPPage] action:", e);
@@ -716,7 +715,7 @@ const SOPPage = () => {
       });
       updateDS(selectedDevice, { savedExecutionId: res.data.id });
     } catch {
-      alert("❌ 儲存失敗，請確認後端連線。");
+      setStartError("❌ 儲存失敗，請確認後端連線。");
     }
   };
 
@@ -748,7 +747,6 @@ const SOPPage = () => {
           </div>
         </div>
 
-        {/* 設備選擇器 */}
         <div
           style={{
             background: "#161b22",
@@ -811,7 +809,6 @@ const SOPPage = () => {
           </div>
         </div>
 
-        {/* 執行資訊面板（測試進行中才顯示） */}
         {isActive &&
           ds.activeSop &&
           data.started_at &&
@@ -885,7 +882,6 @@ const SOPPage = () => {
             );
           })()}
 
-        {/* 趨勢圖 */}
         <div className="info-card" style={{ padding: "14px 16px 10px" }}>
           <div
             style={{
@@ -914,7 +910,6 @@ const SOPPage = () => {
 
       <main className="control-side">
         <div className="scroll-wrapper">
-          {/* 系統控制面板 */}
           <section
             className="operation-box"
             style={
@@ -989,7 +984,6 @@ const SOPPage = () => {
             </div>
           </section>
 
-          {/* 步驟確認（執行中） */}
           {isActive && ds.activeSop && (
             <section
               className="operation-box"
@@ -1060,7 +1054,6 @@ const SOPPage = () => {
                   </label>
                 );
               })}
-              {/* 進度條 */}
               <div style={{ marginTop: 8, marginBottom: 4 }}>
                 <div
                   style={{
@@ -1151,7 +1144,6 @@ const SOPPage = () => {
             </section>
           )}
 
-          {/* 法規選擇（待機中） */}
           {!isActive && (
             <>
               <section
@@ -1307,6 +1299,21 @@ const SOPPage = () => {
                       ? `🚀 啟動 ${selectedDevice}：${testData.name}`
                       : "請先確認所有注意事項"}
                   </button>
+                  {startError && (
+                    <div
+                      style={{
+                        marginTop: 10,
+                        padding: "10px 14px",
+                        background: "#2d0f0f",
+                        border: "1px solid #f8514944",
+                        borderRadius: 6,
+                        color: "#f85149",
+                        fontSize: 12,
+                      }}
+                    >
+                      {startError}
+                    </div>
+                  )}
                 </section>
               )}
             </>
@@ -1316,41 +1323,5 @@ const SOPPage = () => {
     </div>
   );
 };
-
-// 預設步驟（備案用）
-function _defaultSteps() {
-  return [
-    {
-      step_id: 1,
-      name: "設備開機與預檢",
-      description: "確認電源、保險絲、水箱水位正常，記錄初始外觀狀態。",
-      optional: false,
-    },
-    {
-      step_id: 2,
-      name: "設定測試參數",
-      description: "確認目標溫度、速率、時間等參數已正確設定。",
-      optional: false,
-    },
-    {
-      step_id: 3,
-      name: "啟動並監控測試",
-      description: "按下 RUN 鍵，監控溫度曲線是否正常。",
-      optional: false,
-    },
-    {
-      step_id: 4,
-      name: "測試完成確認",
-      description: "確認測試完成，設備無異常，拍照記錄。",
-      optional: false,
-    },
-    {
-      step_id: 5,
-      name: "儲存測試紀錄",
-      description: "點擊儲存按鈕，下載 CSV 測試報告。",
-      optional: false,
-    },
-  ];
-}
 
 export default SOPPage;

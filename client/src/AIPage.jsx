@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 const API_BASE = "http://localhost:8000";
 const STORAGE_KEY = "dqa_ai_chat_history";
+const STORAGE_VERSION = 1; // 版本號，結構變動時遞增，舊資料自動清除
 const MAX_HISTORY = 50;
 
 // ── 繁體中文強制前綴（只在送給 API 時加，不存入 messages）────
@@ -71,15 +72,45 @@ function hasSimplified(text) {
   return [...text].some((c) => SIMPLIFIED_ONLY.has(c));
 }
 
-// ── localStorage 安全存入（容量保護）────────────────────────
+// ── localStorage 安全存入（含版本號）────────────────────────
 function saveMessages(msgs) {
   const trimmed = msgs.slice(-MAX_HISTORY);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ version: STORAGE_VERSION, messages: trimmed }),
+    );
   } catch {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed.slice(-20)));
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          version: STORAGE_VERSION,
+          messages: trimmed.slice(-20),
+        }),
+      );
     } catch {}
+  }
+}
+
+// ── localStorage 安全讀取（版本不符自動清除）────────────────
+function loadMessages() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    // 舊格式（直接是陣列）或版本不符 → 清除，從空白開始
+    if (
+      !parsed ||
+      parsed.version !== STORAGE_VERSION ||
+      !Array.isArray(parsed.messages)
+    ) {
+      localStorage.removeItem(STORAGE_KEY);
+      return [];
+    }
+    return parsed.messages;
+  } catch {
+    return [];
   }
 }
 
@@ -320,14 +351,8 @@ function MessageBubble({ m, onRetry }) {
 
 // ── 主元件 ───────────────────────────────────────────────────
 export default function AIPage() {
-  const [messages, setMessages] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  // ← 改用 loadMessages()，會檢查版本號，舊格式自動清除
+  const [messages, setMessages] = useState(() => loadMessages());
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [streamText, setStreamText] = useState("");
