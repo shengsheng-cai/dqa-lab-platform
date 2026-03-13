@@ -5,6 +5,11 @@ EN 50155 歐洲鐵路電子設備標準
 
 ramp_rate：✅ 法規曲線圖明文：1°C/min
 RTV：✅ 法規明文：≥20°C/min
+
+OT4 通電測試說明：
+  - 升溫 + 三段電壓（×0.7 / operating / ×1.25）各 2h + 降溫 ≈ 法規參考 8h
+  - dwell_time_hours = 2（單一電壓步驟停留時間）
+  - ST1 延伸條件（OT4+15°C = 85°C）獨立一條
 """
 
 from ._base import steps_single_temp, steps_cycle
@@ -26,7 +31,7 @@ TREE = {
                     "high_temperature": 55.0,
                     "low_temperature": None,
                     "target_temperature": 55.0,
-                    "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
+                    "ramp_rate": 1.0,
                     "dwell_time_hours": 16,
                     "cycles": 1,
                     "humidity_rh_percent": None,
@@ -217,6 +222,144 @@ TREE = {
                     "humi_tolerance": 5.0,
                     "reference": "EN 50155:2017 Table 1 OT4",
                     "steps": steps_single_temp(70.0, 16, "high"),
+                },
+                "OT4_High_Operating": {
+                    "sop_id": "en50155_2017_ot4_high_operating",
+                    "name": "OT4 高溫通電測試：+70°C，2h/電壓步驟，三段電壓（通電）",
+                    "test_type": "chamber",
+                    "version": "EN 50155:2017",
+                    "description": "OT4 高溫通電功能測試（Continuous Operation Checks）。通電狀態，70°C 下依序執行三段電壓：下限×0.7 → 額定 → 上限×1.25，每段停留 2 小時並確認功能正常。升降溫含在總測試時間內，法規參考總時間約 8 小時。對應 SOP 方法驗證報告 Method III（EN 50155:2017）。",
+                    "high_temperature": 70.0,
+                    "low_temperature": None,
+                    "target_temperature": 70.0,
+                    "ramp_rate": 1.0,  # ✅ 公司 SOP 文件確認：1°C/min
+                    "dwell_time_hours": 2,
+                    "cycles": 1,
+                    "humidity_rh_percent": None,
+                    "humidity_control": False,
+                    "power_on": True,
+                    "temp_tolerance": 2.0,
+                    "humi_tolerance": 5.0,
+                    "reference": "EN 50155:2017 Clause 13.4.5 OT4 + IEC 60068-2-2 Test Bb",
+                    "steps": [
+                        {
+                            "step_id": 1,
+                            "name": "升溫至 70°C，確認穩定",
+                            "description": "通電狀態，升溫至 70°C，速率 1°C/min。確認溫度穩定在 70°C ± 2°C。",
+                            "requires_photo": False,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 2,
+                            "name": "電壓段 1：下限 ×0.7，2 小時",
+                            "description": "將電源調整至產品額定電壓下限 ×0.7，維持 70°C，通電運作 2 小時。確認設備功能正常，記錄電壓值。",
+                            "requires_photo": False,
+                            "requires_parameters": True,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 3,
+                            "name": "電壓段 2：額定電壓，2 小時",
+                            "description": "將電源調整至產品額定操作電壓，維持 70°C，通電運作 2 小時。確認設備功能正常，記錄電壓值。",
+                            "requires_photo": False,
+                            "requires_parameters": True,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 4,
+                            "name": "電壓段 3：上限 ×1.25，2 小時",
+                            "description": "將電源調整至產品額定電壓上限 ×1.25，維持 70°C，通電運作 2 小時。確認設備功能正常，記錄電壓值。",
+                            "requires_photo": False,
+                            "requires_parameters": True,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 5,
+                            "name": "測試完成，拍照記錄",
+                            "description": "三段電壓全部完成，拍照記錄設備狀態與最終溫度讀值。",
+                            "requires_photo": True,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 6,
+                            "name": "儲存測試紀錄",
+                            "description": "點擊儲存按鈕，確認執行紀錄已寫入資料庫，下載 CSV 測試報告。",
+                            "requires_photo": False,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
+                    ],
+                },
+                "OT4_High_Operating_ST1": {
+                    "sop_id": "en50155_2017_ot4_high_operating_st1",
+                    "name": "OT4 + ST1 高溫通電測試：+85°C，2h/電壓步驟，三段電壓（通電）",
+                    "test_type": "chamber",
+                    "version": "EN 50155:2017",
+                    "description": "OT4 ST1 延伸高溫通電功能測試（OT4+15°C = 85°C）。通電狀態，85°C 下依序執行三段電壓：下限×0.7 → 額定 → 上限×1.25，每段停留 2 小時。模擬設備在高溫開機狀態下的嚴苛通電條件。法規參考總時間約 8 小時。",
+                    "high_temperature": 85.0,
+                    "low_temperature": None,
+                    "target_temperature": 85.0,
+                    "ramp_rate": 1.0,  # ✅ 公司 SOP 文件確認：1°C/min
+                    "dwell_time_hours": 2,
+                    "cycles": 1,
+                    "humidity_rh_percent": None,
+                    "humidity_control": False,
+                    "power_on": True,
+                    "temp_tolerance": 2.0,
+                    "humi_tolerance": 5.0,
+                    "reference": "EN 50155:2017 Clause 13.4.5 OT4 + Table 2 ST1 (OT4+15°C)",
+                    "steps": [
+                        {
+                            "step_id": 1,
+                            "name": "升溫至 85°C，確認穩定",
+                            "description": "通電狀態，升溫至 85°C（OT4+15°C），速率 1°C/min。確認溫度穩定在 85°C ± 2°C。",
+                            "requires_photo": False,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 2,
+                            "name": "電壓段 1：下限 ×0.7，2 小時",
+                            "description": "將電源調整至產品額定電壓下限 ×0.7，維持 85°C，通電運作 2 小時。確認設備功能正常，記錄電壓值。",
+                            "requires_photo": False,
+                            "requires_parameters": True,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 3,
+                            "name": "電壓段 2：額定電壓，2 小時",
+                            "description": "將電源調整至產品額定操作電壓，維持 85°C，通電運作 2 小時。確認設備功能正常，記錄電壓值。",
+                            "requires_photo": False,
+                            "requires_parameters": True,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 4,
+                            "name": "電壓段 3：上限 ×1.25，2 小時",
+                            "description": "將電源調整至產品額定電壓上限 ×1.25，維持 85°C，通電運作 2 小時。確認設備功能正常，記錄電壓值。",
+                            "requires_photo": False,
+                            "requires_parameters": True,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 5,
+                            "name": "測試完成，拍照記錄",
+                            "description": "三段電壓全部完成，拍照記錄設備狀態與最終溫度讀值。",
+                            "requires_photo": True,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 6,
+                            "name": "儲存測試紀錄",
+                            "description": "點擊儲存按鈕，確認執行紀錄已寫入資料庫，下載 CSV 測試報告。",
+                            "requires_photo": False,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
+                    ],
                 },
                 "OT4_Low_Cold": {
                     "sop_id": "en50155_2017_ot4_low",
