@@ -2,6 +2,22 @@
 
 所有版本修改紀錄集中於此，依日期倒序排列。
 
+
+## 2026-03-13
+
+
+- 新增 standards/ 套件（8 個檔案）
+- _base.py：步驟工廠函數
+- 六個法規子模組：iec60068 / en50155 / iec61850 / dnv / kema / nmea
+- __init__.py：組裝 STANDARD_TREE，完全向後相容
+- 同步套用法規修正：
+  - IEC 60068-2-1 Ab_-25 新增（HQ-PD.486）
+  - Ad_-25 dwell 2h→48h，ramp 3→1，補 Power ON/OFF steps
+  - IEC 61850-3 全部 ramp 2→1（公司 SOP 確認）
+  - C2 冷測拆 Operational/Storage，C3 冷測改名+ramp 3
+  - DNV CG0339 ClassD duplicate sop_id 修正
+- sop_id 總數：64→67（新增 3 條）
+- sop.py / main.py import 路徑不變"
 ---
 
 ## 2026-03-12
