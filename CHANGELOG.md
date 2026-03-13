@@ -34,6 +34,16 @@
 
 ---
 
+**法規正確性審查：EN 50155 高溫通電測試新增**
+
+後端
+
+- **feat**: `en50155.py` 新增 `OT4_High_Operating`（sop_id: `en50155_2017_ot4_high_operating`）：70°C / 通電 / 三段電壓（×0.7 / 額定 / ×1.25）/ 2h/段 / ramp 1°C/min / 6 步驟
+- **feat**: `en50155.py` 新增 `OT4_High_Operating_ST1`（sop_id: `en50155_2017_ot4_high_operating_st1`）：85°C（OT4+15°C）/ 通電 / 三段電壓 / 2h/段 / ramp 1°C/min / 6 步驟
+- sop_id 總數：63 → 65；en50155.py 條數：19 → 21
+
+---
+
 **Standards 模組重構：standards.py → standards/ 套件**
 
 後端
