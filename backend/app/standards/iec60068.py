@@ -6,14 +6,14 @@ IEC 60068 基礎環境測試標準
 - IEC 60068-2-30:2005 (Test Db: Damp Heat Cyclic)
 - IEC 60068-2-78:2012 (Test Cab: Damp Heat Steady State)
 
-ramp_rate（公司 SOP 文件確認）：
+ramp_rate：
   ✅ 標溫（-25°C 等級）：1°C/min
   ✅ 寬溫（-40°C 及以下）：3°C/min
   ⚠️ Ba/Bb 高溫：暫用 3.0°C/min，待確認
   ✅ Nb：法規允許 1~15°C/min，慣用 2°C/min
   ✅ Na：轉換 <30 秒，設 30.0（非速率概念）
   ⚠️ Db：IEC 60068-2-30 程序控制（3h 升溫），非獨立速率，暫用 2.0
-  ✅ Cab：公司 SOP 文件確認：1°C/min
+  ✅ Cab：1°C/min
 """
 
 from ._base import steps_single_temp, steps_cycle
@@ -31,11 +31,11 @@ TREE = {
                     "name": "低溫儲存 Test Ab：-25°C，16 小時（非通電）",
                     "test_type": "chamber",
                     "version": "IEC 60068-2-1:2007",
-                    "description": "Test Ab 標溫等級：非通電狀態，-25°C 低溫儲存 16 小時，評估標溫產品耐受性。對應公司內部 HQ-PD.486。",
+                    "description": "Test Ab 標溫等級：非通電狀態，-25°C 低溫儲存 16 小時，評估標溫產品耐受性。",
                     "high_temperature": None,
                     "low_temperature": -25.0,
                     "target_temperature": -25.0,
-                    "ramp_rate": 1.0,  # ✅ 標溫（-25°C）：1°C/min（公司 SOP 文件確認）
+                    "ramp_rate": 1.0,  # ✅ 標溫（-25°C）：1°C/min
                     "dwell_time_hours": 16,
                     "cycles": 1,
                     "humidity_rh_percent": None,
@@ -55,7 +55,7 @@ TREE = {
                     "high_temperature": None,
                     "low_temperature": -40.0,
                     "target_temperature": -40.0,
-                    "ramp_rate": 3.0,  # ✅ 寬溫（-40°C）：3°C/min（公司 SOP 文件確認）
+                    "ramp_rate": 3.0,  # ✅ 寬溫（-40°C）：3°C/min
                     "dwell_time_hours": 16,
                     "cycles": 1,
                     "humidity_rh_percent": None,
@@ -75,8 +75,7 @@ TREE = {
                     "high_temperature": None,
                     "low_temperature": -55.0,
                     "target_temperature": -55.0,
-                    "ramp_rate": 3.0,  # ✅ 寬溫以上（-55°C）：3°C/min（公司 SOP 文件確認）
-                    "dwell_time_hours": 16,
+                    "ramp_rate": 3.0,  # ✅ 寬溫以上（-55°C）：3°C/min                    "dwell_time_hours": 16,
                     "cycles": 1,
                     "humidity_rh_percent": None,
                     "humidity_control": False,
@@ -91,11 +90,11 @@ TREE = {
                     "name": "低溫工作 Test Ad：-25°C，48 小時（通電，含 Power ON/OFF 循環）",
                     "test_type": "chamber",
                     "version": "IEC 60068-2-1:2007",
-                    "description": "Test Ad 標溫工作：通電狀態，-25°C 停留 48 小時，含 10 次 Power ON/OFF 循環（5 min OFF / 2 hr ON）。對應公司內部 HQ-PD.485。",
+                    "description": "Test Ad 標溫工作：通電狀態，-25°C 停留 48 小時，含 10 次 Power ON/OFF 循環（5 min OFF / 2 hr ON）。",
                     "high_temperature": None,
                     "low_temperature": -25.0,
                     "target_temperature": -25.0,
-                    "ramp_rate": 1.0,  # ✅ 標溫（-25°C）：1°C/min（公司 SOP 文件確認）
+                    "ramp_rate": 1.0,  # ✅ 標溫（-25°C）：1°C/min
                     "dwell_time_hours": 48,
                     "cycles": 1,
                     "humidity_rh_percent": None,
@@ -103,7 +102,7 @@ TREE = {
                     "power_on": True,
                     "temp_tolerance": 2.0,
                     "humi_tolerance": 5.0,
-                    "reference": "IEC 60068-2-1:2007 Test Ad + HQ-PD.485",
+                    "reference": "IEC 60068-2-1:2007 Test Ad ",
                     "steps": [
                         {
                             "step_id": 1,
@@ -360,7 +359,7 @@ TREE = {
                     "high_temperature": 65.0,
                     "low_temperature": None,
                     "target_temperature": 65.0,
-                    "ramp_rate": 1.0,  # ✅ 公司 SOP 文件確認：1°C/min
+                    "ramp_rate": 1.0,
                     "dwell_time_hours": 16,
                     "cycles": 1,
                     "humidity_rh_percent": 95.0,
@@ -380,7 +379,7 @@ TREE = {
                     "high_temperature": 65.0,
                     "low_temperature": None,
                     "target_temperature": 65.0,
-                    "ramp_rate": 1.0,  # ✅ 公司 SOP 文件確認：1°C/min
+                    "ramp_rate": 1.0,
                     "dwell_time_hours": 24,
                     "cycles": 1,
                     "humidity_rh_percent": 95.0,
@@ -400,7 +399,7 @@ TREE = {
                     "high_temperature": 90.0,
                     "low_temperature": None,
                     "target_temperature": 90.0,
-                    "ramp_rate": 1.0,  # ✅ 公司 SOP 文件確認：1°C/min
+                    "ramp_rate": 1.0,
                     "dwell_time_hours": 16,
                     "cycles": 1,
                     "humidity_rh_percent": 95.0,
@@ -420,7 +419,7 @@ TREE = {
                     "high_temperature": 90.0,
                     "low_temperature": None,
                     "target_temperature": 90.0,
-                    "ramp_rate": 1.0,  # ✅ 公司 SOP 文件確認：1°C/min
+                    "ramp_rate": 1.0,
                     "dwell_time_hours": 24,
                     "cycles": 1,
                     "humidity_rh_percent": 95.0,

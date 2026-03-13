@@ -3,7 +3,7 @@ EN 50155 歐洲鐵路電子設備標準
 - EN 50155:2017（現行，OT1~OT6 + ST1 + RTV + 濕熱循環）
 - EN 50155:2007（舊版，T1/T2/T3/TX）
 
-ramp_rate：✅ 法規曲線圖明文：1°C/min（DQA 內部 PPT 確認）
+ramp_rate：✅ 法規曲線圖明文：1°C/min
 RTV：✅ 法規明文：≥20°C/min
 """
 
@@ -46,7 +46,7 @@ TREE = {
                     "high_temperature": None,
                     "low_temperature": -25.0,
                     "target_temperature": -25.0,
-                    "ramp_rate": 1.0,  # ✅ EN 50155:2017 曲線圖明文：1°C/min
+                    "ramp_rate": 1.0,
                     "dwell_time_hours": 16,
                     "cycles": 1,
                     "humidity_rh_percent": None,
@@ -156,11 +156,46 @@ TREE = {
                     "humi_tolerance": 5.0,
                     "reference": "EN 50155:2017 Table 2 ST1 (OT3+15°C, 10 min)",
                     "steps": [
-                        {"step_id": 1, "name": "設備開機與預檢", "description": "確認電源、保險絲、水箱水位正常。", "requires_photo": True, "requires_parameters": False, "optional": False},
-                        {"step_id": 2, "name": "升溫至 OT3+15°C = +85°C", "description": "通電狀態，升溫至 85°C，速率 1°C/min。確認設備在升溫過程中功能正常。", "requires_photo": False, "requires_parameters": False, "optional": False},
-                        {"step_id": 3, "name": "維持 85°C，10 分鐘", "description": "通電狀態維持 +85°C 恰好 10 分鐘（±1 分鐘），監控設備功能是否正常。", "requires_photo": False, "requires_parameters": False, "optional": False},
-                        {"step_id": 4, "name": "測試完成確認", "description": "10 分鐘後確認設備無異常，拍照記錄。", "requires_photo": True, "requires_parameters": False, "optional": False},
-                        {"step_id": 5, "name": "儲存測試紀錄", "description": "點擊儲存按鈕，確認執行紀錄已寫入資料庫。", "requires_photo": False, "requires_parameters": False, "optional": False},
+                        {
+                            "step_id": 1,
+                            "name": "設備開機與預檢",
+                            "description": "確認電源、保險絲、水箱水位正常。",
+                            "requires_photo": True,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 2,
+                            "name": "升溫至 OT3+15°C = +85°C",
+                            "description": "通電狀態，升溫至 85°C，速率 1°C/min。確認設備在升溫過程中功能正常。",
+                            "requires_photo": False,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 3,
+                            "name": "維持 85°C，10 分鐘",
+                            "description": "通電狀態維持 +85°C 恰好 10 分鐘（±1 分鐘），監控設備功能是否正常。",
+                            "requires_photo": False,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 4,
+                            "name": "測試完成確認",
+                            "description": "10 分鐘後確認設備無異常，拍照記錄。",
+                            "requires_photo": True,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
+                        {
+                            "step_id": 5,
+                            "name": "儲存測試紀錄",
+                            "description": "點擊儲存按鈕，確認執行紀錄已寫入資料庫。",
+                            "requires_photo": False,
+                            "requires_parameters": False,
+                            "optional": False,
+                        },
                     ],
                 },
                 "OT4_High_Dry_Heat": {
