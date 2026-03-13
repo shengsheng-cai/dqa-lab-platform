@@ -148,6 +148,7 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
             "active_sop_json": active_sop_json,
             "completed_steps": 0,
             "started_at": now,
+            "total_steps": len(std_data.get("steps", [])),  # fix: Dashboard 進度條需要此值
         }
     )
 

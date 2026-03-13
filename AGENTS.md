@@ -4,24 +4,23 @@
 
 ---
 
-## 當前狀態快照（2026-03-13git add ./docs/architecture.md
-git commit -m "docs: update architecture 4 laws 56 conditions standards/ refactor）
+## 當前狀態快照（2026-03-13）
 
 ### 已完成模組
 
 | 模組 | 位置 | 說明 |
 |------|------|------|
-| 物理模擬引擎 | `backend/app/main.py` | 升降溫斜率、每 10 秒寫 DB、ISO 17025 永久保存、每台設備獨立 DB session |
-| 設備狀態持久化 | `backend/app/main.py` + `models.py` | DeviceState 表、updated_at 自動更新、重啟後自動恢復 RUNNING 狀態與步驟清單 |
-| 環境測試標準 | `backend/app/standards/` | 三層 STANDARD_TREE，4 法規 56 條件，套件含 __init__.py / _base.py / iec60068.py / en50155.py / iec61850.py / dnv.py |
-| SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取；`/api/sop/standards/tree` 不含 steps 欄位（108kB → ~12kB） |
+| 物理模擬引擎 | `backend/app/main.py` | 升降溫斜率、每 10 秒寫 DB、ISO 17025 永久保存、每台設備獨立 DB session、所有時間戳統一 `_now_utc()` |
+| 設備狀態持久化 | `backend/app/main.py` + `models.py` | DeviceState 表、`_save_device_state()` 統一封裝寫入邏輯、重啟後自動恢復 RUNNING 狀態與步驟清單 |
+| 環境測試標準 | `backend/app/standards/` | 三層 STANDARD_TREE，4 法規 56 條件，套件含 `__init__.py` / `_base.py` / `iec60068.py` / `en50155.py` / `iec61850.py` / `dnv.py` |
+| SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取；`start_sop` 啟動時將 `total_steps` 存入 AICM_CACHE；`/api/sop/standards/tree` 不含 steps 欄位（108kB → ~12kB） |
 | CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，PASS/FAIL 工程師人工判定 |
 | 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
 | 歷史資料 API | `backend/app/main.py` | `GET /api/devices/{id}/history`，從 started_at 至今每分鐘聚合 |
-| AI 法規諮詢後端 | `backend/app/ai.py` | 串流 + 非串流，Ollama qwen2.5:7b，多輪對話，強制繁體中文；system prompt 含兩條免責規則（版本號標注 + 回覆結尾聲明） |
-| AI 法規諮詢前端 | `client/src/AIPage.jsx` | 串流逐字輸出、Markdown 渲染、快速提問側欄（可收合）、中途停止保留內容、複製回覆、回覆計時、localStorage 持久化、智慧捲動、追問建議動態產生、**雙層免責聲明**（前端固定標籤 + AI 回覆內聲明） |
-| 儀表板 | `client/src/Dashboard.jsx` | 六狀態、趨勢圖雙 Y 軸可切換 5 台、步驟進度條、倒數計時器、執行紀錄列表（60s 刷新）、低溫 < 0°C 隱藏濕度、趨勢圖低溫段 humidity 存 null |
-| SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇（per-device）、treeLoaded skeleton、步驟依序追蹤、generateSP 低溫 < 0°C 濕度為 null、SP+PV 波型曲線、執行資訊面板 |
+| AI 法規諮詢後端 | `backend/app/ai.py` | 串流 + 非串流，Ollama qwen2.5:7b，多輪對話，強制繁體中文；system prompt 模組載入時快取（`_SYSTEM_PROMPT_CACHE`），只建立一次；含兩條免責規則 |
+| AI 法規諮詢前端 | `client/src/AIPage.jsx` | 串流逐字輸出、Markdown 渲染、快速提問側欄（可收合）、中途停止保留內容、複製回覆、回覆計時、localStorage 持久化、智慧捲動、追問建議動態產生、雙層免責聲明 |
+| 儀表板 | `client/src/Dashboard.jsx` | 六狀態、趨勢圖雙 Y 軸可切換 5 台、步驟進度條（依賴後端 `total_steps`）、倒數計時器、執行紀錄列表（60s 刷新）、低溫 < 0°C 隱藏濕度 |
+| SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇（per-device）、treeLoaded skeleton、步驟依序追蹤（`ds.activeSop.steps.length` 自行計算，不依賴後端 `total_steps`）、generateSP 低溫濕度為 null、SP+PV 波型曲線、執行資訊面板 |
 | 異常看板 | `client/src/Errorlog.jsx` | 統計卡片 + 完整紀錄列表，60s 自動刷新 |
 | 全域路由 | `client/src/App.jsx` | CSS display 切換（非 Router unmount），四頁面常駐 DOM，切換無延遲 |
 | QA 報告模板 | `docs/templates/` | 對外 Word 模板 |
@@ -39,21 +38,25 @@ git commit -m "docs: update architecture 4 laws 56 conditions standards/ refacto
 - 備用：`qwen2.5:14b`（需關閉其他應用釋放記憶體）
 - timeout：180 秒
 - 端點：`/api/ai/standards-query`（非串流）、`/api/ai/standards-query-stream`（串流，前端主要使用）
-- system prompt：6 條規則（禁簡體、禁 code block、限定推薦清單、強制繁體中文、**回覆結尾免責聲明**、**推薦法規時標注正式版本號**），內建 STANDARD_TREE 56 個測試條件摘要
+- system prompt：6 條規則，內建 STANDARD_TREE 56 個測試條件摘要；**模組載入時快取，只建立一次**
 - user message 前綴：`TC_PREFIX = "[請用繁體中文回覆，不可有任何簡體字] "`，只在送出 API 時附加，不存入 messages state
 - 多輪對話：history 陣列帶入，content 均為不含前綴的乾淨字串
 - 前端儲存：`localStorage`，key = `dqa_ai_chat_history`
+
+### total_steps 設計說明
+| 元件 | 來源 | 說明 |
+|------|------|------|
+| `Dashboard.jsx` DeviceCard 進度條 | 後端 `device.total_steps` | `start_sop` 時存入 AICM_CACHE（`len(std_data.get("steps", []))`） |
+| `SOPPage.jsx` 步驟追蹤進度條 | 前端 `ds.activeSop.steps.length` | 不依賴後端，自行從 activeSop 計算 |
 
 ### AIPage.jsx 關鍵設計規範
 | 項目 | 規範 |
 |------|------|
 | `TC_PREFIX` | 只在 `sendMessage` 的 `apiMsg` 與 `generateSuggestions` 的 `prompt` 使用，絕不存入 `messages` state |
 | `messages[].content` | 永遠是使用者原始輸入或 AI 回覆，不含任何前綴 |
-| `retryInTraditional` | 從 messages 取乾淨 userMsg 直接傳給 `sendMessage`，不在此處拼接前綴 |
-| 自動捲動 | `userScrolledUpRef` 追蹤使用者是否往上捲；距底部 > 80px 停止強制跟隨；送出時呼叫 `scrollToBottomForce()` 重置 |
-| 簡體偵測 | `SIMPLIFIED_ONLY Set`，只含繁體絕對不出現的字；排除繁簡共用字（如温、湿） |
-| 追問建議 | `generateSuggestions` prompt 同樣加 `TC_PREFIX`，防止建議欄出現簡體 |
-| 免責聲明 | `DISCLAIMER` 常數統一管理文字；每則 AI 回覆泡泡下方固定顯示，空白頁面亦顯示 |
+| 自動捲動 | `userScrolledUpRef` 追蹤使用者是否往上捲；距底部 > 80px 停止強制跟隨 |
+| 簡體偵測 | `SIMPLIFIED_ONLY Set`，只含繁體絕對不出現的字 |
+| 免責聲明 | `DISCLAIMER` 常數統一管理；每則 AI 回覆泡泡下方固定顯示，空白頁面亦顯示 |
 
 ### SOPPage.jsx 關鍵設計規範
 | 項目 | 規範 |
@@ -75,15 +78,15 @@ git commit -m "docs: update architecture 4 laws 56 conditions standards/ refacto
 |------|------|
 | 切換方式 | `useState(currentPage)` + `display: none / block`，**非** React Router |
 | 優點 | 四頁面常駐 DOM，API 只打一次，state/輪詢/圖表全保留 |
-| 注意 | 無 URL 路由，不支援直接輸入 URL 跳頁；如日後需要再改回 Router |
+| 注意 | 無 URL 路由，不支援直接輸入 URL 跳頁 |
 
-### 前端輪詢策略（實際程式碼）
+### 前端輪詢策略
 | 元件 | 輪詢內容 | 頻率 |
 |------|---------|------|
 | `Dashboard.jsx` | 設備狀態（`/api/devices`） | 每 10 秒 |
-| `Dashboard.jsx` | 趨勢圖資料點 | 每分鐘存一點（整分鐘判斷）|
+| `Dashboard.jsx` | 趨勢圖資料點 | 每分鐘存一點 |
 | `Dashboard.jsx` | 執行紀錄列表（`/api/reports/list`） | 每 60 秒 |
-| `SOPPage.jsx` | 設備狀態（`/api/devices`） | 每 1 秒 |
+| `SOPPage.jsx` | 設備狀態（`/api/devices`） | 每 3 秒 |
 | `SOPPage.jsx` | 設備歷史資料（`/api/devices/{id}/history`） | 切換設備或 started_at 變化時、整分鐘補撈 |
 | `Errorlog.jsx` | 異常紀錄（`/api/errors/`） | 每 60 秒 |
 | `AIPage.jsx` | 無輪詢，事件驅動 | — |
@@ -100,10 +103,10 @@ OFFLINE（串口斷線）
 |------|------|
 | `device_data` | 歷史溫濕度，每 10 秒，永久保存 |
 | `device_states` | 設備狀態持久化，含 status / temperature / active_sop_json / completed_steps / started_at / updated_at |
-| `sop_executions` | 執行歷程主表，含 operator / device_id / test_started_at（DateTime）/ test_ended_at（DateTime）|
-| `step_records` | 每步驟完成狀態（execution_id ForeignKey、completed Boolean）|
+| `sop_executions` | 執行歷程主表 |
+| `step_records` | 每步驟完成狀態 |
 | `sop_templates` | 自訂 SOP |
-| `error_logs` | 緊急停止事件紀錄（created_at DateTime，ISO 8601 序列化）|
+| `error_logs` | 緊急停止事件紀錄 |
 
 ### DB 結構變更流程（在 backend/ 目錄下）
 ```bash
@@ -161,10 +164,8 @@ alembic upgrade head
 - **主題**：GitHub dark 統一風格。
 - **捲動架構**：`#root` flex column + `height: 100vh`；各頁面自己管理內部捲動。
 - **per-device state**：SOPPage 的法規選擇、步驟勾選、safetyChecked、chartHistory 都儲存在 `deviceStates[deviceId]`，切換設備不互相干擾。
-- **AIPage 串流架構**：`fetch` + `ReadableStream`；`streamTextRef`（ref）追蹤即時內容供 `stopStream()` 讀取，避免 closure 問題；`startTimeRef` 計算回覆耗時。
-- **AIPage 捲動架構**：`chatAreaRef` 綁定捲動容器；`userScrolledUpRef` 記錄使用者是否離開底部；智慧自動捲不干擾閱讀。
-- **濕度顯示規範**：模擬環境下低溫段（< 0°C）感測器回傳值無意義，前端一律隱藏或存 null；待 Phase 3 接真實硬體後改依 `humidity_control` 欄位判斷。
-- **免責聲明規範**：AI 諮詢頁面採雙層保護。前端層：`DISCLAIMER` 常數，每則 AI 回覆固定顯示，不可移除。後端層：system prompt 強制 AI 標注法規版本號並附聲明。目的是確保使用者不以 AI 建議直接作為測試依據。
+- **濕度顯示規範**：模擬環境下低溫段（< 0°C）感測器回傳值無意義，前端一律隱藏或存 null。
+- **免責聲明規範**：AI 諮詢頁面採雙層保護。前端層：`DISCLAIMER` 常數，每則 AI 回覆固定顯示。後端層：system prompt 強制 AI 標注法規版本號並附聲明。
 
 ---
 
