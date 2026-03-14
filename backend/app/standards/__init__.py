@@ -1,6 +1,6 @@
 """
 環境測試標準定義 + SOP 步驟整合
-架構：六個法規子模組 → __init__.py 組裝 STANDARD_TREE → 向後相容 STANDARDS_AND_SOPS 平坦結構
+架構：四個法規子模組 → __init__.py 組裝 STANDARD_TREE → 向後相容 STANDARDS_AND_SOPS 平坦結構
 
 資料來源（公開法規）：
 - IEC 60068-2-1:2007  (Test A: Cold)
@@ -28,10 +28,10 @@ ramp_rate 說明：
   standards/
   ├── __init__.py     ← 本檔，組裝 STANDARD_TREE + 工具函數
   ├── _base.py        ← steps_single_temp / steps_cycle 工廠函數
-  ├── iec60068.py     ← IEC 60068-2-1/2/14/30（13 條）
-  ├── en50155.py      ← EN 50155:2017 + 2007（19 條）
-  ├── iec61850.py     ← IEC 61850-3 Ed.2/Ed.1（10 條）
-  └── dnv.py          ← DNV CG-0339 + Std.Cert.2.4（15 條）
+  ├── iec60068.py     ← IEC 60068-2-1/2/14/30/78（17 條）
+  ├── en50155.py      ← EN 50155:2017 + 2007（21 條）
+  ├── iec61850.py     ← IEC 61850-3 Ed.2/Ed.1（13 條）
+  └── dnv.py          ← DNV CG-0339 + Std.Cert.2.4（14 條）
 
 注意：KEMA / NMEA 因無原始法規文件可供對照，暫不納入。
 """
