@@ -12,7 +12,7 @@
 |------|------|------|
 | 物理模擬引擎 | `backend/app/main.py` | 升降溫斜率、每 10 秒寫 DB、ISO 17025 永久保存、每台設備獨立 DB session、所有時間戳統一 `_now_utc()` |
 | 設備狀態持久化 | `backend/app/main.py` + `models.py` | DeviceState 表、`_save_device_state()` 統一封裝寫入邏輯、重啟後自動恢復 RUNNING 狀態與步驟清單 |
-| 環境測試標準 | `backend/app/standards/` | 三層 STANDARD_TREE，4 法規 **65 條件**，套件含 `__init__.py` / `_base.py` / `iec60068.py` / `en50155.py`（21 條）/ `iec61850.py` / `dnv.py` |
+| 環境測試標準 | `backend/app/standards/` | 三層 STANDARD_TREE，4 法規 **68 條件**，套件含 `__init__.py` / `_base.py` / `iec60068.py` / `en50155.py`（21 條）/ `iec61850.py` / `dnv.py` |
 | SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取；`start_sop` 啟動時將 `total_steps` 存入 AICM_CACHE；`/api/sop/standards/tree` 不含 steps 欄位（108kB → ~12kB） |
 | CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，PASS/FAIL 工程師人工判定 |
 | 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
@@ -27,7 +27,7 @@
 
 ### 下一步待開發（依優先度）
 
-1. **法規正確性審查**（進行中）— 對照原始法規文件逐條驗證 STANDARD_TREE 的 65 個測試條件，審查順序：IEC 60068 → EN 50155 → IEC 61850-3 → DNV。審查項目：溫度、停留時間、濕度、循環數、升降溫速率。發現差異標出並整理修正清單，最終更新 `standards/` 套件。
+1. **法規正確性審查**（進行中）— 對照原始法規文件逐條驗證 STANDARD_TREE 的 68 個測試條件，審查順序：IEC 60068 → EN 50155 → IEC 61850-3 → DNV。審查項目：溫度、停留時間、濕度、循環數、升降溫速率。發現差異標出並整理修正清單，最終更新 `standards/` 套件。
 2. **AI 治具管理助手**（`/api/ai/fixture-recommend`）— 後端 + 前端，構思中
 3. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
 4. **步驟軟體確認 vs 現場確認**（Phase 3 前再做）
@@ -38,7 +38,7 @@
 - 備用：`qwen2.5:14b`（需關閉其他應用釋放記憶體）
 - timeout：180 秒
 - 端點：`/api/ai/standards-query`（非串流）、`/api/ai/standards-query-stream`（串流，前端主要使用）
-- system prompt：6 條規則，內建 STANDARD_TREE 65 個測試條件摘要；**模組載入時快取，只建立一次**
+- system prompt：6 條規則，內建 STANDARD_TREE 68 個測試條件摘要；**模組載入時快取，只建立一次**
 - user message 前綴：`TC_PREFIX = "[請用繁體中文回覆，不可有任何簡體字] "`，只在送出 API 時附加，不存入 messages state
 - 多輪對話：history 陣列帶入，content 均為不含前綴的乾淨字串
 - 前端儲存：`localStorage`，key = `dqa_ai_chat_history`

@@ -30,7 +30,7 @@ ramp_rate 說明：
   ├── _base.py        ← steps_single_temp / steps_cycle 工廠函數
   ├── iec60068.py     ← IEC 60068-2-1/2/14/30/78（17 條）
   ├── en50155.py      ← EN 50155:2017 + 2007（21 條）
-  ├── iec61850.py     ← IEC 61850-3 Ed.2/Ed.1（13 條）
+  ├── iec61850.py     ← IEC 61850-3 Ed.2/Ed.1（16 條）
   └── dnv.py          ← DNV CG-0339 + Std.Cert.2.4（14 條）
 
 注意：KEMA / NMEA 因無原始法規文件可供對照，暫不納入。

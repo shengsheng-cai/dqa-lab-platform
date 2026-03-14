@@ -21,6 +21,19 @@
 
 ---
 
+**法規正確性審查：IEC 61850-3 Ed.2 高溫測試修正（Method IV / V）**
+
+後端
+
+- **fix**: `iec61850.py` C1/C2/C3 乾熱 `reference` 由 `Test Bb` 修正為 `Test Be`（發熱件通電，Method IV）
+- **feat**: `iec61850.py` 新增 C1/C2/C3 各一條 Cab Non-Operating 16h（Method V）：
+  - `C1_Cab_High_NonOp_16h`：55°C / Non-Operating / 16h / 1°C/min
+  - `C2_Cab_High_NonOp_16h`：70°C / Non-Operating / 16h / 1°C/min
+  - `C3_Cab_High_NonOp_16h`：70°C / Non-Operating / 16h / 1°C/min
+- sop_id 總數：65 → 68；IEC 61850-3 條數：13 → 16
+
+---
+
 **Bug 修復與架構優化**
 
 後端
