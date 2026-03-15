@@ -18,7 +18,7 @@
 
 ## AI 輔助模組
 
-**法規諮詢助手**（✅ 已完成）— 使用者以自然語言描述產品與目標，LLM 對應建議法規版本與測試條件，適用於開案前初步評估。串接本機 Ollama `qwen2.5:7b`，不依賴雲端，資料不出內網。支援多對話管理、專案分組（含移動對話至分組）、串流逐字輸出、多輪對話、對話記錄持久化、智慧捲動、動態追問建議（切換對話自動取消）。每則回覆強制附上免責聲明，並標注法規正式版本號。
+**法規諮詢助手**（✅ 已完成）— 使用者以自然語言描述產品與目標，LLM 對應建議法規版本與測試條件，適用於開案前初步評估。串接本機 Ollama `gemma3:4b`，不依賴雲端，資料不出內網。支援多對話管理、專案分組（含移動對話至分組）、串流逐字輸出、多輪對話、對話記錄持久化、智慧捲動、動態追問建議（切換對話自動取消）。每則回覆強制附上免責聲明，並標注法規正式版本號。
 
 **治具管理助手**（規劃中）— 使用者描述待測產品與需求，LLM 推理對應所需治具組合，自動產出借用申請送管理者確認。
 
@@ -81,7 +81,7 @@ make dev
 | GET  | `/api/devices` | 所有設備即時狀態（含 total_steps、completed_steps、started_at） |
 | GET  | `/api/devices/{id}/history` | 設備歷史溫濕度（每分鐘聚合，從 started_at 至今） |
 | GET  | `/api/sop/` | SOP 列表 |
-| GET  | `/api/sop/standards/tree` | 三層標準樹（法規→版本→測試條件，不含 steps 欄位） |
+| GET  | `/api/sop/standards/tree` | 三層標準樹（法規→版本→測試條件，含 steps 欄位） |
 | POST | `/api/sop/start` | 啟動 SOP |
 | POST | `/api/devices/{id}/progress` | 更新步驟完成數 |
 | POST | `/api/sop-executions/` | 儲存執行紀錄（含 device_id、operator、test_started_at） |
@@ -99,13 +99,12 @@ make dev
 
 後端：FastAPI、Pydantic v2、SQLAlchemy 2.0、asyncio、SQLite、httpx、Alembic
 前端：React 18、Vite、Recharts、Axios
-AI：Ollama（本機）、qwen2.5:7b
+AI：Ollama（本機）、gemma3:4b
 環境：Python 3.9+、Node.js 18+、macOS/Linux（需要 socat）
 
 ## 延伸文件
 
 - [AI Agent 開發規範與專案背景](./AGENTS.md)
-- [更新紀錄](./CHANGELOG.md)
 - [QA 測試報告模板](./docs/templates/QA_Test_Report_Template.docx)
 
 

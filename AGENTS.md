@@ -1,6 +1,6 @@
 # 🧬 DQALab Digital Twin — AI Agent Context
 
-給 AI 協作工具（Claude、Cursor、Copilot）閱讀的專案背景與開發規範。每個開發階段結束後更新「當前狀態快照」區塊即可，其餘理論部分不動。
+給 AI 協作工具（Claude、Cursor、Copilot）閱讀的專案背景與開發規範。每個開發階段結束後更新「當前狀態快照」區塊即可，其餘理論部分不動。版本紀錄以 git log 為準，不另維護 CHANGELOG。
 
 ---
 
@@ -29,6 +29,7 @@
 │       ├── reports.py
 │       ├── serial_reader.py
 │       ├── sop.py
+│       ├── utils.py
 │       └── standards/
 │           ├── __init__.py
 │           ├── _base.py
@@ -63,14 +64,15 @@
 
 | 模組 | 位置 | 說明 |
 |------|------|------|
+| 共用工具函式 | `backend/app/utils.py` | `_now_utc()`、`_save_device_state()`，供 `main.py` 與 `sop.py` 共用，避免 circular import |
 | 物理模擬引擎 | `backend/app/main.py` | 升降溫斜率、每 10 秒寫 DB、ISO 17025 永久保存、每台設備獨立 DB session、所有時間戳統一 `_now_utc()` |
 | 設備狀態持久化 | `backend/app/main.py` + `models.py` | DeviceState 表、`_save_device_state()` 統一封裝寫入邏輯、重啟後自動恢復 RUNNING 狀態與步驟清單 |
 | 環境測試標準 | `backend/app/standards/` | 三層 STANDARD_TREE，5 法規 **78 條件**，套件含 `__init__.py` / `_base.py` / `iec60068.py` / `en50155.py`（21 條）/ `iec61850.py`（19 條）/ `dnv.py` / `iec60945.py`（7 條）|
-| SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取；`start_sop` 啟動時將 `total_steps` 存入 AICM_CACHE；`/api/sop/standards/tree` 不含 steps 欄位（~12kB） |
+| SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取；`start_sop` 啟動時將 `total_steps` 存入 AICM_CACHE；`/api/sop/standards/tree` 含 steps 欄位，前端啟動 SOP 不需二次請求 |
 | CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，PASS/FAIL 工程師人工判定 |
 | 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
 | 歷史資料 API | `backend/app/main.py` | `GET /api/devices/{id}/history`，從 started_at 至今每分鐘聚合 |
-| AI 法規諮詢後端 | `backend/app/ai.py` | 串流 + 非串流，Ollama qwen2.5:7b，多輪對話，強制繁體中文；system prompt 模組載入時快取（`_SYSTEM_PROMPT_CACHE`），只建立一次；含兩條免責規則 |
+| AI 法規諮詢後端 | `backend/app/ai.py` | 串流 + 非串流，Ollama gemma3:4b，多輪對話，強制繁體中文（英文指令）；system prompt 模組載入時快取（`_SYSTEM_PROMPT_CACHE`），只建立一次；含免責規則與法規版本號標注要求 |
 | AI 法規諮詢前端 | `client/src/AIPage.jsx` + `client/src/ai/` | 多對話管理、專案分組（含移動對話至分組）、串流逐字輸出、Markdown 渲染、快速提問側欄（可收合）、中途停止保留內容、複製回覆（含 HTTP fallback）、回覆計時、localStorage 持久化、智慧捲動、追問建議動態產生（切換對話時自動取消）、雙層免責聲明 |
 | 儀表板 | `client/src/Dashboard.jsx` | 六狀態、趨勢圖雙 Y 軸可切換 5 台、步驟進度條（依賴後端 `total_steps`）、倒數計時器、執行紀錄列表（60s 刷新）、低溫 < 0°C 隱藏濕度；歷史陣列改用展開運算子避免 React StrictMode 凍結問題 |
 | SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇（per-device）、treeLoaded skeleton、步驟依序追蹤（`ds.activeSop.steps.length` 自行計算）、generateSP 低溫濕度為 null、SP+PV 波型曲線、執行資訊面板 |
@@ -84,9 +86,10 @@
 2. **AI 諮詢 UI 改版**（✅ 完成）— 多對話管理、專案分組，詳見下方規劃段落
 3. **AI 諮詢模組 bug 修正**（✅ 完成）— 分組管理、串流狀態、簡體偵測、Dashboard 歷史陣列凍結問題全部修正
 4. **後端與前端系統性優化**（✅ 完成）— ai.py 雙重前綴、sop.py 重複 DB 寫入、main.py 時區偏移與低溫預估計算、SOPPage 防重複提交與輪詢優化、App.jsx 隱藏頁面暫停輪詢、models.py composite index、reports.py 記憶體上限
-5. **AI 治具管理助手**（`/api/ai/fixture-recommend`）
-6. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
-7. **Phase 3**：多台設備架構、治具資料庫、認證系統、RS-485 真實通訊
+5. **後端架構優化**（✅ 完成）— utils.py 抽離共用函式解決 circular import、低溫模擬邏輯補完、gemma3:4b 模型切換與繁體強化
+6. **AI 治具管理助手**（`/api/ai/fixture-recommend`）
+7. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
+8. **Phase 3**：多台設備架構、治具資料庫、認證系統、RS-485 真實通訊
 
 ### 環境測試標準模組（standards/）
 
