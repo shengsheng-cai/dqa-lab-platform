@@ -13,6 +13,7 @@ from .errors import router as errors_router
 from .ai import router as ai_router, _warmup_ollama
 from .models import SessionLocal, DeviceData, ErrorLog, DeviceState
 from .standards import get_ramp_rate, get_standard
+from .utils import _now_utc, _save_device_state
 
 background_tasks = set()
 
@@ -93,28 +94,7 @@ app.add_middleware(
 # ============================================================
 
 
-def _now_utc() -> datetime.datetime:
-    return datetime.datetime.now(datetime.timezone.utc)
-
-
-def _save_device_state(device_id: str, item: dict):
-    """將目前設備狀態寫回 DB，供重啟後恢復使用"""
-    with SessionLocal() as db:
-        state = db.get(DeviceState, device_id)
-        if state is None:
-            state = DeviceState(device_id=device_id)
-            db.add(state)
-        state.status = item.get("status", "IDLE")
-        state.temperature = item.get("temperature", 25.0)
-        state.humidity = item.get("humidity", 55.0)
-        state.running_sop_id = item.get("running_sop_id")
-        state.running_sop_name = item.get("running_sop_name")
-        state.standard_id = item.get("standard_id")
-        state.active_sop_json = item.get("active_sop_json")
-        state.completed_steps = item.get("completed_steps", 0)
-        state.started_at = item.get("started_at")
-        state.updated_at = _now_utc()
-        db.commit()
+# _now_utc 與 _save_device_state 已移至 utils.py
 
 
 def _get_device(device_id: str) -> dict:
@@ -418,11 +398,25 @@ async def data_simulator():
                 standard_id = item.get("standard_id", "IEC60068_CYCLE")
                 max_ramp_rate = get_ramp_rate(standard_id)
                 standard = get_standard(standard_id)
-                target_temp = 25.0
+
+                # fix: 低溫測試先降至 low_temperature，再升至 high_temperature
+                high_temp = 25.0
+                low_temp = None
                 if standard:
-                    target_temp = standard.get("high_temperature") or standard.get(
+                    high_temp = standard.get("high_temperature") or standard.get(
                         "target_temperature", 25.0
                     )
+                    low_temp = standard.get("low_temperature")
+
+                # 判斷目前應朝哪個目標移動
+                if low_temp is not None and low_temp < 25.0:
+                    # 低溫測試：先判斷是否已到低溫目標，再決定升溫還是降溫
+                    if current_temp > low_temp + 0.5:
+                        target_temp = low_temp  # 尚未到達低溫，繼續降溫
+                    else:
+                        target_temp = high_temp  # 已到達低溫，開始升溫
+                else:
+                    target_temp = high_temp
 
                 temp_diff = target_temp - current_temp
                 if abs(temp_diff) > 0.1:

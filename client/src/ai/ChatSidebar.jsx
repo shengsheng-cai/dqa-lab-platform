@@ -279,7 +279,7 @@ export default function ChatSidebar({
           )}
 
           <div style={S.modelBadge}>
-            <span style={{ color: "#3fb950" }}>●</span> qwen2.5:7b（本機）
+            <span style={{ color: "#3fb950" }}>●</span> gemma3:4b（本機）
           </div>
         </>
       )}

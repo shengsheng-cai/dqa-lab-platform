@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
+from .utils import _save_device_state
 
 router = APIRouter()
 execution_router = APIRouter(prefix="/api/sop-executions", tags=["sop-executions"])
@@ -152,9 +153,7 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
         }
     )
 
-    # fix: 統一使用 _save_device_state，移除重複的手動 DB 寫入邏輯
-    from .main import _save_device_state
-
+    # fix: 統一使用 _save_device_state（來自 utils.py，避免 circular import）
     _save_device_state(device_id, device)
 
     print(f"🔥 [{device_id}] Started SOP: {sop_id} ({sop_name})")
