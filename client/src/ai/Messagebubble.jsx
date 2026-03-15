@@ -6,6 +6,8 @@ export const DISCLAIMER =
 
 const COLLAPSE_HEIGHT = 300;
 
+// fix: 只保留「繁體中文完全不使用、簡體中文獨有」的字
+// 移除「話、問、題、時、機、動、為、對」等繁簡共用字
 const SIMPLIFIED_ONLY = new Set([
   "设",
   "备",
@@ -28,20 +30,12 @@ const SIMPLIFIED_ONLY = new Set([
   "给",
   "网",
   "说",
-  "话",
-  "问",
-  "题",
   "术",
   "实",
   "现",
   "际",
-  "时",
   "样",
-  "机",
-  "动",
   "产",
-  "为",
-  "对",
   "从",
   "传",
   "输",
@@ -49,8 +43,6 @@ const SIMPLIFIED_ONLY = new Set([
   "关",
   "联",
   "线",
-  "车",
-  "载",
   "总",
   "则",
   "达",
@@ -60,6 +52,13 @@ const SIMPLIFIED_ONLY = new Set([
   "节",
   "运",
   "营",
+  "图",
+  "书",
+  "热",
+  "气",
+  "风",
+  "车",
+  "载",
 ]);
 
 export const hasSimplified = (text) =>
@@ -149,15 +148,16 @@ export function renderMarkdown(rawText) {
 }
 
 // ── 可折疊泡泡 ───────────────────────────────────────────────
-function CollapsibleBubble({ children }) {
+function CollapsibleBubble({ children, contentKey }) {
   const [expanded, setExpanded] = useState(false);
   const [overflow, setOverflow] = useState(false);
   const innerRef = useRef(null);
 
+  // fix: 用 contentKey（訊息長度）而非 children reference 判斷是否重新測量
   useEffect(() => {
     if (innerRef.current)
       setOverflow(innerRef.current.scrollHeight > COLLAPSE_HEIGHT);
-  }, [children]);
+  }, [contentKey]);
 
   return (
     <div style={{ position: "relative" }}>
@@ -187,11 +187,32 @@ export default function MessageBubble({ m, onRetry }) {
   const [copied, setCopied] = useState(false);
   const simplified = m.role === "assistant" && hasSimplified(m.content);
 
+  // fix: clipboard 加 fallback，支援 HTTP 環境
   const handleCopy = () => {
-    navigator.clipboard.writeText(cleanText(m.content)).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    const text = cleanText(m.content);
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    } else {
+      // fallback for HTTP
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      try {
+        document.execCommand("copy");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        /* 複製失敗靜默處理 */
+      }
+      document.body.removeChild(el);
+    }
   };
 
   return (
@@ -204,7 +225,9 @@ export default function MessageBubble({ m, onRetry }) {
       >
         <div style={m.role === "user" ? S.userBubble : S.aiBubble}>
           {m.role === "assistant" ? (
-            <CollapsibleBubble>{renderMarkdown(m.content)}</CollapsibleBubble>
+            <CollapsibleBubble contentKey={m.content.length}>
+              {renderMarkdown(m.content)}
+            </CollapsibleBubble>
           ) : (
             <p style={{ margin: 0 }}>{m.content}</p>
           )}
