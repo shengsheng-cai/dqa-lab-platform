@@ -9,7 +9,7 @@ import {
 
 const API_BASE = "http://localhost:8000";
 const TC_PREFIX = "[請用繁體中文回覆，不可有任何簡體字] ";
-const MAX_HISTORY = 2; // 帶入 API 的歷史筆數（perf 考量）
+const MAX_HISTORY = 2;
 
 export default function useAIChat() {
   const [store, setStore] = useState(() => loadChats());
@@ -29,18 +29,15 @@ export default function useAIChat() {
   const userScrolledUpRef = useRef(false);
   const prevSuggestionsRef = useRef(null);
 
-  // ── derived ──────────────────────────────────────────────────
   const activeId = store.activeConversationId;
   const conversations = store.conversations;
   const projectGroups = store.projectGroups;
   const messages = conversations[activeId]?.messages ?? [];
 
-  // ── persist ──────────────────────────────────────────────────
   useEffect(() => {
     saveChats(store);
   }, [store]);
 
-  // ── scroll ───────────────────────────────────────────────────
   useEffect(() => {
     const el = chatAreaRef.current;
     if (!el) return;
@@ -62,8 +59,6 @@ export default function useAIChat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // ── store helpers ─────────────────────────────────────────────
-  /** 更新目前對話的 messages，並自動產生標題（首則訊息） */
   const updateMessages = useCallback((newMsgs) => {
     setStore((prev) => {
       const conv = prev.conversations[prev.activeConversationId];
@@ -88,7 +83,6 @@ export default function useAIChat() {
     });
   }, []);
 
-  // ── multi-conversation ops ────────────────────────────────────
   const switchConversation = useCallback(
     (id) => {
       if (loading) return;
@@ -101,7 +95,7 @@ export default function useAIChat() {
   );
 
   const addConversation = useCallback(({ projectGroup } = {}) => {
-    const conv = createConversation({ projectGroup: projectGroup ?? "未分類" });
+    const conv = createConversation({ projectGroup: projectGroup ?? "未分組" });
     setStore((prev) => ({
       ...prev,
       conversations: { ...prev.conversations, [conv.id]: conv },
@@ -150,7 +144,6 @@ export default function useAIChat() {
     }));
   }, []);
 
-  // ── chat ops ──────────────────────────────────────────────────
   const handleInputChange = (e) => {
     setInput(e.target.value);
     const el = e.target;
@@ -348,31 +341,25 @@ export default function useAIChat() {
   };
 
   return {
-    // store
     activeId,
     conversations,
     projectGroups,
-    // active conversation
     messages,
-    // ui state
     input,
     loading,
     streamText,
     suggestions,
     suggestLoading,
-    // refs
     bottomRef,
     chatAreaRef,
     inputRef,
     textareaRef,
-    // multi-conv ops
     switchConversation,
     addConversation,
     deleteConversation,
     renameConversation,
     setConversationGroup,
     addProjectGroup,
-    // chat ops
     sendMessage,
     stopStream,
     retryInTraditional,
