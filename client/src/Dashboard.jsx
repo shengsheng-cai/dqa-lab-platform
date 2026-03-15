@@ -77,7 +77,6 @@ const DeviceCard = ({ device, selected, onClick }) => {
     showCountdown ? device.estimated_end_at : null,
   );
 
-  // 溫度低於 0°C 時不顯示濕度（物理上無法控濕）
   const showHumi = device.temperature >= 0;
 
   return (
@@ -95,7 +94,6 @@ const DeviceCard = ({ device, selected, onClick }) => {
         transition: "outline 0.15s",
       }}
     >
-      {/* 標題列 */}
       <div
         style={{
           display: "flex",
@@ -128,7 +126,6 @@ const DeviceCard = ({ device, selected, onClick }) => {
         </span>
       </div>
 
-      {/* 溫濕度：temp < 0°C 時濕度顯示 — */}
       <div
         style={{
           display: "flex",
@@ -204,7 +201,6 @@ const DeviceCard = ({ device, selected, onClick }) => {
         </div>
       </div>
 
-      {/* 執行中任務 */}
       <div
         style={{
           padding: "8px 12px",
@@ -218,7 +214,6 @@ const DeviceCard = ({ device, selected, onClick }) => {
         {isActive ? device.running_sop_name : "STANDBY (IDLE)"}
       </div>
 
-      {/* 步驟進度條 */}
       {isActive && totalSteps > 0 && (
         <div>
           <div
@@ -260,7 +255,6 @@ const DeviceCard = ({ device, selected, onClick }) => {
         </div>
       )}
 
-      {/* 倒數計時器 */}
       {showCountdown && countdown !== null && (
         <div
           style={{
@@ -292,7 +286,8 @@ const DeviceCard = ({ device, selected, onClick }) => {
   );
 };
 
-const Dashboard = () => {
+// fix: 加入 active prop，頁面隱藏時暫停所有輪詢
+const Dashboard = ({ active = true }) => {
   const [devices, setDevices] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState("KSON_CH01");
   const historyRef = useRef(
@@ -318,7 +313,10 @@ const Dashboard = () => {
       .catch((err) => console.error("[Dashboard] history fetch:", err));
   }, [selectedDevice]);
 
+  // fix: active 為 false 時不啟動 interval，切回頁面時重新啟動
   useEffect(() => {
+    if (!active) return;
+
     const fetchDevices = async () => {
       try {
         const res = await axios.get(`${API}/api/devices`);
@@ -351,9 +349,11 @@ const Dashboard = () => {
     const interval = setInterval(fetchDevices, 10000);
     fetchDevices();
     return () => clearInterval(interval);
-  }, []);
+  }, [active]);
 
   useEffect(() => {
+    if (!active) return;
+
     const fetchExecutions = () => {
       axios
         .get(`${API}/api/reports/list`)
@@ -363,7 +363,7 @@ const Dashboard = () => {
     fetchExecutions();
     const t = setInterval(fetchExecutions, 60000);
     return () => clearInterval(t);
-  }, []);
+  }, [active]);
 
   const runningCount = devices.filter((d) => d.status === "RUNNING").length;
   const emergencyCount = devices.filter((d) => d.status === "EMERGENCY").length;
@@ -385,7 +385,6 @@ const Dashboard = () => {
         width: "100%",
       }}
     >
-      {/* 標題列 */}
       <div
         style={{
           display: "flex",
@@ -408,7 +407,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 5 台設備卡片 */}
       <div
         style={{
           display: "grid",
@@ -427,7 +425,6 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* 趨勢圖 */}
       <div style={{ ...card, marginBottom: 24 }}>
         <div
           style={{
@@ -586,7 +583,6 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* 執行紀錄 */}
       <div style={card}>
         <div
           style={{
