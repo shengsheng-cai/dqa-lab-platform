@@ -101,11 +101,11 @@
 
 ### AI 模組技術規格
 
-- 模型：`qwen2.5:7b`（本機 Ollama，`http://localhost:11434`）；備用：`qwen2.5:14b`
+- 模型：`gemma3:4b`（本機 Ollama，`http://localhost:11434`）；備用：`gemma3:12b`
 - timeout：180 秒
 - 端點：`/api/ai/standards-query`（非串流）、`/api/ai/standards-query-stream`（串流，前端主要使用）
 - system prompt：6 條規則，內建 STANDARD_TREE 78 個測試條件名稱（不含詳細參數，約 800 tokens）；模組載入時快取，只建立一次；lifespan 啟動時執行 warm-up 預載模型
-- user message 前綴：`TC_PREFIX = "[請用繁體中文回覆，不可有任何簡體字] "`，只在送出 API 時附加，不存入 messages state
+- user message 前綴：`TC_PREFIX = "[MUST reply in Traditional Chinese zh-TW ONLY, NO Simplified Chinese] "`，只在送出 API 時附加，不存入 messages state
 - 多輪對話：history 陣列帶入（MAX_HISTORY = 4），content 均為不含前綴的乾淨字串
 - 前端儲存：`localStorage`，key = `dqa_ai_chats_v2`（多對話格式）
 - 追問建議：3s 延遲後產生，切換對話時自動 abort 上一輪請求，結果只寫入發送當下的對話

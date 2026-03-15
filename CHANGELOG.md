@@ -7,6 +7,16 @@
 
 ## 2026-03-15（續）
 
+**AI 模型切換與繁體強化**
+
+- **feat**: `ai.py` 模型從 `qwen2.5:7b` 換為 `gemma3:4b`，繁體中文輸出穩定性提升，推理速度加快
+- **fix**: `ai.py` system prompt 改為英文指令，gemma 對英文指令遵從度更高，有效抑制簡體輸出；加入簡繁體對照範例強化辨別
+- **fix**: `ai/useAIChat.jsx` `TC_PREFIX` 改為 `"[MUST reply in Traditional Chinese zh-TW ONLY, NO Simplified Chinese] "`，中英混合提升模型遵從度
+
+---
+
+## 2026-03-15（續）
+
 **後端系統性優化**
 
 - **fix**: `ai.py` 移除後端重複 `TC_PREFIX`，前端已附加，後端不再加，避免雙重前綴
