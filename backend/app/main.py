@@ -10,7 +10,7 @@ from typing import Optional
 from .sop import router as sop_router, execution_router, DEVICE_IDS
 from .reports import router as reports_router
 from .errors import router as errors_router
-from .ai import router as ai_router
+from .ai import router as ai_router, _warmup_ollama
 from .models import SessionLocal, DeviceData, ErrorLog, DeviceState
 from .standards import get_ramp_rate, get_standard
 
@@ -66,6 +66,9 @@ async def lifespan(app: FastAPI):
     background_tasks.add(sim_task)
     sim_task.add_done_callback(background_tasks.discard)
     print(f"✅ System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
+
+    # perf: 預載 Ollama 模型，避免第一次對話冷啟動無法串流
+    await _warmup_ollama()
 
     yield  # 應用程式運行期間
 
@@ -134,10 +137,6 @@ def _make_description(status: str, sop_name: str) -> str:
 
 
 def _calc_estimated_end_at(item: dict) -> Optional[str]:
-    """
-    根據 active_sop_json 計算預估結束時間。
-    回傳 ISO 8601 字串，或 None（無法計算時）。
-    """
     status = item.get("status")
     if status not in ("RUNNING", "PAUSED"):
         return None
@@ -152,7 +151,7 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
     except Exception:
         return None
 
-    ramp_rate = sop.get("ramp_rate") or 1.0  # °C/min，預設 1
+    ramp_rate = sop.get("ramp_rate") or 1.0
     dwell_hours = sop.get("dwell_time_hours") or 0.0
     dwell_min = dwell_hours * 60.0
     cycles = sop.get("cycles") or 1
@@ -163,19 +162,16 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
     ramp_up_min = abs(high_temp - 25.0) / ramp_rate
 
     if low_temp is not None:
-        # 循環測試：升溫→高溫停留→降溫→低溫停留，重複 cycles 次
         ramp_down_min = abs(high_temp - low_temp) / ramp_rate
         ramp_back_min = abs(low_temp - 25.0) / ramp_rate
         one_cycle_min = ramp_up_min + dwell_min + ramp_down_min + dwell_min
         total_min = one_cycle_min * cycles + ramp_back_min
     else:
-        # 單次測試：升溫→停留→降溫回 25°C
         ramp_down_min = abs(high_temp - 25.0) / ramp_rate
         total_min = ramp_up_min + dwell_min + ramp_down_min
 
     total_seconds = total_min * 60.0
 
-    # 統一轉成 UTC-aware datetime
     if isinstance(started_at, str):
         started_dt = datetime.datetime.fromisoformat(started_at.replace("Z", "+00:00"))
     else:
@@ -194,8 +190,7 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
 
 @app.get("/api/devices")
 async def get_all_devices():
-    """取得所有設備即時狀態"""
-    now = _now_utc().strftime("%H:%M:%S")  # fix: 統一用 UTC
+    now = _now_utc().strftime("%H:%M:%S")
     return [
         {
             "device_id": device_id,
@@ -221,9 +216,6 @@ async def get_all_devices():
 
 @app.get("/api/devices/{device_id}/history")
 async def get_device_history(device_id: str):
-    """
-    取得設備當前測試的完整溫濕度歷史，每分鐘聚合一個平均點。
-    """
     device = app.state.AICM_CACHE.get(device_id)
     if not device:
         raise HTTPException(status_code=404, detail=f"設備 {device_id} 不存在")
@@ -232,7 +224,6 @@ async def get_device_history(device_id: str):
     if not started_at:
         return []
 
-    # 統一轉成 naive datetime，避免 SQLite 比對格式不符
     if isinstance(started_at, str):
         started_at_dt = datetime.datetime.fromisoformat(
             started_at.replace("Z", "")
@@ -256,7 +247,6 @@ async def get_device_history(device_id: str):
     if not rows:
         return []
 
-    # 每分鐘聚合
     buckets: dict = {}
     for row in rows:
         minute_key = row.timestamp.strftime("%Y-%m-%d %H:%M")
@@ -289,7 +279,6 @@ async def get_device_history(device_id: str):
 
 @app.get("/api/latest")
 async def get_latest():
-    """取得 KSON_CH01 即時狀態（向後相容）"""
     cache = app.state.AICM_CACHE
     if not cache or "KSON_CH01" not in cache:
         return {
@@ -319,7 +308,6 @@ async def get_latest():
 
 @app.post("/api/stop/{device_id}/emergency")
 async def emergency_stop(device_id: str):
-    """🚨 指定設備緊急停止"""
     device = _get_device(device_id)
     with SessionLocal() as db:
         db.add(
@@ -344,7 +332,7 @@ async def emergency_stop(device_id: str):
             "active_sop_json": None,
             "completed_steps": 0,
             "started_at": None,
-            "total_steps": 0,  # fix: 移除未定義的 std_data 參照
+            "total_steps": 0,
         }
     )
     _save_device_state(device_id, device)
@@ -358,7 +346,6 @@ class ProgressPayload(BaseModel):
 
 @app.post("/api/devices/{device_id}/progress")
 async def update_progress(device_id: str, payload: ProgressPayload):
-    """更新設備目前完成的步驟數"""
     device = _get_device(device_id)
     device["completed_steps"] = payload.completed
     _save_device_state(device_id, device)
@@ -367,7 +354,6 @@ async def update_progress(device_id: str, payload: ProgressPayload):
 
 @app.post("/api/stop/{device_id}/pause")
 async def pause_test(device_id: str):
-    """⏸ 指定設備暫停切換"""
     device = _get_device(device_id)
     if device["status"] == "RUNNING":
         device["status"] = "PAUSED"
@@ -379,7 +365,6 @@ async def pause_test(device_id: str):
 
 @app.post("/api/stop/{device_id}/normal")
 async def normal_stop(device_id: str):
-    """⏹ 指定設備正常停止"""
     device = _get_device(device_id)
     device.update(
         {
@@ -405,7 +390,7 @@ async def data_simulator():
 
     while True:
         cache = app.state.AICM_CACHE
-        now = _now_utc()  # fix: 統一用 UTC aware datetime
+        now = _now_utc()
 
         for device_id, item in cache.items():
             status = item.get("status", "OFFLINE")
@@ -414,7 +399,6 @@ async def data_simulator():
             if device_id not in write_counters:
                 write_counters[device_id] = 0
 
-            # 溫度物理模擬
             if status == "RUNNING":
                 standard_id = item.get("standard_id", "IEC60068_CYCLE")
                 max_ramp_rate = get_ramp_rate(standard_id)
@@ -460,12 +444,10 @@ async def data_simulator():
                     current_temp + random.uniform(-0.05, 0.05), 2
                 )
 
-            # 每台設備獨立計數，滿 10 秒才寫入 DB
             if status in ["RUNNING", "FINISHING", "PAUSED", "EMERGENCY"]:
                 write_counters[device_id] += 1
                 if write_counters[device_id] >= 10:
                     try:
-                        # fix: DeviceData 寫入統一用 _now_utc()
                         with SessionLocal() as db:
                             db.add(
                                 DeviceData(
@@ -476,7 +458,6 @@ async def data_simulator():
                                 )
                             )
                             db.commit()
-                        # fix: DeviceState 統一呼叫 _save_device_state，不重複手寫 SQL
                         _save_device_state(device_id, item)
                     except Exception as e:
                         print(f"[{device_id}] DB write error: {e}")

@@ -48,24 +48,30 @@ def _build_system_prompt() -> str:
                 f"  版本：{ver_data['label']} — {ver_data.get('description', '')}"
             )
             for test_key, test_data in ver_data["tests"].items():
-                params = []
-                if test_data.get("high_temperature"):
-                    params.append(f"高溫 {test_data['high_temperature']}°C")
-                if test_data.get("low_temperature"):
-                    params.append(f"低溫 {test_data['low_temperature']}°C")
-                if test_data.get("target_temperature"):
-                    params.append(f"目標溫度 {test_data['target_temperature']}°C")
-                if test_data.get("dwell_time_hours"):
-                    params.append(f"停留 {test_data['dwell_time_hours']}h")
-                if test_data.get("cycles"):
-                    params.append(f"{test_data['cycles']} 循環")
-                if test_data.get("humidity_rh_percent"):
-                    params.append(f"濕度 {test_data['humidity_rh_percent']}%RH")
-                param_str = "、".join(params) if params else ""
-                lines.append(f"    - {test_data['name']}（{param_str}）")
+                # perf: 只列測試條件名稱，不列詳細參數，降低 context token 數
+                lines.append(f"    - {test_data['name']}")
 
     _SYSTEM_PROMPT_CACHE = "\n".join(lines)
     return _SYSTEM_PROMPT_CACHE
+
+
+async def _warmup_ollama():
+    """
+    伺服器啟動時預載模型，避免第一次對話因模型冷啟動而無法串流。
+    """
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            await client.post(
+                OLLAMA_URL,
+                json={
+                    "model": OLLAMA_MODEL,
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "stream": False,
+                },
+            )
+        print(f"✅ Ollama warm-up 完成（{OLLAMA_MODEL}）")
+    except Exception as e:
+        print(f"⚠️  Ollama warm-up 失敗（服務可能尚未啟動）：{e}")
 
 
 class QueryRequest(BaseModel):
