@@ -81,18 +81,34 @@ export const loadChats = () => {
 
   store = migrate(store);
 
-  // ✅ 修正：掃描所有對話的 projectGroup，若不在 projectGroups 陣列就補進去
-  // 避免對話的分組標籤孤立、導致 ChatSidebar 層級結構跑掉
+  // 掃描所有對話的 projectGroup，若不在 projectGroups 陣列就補進去
   Object.values(store.conversations ?? {}).forEach((c) => {
     if (c.projectGroup && !store.projectGroups.includes(c.projectGroup)) {
       store.projectGroups.push(c.projectGroup);
     }
   });
 
+  // 清除無任何對話的空分組（「未分組」永遠保留）
+  const usedGroups = new Set(
+    Object.values(store.conversations ?? {}).map((c) => c.projectGroup),
+  );
+  store.projectGroups = [
+    ...new Set([
+      ...store.projectGroups.filter((g) => g !== "未分組" && usedGroups.has(g)),
+      "未分組",
+    ]),
+  ];
+
   if (Object.keys(store.conversations).length === 0) {
     const conv = createConversation();
     store.conversations[conv.id] = conv;
     store.activeConversationId = conv.id;
+  } else if (!store.conversations[store.activeConversationId]) {
+    // activeConversationId 指向不存在的對話，修正為最新一筆
+    const latest = Object.values(store.conversations).sort(
+      (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
+    )[0];
+    store.activeConversationId = latest.id;
   }
   return store;
 };

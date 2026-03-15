@@ -49,7 +49,11 @@ export default function ChatSidebar({
 
   const commitAddGroup = () => {
     const name = newGroupInput.trim();
-    if (name) onAddGroup(name);
+    if (name) {
+      onAddGroup(name);
+      // 同時在新分組建立一個新對話，避免空分組被自動清除
+      onAdd({ projectGroup: name });
+    }
     setNewGroupInput("");
     setShowGroupInput(false);
   };
@@ -94,14 +98,11 @@ export default function ChatSidebar({
           <div style={S.listArea}>
             {sortedGroups.map((group) => {
               const items = grouped[group] ?? [];
-              // 「未分組」空的就不顯示；其他分組即使空也要顯示
-              if (group === "未分組" && items.length === 0) return null;
+              // 空分組一律不顯示
+              if (items.length === 0) return null;
               return (
                 <div key={group}>
-                  <div style={S.groupLabel}>
-                    {group}
-                    {items.length === 0 && <span style={S.emptyBadge}>空</span>}
-                  </div>
+                  <div style={S.groupLabel}>{group}</div>
                   {items.map((conv) => {
                     const isActive = conv.id === activeId;
                     return (
@@ -344,7 +345,7 @@ const S = {
   convItemActive: {
     background: "#21262d",
     borderLeft: "2px solid #58a6ff",
-    paddingLeft: 6,
+    padding: "6px 8px 6px 6px",
   },
   convTitle: {
     fontSize: 12,
