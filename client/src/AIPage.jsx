@@ -406,9 +406,10 @@ export default function AIPage() {
 
   const generateSuggestions = useCallback(
     async (currentMessages) => {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
       setSuggestLoading(true);
       try {
-        const recentHistory = currentMessages.slice(-6).map((m) => ({
+        const recentHistory = currentMessages.slice(-2).map((m) => ({
           role: m.role,
           content: m.content,
         }));
@@ -602,18 +603,6 @@ export default function AIPage() {
             </span>
           )}
           <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
-            {sidebarOpen && isDynamic && (
-              <button
-                style={styles.resetBtn}
-                onClick={() => {
-                  setSuggestions(null);
-                  prevSuggestionsRef.current = null;
-                }}
-                title="回到預設問題"
-              >
-                ↺
-              </button>
-            )}
             <button
               style={styles.toggleBtn}
               onClick={() => setSidebarOpen((v) => !v)}
@@ -736,7 +725,7 @@ export default function AIPage() {
               <div style={styles.emptyIcon}>🔬</div>
               <div style={styles.emptyTitle}>DQA Lab 法規諮詢助手</div>
               <div style={styles.emptyDesc}>
-                描述你的產品或測試需求，AI 將從 6 大法規、64
+                描述你的產品或測試需求，AI 將從 5 大法規、78
                 個測試條件中推薦最適合的方案。
               </div>
               <div style={styles.emptyDisclaimer}>{DISCLAIMER}</div>
@@ -870,18 +859,6 @@ const styles = {
     border: "1px solid #30363d",
     color: "#8b949e",
     fontSize: 10,
-    padding: "4px 7px",
-    cursor: "pointer",
-    borderRadius: 4,
-    lineHeight: 1,
-    flexShrink: 0,
-    transition: "background .15s",
-  },
-  resetBtn: {
-    background: "#21262d",
-    border: "1px solid #30363d",
-    color: "#58a6ff",
-    fontSize: 12,
     padding: "4px 7px",
     cursor: "pointer",
     borderRadius: 4,
