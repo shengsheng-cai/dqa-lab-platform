@@ -1,125 +1,114 @@
-# 📝 Changelog
+# DQA Lab Digital Twin
 
-所有版本修改紀錄集中於此，依日期倒序排列。
+![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
 
----
+基於 FastAPI + React 的實驗室數位孿生平台，整合物理模擬引擎與國際環境測試標準，實現溫箱設備的遠端自動化控制。
 
-## 2026-03-06（續）
+## 專案背景
 
-- **feat**: `models.py` 新增 `DeviceState` 表，儲存設備狀態、溫度、active_sop_json，支援重啟後恢復
-- **feat**: `main.py` 啟動時從 `DeviceState` 表讀回上次狀態，RUNNING 直接恢復（不降級為 PAUSED）
-- **feat**: `main.py` 模擬器每 10 秒同步寫入 `DeviceState`，確保狀態持久化
-- **feat**: `main.py` 緊急停止、正常停止、FINISHING→IDLE 時立即同步 `DeviceState`
-- **feat**: `sop.py` 啟動 SOP 時將 `active_sop_json` 寫入 `DeviceState`
-- **feat**: `main.py` `/api/devices` 回傳 `active_sop_json`，供前端重啟後恢復步驟清單
-- **feat**: `SOPPage.jsx` 輪詢時自動從 `active_sop_json` 恢復 `activeSop` 與步驟清單
-- **fix**: `App.jsx` `minHeight: 100vh` 改為 `height: 100vh`，修復 SOPPage layout 溢出蓋到其他頁面
-- **fix**: `SOPPage.css` `width: 100vw` 改為 `width: 100%`，修復 layout 滲出問題
-- **feat**: `SOPPage.jsx` HUMI PV 整合進 TEMP/HUMI TREND 卡片右上角，避免左側卡片被裁切
-- **feat**: `Dashboard.jsx` 趨勢圖改為可切換 5 台設備，各自維護獨立 history buffer
-- **fix**: `dev_start.sh` 啟動前強制釋放 port 8000 / 5173，避免 make clean 後殘留程序
-- **chore**: 刪除根目錄多餘的 `test.db`
-- **chore**: 刪除 `backend/app/database.py`（功能已在 models.py，無任何引用）
-- **chore**: 刪除 `backend/templates/`（與 docs/templates/ 重複）
-- **docs**: `architecture.md` 資料庫表格新增 `device_states`、完成度統計新增持久化/恢復/趨勢圖切換條目
-- **chore**: 刪除根目錄多餘的 `test.db`
-- **chore**: 刪除 `backend/app/database.py`（功能已在 `models.py`，無任何引用）
-- **chore**: 刪除 `backend/templates/`（與 `docs/templates/` 重複）
-- **chore**: 刪除 `docs/screenshots/demo.gif`（README 已移除引用）
-- **chore**: 刪除 `client/public/vite.svg`（Vite 預設圖示，與專案無關）
-- **chore**: `serial_reader.py` 頂部加上 Phase 3 預留說明，明確標示尚未啟用
-- **refactor**: `sop_execution.py` 合併進 `sop.py`，統一管理 SOP 相關邏輯，刪除 `sop_execution.py`
-- **docs**: `architecture.md` 通訊層 `serial_reader.py` 標記為 Phase 3 預留
-- **docs**: `README.md` 專案背景重寫，補充人為疏失風險、培訓成本與多標準對照負擔
+工業環境測試涉及眾多國際標準（IEC、EN、DNV、NMEA 等），即使有 SOP 可循，測試人員仍需大量人工比對法規參數，細微的判讀差異就可能導致測試條件設定錯誤。加上各標準版本更迭頻繁、新人培訓成本高，整個流程對人力依賴程度極高，人為疏失風險難以有效控制。
+
+本專案將測試流程數位化，把 5 大國際標準的 78 個測試條件直接內建進系統，操作人員透過三步驟選擇法規、版本、測試條件後，參數自動帶入，無需手動比對文件。搭配物理模擬引擎，在硬體不在場時也能完整執行開發與驗證流程，降低人力成本與培訓門檻。
 
 ---
 
-## 2026-03-06
+## AI 輔助模組
 
-- **fix**: 移除 `_cleanup_old_data()`，依 ISO/IEC 17025:2017 §7.5 & §8.4 量測數據永久保存，不自動刪除（`main.py`）
-- **feat**: `SopExecution` 新增 `operator`（責任人）、`device_id`、`test_started_at`、`test_ended_at` 欄位，符合 §7.5.1 技術記錄責任人要求（`models.py`）
-- **feat**: `sop_execution.py` 新增對應欄位的接收與回傳（`ExecutionCreate`、`ExecutionResponse`）
-- **fix**: `reports.py` 移除系統自動 PASS/FAIL 判定，改為工程師人工填寫欄位，符合 §7.8.6 & §7.8.7
-- **fix**: `reports.py` 原始數據查詢範圍改為依 `test_started_at` / `test_ended_at` 決定，符合 §7.5.2
-- **fix**: `reports.py` 移除「認可標準 Accreditation: ISO/IEC 17025:2017」錯誤宣告
-- **fix**: `reports.py` 執行紀錄列表新增 `device_id`、`operator`、`test_started_at`、`test_ended_at`
-- **feat**: `SOPPage.jsx` SELECT DEVICE 每顆按鈕即時反映各自設備狀態顏色，RUNNING 時加發光效果
-- **feat**: `SOPPage.jsx` `STATUS_CONFIG` 新增 `label` 欄位，與 `Dashboard.jsx` 完全一致
-- **fix**: `SOPPage.jsx` 控制面板狀態標籤統一使用 `sc.label` 顯示
-- **fix**: `SOPPage.jsx` `saveExecution` 補上 `device_id` 傳給後端
-- **feat**: `Dashboard.jsx` 執行紀錄表格新增「設備」、「執行人員」、「測試開始」三欄，與後端同步
-- **docs**: `README.md` 移除 demo gif（避免壞圖）、移除實驗室範圍區塊、AI 輔助模組移至最前、核心功能更新 17025 描述
-- **docs**: `architecture.md` 移除 7 天自動清理描述、更新報告架構為半自動方向、AI 流程移至數據流程圖最前、移除認證機構描述、新增本次所有功能至完成度統計
-- **fix**: `dev_start.sh` 移除 cleanup 時自動刪除日誌（保留供 `make logs` 事後查閱）
-- **fix**: `dev_start.sh` socat 串口路徑解析改為最多重試 5 秒，避免系統較慢時抓不到路徑
-- **fix**: `dev_start.sh` `wait` 改為指定 PID（`$BACK_PID $SIM_PID $CLIENT_PID`），任一服務 crash 即觸發 cleanup
-- **fix**: `Makefile` clean 指令移除 recipe 內 `#` 注釋、移除冗餘 `|| true`
-- **docs**: `README.md` 快速啟動改用 `make install`、補上 `python backend/init_db.py` 首次初始化步驟、核心功能新增多設備同步監控描述
-- **docs**: `architecture.md` TEMP TREND 描述更新為溫濕度雙線含 X 軸、完成度統計更新折線圖說明並新增 dev_start.sh 條目
+**法規諮詢助手**（✅ 已完成）— 使用者以自然語言描述產品與目標，LLM 對應建議法規版本與測試條件，適用於開案前初步評估。串接本機 Ollama `gemma3:4b`，不依賴雲端，資料不出內網。支援多對話管理、專案分組（含移動對話至分組）、串流逐字輸出、多輪對話、對話記錄持久化、智慧捲動、動態追問建議（切換對話自動取消）。每則回覆強制附上免責聲明，並標注法規正式版本號。
+
+**治具管理助手**（規劃中）— 使用者描述待測產品與需求，LLM 推理對應所需治具組合，自動產出借用申請送管理者確認。
+
+**設備排程預估**（規劃中）— 使用者提交測試需求，LLM 結合現有排程資料計算最快可用時間窗口。
 
 ---
 
-## 2026-03-04（續）
+## 核心功能
 
-- **feat**: 新增 `ErrorLog` 表（`models.py`），記錄緊急停止事件
-- **feat**: 新增 `errors.py` router，`GET /api/errors/` 回傳所有異常紀錄
-- **feat**: `emergency_stop()` 觸發時自動寫入 device_id、error_type、當下溫濕度、執行中 SOP（`main.py`）
-- **feat**: 新增「異常看板」頁面（`ErrorLog.jsx`），顯示統計卡片與完整紀錄列表
-- **feat**: `App.jsx` 導航列新增「異常看板」入口，active 頁面高亮
-- **feat**: `Dashboard.jsx` 統一 GitHub dark 主題，新增執行紀錄列表與一鍵下載 CSV
-- **feat**: `SOPPage.jsx` 新增即時 TEMP TREND 折線圖（含目標溫度虛線）、EMERGENCY 閃爍、狀態 badge、步驟進度條
-- **fix**: 緊急停止後正常停止按鈕可用（`canStop = isActive || isEmergency`）
-- **fix**: TEMP/HUMI 卡片加左側 accent 色邊框
+- **多設備同步監控** — 5 台溫箱（KSON_CH01～CH05）各自獨立模擬運作，SELECT DEVICE 按鈕即時反映各設備狀態顏色
+- **儀表板** — 即時溫濕度監控（每秒更新）、趨勢圖雙 Y 軸、步驟進度條、倒數計時器、六種狀態顏色區分；低溫（< 0°C）自動隱藏濕度顯示
+- **三步驟法規選擇** — 法規 → 版本/Class → 測試條件，5 大法規、78 個官方測試條件，各設備選擇獨立儲存
+- **SOP 步驟依序確認** — 步驟必須依序勾選，取消時連鎖清除後續，Optional 步驟可跳過，每次勾選即時同步後端
+- **完整波型曲線** — SP 目標曲線（虛線）與 PV 實際曲線（實線）疊加顯示，X 軸為完整測試時長；低溫段（< 0°C）濕度線自動斷開
+- **執行資訊面板** — Pgm / Step / Free Time / Cycle / Now Time / End Time，對應 KSON 溫箱面板格式
+- **AI 法規諮詢** — 多對話管理、專案分組、自然語言描述需求、串流逐字回覆，支援中途停止、複製（含 HTTP fallback）、計時、對話持久化、智慧捲動、動態追問建議；雙層免責聲明（前端固定標籤 + AI 回覆內標注版本號）
+- **物理模擬引擎** — 即時升降溫斜率模擬，遵守各標準速率限制，每 10 秒寫 DB，依 ISO/IEC 17025:2017 §7.5 & §8.4 永久保存
+- **異常看板** — 緊急停止自動寫入事件紀錄，記錄當下溫濕度與執行中 SOP，每 60 秒自動刷新
+- **ISO 17025 測試報告** — 7 節格式，big5 編碼，PASS/FAIL 由授權工程師人工判定
+- **重啟恢復** — 伺服器重啟後自動恢復 RUNNING 狀態、步驟進度與 SOP 資料
+- **瞬間頁面切換** — App.jsx 採 CSS display 切換取代路由 unmount，四頁面狀態常駐記憶體，切換無延遲
 
----
+## 支持的環境測試標準（78 個測試條件）
 
-## 2026-03-04
+| 法規 | 版本 | 測試數 | 主要測試項目 |
+|------|------|---------|------------|
+| **IEC 60068** | 2-1 / 2-2 / 2-14 / 2-30 / 2-78 | 17 | 冷測 Ab/Ad、乾熱 Ba/Bb、溫度循環/熱衝擊 Na/Nb、濕熱循環 Db、高溫高濕穩態 Cab |
+| **EN 50155** | 2017 / 2007 | 21 | OT1~OT6 高溫/低溫（含 OT5 低溫 -40°C）、ST1 開機延伸、隧道快速溫變、濕熱循環、OT4 高溫通電（三段電壓） |
+| **IEC 61850-3** | Ed.2:2013 / Ed.1:2002 | 19 | Class C1/C2/C3 各自乾熱+冷測+濕熱+高溫高濕穩態 Cab |
+| **IEC 60945** | 2002 | 7 | 乾熱儲存/工作、濕熱 Db variant 1、低溫儲存/工作（Portable/Protected/Exposed）|
+| **DNV** | CG-0339:2015 / Std.Cert.2.4 | 14 | Class A/B/C/D，穩態/循環濕熱，Std.Cert.2.4 Class C/D 乾熱 |
 
-- **feat**: 新增 `docs/templates/QA_Test_Report_Template.docx` — 對外 QA 測試報告空白模板（8 章節，含封面/目錄/簽名欄，已移除商標）
-- **feat**: 新增 `backend/templates/QA_Test_Report_Template.docx` — 供未來後端半自動填入使用
-- **feat**: `standards.py` 重構為三層巢狀 `STANDARD_TREE`，新增 IEC 60068 完整系列（Test Ab/Ad/Ba/Bb/Na/Nb/Db）
-- **feat**: EN 50155:2017 新增 OT1~OT6 各高溫/低溫分開、ST1 開機延伸溫度、快速溫度變化測試
-- **feat**: IEC 61850-3 Ed.2 新增 Class C1/C2/C3 分別測試條件；保留 Ed.1 向後相容
-- **feat**: DNV 新增 DNVGL-CG-0339:2019 Class A/B/C/D（含穩態/循環濕熱區分）；保留舊版 Std.Cert.2.4
-- **feat**: KEMA 新增乾熱/冷測/濕熱穩態/溫度循環四項測試
-- **feat**: NMEA 細分受保護/暴露裝置，NMEA 0183/2000 獨立版本
-- **feat**: `STANDARDS_AND_SOPS` 改由 `_build_flat_standards()` 自動展開（向後相容）
-- **feat**: `GET /api/sop/standards/tree` 新端點，回傳完整三層結構供前端使用
-- **feat**: `sop.py` 更新配合新 `STANDARDS_AND_SOPS` 展開方式
-- **perf**: `device_data` 寫入頻率從每秒改為每 10 秒，減少 90% 寫入量
-- **feat**: CSV 報告下載按鈕（儲存紀錄後顯示）
-- **fix**: CSV 報告編碼改為 big5，解決 macOS Excel 中文亂碼
-- **fix**: CSV 報告溫度數值 `round(value, 2)` 防止浮點精度問題
-- **feat**: 報告容差從各標準 `temp_tolerance`/`humi_tolerance` 讀取（非寫死 ±2°C）
-- **docs**: 新增 `CHANGELOG.md`，集中所有版本 log
-- **docs**: 新增 `AGENTS.md`（從 `docs/notes/ai_context.md` 改名並更新）
-- **docs**: `README.md` 移除更新紀錄，改連結至 CHANGELOG
-- **docs**: `architecture.md` 移除修改紀錄，改連結至 CHANGELOG
+> ⚠️ 系統內建參數僅供初步評估參考，實際測試條件請以原始法規文件為準，並由授權工程師確認。
+> KEMA / NMEA 暫時移除（無原始法規文件可供對照）。
 
----
+## 快速啟動
 
-## 2026-03-03
+```bash
+# 1. 安裝所有依賴（後端 + 模擬器 + 前端）
+make install
 
-- **fix**: `include_router` 移至應用層級，修復重複 import（`main.py`）
-- **fix**: 物理模擬目標溫度改從 `get_standard()` 讀取（`main.py`）
-- **fix**: Dashboard 六種狀態正確顯示任務名稱（`Dashboard.jsx`）
-- **fix**: `FINISHING` 降溫完成後自動回 `IDLE`（`main.py`）
-- **fix**: 暫停切換改為 `RUNNING ↔ PAUSED` 真正切換（`main.py`）
-- **feat**: `SopResponse` 新增 `standard_id` 欄位（`sop.py`）
-- **feat**: Pydantic `StartSopRequest` 輸入驗證（`sop.py`）
-- **feat**: 上架驗證注意事項確認框（`SOPPage.jsx`）
-- **feat**: 待機/執行中畫面自動切換邏輯（`SOPPage.jsx`）
-- **feat**: SOP 步驟清單，啟動後自動勾選 Step 1、2（`SOPPage.jsx`）
-- **feat**: 註冊 `sop_execution` router，支援執行紀錄 API（`main.py`）
-- **feat**: ISO 17025 格式測試報告（`reports.py`）
-- **refactor**: `standards.py` 統一步驟為 4 步，移除「啟動測試」步驟
-- **refactor**: `init_db()` 合併進 `models.py`，`database.py` 改為轉發層
-- **fix**: `datetime.utcnow` 改為 `datetime.now(timezone.utc)`（Python 3.12 相容）
+# 2. 初始化資料庫（首次執行必須）
+python backend/init_db.py
 
----
+# 3. 一鍵啟動
+make dev
+```
 
-## 2026-03-02
+> ⚠️ DB 結構有變更時：改 `models.py` → `alembic revision --autogenerate -m "描述"` → `alembic upgrade head`（需在 `backend/` 目錄下執行）
 
-- 整合 EN50155、IEC60068 環境測試標準
-- 動態 SOP 管理系統
-- 前端 SOP 列表動態載入
+啟動後開啟 `http://localhost:5173`，或前往 `http://localhost:5173/sop` 執行測試，`http://localhost:5173/ai` 使用 AI 法規諮詢。
+
+互動式 API 文件：`http://localhost:8000/docs`
+
+## API 端點
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| GET  | `/api/latest` | 即時溫濕度與狀態（KSON_CH01，向後相容） |
+| GET  | `/api/devices` | 所有設備即時狀態（含 total_steps、completed_steps、started_at） |
+| GET  | `/api/devices/{id}/history` | 設備歷史溫濕度（每分鐘聚合，從 started_at 至今） |
+| GET  | `/api/sop/` | SOP 列表 |
+| GET  | `/api/sop/standards/tree` | 三層標準樹（法規→版本→測試條件，不含 steps 欄位） |
+| POST | `/api/sop/start` | 啟動 SOP |
+| POST | `/api/devices/{id}/progress` | 更新步驟完成數 |
+| POST | `/api/sop-executions/` | 儲存執行紀錄（含 device_id、operator、test_started_at） |
+| GET  | `/api/sop-executions/{id}` | 讀取執行紀錄 |
+| GET  | `/api/reports/csv/{id}` | 下載測試報告 CSV（ISO 17025 七節格式，RFC 5987 檔名） |
+| GET  | `/api/reports/list` | 所有執行紀錄列表 |
+| GET  | `/api/errors/` | 異常紀錄列表 |
+| POST | `/api/stop/{device_id}/emergency` | 緊急停止 |
+| POST | `/api/stop/{device_id}/pause` | 暫停切換（RUNNING ↔ PAUSED） |
+| POST | `/api/stop/{device_id}/normal` | 正常停止（自動降溫回 IDLE） |
+| POST | `/api/ai/standards-query` | AI 法規諮詢（非串流） |
+| POST | `/api/ai/standards-query-stream` | AI 法規諮詢（串流，前端主要使用） |
+
+## 技術堆棧
+
+後端：FastAPI、Pydantic v2、SQLAlchemy 2.0、asyncio、SQLite、httpx、Alembic
+前端：React 18、Vite、Recharts、Axios
+AI：Ollama（本機）、gemma3:4b
+環境：Python 3.9+、Node.js 18+、macOS/Linux（需要 socat）
+
+## 延伸文件
+
+- [AI Agent 開發規範與專案背景](./AGENTS.md)
+- [更新紀錄](./CHANGELOG.md)
+- [QA 測試報告模板](./docs/templates/QA_Test_Report_Template.docx)
+
+
+## 授權
+
+MIT License

@@ -1,8 +1,8 @@
+import json
+import datetime
 from fastapi import APIRouter, HTTPException, Body, Request
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-import json
-from datetime import datetime
 from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 
@@ -21,9 +21,14 @@ class SopResponse(BaseModel):
     description: Optional[str] = ""
 
 
+# ============================================================
+# 標準樹 & SOP 列表
+# ============================================================
+
+
 @router.get("/standards/tree")
 def get_standards_tree():
-    """完整三層標準樹：法規 → 版本 → 測試條件"""
+    """完整三層標準樹：法規 → 版本 → 測試條件（不含 steps 欄位，節省傳輸量）"""
     tree = get_standard_tree()
     result = {}
     for std_key, std_data in tree.items():
@@ -55,6 +60,7 @@ def get_standards_tree():
                     "reference": test_data.get("reference", ""),
                     "temp_tolerance": test_data.get("temp_tolerance", 2.0),
                     "humi_tolerance": test_data.get("humi_tolerance", 5.0),
+                    # fix: 一併回傳 steps，前端啟動時不需再打 /api/sop/ 取得步驟
                     "steps": test_data.get("steps", []),
                 }
     return result
@@ -94,6 +100,11 @@ def list_sops():
     return sops
 
 
+# ============================================================
+# 啟動 SOP
+# ============================================================
+
+
 @router.post("/start")
 async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
     """啟動指定設備的 SOP 測試"""
@@ -124,40 +135,34 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
             if sop:
                 sop_name = sop.name
 
+    now = datetime.datetime.now(datetime.timezone.utc)
+    active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
+    active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
+
     device.update(
         {
             "status": "RUNNING",
             "running_sop_id": sop_id,
             "running_sop_name": sop_name,
             "standard_id": sop_id,
+            "active_sop_json": active_sop_json,
+            "completed_steps": 0,
+            "started_at": now,
+            "total_steps": len(std_data.get("steps", [])),
         }
     )
 
-    # 把 active_sop 資料存入 DeviceState 供前端重啟後恢復
-    import datetime as dt
+    # fix: 統一使用 _save_device_state，移除重複的手動 DB 寫入邏輯
+    from .main import _save_device_state
 
-    active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
-    active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
-    device["active_sop_json"] = active_sop_json
-    with SessionLocal() as db:
-        state = db.get(DeviceState, device_id)
-        if state is None:
-            state = DeviceState(device_id=device_id)
-            db.add(state)
-        state.status = "RUNNING"
-        state.running_sop_id = sop_id
-        state.running_sop_name = sop_name
-        state.standard_id = sop_id
-        state.active_sop_json = active_sop_json
-        state.updated_at = dt.datetime.now(dt.timezone.utc)
-        db.commit()
+    _save_device_state(device_id, device)
 
     print(f"🔥 [{device_id}] Started SOP: {sop_id} ({sop_name})")
     return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
 
 
 # ============================================================
-# SOP 執行紀錄（原 sop_execution.py）
+# SOP 執行紀錄
 # ============================================================
 
 
@@ -170,31 +175,41 @@ class StepRecordSchema(BaseModel):
 
 class ExecutionCreate(BaseModel):
     sop_id: str
+    device_id: Optional[str] = None
+    operator: Optional[str] = None
+    test_started_at: Optional[datetime.datetime] = None
+    test_ended_at: Optional[datetime.datetime] = None
     steps: List[StepRecordSchema]
 
 
 class ExecutionResponse(BaseModel):
     id: int
     sop_id: str
-    created_at: datetime
+    device_id: Optional[str] = None
+    operator: Optional[str] = None
+    created_at: datetime.datetime
     steps: List[StepRecordSchema]
 
 
 @execution_router.post("/", response_model=ExecutionResponse)
 def create_execution(data: ExecutionCreate):
-    db = SessionLocal()
-    try:
-        execution = SopExecution(sop_id=data.sop_id)
+    with SessionLocal() as db:
+        execution = SopExecution(
+            sop_id=data.sop_id,
+            device_id=data.device_id,
+            operator=data.operator,
+            test_started_at=data.test_started_at,
+            test_ended_at=data.test_ended_at,
+        )
         db.add(execution)
-        db.commit()
-        db.refresh(execution)
+        db.flush()
 
-        steps_response = []
+        records = []
         for step in data.steps:
             record = StepRecord(
                 execution_id=execution.id,
                 step_id=step.step_id,
-                completed=1 if step.completed else 0,
+                completed=step.completed,
                 parameters=json.dumps(step.parameters, ensure_ascii=False)
                 if step.parameters
                 else None,
@@ -203,33 +218,34 @@ def create_execution(data: ExecutionCreate):
                 else None,
             )
             db.add(record)
-            db.commit()
-            db.refresh(record)
-            steps_response.append(
-                StepRecordSchema(
-                    step_id=record.step_id,
-                    completed=bool(record.completed),
-                    parameters=json.loads(record.parameters)
-                    if record.parameters
-                    else None,
-                    photos=json.loads(record.photos) if record.photos else None,
-                )
+            records.append(record)
+
+        db.commit()
+        db.refresh(execution)
+
+        steps_response = [
+            StepRecordSchema(
+                step_id=r.step_id,
+                completed=r.completed,
+                parameters=json.loads(r.parameters) if r.parameters else None,
+                photos=json.loads(r.photos) if r.photos else None,
             )
+            for r in records
+        ]
 
         return ExecutionResponse(
             id=execution.id,
             sop_id=execution.sop_id,
+            device_id=execution.device_id,
+            operator=execution.operator,
             created_at=execution.created_at,
             steps=steps_response,
         )
-    finally:
-        db.close()
 
 
 @execution_router.get("/{execution_id}", response_model=ExecutionResponse)
 def get_execution(execution_id: int):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         execution = (
             db.query(SopExecution).filter(SopExecution.id == execution_id).first()
         )
@@ -242,7 +258,7 @@ def get_execution(execution_id: int):
         steps = [
             StepRecordSchema(
                 step_id=r.step_id,
-                completed=bool(r.completed),
+                completed=r.completed,
                 parameters=json.loads(r.parameters) if r.parameters else None,
                 photos=json.loads(r.photos) if r.photos else None,
             )
@@ -251,8 +267,8 @@ def get_execution(execution_id: int):
         return ExecutionResponse(
             id=execution.id,
             sop_id=execution.sop_id,
+            device_id=execution.device_id,
+            operator=execution.operator,
             created_at=execution.created_at,
             steps=steps,
         )
-    finally:
-        db.close()

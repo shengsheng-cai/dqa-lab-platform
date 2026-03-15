@@ -3,3 +3,5 @@ uvicorn
 pyserial
 sqlalchemy
 python-dotenv
+alembic
+httpx

@@ -1,9 +1,22 @@
-from sqlalchemy import create_engine, String, Integer, Float, DateTime, Text
+from sqlalchemy import (
+    create_engine,
+    String,
+    Integer,
+    Float,
+    DateTime,
+    Text,
+    Boolean,
+    ForeignKey,
+    Index,
+)
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Mapped, mapped_column
 import datetime
+import os
 from typing import Optional
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{BASE_DIR}/test.db"
+
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
@@ -38,8 +51,12 @@ class SopExecution(Base):
     sop_id: Mapped[str] = mapped_column(String, index=True)
     device_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     operator: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    test_started_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    test_ended_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    test_started_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    test_ended_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
@@ -50,9 +67,11 @@ class StepRecord(Base):
     __tablename__ = "step_records"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    execution_id: Mapped[int] = mapped_column(Integer, index=True)
+    execution_id: Mapped[int] = mapped_column(
+        ForeignKey("sop_executions.id"), index=True
+    )
     step_id: Mapped[int] = mapped_column(Integer)
-    completed: Mapped[int] = mapped_column(Integer)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
     parameters: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     photos: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -70,6 +89,13 @@ class DeviceData(Base):
     humidity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     raw_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # fix: 加入 composite index (device_id, timestamp)
+    # reports.py 與 history API 都用 device_id + timestamp 範圍查詢
+    # 資料量大時避免全表掃描
+    __table_args__ = (
+        Index("ix_device_data_device_timestamp", "device_id", "timestamp"),
+    )
+
 
 # ---------- 設備狀態持久化 ----------
 class DeviceState(Base):
@@ -83,8 +109,14 @@ class DeviceState(Base):
     running_sop_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     standard_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     active_sop_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    completed_steps: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    # fix: 移除無效的 onupdate lambda（SQLite 不觸發），改由 _save_device_state 手動更新
     updated_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime,
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
 
@@ -94,7 +126,7 @@ class ErrorLog(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     device_id: Mapped[str] = mapped_column(String, index=True)
-    error_type: Mapped[str] = mapped_column(String)  # EMERGENCY / SENSOR_ERROR 等
+    error_type: Mapped[str] = mapped_column(String)
     sop_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     sop_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     temperature: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
