@@ -1,114 +1,191 @@
-# DQA Lab Digital Twin
+# 📝 Changelog
 
-![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
-
-基於 FastAPI + React 的實驗室數位孿生平台，整合物理模擬引擎與國際環境測試標準，實現溫箱設備的遠端自動化控制。
-
-## 專案背景
-
-工業環境測試涉及眾多國際標準（IEC、EN、DNV、NMEA 等），即使有 SOP 可循，測試人員仍需大量人工比對法規參數，細微的判讀差異就可能導致測試條件設定錯誤。加上各標準版本更迭頻繁、新人培訓成本高，整個流程對人力依賴程度極高，人為疏失風險難以有效控制。
-
-本專案將測試流程數位化，把 5 大國際標準的 78 個測試條件直接內建進系統，操作人員透過三步驟選擇法規、版本、測試條件後，參數自動帶入，無需手動比對文件。搭配物理模擬引擎，在硬體不在場時也能完整執行開發與驗證流程，降低人力成本與培訓門檻。
+所有版本修改紀錄集中於此，依日期倒序排列。
+每個版本只呈現最終結果，不保留中間修改過程。
 
 ---
 
-## AI 輔助模組
+## 2026-03-15
 
-**法規諮詢助手**（✅ 已完成）— 使用者以自然語言描述產品與目標，LLM 對應建議法規版本與測試條件，適用於開案前初步評估。串接本機 Ollama `gemma3:4b`，不依賴雲端，資料不出內網。支援多對話管理、專案分組（含移動對話至分組）、串流逐字輸出、多輪對話、對話記錄持久化、智慧捲動、動態追問建議（切換對話自動取消）。每則回覆強制附上免責聲明，並標注法規正式版本號。
+**feat**
 
-**治具管理助手**（規劃中）— 使用者描述待測產品與需求，LLM 推理對應所需治具組合，自動產出借用申請送管理者確認。
+- AI 法規諮詢重構為多對話管理架構，`AIPage.jsx` 拆分為 `client/src/ai/` 子模組（`aiStorage.jsx` / `useAIChat.jsx` / `MessageBubble.jsx` / `ChatArea.jsx` / `ChatSidebar.jsx`）
+- AI 法規諮詢支援專案分組、對話跨分組移動（📁）、重新命名、匯出、刪除確認
+- AI 法規諮詢模型從 `qwen2.5:7b` 換為 `gemma3:4b`，繁體輸出穩定性提升、推理速度加快
+- `sop.py` `standards/tree` 補回 `steps` 欄位，前端選好測試條件後直接啟動，不需二次請求
+- `models.py` `DeviceData` 加入 composite index `(device_id, timestamp)`，大量資料時避免全表掃描
+- DNV DNVGL-CG-0339:2015 法規審查完成，條數維持 14 條
 
-**設備排程預估**（規劃中）— 使用者提交測試需求，LLM 結合現有排程資料計算最快可用時間窗口。
+**fix — 後端**
+
+- `ai.py` system prompt 改為英文指令，加入簡繁體對照範例，有效抑制 gemma 輸出簡體；移除後端重複 TC_PREFIX（前端已附加）
+- `main.py` `get_device_history` 時區修正：`started_at` 統一轉為 UTC naive datetime 再與 DB 比對
+- `main.py` `lifespan` 恢復設備狀態時 `started_at` 統一轉為 UTC aware datetime，確保型別一致
+- `main.py` `_calc_estimated_end_at` 修正低溫測試預估時間計算錯誤（原本固定從 25°C 出發，未考慮低溫段先降溫）
+- `main.py` `data_simulator` `PAUSED` 狀態不再寫 DB，避免無效 IO
+- `sop.py` `start_sop` 統一使用 `_save_device_state` 寫 DB，移除重複手動寫入
+- `models.py` `DeviceState.updated_at` 移除無效的 `onupdate` lambda（SQLite 不觸發）
+- `reports.py` `DeviceData` 查詢加入 `limit(10000)` 防止記憶體溢出，截斷時報告標注警告
+- `dnv.py` ClassA Damp Heat `power_on` False → True；`humi_tolerance` 10.0 → 3.0；ClassB Dry Heat name/description 修正
+
+**fix — 前端**
+
+- `App.jsx` + `Dashboard.jsx` + `SOPPage.jsx` 加入 `active` prop，頁面隱藏時暫停輪詢，切回時重新啟動
+- `Dashboard.jsx` 歷史資料陣列改用展開運算子建立可變副本，修正 React StrictMode 凍結導致 `push` 失敗
+- `SOPPage.jsx` `saveExecution` 加入 `saving` state 防重複提交；`isStepUnlocked` 改為迭代，修正 O(n²) 遞迴
+- `aiStorage.jsx` `loadChats` 自動補齊孤立分組、清除空分組、去除重複分組；`activeConversationId` 指向不存在對話時自動修正；`deleteConversation` 刪除後自動清除空分組
+- `useAIChat.jsx` 修正 `addConversation` 解構錯誤、`stopStream` abort 時序、`retryInTraditional` 重複回覆、`clearConversation` 狀態不完整、`generateSuggestions` 切換對話寫入錯誤對話；`MAX_HISTORY` 從 2 提升至 4
+- `ChatSidebar.jsx` `convItemActive` 修正 padding shorthand 警告；model badge 更新為 `gemma3:4b`
+- `ChatArea.jsx` 修正 messages key 使用 index 導致 diff 錯誤；建議列閃爍問題
+- `MessageBubble.jsx` 降低 `SIMPLIFIED_ONLY` 繁體誤判率；`handleCopy` 加入 HTTP fallback；`CollapsibleBubble` 改用 `contentKey` 避免重複測量高度
+
+**perf**
+
+- `ai.py` system prompt token 從約 2500 降至約 800；模組載入時快取，只建立一次；`TC_PREFIX` 改為中英混合
+- `main.py` lifespan 加入 Ollama warm-up，解決冷啟動不串流問題
+
+**refactor**
+
+- `standards.py` 拆分為 `standards/` 套件（`__init__.py` / `_base.py` / `iec60068.py` / `en50155.py` / `iec61850.py` / `iec60945.py` / `dnv.py`）
+- `AIPage.jsx` 重構為純組裝層，邏輯全部下沉至 `ai/` 子模組
+
+**docs**
+
+- 合併 `architecture.md` 進 `AGENTS.md`，刪除 `architecture.md`
+- 移除 `AGENTS.md` 與 README 重複的 API 端點表格
 
 ---
 
-## 核心功能
+## 2026-03-14
 
-- **多設備同步監控** — 5 台溫箱（KSON_CH01～CH05）各自獨立模擬運作，SELECT DEVICE 按鈕即時反映各設備狀態顏色
-- **儀表板** — 即時溫濕度監控（每秒更新）、趨勢圖雙 Y 軸、步驟進度條、倒數計時器、六種狀態顏色區分；低溫（< 0°C）自動隱藏濕度顯示
-- **三步驟法規選擇** — 法規 → 版本/Class → 測試條件，5 大法規、78 個官方測試條件，各設備選擇獨立儲存
-- **SOP 步驟依序確認** — 步驟必須依序勾選，取消時連鎖清除後續，Optional 步驟可跳過，每次勾選即時同步後端
-- **完整波型曲線** — SP 目標曲線（虛線）與 PV 實際曲線（實線）疊加顯示，X 軸為完整測試時長；低溫段（< 0°C）濕度線自動斷開
-- **執行資訊面板** — Pgm / Step / Free Time / Cycle / Now Time / End Time，對應 KSON 溫箱面板格式
-- **AI 法規諮詢** — 多對話管理、專案分組、自然語言描述需求、串流逐字回覆，支援中途停止、複製（含 HTTP fallback）、計時、對話持久化、智慧捲動、動態追問建議；雙層免責聲明（前端固定標籤 + AI 回覆內標注版本號）
-- **物理模擬引擎** — 即時升降溫斜率模擬，遵守各標準速率限制，每 10 秒寫 DB，依 ISO/IEC 17025:2017 §7.5 & §8.4 永久保存
-- **異常看板** — 緊急停止自動寫入事件紀錄，記錄當下溫濕度與執行中 SOP，每 60 秒自動刷新
-- **ISO 17025 測試報告** — 7 節格式，big5 編碼，PASS/FAIL 由授權工程師人工判定
-- **重啟恢復** — 伺服器重啟後自動恢復 RUNNING 狀態、步驟進度與 SOP 資料
-- **瞬間頁面切換** — App.jsx 採 CSS display 切換取代路由 unmount，四頁面狀態常駐記憶體，切換無延遲
+**feat**
 
-## 支持的環境測試標準（78 個測試條件）
+- `iec61850.py` 新增 C1/C2/C3 各一條 Test Nb 溫度循環（sop_id 68→71）
+  - C1：-10°C ↔ +55°C / 3h/step / 5 cycles / 1°C/min
+  - C2/C3：-40°C ↔ +70°C / 3h/step / 5 cycles / 1°C/min
+- 新建 `iec60945.py`，IEC 60945:2002 共 7 條（乾熱儲存/工作、濕熱 Db variant 1、低溫儲存/工作）
+- `standards/__init__.py` 加入 `iec60945` 註冊，法規模組從 4 個擴充至 5 個
+- sop_id 總數：68 → 78；IEC 61850-3 條數：16 → 19
 
-| 法規 | 版本 | 測試數 | 主要測試項目 |
-|------|------|---------|------------|
-| **IEC 60068** | 2-1 / 2-2 / 2-14 / 2-30 / 2-78 | 17 | 冷測 Ab/Ad、乾熱 Ba/Bb、溫度循環/熱衝擊 Na/Nb、濕熱循環 Db、高溫高濕穩態 Cab |
-| **EN 50155** | 2017 / 2007 | 21 | OT1~OT6 高溫/低溫（含 OT5 低溫 -40°C）、ST1 開機延伸、隧道快速溫變、濕熱循環、OT4 高溫通電（三段電壓） |
-| **IEC 61850-3** | Ed.2:2013 / Ed.1:2002 | 19 | Class C1/C2/C3 各自乾熱+冷測+濕熱+高溫高濕穩態 Cab |
-| **IEC 60945** | 2002 | 7 | 乾熱儲存/工作、濕熱 Db variant 1、低溫儲存/工作（Portable/Protected/Exposed）|
-| **DNV** | CG-0339:2015 / Std.Cert.2.4 | 14 | Class A/B/C/D，穩態/循環濕熱，Std.Cert.2.4 Class C/D 乾熱 |
+**fix**
 
-> ⚠️ 系統內建參數僅供初步評估參考，實際測試條件請以原始法規文件為準，並由授權工程師確認。
-> KEMA / NMEA 暫時移除（無原始法規文件可供對照）。
+- `iec61850.py` C1 Damp Heat 濕度 95%RH → 93%RH
 
-## 快速啟動
+---
 
-```bash
-# 1. 安裝所有依賴（後端 + 模擬器 + 前端）
-make install
+## 2026-03-13
 
-# 2. 初始化資料庫（首次執行必須）
-python backend/init_db.py
+**feat**
 
-# 3. 一鍵啟動
-make dev
-```
+- `iec60068.py` 新增 IEC 60068-2-78 Test Cab 共 4 條（65°C / 90°C × 16h / 24h，95%RH，通電）
+- `iec61850.py` C1/C2/C3 各新增 Cab 高溫高濕 Method III（40°C / 93%RH / 240h）共 3 條
+- `iec61850.py` C1/C2/C3 各新增 Cab Non-Operating 16h Method V 共 3 條
+- `en50155.py` 新增 OT4_High_Operating / OT4_High_Operating_ST1 兩條通電測試
+- sop_id 總數：56 → 68
 
-> ⚠️ DB 結構有變更時：改 `models.py` → `alembic revision --autogenerate -m "描述"` → `alembic upgrade head`（需在 `backend/` 目錄下執行）
+**fix**
 
-啟動後開啟 `http://localhost:5173`，或前往 `http://localhost:5173/sop` 執行測試，`http://localhost:5173/ai` 使用 AI 法規諮詢。
+- `iec61850.py` C1/C2/C3 乾熱 reference Bb → Be（Method IV）
+- `iec60068.py` Test Nb `dwell_time_hours` 1h → 2h
+- `main.py` `emergency_stop` crash 修正；timestamp 統一使用 `_now_utc()`
+- `sop.py` `start_sop` 補入 `total_steps` 存入 AICM_CACHE，修正 Dashboard 進度條不顯示
 
-互動式 API 文件：`http://localhost:8000/docs`
+**perf**
 
-## API 端點
+- `ai.py` 新增 `_SYSTEM_PROMPT_CACHE`，system prompt 模組載入時建立一次
 
-| 方法 | 路徑 | 說明 |
-|------|------|------|
-| GET  | `/api/latest` | 即時溫濕度與狀態（KSON_CH01，向後相容） |
-| GET  | `/api/devices` | 所有設備即時狀態（含 total_steps、completed_steps、started_at） |
-| GET  | `/api/devices/{id}/history` | 設備歷史溫濕度（每分鐘聚合，從 started_at 至今） |
-| GET  | `/api/sop/` | SOP 列表 |
-| GET  | `/api/sop/standards/tree` | 三層標準樹（法規→版本→測試條件，不含 steps 欄位） |
-| POST | `/api/sop/start` | 啟動 SOP |
-| POST | `/api/devices/{id}/progress` | 更新步驟完成數 |
-| POST | `/api/sop-executions/` | 儲存執行紀錄（含 device_id、operator、test_started_at） |
-| GET  | `/api/sop-executions/{id}` | 讀取執行紀錄 |
-| GET  | `/api/reports/csv/{id}` | 下載測試報告 CSV（ISO 17025 七節格式，RFC 5987 檔名） |
-| GET  | `/api/reports/list` | 所有執行紀錄列表 |
-| GET  | `/api/errors/` | 異常紀錄列表 |
-| POST | `/api/stop/{device_id}/emergency` | 緊急停止 |
-| POST | `/api/stop/{device_id}/pause` | 暫停切換（RUNNING ↔ PAUSED） |
-| POST | `/api/stop/{device_id}/normal` | 正常停止（自動降溫回 IDLE） |
-| POST | `/api/ai/standards-query` | AI 法規諮詢（非串流） |
-| POST | `/api/ai/standards-query-stream` | AI 法規諮詢（串流，前端主要使用） |
+---
 
-## 技術堆棧
+## 2026-03-12
 
-後端：FastAPI、Pydantic v2、SQLAlchemy 2.0、asyncio、SQLite、httpx、Alembic
-前端：React 18、Vite、Recharts、Axios
-AI：Ollama（本機）、gemma3:4b
-環境：Python 3.9+、Node.js 18+、macOS/Linux（需要 socat）
+**feat**
 
-## 延伸文件
+- AI 法規諮詢雙層免責聲明（每則回覆固定顯示 + 空白頁面提示）
+- `ai.py` system prompt 加入免責規則與法規版本號標注要求
 
-- [AI Agent 開發規範與專案背景](./AGENTS.md)
-- [更新紀錄](./CHANGELOG.md)
-- [QA 測試報告模板](./docs/templates/QA_Test_Report_Template.docx)
+**fix**
 
+- `SOPPage.jsx` treeLoaded skeleton、generateSP 低溫濕度為 null、ConditionCard 低溫補註
+- `Dashboard.jsx` 低溫（< 0°C）隱藏濕度；趨勢圖低溫段 humidity 存 null（`connectNulls={false}`）
 
-## 授權
+**perf**
 
-MIT License
+- `App.jsx` CSS display 切換取代 React Router unmount，四頁面常駐 DOM，切換無延遲
+- `sop.py` `/api/sop/standards/tree` 移除 steps 欄位，回應從 108kB 降至 ~12kB
+
+---
+
+## 2026-03-11
+
+**feat**
+
+- 新增 `backend/app/ai.py`，實作串流與非串流法規諮詢端點，串接本機 Ollama
+- 新增 `client/src/AIPage.jsx`，串流輸出、Markdown 渲染、快速提問、中途停止、localStorage 持久化、智慧捲動、追問建議、雙層免責聲明
+
+---
+
+## 2026-03-10
+
+**feat**
+
+- 導入 Alembic 資料庫遷移管理
+- `main.py` 新增 `_calc_estimated_end_at()`、`/api/devices/{id}/progress` API
+- `models.py` `DeviceState` 新增 `completed_steps`、`started_at` 欄位
+- `Dashboard.jsx` 新增倒數計時器、趨勢圖 Brush 縮放、步驟進度條
+- `SOPPage.jsx` 新增執行資訊面板、SP+PV 波型曲線、步驟依序鎖定
+
+**fix**
+
+- startup 改為 asynccontextmanager lifespan；新增 `_now_utc()`；多項 models 型別修正
+
+---
+
+## 2026-03-06
+
+**feat**
+
+- `models.py` 新增 `DeviceState` 表，支援伺服器重啟後恢復設備狀態
+- `Dashboard.jsx` 趨勢圖支援切換 5 台設備
+
+**fix**
+
+- 移除 `_cleanup_old_data()`，依 ISO/IEC 17025:2017 §7.5 & §8.4 永久保存量測數據
+
+**refactor**
+
+- `sop_execution.py` 合併進 `sop.py`
+
+---
+
+## 2026-03-04
+
+**feat**
+
+- 新增 `ErrorLog` 表與 `errors.py` router
+- 新增異常看板頁面（`ErrorLog.jsx`），統計卡片 + 完整紀錄列表，60s 自動刷新
+- `standards.py` 重構為三層巢狀 `STANDARD_TREE`
+
+**perf**
+
+- `device_data` 寫入頻率從每秒降為每 10 秒
+
+---
+
+## 2026-03-03
+
+**feat**
+
+- ISO 17025 格式測試報告（`reports.py`），7 節格式，big5 編碼，PASS/FAIL 工程師人工判定
+
+**fix**
+
+- `FINISHING` 降溫完成後自動回 `IDLE`；暫停切換改為 `RUNNING ↔ PAUSED`
+
+---
+
+## 2026-03-02
+
+**feat**
+
+- 整合 EN 50155、IEC 60068 環境測試標準
+- 動態 SOP 管理系統，前端 SOP 列表動態載入
