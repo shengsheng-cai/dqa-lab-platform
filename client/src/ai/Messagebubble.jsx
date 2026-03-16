@@ -236,7 +236,7 @@ export default function MessageBubble({ m, onRetry, isFirstAssistant = true }) {
 
         {m.role === "assistant" && (
           <>
-            {/* 始终显示完整免责文字 */}
+            {/* 始終顯示完整免責文字 */}
             <div style={S.disclaimer}>{DISCLAIMER}</div>
 
             <div style={S.meta}>
