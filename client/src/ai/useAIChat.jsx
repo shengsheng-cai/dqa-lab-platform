@@ -56,11 +56,7 @@ export default function useAIChat() {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    // 串流更新時只在使用者沒有往上滾的情況下才跟著捲
-    if (!userScrolledUpRef.current)
-      bottomRef.current?.scrollIntoView({ behavior: "auto" });
-  }, [streamText]);
+  // 串流更新時不強制捲動，避免與使用者手動滾動衝突
 
   const scrollToBottomForce = useCallback(() => {
     userScrolledUpRef.current = false;

@@ -234,16 +234,7 @@ export default function ChatSidebar({
                               >
                                 ✏️
                               </button>
-                              <button
-                                style={S.iconBtn}
-                                title="移動分組"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setMovingId(conv.id);
-                                }}
-                              >
-                                📁
-                              </button>
+
                               <button
                                 style={S.iconBtn}
                                 title="匯出"
