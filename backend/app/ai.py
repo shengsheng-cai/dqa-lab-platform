@@ -138,3 +138,53 @@ async def standards_query_stream(req: QueryRequest):
                             pass
 
     return StreamingResponse(generate(), media_type="text/plain")
+
+
+class SuggestRequest(BaseModel):
+    history: Optional[list] = []
+
+
+@router.post("/suggest-stream")
+async def suggest_stream(req: SuggestRequest):
+    """
+    追問建議專用串流端點。
+    num_predict: 128 — 只需要三個短問題，不需要長回覆。
+    不帶 system prompt，直接要求產生建議，減少 context 大小。
+    """
+    prompt = (
+        "[MUST reply in Traditional Chinese zh-TW ONLY, NO Simplified Chinese] "
+        "根據以上對話，產生3個簡短的追問問題，必須與環境測試法規相關。"
+        '只回傳JSON陣列，不要其他文字，格式：["問題一","問題二","問題三"]'
+    )
+    messages = []
+    for h in req.history:
+        messages.append(h)
+    messages.append({"role": "user", "content": prompt})
+
+    async def generate():
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            async with client.stream(
+                "POST",
+                OLLAMA_URL,
+                json={
+                    "model": OLLAMA_MODEL,
+                    "messages": messages,
+                    "stream": True,
+                    "options": {
+                        "num_ctx": 1024,
+                        "temperature": 0.5,
+                        "num_predict": 128,
+                    },
+                },
+            ) as response:
+                async for line in response.aiter_lines():
+                    if line.strip():
+                        try:
+                            data = json.loads(line)
+                            token = data.get("message", {}).get("content", "")
+                            if token:
+                                yield token
+                        except Exception:
+                            pass
+
+    return StreamingResponse(generate(), media_type="text/plain")
