@@ -1,5 +1,5 @@
 # DQA Lab Digital Twin 控制中心
-.PHONY: dev clean install help logs
+.PHONY: dev clean install help logs ngrok
 
 # 預設顯示幫助資訊
 help:
@@ -8,6 +8,7 @@ help:
 	@echo "  make dev     - 2. 一鍵啟動 (自動處理虛擬串口與所有服務)"
 	@echo "  make clean   - 3. 強制關閉所有服務並清理殘留連線"
 	@echo "  make logs    - 4. 查看串口連線狀態日誌"
+	@echo "  make ngrok   - 5. 啟動 ngrok（LINE Bot Webhook 用，另開 terminal）"
 
 # 1. 安裝流程
 install:
@@ -42,3 +43,9 @@ clean:
 logs:
 	@echo "📋 追蹤虛擬串口 (socat) 連線日誌..."
 	@tail -f .socat_info.log
+
+# 5. ngrok：建立公開 Webhook URL 供 LINE Bot 使用
+ngrok:
+	@echo "🌐 啟動 ngrok（LINE Bot Webhook 用）..."
+	@echo "💡 啟動後請將 Forwarding URL + /api/line/webhook 填入 LINE Developers Console"
+	ngrok http 8000

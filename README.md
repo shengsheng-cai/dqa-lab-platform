@@ -20,7 +20,7 @@
 
 **法規諮詢助手**（✅ 已完成）— 使用者以自然語言描述產品與目標，LLM 對應建議法規版本與測試條件，適用於開案前初步評估。串接本機 Ollama `gemma3:4b`，不依賴雲端，資料不出內網。支援多對話管理、專案分組（含移動對話至分組）、串流逐字輸出、多輪對話、對話記錄持久化、智慧捲動、動態追問建議（切換對話自動取消）。每則回覆強制附上免責聲明，並標注法規正式版本號。
 
-**LINE Bot 整合**（規劃中）— 異常警報主動推播、測試完成通知、設備狀態查詢，讓操作人員離開現場後仍能即時掌握測試進度。串接 LINE Messaging API，使用 ngrok 建立公開 Webhook。
+**LINE Bot 整合**（✅ 已完成）— 異常警報主動推播、測試完成通知、設備狀態查詢，讓操作人員離開現場後仍能即時掌握測試進度。串接 LINE Messaging API，使用 ngrok 建立公開 Webhook；簽名驗證與 User ID 白名單確保安全。
 
 **治具管理助手**（規劃中）— 使用者描述待測產品與需求，LLM 推理對應所需治具組合，自動產出借用申請送管理者確認。
 
@@ -70,6 +70,8 @@ make dev
 ```
 
 > ⚠️ DB 結構有變更時：改 `models.py` → `alembic revision --autogenerate -m "描述"` → `alembic upgrade head`（需在 `backend/` 目錄下執行）
+
+> ⚠️ 使用 LINE Bot 功能時，需另開 terminal 執行 `make ngrok`，並將產生的 HTTPS URL 設定至 LINE Developers Console 的 Webhook URL。
 
 啟動後開啟 `http://localhost:5173`，或前往 `http://localhost:5173/sop` 執行測試，`http://localhost:5173/ai` 使用 AI 法規諮詢。
 

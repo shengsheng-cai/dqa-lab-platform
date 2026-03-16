@@ -69,6 +69,7 @@
 | 環境測試標準 | `backend/app/standards/` | 三層 STANDARD_TREE，5 法規 78 條件 |
 | SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇 API、執行紀錄儲存讀取；`standards/tree` 含 steps 欄位，前端不需二次請求 |
 | CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，PASS/FAIL 工程師人工判定，查詢上限 10000 筆 |
+| LINE Bot | `backend/app/line.py` | 設備狀態查詢、單一設備查詢、EMERGENCY/測試完成主動推播；LINE 簽名驗證、User ID 白名單；金鑰從 `.env` 載入 |
 | 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
 | AI 法規諮詢後端 | `backend/app/ai.py` | 串流 + 非串流，Ollama gemma3:4b，英文指令強制繁體；system prompt 快取，warm-up 預載 |
 | AI 法規諮詢前端 | `client/src/AIPage.jsx` + `client/src/ai/` | 多對話管理、專案分組、串流輸出、追問建議、localStorage 持久化、雙層免責聲明 |
@@ -84,7 +85,7 @@
 3. **AI 諮詢模組 bug 修正**（✅ 完成）
 4. **後端與前端系統性優化**（✅ 完成）
 5. **後端架構優化**（✅ 完成）— utils.py、circular import、低溫模擬、gemma3:4b
-6. **LINE Bot 整合**（`/api/line/`）— 異常警報推播、測試完成通知、設備狀態查詢；ngrok 建立公開 Webhook；指令白名單限制操作權限
+6. **LINE Bot 整合**（✅ 完成）— 設備狀態查詢、單一設備查詢、EMERGENCY 與測試完成主動推播；簽名驗證、User ID 白名單；ngrok 建立公開 Webhook
 7. **AI 治具管理助手**（`/api/ai/fixture-recommend`）
 8. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
 9. **Phase 3**：多台設備架構、治具資料庫、認證系統、RS-485 真實通訊（屆時評估以 MQTT 取代現有輪詢架構）
@@ -152,12 +153,22 @@ OFFLINE（串口斷線）
 | 後端模組 | `backend/app/module.py` |
 | 模擬器 | `simulator/main.py` |
 
+**LINE Bot 技術規格**
+- 套件：`line-bot-sdk==3.11.0`
+- Webhook：`POST /api/line/webhook`，LINE 簽名強制驗證
+- 白名單：只有 `LINE_USER_ID` 對應的帳號可操作
+- 推播觸發：EMERGENCY 觸發、FINISHING → IDLE
+- 指令：`狀態`/`status`、`CH01`~`CH05`、`help`
+- 金鑰：`LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`LINE_USER_ID` 存於 `backend/.env`
+- ngrok：本機測試用，每次重啟 URL 會變，需重新設定 Webhook URL
+
 **常用指令**
 ```bash
 make install               # 安裝所有依賴
 python backend/init_db.py  # 首次初始化資料庫
 make dev                   # 啟動全部服務
 make clean                 # 深度清理殘留程序
+make ngrok                 # 啟動 ngrok（另開 terminal，LINE Bot Webhook 用）
 # DB 結構變更（在 backend/ 目錄下）
 alembic revision --autogenerate -m "描述"
 alembic upgrade head
