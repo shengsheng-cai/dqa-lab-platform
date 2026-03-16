@@ -31,6 +31,7 @@ def _build_system_prompt() -> str:
         "DISCLAIMER RULE: At the end of every reply, add a blank line then this exact disclaimer:",
         "「⚠️ 本建議僅供初步評估參考，實際測試條件與判定標準請以原始法規文件為準，並由授權工程師確認。」",
         "DISCLAIMER RULE: When recommending a specific standard, include its official version number (e.g. IEC 60068-2-1:2007).",
+        "BREVITY RULE: Keep replies concise. Maximum 400 Chinese characters for simple questions, 600 for complex ones. Do not repeat information.",
         "Based on the user's product description and requirements, recommend the most suitable standards, versions and test conditions, and explain your reasoning.",
         "",
         "=== 支援的環境測試標準 ===",
@@ -97,7 +98,7 @@ async def standards_query(req: QueryRequest):
                 "model": OLLAMA_MODEL,
                 "messages": messages,
                 "stream": False,
-                "options": {"num_ctx": 2048, "temperature": 0.3},
+                "options": {"num_ctx": 2048, "temperature": 0.3, "num_predict": 512},
             },
         )
         response.raise_for_status()
@@ -119,7 +120,11 @@ async def standards_query_stream(req: QueryRequest):
                     "model": OLLAMA_MODEL,
                     "messages": messages,
                     "stream": True,
-                    "options": {"num_ctx": 2048, "temperature": 0.3},
+                    "options": {
+                        "num_ctx": 2048,
+                        "temperature": 0.3,
+                        "num_predict": 512,
+                    },
                 },
             ) as response:
                 async for line in response.aiter_lines():
