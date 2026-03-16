@@ -1,6 +1,6 @@
 // client/src/ai/ChatArea.jsx
 import { useState, useEffect, useRef } from "react";
-import MessageBubble, { DISCLAIMER, renderMarkdown } from "./MessageBubble";
+import MessageBubble, { DISCLAIMER, renderMarkdown } from "./Messagebubble";
 
 // 串流泡泡：每秒更新已經過秒數
 function StreamingBubble({ streamText }) {
