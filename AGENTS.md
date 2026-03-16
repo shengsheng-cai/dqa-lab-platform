@@ -125,7 +125,7 @@
 - 模型：`gemma3:4b`（本機 Ollama）；備用：`gemma3:12b`
 - 端點：`/api/ai/standards-query`（非串流）、`/api/ai/standards-query-stream`（串流）
 - system prompt：英文指令，約 150 tokens；不含條目清單，靠模型訓練知識回答；限制五大法規與溫箱設備
-- TC_PREFIX：`"[MUST reply in Traditional Chinese zh-TW ONLY, NO Simplified Chinese] "`，前端附加
+- 繁體中文強制：由 system prompt 統一管理，前端不再附加 TC_PREFIX
 - 多輪對話：MAX_HISTORY = 4
 - 追問建議功能：已移除（Ollama 單佇列限制，無法同步產生）
 - localStorage key：`dqa_ai_chats_v2`
