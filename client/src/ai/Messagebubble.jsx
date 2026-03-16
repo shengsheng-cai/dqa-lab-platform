@@ -149,7 +149,8 @@ export function renderMarkdown(rawText) {
 
 // ── 可折疊泡泡 ───────────────────────────────────────────────
 function CollapsibleBubble({ children, contentKey }) {
-  const [expanded, setExpanded] = useState(false);
+  // fix: 預設展開，使用者看完後才能手動收合
+  const [expanded, setExpanded] = useState(true);
   const [overflow, setOverflow] = useState(false);
   const innerRef = useRef(null);
 
@@ -164,7 +165,7 @@ function CollapsibleBubble({ children, contentKey }) {
       <div
         ref={innerRef}
         style={{
-          maxHeight: overflow && !expanded ? COLLAPSE_HEIGHT : undefined,
+          maxHeight: !expanded ? COLLAPSE_HEIGHT : undefined,
           overflow: "hidden",
           transition: "max-height .3s ease",
         }}
@@ -183,7 +184,7 @@ function CollapsibleBubble({ children, contentKey }) {
 }
 
 // ── 單則訊息 ─────────────────────────────────────────────────
-export default function MessageBubble({ m, onRetry }) {
+export default function MessageBubble({ m, onRetry, isFirstAssistant = true }) {
   const [copied, setCopied] = useState(false);
   const simplified = m.role === "assistant" && hasSimplified(m.content);
 
@@ -235,7 +236,13 @@ export default function MessageBubble({ m, onRetry }) {
 
         {m.role === "assistant" && (
           <>
-            <div style={S.disclaimer}>{DISCLAIMER}</div>
+            {isFirstAssistant ? (
+              <div style={S.disclaimer}>{DISCLAIMER}</div>
+            ) : (
+              <div style={S.disclaimerIcon} title={DISCLAIMER}>
+                ⚠️
+              </div>
+            )}
             <div style={S.meta}>
               {m.elapsed != null && (
                 <span style={S.elapsed}>⏱ {m.elapsed}s</span>
