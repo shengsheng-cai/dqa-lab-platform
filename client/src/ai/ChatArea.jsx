@@ -1,8 +1,11 @@
-// client/src/ai/ChatArea.jsx
+// 對話區域（包含對話列表、輸入框及控制按鈕）
+
 import { useState, useEffect, useRef } from "react";
 import MessageBubble, { DISCLAIMER, renderMarkdown } from "./Messagebubble";
 
-// 串流泡泡：每秒更新已經過秒數
+/**
+ * 串流泡泡：顯示已經過秒數
+ */
 function StreamingBubble({ streamText }) {
   const [elapsed, setElapsed] = useState(0);
   const startRef = useRef(Date.now());
