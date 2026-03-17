@@ -1,10 +1,21 @@
-// client/src/ai/aiStorage.jsx
+// 對話儲存與管理（localStorage 存取、對話紀錄遷移、對話刪除等）
+
 const STORAGE_KEY = "dqa_ai_chats_v2";
 const LEGACY_KEY = "dqa_ai_chat_history";
 
+/**
+ * 生成新的對話 ID
+ */
 export const genId = () =>
   `conv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
+/**
+ * 創建新對話
+ *
+ * @param {object} [options] 選項
+ * @param {string} [options.title="新對話"] 對話標題
+ * @param {string} [options.projectGroup="未分組"] 分組名稱
+ */
 export const createConversation = ({
   title = "新對話",
   projectGroup = "未分組",
@@ -17,18 +28,20 @@ export const createConversation = ({
   messages: [],
 });
 
+/**
+ * 初始儲存空白的狀態
+ */
 const emptyStore = () => ({
   activeConversationId: null,
   conversations: {},
   projectGroups: ["未分組"],
 });
 
-const titleFrom = (messages) => {
-  const first = messages?.find((m) => m.role === "user");
-  if (!first) return "新對話";
-  return first.content.slice(0, 20) + (first.content.length > 20 ? "…" : "");
-};
-
+/**
+ * 將舊資料遷移至新的格式
+ *
+ * @param {object} store 存在的儲存物件
+ */
 const migrate = (store) => {
   try {
     const raw = localStorage.getItem(LEGACY_KEY);
@@ -53,6 +66,11 @@ const migrate = (store) => {
   return store;
 };
 
+/**
+ * 載入儲存的對話紀錄
+ *
+ * @return {object} 存在的儲存物件
+ */
 export const loadChats = () => {
   let store;
   try {
@@ -113,6 +131,11 @@ export const loadChats = () => {
   return store;
 };
 
+/**
+ * 儲存對話紀錄
+ *
+ * @param {object} store 存在的儲存物件
+ */
 export const saveChats = (store) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
@@ -121,6 +144,12 @@ export const saveChats = (store) => {
   }
 };
 
+/**
+ * 刪除對話
+ *
+ * @param {object} store 存在的儲存物件
+ * @param {string} id 對話 ID
+ */
 export const deleteConversation = (store, id) => {
   const next = { ...store, conversations: { ...store.conversations } };
   delete next.conversations[id];
@@ -148,6 +177,12 @@ export const deleteConversation = (store, id) => {
   return next;
 };
 
+/**
+ * 匯出對話紀錄
+ *
+ * @param {Array} messages 對話列表
+ * @param {string} [title="對話紀錄"] 對話標題
+ */
 export const exportChat = (messages, title = "對話紀錄") => {
   const lines = messages.map((m) => {
     const role = m.role === "user" ? "【使用者】" : "【AI 助手】";
