@@ -70,7 +70,7 @@
 | 環境測試標準 | `backend/app/standards/` | 三層 STANDARD_TREE，5 法規 78 條件 |
 | SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇、執行紀錄；`standards/tree` 含 steps 欄位 |
 | CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，查詢上限 10000 筆 |
-| LINE Bot | `backend/app/line.py` | 狀態查詢、推播、LINE 簽名驗證、User ID 白名單 |
+| LINE Bot | backend/app/line.py | 狀態查詢、推播、簽名驗證、白名單、Flex Message 視覺化、Quick Replies 免打字互動 |
 | 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
 | AI 法規諮詢後端 | `backend/app/ai.py` | 串流 + 非串流，llama3.1:8b，system prompt 快取，warm-up 預載 |
 | AI 法規諮詢前端 | `client/src/ai/` | 多對話管理、專案分組、拖曳移動分組、串流計時器、免責聲明精簡、localStorage 持久化 |
@@ -81,16 +81,9 @@
 
 ### 下一步待開發（依優先度）
 
-1. **法規正確性審查**（✅ 完成）
-2. **AI 諮詢 UI 改版**（✅ 完成）
-3. **AI 諮詢模組 bug 修正**（✅ 完成）
-4. **後端與前端系統性優化**（✅ 完成）
-5. **後端架構優化**（✅ 完成）
-6. **LINE Bot 整合**（✅ 完成）
-7. **AI 諮詢 UI / 效能優化**（✅ 完成）— 建議功能移除、串流計時器、拖曳分組、system prompt 重寫、SOPPage 切換速度優化
-8. **AI 治具管理助手**（`/api/ai/fixture-recommend`）
-9. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
-10. **Phase 3**：多台設備架構、治具資料庫、認證系統、RS-485 真實通訊
+1. **AI 治具管理助手**（`/api/ai/fixture-recommend`）
+2. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
+3. **Phase 3**：多台設備架構、治具資料庫、認證系統、RS-485 真實通訊
 
 ---
 
@@ -122,7 +115,9 @@
 
 - 套件：`line-bot-sdk==3.11.0`
 - Webhook：`POST /api/line/webhook`，LINE 簽名強制驗證
-- 白名單：只有 `LINE_USER_ID` 可操作
+- 安全性：BackgroundTasks 異步回覆、User ID 白名單、SHA256 簽名驗證
+- 視覺化：Flex Message (JSON) 儀表板卡片，顏色隨狀態切換 (RUNNING: 綠, EMERGENCY: 紅)
+- 互動性：Quick Replies 快速回覆按鈕 (一鍵查詢 CH01~CH05 / 總覽 / 幫助)
 - 推播觸發：EMERGENCY、FINISHING → IDLE
 - 指令：`狀態`/`status`、`CH01`~`CH05`、`help`
 - 金鑰存於 `backend/.env`：`LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`LINE_USER_ID`
