@@ -18,7 +18,7 @@
 
 ## AI 輔助模組
 
-**法規諮詢助手**（✅ 已完成）— 使用者以自然語言描述產品與目標，RAG 架構從 78 個測試條件中精準檢索，LLM 僅負責整理語言回覆，不憑訓練知識捏造參數。串接本機 Ollama `qwen2.5:7b`（推理）+ `nomic-embed-text`（向量化），不依賴雲端，資料不出內網。支援多對話管理、專案分組、拖曳移動對話、串流逐字輸出含計時、多輪對話、對話記錄持久化。僅推薦溫箱可執行的測試，只限五大法規範圍內。每則回覆附上免責聲明。
+**法規諮詢助手**（✅ 已完成）— 使用者以自然語言描述產品與目標，RAG 架構從 78 個測試條件中精準檢索，LLM 僅負責整理語言回覆，不憑訓練知識捏造參數。向量化使用本機 Ollama `nomic-embed-text`，推理串接 Google Gemini 2.5 Flash-Lite（免費方案，1000 次/天）。支援多對話管理、專案分組、拖曳移動對話、串流逐字輸出含計時、多輪對話、對話記錄持久化。僅推薦溫箱可執行的測試，只限五大法規範圍內。每則回覆附上免責聲明。
 
 **LINE Bot 整合**（✅ 已完成）— 異常警報主動推播、測試完成通知、設備狀態查詢。**優化互動體驗**：導入 Flex Message 卡片視覺化（依狀態變換紅/綠色調）與 Quick Replies 快速回覆按鈕，讓操作人員在實驗室中無需打字，點擊即可掌握進度。串接 LINE Messaging API，使用 ngrok 建立公開 Webhook；簽名驗證與 User ID 白名單確保安全。
 
@@ -76,6 +76,8 @@ make dev
 
 > ⚠️ 首次啟動前需拉取 embedding 模型：`ollama pull nomic-embed-text`
 
+> ⚠️ AI 諮詢功能需在 `backend/.env` 設定 `GEMINI_API_KEY`（Google AI Studio 免費申請）
+
 啟動後開啟 `http://localhost:5173`，或前往 `http://localhost:5173/sop` 執行測試，`http://localhost:5173/ai` 使用 AI 法規諮詢。
 
 互動式 API 文件：`http://localhost:8000/docs`
@@ -106,14 +108,13 @@ make dev
 
 後端：FastAPI、Pydantic v2、SQLAlchemy 2.0、asyncio、SQLite、httpx、Alembic、numpy
 前端：React 18、Vite、Recharts、Axios
-AI：Ollama（本機）、qwen2.5:7b（推理）、nomic-embed-text（向量化）、RAG in-memory
+AI：nomic-embed-text（本機 Ollama，向量化）、Gemini 2.5 Flash-Lite（推理）、RAG in-memory
 環境：Python 3.9+、Node.js 18+、macOS/Linux（需要 socat）
 
 ## 延伸文件
 
 - [AI Agent 開發規範與專案背景](./AGENTS.md)
 - [QA 測試報告模板](./docs/templates/QA_Test_Report_Template.docx)
-
 
 ## 授權
 

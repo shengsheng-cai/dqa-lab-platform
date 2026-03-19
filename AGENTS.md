@@ -73,8 +73,8 @@
 | CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，查詢上限 10000 筆 |
 | LINE Bot | `backend/app/line.py` | 狀態查詢、推播、簽名驗證、白名單、Flex Message 視覺化、Quick Replies 免打字互動 |
 | 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
-| RAG 知識庫 | `backend/app/rag.py` | nomic-embed-text 向量化 78 條件、in-memory 搜尋、簡寫比對、溫度過濾 |
-| AI 法規諮詢後端 | `backend/app/ai.py` | 串流 + 非串流，qwen2.5:7b，四種查詢路由，RAG 動態注入 context |
+| RAG 知識庫 | `backend/app/rag.py` | nomic-embed-text 向量化 78 條件、in-memory 搜尋、簡寫比對、溫度過濾、top_k=20 |
+| AI 法規諮詢後端 | `backend/app/ai.py` | 串流 + 非串流，Gemini 2.5 Flash-Lite，RAG 動態注入 context |
 | AI 法規諮詢前端 | `client/src/ai/` | 多對話管理、專案分組、拖曳移動分組、串流計時器、前端固定免責聲明、localStorage 持久化 |
 | 儀表板 | `client/src/Dashboard.jsx` | 六狀態、趨勢圖、步驟進度條、倒數計時器、active prop 控制輪詢 |
 | SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇、SP+PV 波型曲線、執行資訊面板、防重複提交、切換回來立刻打 API |
@@ -104,15 +104,16 @@
 
 ### AI 模組
 
-- 推理模型：`qwen2.5:7b`（本機 Ollama）
+- 推理模型：`gemini-2.5-flash-lite`（Google Gemini API，免費方案 1000 次/天）
 - 向量模型：`nomic-embed-text`（本機 Ollama，啟動時向量化 78 條件，約 3~5 秒）
 - 架構：RAG（Retrieval-Augmented Generation）— in-memory 向量庫，numpy 餘弦相似度搜尋，零額外套件
 - 端點：`/api/ai/standards-query`（非串流）、`/api/ai/standards-query-stream`（串流）
-- 查詢路由：點名單一標準 → `retrieve_by_std` 全撈；跨標準比較 → `retrieve_multi`；含溫度數字 → 向量 + 溫度過濾；其他 → top_k=5 向量搜尋
+- 查詢路由：點名單一標準 → `retrieve_by_std` 全撈；跨標準比較 → `retrieve_multi`；含溫度數字 → 向量 + 溫度過濾；其他 → top_k=20 向量搜尋
 - 簡寫比對：`match_std_keys` 支援 `"50155"`、`"60068"`、`"IEC 61850"` 等口語化輸入
 - 繁體中文強制：由 system prompt 統一管理
-- 多輪對話：MAX_HISTORY = 4
+- 多輪對話：MAX_HISTORY = 4（history 由前端傳入）
 - 免責聲明：由前端 `MessageBubble.jsx` 固定顯示，system prompt 不重複
+- API Key：存於 `backend/.env` 的 `GEMINI_API_KEY`
 - localStorage key：`dqa_ai_chats_v2`
 
 ### LINE Bot
@@ -160,12 +161,12 @@ RUNNING → EMERGENCY（任意時刻）
 
 **常用指令**
 ```bash
-make install               # 安裝所有依賴
-python backend/init_db.py  # 首次初始化資料庫
+make install                  # 安裝所有依賴
+python backend/init_db.py     # 首次初始化資料庫
 ollama pull nomic-embed-text  # 首次需拉取 embedding 模型
-make dev                   # 啟動全部服務
-make clean                 # 清理殘留程序
-make ngrok                 # 啟動 ngrok（LINE Bot Webhook 用）
+make dev                      # 啟動全部服務
+make clean                    # 清理殘留程序
+make ngrok                    # 啟動 ngrok（LINE Bot Webhook 用）
 # DB 結構變更（在 backend/ 目錄下）
 alembic revision --autogenerate -m "描述"
 alembic upgrade head
@@ -187,6 +188,7 @@ alembic upgrade head
 - 向量化：`nomic-embed-text` 逐筆 embed，L2 正規化後存入 numpy array
 - 搜尋：點積 = 餘弦相似度（已正規化），直接矩陣運算，無需 ChromaDB
 - 簡寫比對：`_STD_ALIAS_MAP` 涵蓋口語化輸入，normalize 後比對（小寫、去空格與連字號）
+- top_k=20 確保跨法規全局性問題（如「所有低溫測試」）能撈到五大法規的相關條目
 
 ### 硬體通訊（Phase 3）
 
