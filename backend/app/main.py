@@ -27,8 +27,6 @@ background_tasks = set()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
-    # 初始化資料庫結構
     from .models import init_db
 
     init_db()
@@ -40,7 +38,6 @@ async def lifespan(app: FastAPI):
     for device_id in DEVICE_IDS:
         s = saved_states.get(device_id)
         if s:
-            # fix: started_at 統一轉為 UTC aware datetime，避免後續型別不一致
             started_at = s.started_at
             if started_at is not None and started_at.tzinfo is None:
                 started_at = started_at.replace(tzinfo=datetime.timezone.utc)
@@ -55,6 +52,9 @@ async def lifespan(app: FastAPI):
                 "active_sop_json": s.active_sop_json,
                 "completed_steps": s.completed_steps or 0,
                 "started_at": started_at,
+                # fix #6: 恢復時也要還原 cycle 狀態
+                "sim_phase": "running",
+                "sim_cycle": 0,
             }
             print(f"🔄 [{device_id}] 恢復狀態：{s.status}，溫度：{s.temperature}°C")
         else:
@@ -68,6 +68,8 @@ async def lifespan(app: FastAPI):
                 "active_sop_json": None,
                 "completed_steps": 0,
                 "started_at": None,
+                "sim_phase": "idle",
+                "sim_cycle": 0,
             }
 
     app.state.AICM_CACHE = cache
@@ -104,9 +106,6 @@ app.add_middleware(
 # ============================================================
 
 
-# _now_utc 與 _save_device_state 已移至 utils.py
-
-
 def _get_device(device_id: str) -> dict:
     device = app.state.AICM_CACHE.get(device_id)
     if not device:
@@ -125,6 +124,16 @@ def _make_description(status: str, sop_name: str) -> str:
 
 
 def _calc_estimated_end_at(item: dict) -> Optional[str]:
+    """
+    fix #5: 低溫邏輯與前端 generateSP 對齊。
+    路徑：
+      有 low_temp 且 low_temp < ambient（低溫測試）：
+        ambient → low → (high → dwell → low → dwell) × cycles → ambient
+      有 low_temp 且 low_temp >= ambient（雙溫循環）：
+        ambient → high → (dwell → low → dwell → high) × cycles → ambient
+      無 low_temp（單溫段）：
+        ambient → target → dwell → ambient
+    """
     status = item.get("status")
     if status not in ("RUNNING", "PAUSED"):
         return None
@@ -143,36 +152,28 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
     dwell_hours = sop.get("dwell_time_hours") or 0.0
     dwell_min = dwell_hours * 60.0
     cycles = sop.get("cycles") or 1
-
     high_temp = sop.get("high_temperature") or sop.get("target_temperature") or 25.0
     low_temp = sop.get("low_temperature")
     ambient = 25.0
 
-    # fix: 低溫測試從 ambient 先降至 low_temp，再升至 high_temp
-    if low_temp is not None:
-        if low_temp < ambient:
-            # 低溫測試：ambient → low → high → dwell → low → ... → ambient
-            ramp_to_low_min = abs(ambient - low_temp) / ramp_rate
-            ramp_low_to_high_min = abs(high_temp - low_temp) / ramp_rate
-            one_cycle_min = (
-                ramp_low_to_high_min + dwell_min + ramp_low_to_high_min + dwell_min
-            )
-            total_min = (
-                ramp_to_low_min
-                + one_cycle_min * cycles
-                + abs(low_temp - ambient) / ramp_rate
-            )
-        else:
-            # 雙溫段循環（low_temp >= ambient）
-            ramp_up_min = abs(high_temp - ambient) / ramp_rate
-            ramp_down_min = abs(high_temp - low_temp) / ramp_rate
-            ramp_back_min = abs(low_temp - ambient) / ramp_rate
-            one_cycle_min = ramp_up_min + dwell_min + ramp_down_min + dwell_min
-            total_min = one_cycle_min * cycles + ramp_back_min
+    if low_temp is not None and low_temp < ambient:
+        # 低溫測試：ambient→low, (low→high→dwell→low→dwell)×cycles, low→ambient
+        ramp_ambient_to_low = abs(ambient - low_temp) / ramp_rate
+        ramp_low_to_high = abs(high_temp - low_temp) / ramp_rate
+        one_cycle_min = ramp_low_to_high + dwell_min + ramp_low_to_high + dwell_min
+        total_min = ramp_ambient_to_low + one_cycle_min * cycles + ramp_ambient_to_low
+    elif low_temp is not None:
+        # 雙溫循環（low >= ambient）：ambient→high, (dwell→low→dwell→high)×cycles, →ambient
+        ramp_up = abs(high_temp - ambient) / ramp_rate
+        ramp_hl = abs(high_temp - low_temp) / ramp_rate
+        one_cycle_min = dwell_min + ramp_hl + dwell_min + ramp_hl
+        total_min = (
+            ramp_up + one_cycle_min * cycles + abs(low_temp - ambient) / ramp_rate
+        )
     else:
-        ramp_up_min = abs(high_temp - ambient) / ramp_rate
-        ramp_down_min = abs(high_temp - ambient) / ramp_rate
-        total_min = ramp_up_min + dwell_min + ramp_down_min
+        # 單溫段
+        ramp_up = abs(high_temp - ambient) / ramp_rate
+        total_min = ramp_up + dwell_min + ramp_up
 
     total_seconds = total_min * 60.0
 
@@ -228,13 +229,11 @@ async def get_device_history(device_id: str):
     if not started_at:
         return []
 
-    # fix: 統一轉為 UTC naive datetime 再與 DB 比對，避免時區偏移
     if isinstance(started_at, str):
         started_dt = datetime.datetime.fromisoformat(started_at.replace("Z", "+00:00"))
     else:
         started_dt = started_at
 
-    # 轉為 naive UTC（DB 存的是 naive UTC）
     if started_dt.tzinfo is not None:
         started_dt = started_dt.replace(tzinfo=None)
 
@@ -314,6 +313,14 @@ async def get_latest():
 @app.post("/api/stop/{device_id}/emergency")
 async def emergency_stop(device_id: str):
     device = _get_device(device_id)
+
+    # fix #3: 已是 EMERGENCY 直接 return，避免重複寫入 ErrorLog
+    if device.get("status") == "EMERGENCY":
+        return {
+            "status": "already_emergency",
+            "message": f"{device_id} 已在緊急停止狀態",
+        }
+
     with SessionLocal() as db:
         db.add(
             ErrorLog(
@@ -324,6 +331,9 @@ async def emergency_stop(device_id: str):
                 temperature=device.get("temperature"),
                 humidity=device.get("humidity"),
                 note="操作人員觸發緊急停止",
+                # fix #9: 記錄當下步驟進度
+                completed_steps=device.get("completed_steps", 0),
+                total_steps=device.get("total_steps", 0),
                 created_at=_now_utc(),
             )
         )
@@ -338,11 +348,12 @@ async def emergency_stop(device_id: str):
             "completed_steps": 0,
             "started_at": None,
             "total_steps": 0,
+            "sim_phase": "idle",
+            "sim_cycle": 0,
         }
     )
     _save_device_state(device_id, device)
     print(f"🚨 [{device_id}] EMERGENCY STOP")
-    # 推播 LINE 通知
 
     asyncio.create_task(
         push_message(
@@ -385,6 +396,10 @@ async def normal_stop(device_id: str):
             "active_sop_json": None,
             "completed_steps": 0,
             "started_at": None,
+            # fix #11: 同步清除 standard_id，避免 IDLE 後讀到舊值
+            "standard_id": None,
+            "sim_phase": "idle",
+            "sim_cycle": 0,
         }
     )
     _save_device_state(device_id, device)
@@ -397,8 +412,22 @@ async def normal_stop(device_id: str):
 
 
 async def data_simulator():
-    """物理模擬器 — 5 台各自獨立運作，每 10 秒寫一次資料庫"""
+    """
+    物理模擬器 — 5 台各自獨立運作，每 10 秒寫一次資料庫。
+
+    fix #6: 完整 cycle 邏輯，使用 sim_phase 追蹤當前階段：
+      - "ramp_to_low"   : 降至低溫目標（低溫測試第一段）
+      - "ramp_to_high"  : 升至高溫目標
+      - "dwell_high"    : 高溫停留
+      - "ramp_to_low2"  : 降至低溫（cycle 中間段）
+      - "dwell_low"     : 低溫停留
+      - "ramp_to_ambient": 回到 ambient
+
+    fix #10: 濕度從上次值為基礎抖動，RUNNING 時追蹤 SOP 設定值。
+    """
     write_counters: dict = {}
+    # 每個設備的停留計時器（秒）
+    dwell_counters: dict = {}
 
     while True:
         cache = app.state.AICM_CACHE
@@ -407,44 +436,128 @@ async def data_simulator():
         for device_id, item in cache.items():
             status = item.get("status", "OFFLINE")
             current_temp = item.get("temperature", 25.0)
+            current_humi = item.get("humidity", 55.0)
 
             if device_id not in write_counters:
                 write_counters[device_id] = 0
+            if device_id not in dwell_counters:
+                dwell_counters[device_id] = 0
 
             if status == "RUNNING":
-                standard_id = item.get("standard_id", "IEC60068_CYCLE")
-                max_ramp_rate = get_ramp_rate(standard_id)
-                standard = get_standard(standard_id)
+                standard_id = item.get("standard_id")
+                standard = get_standard(standard_id) if standard_id else None
+                max_ramp_rate = get_ramp_rate(standard_id) if standard_id else 1.0
 
-                # fix: 低溫測試先降至 low_temperature，再升至 high_temperature
                 high_temp = 25.0
                 low_temp = None
+                dwell_seconds = 3600.0
+                cycles = 1
+                target_humi = None
+
                 if standard:
                     high_temp = standard.get("high_temperature") or standard.get(
                         "target_temperature", 25.0
                     )
                     low_temp = standard.get("low_temperature")
+                    dwell_seconds = (standard.get("dwell_time_hours") or 1.0) * 3600.0
+                    cycles = standard.get("cycles") or 1
+                    target_humi = standard.get("humidity_rh_percent")
 
-                # 判斷目前應朝哪個目標移動
-                if low_temp is not None and low_temp < 25.0:
-                    # 低溫測試：先判斷是否已到低溫目標，再決定升溫還是降溫
-                    if current_temp > low_temp + 0.5:
-                        target_temp = low_temp  # 尚未到達低溫，繼續降溫
+                ambient = 25.0
+                sim_phase = item.get("sim_phase", "")
+                sim_cycle = item.get("sim_cycle", 0)
+
+                # fix #6: 初始化 sim_phase（剛啟動時）
+                if not sim_phase or sim_phase == "idle":
+                    if low_temp is not None and low_temp < ambient:
+                        item["sim_phase"] = "ramp_to_low"
                     else:
-                        target_temp = high_temp  # 已到達低溫，開始升溫
-                else:
-                    target_temp = high_temp
+                        item["sim_phase"] = "ramp_to_high"
+                    item["sim_cycle"] = 0
+                    sim_phase = item["sim_phase"]
+                    dwell_counters[device_id] = 0
 
-                temp_diff = target_temp - current_temp
-                if abs(temp_diff) > 0.1:
-                    max_change = max_ramp_rate / 60.0
-                    actual_change = min(abs(temp_diff), max_change)
-                    new_temp = current_temp + (
-                        actual_change if temp_diff > 0 else -actual_change
+                max_change = max_ramp_rate / 60.0
+
+                def move_toward(current, target):
+                    diff = target - current
+                    if abs(diff) <= 0.1:
+                        return target
+                    change = min(abs(diff), max_change)
+                    return current + (change if diff > 0 else -change)
+
+                new_temp = current_temp
+
+                if sim_phase == "ramp_to_low":
+                    new_temp = move_toward(current_temp, low_temp)
+                    if abs(new_temp - low_temp) <= 0.1:
+                        new_temp = low_temp
+                        item["sim_phase"] = "ramp_to_high"
+
+                elif sim_phase == "ramp_to_high":
+                    new_temp = move_toward(current_temp, high_temp)
+                    if abs(new_temp - high_temp) <= 0.1:
+                        new_temp = high_temp
+                        item["sim_phase"] = "dwell_high"
+                        dwell_counters[device_id] = 0
+
+                elif sim_phase == "dwell_high":
+                    new_temp = high_temp
+                    dwell_counters[device_id] += 1
+                    if dwell_counters[device_id] >= dwell_seconds:
+                        dwell_counters[device_id] = 0
+                        if low_temp is not None and cycles > 1:
+                            item["sim_phase"] = "ramp_to_low2"
+                        else:
+                            item["sim_phase"] = "ramp_to_ambient"
+
+                elif sim_phase == "ramp_to_low2":
+                    new_temp = move_toward(current_temp, low_temp)
+                    if abs(new_temp - low_temp) <= 0.1:
+                        new_temp = low_temp
+                        item["sim_phase"] = "dwell_low"
+                        dwell_counters[device_id] = 0
+
+                elif sim_phase == "dwell_low":
+                    new_temp = low_temp
+                    dwell_counters[device_id] += 1
+                    if dwell_counters[device_id] >= dwell_seconds:
+                        dwell_counters[device_id] = 0
+                        item["sim_cycle"] = sim_cycle + 1
+                        if item["sim_cycle"] < cycles:
+                            item["sim_phase"] = "ramp_to_high"
+                        else:
+                            item["sim_phase"] = "ramp_to_ambient"
+
+                elif sim_phase == "ramp_to_ambient":
+                    new_temp = move_toward(current_temp, ambient)
+                    if abs(new_temp - ambient) <= 0.1:
+                        new_temp = ambient
+
+                item["temperature"] = round(new_temp + random.uniform(-0.1, 0.1), 2)
+
+                # fix #10: 濕度追蹤 SOP 設定值，從上次值為基礎抖動
+                if target_humi is not None and new_temp >= 0:
+                    # 往目標值緩慢追蹤（每秒最多變化 0.3%RH）
+                    humi_diff = target_humi - current_humi
+                    humi_change = min(abs(humi_diff), 0.3)
+                    tracked_humi = current_humi + (
+                        humi_change if humi_diff > 0 else -humi_change
+                    )
+                    item["humidity"] = round(
+                        tracked_humi + random.uniform(-0.2, 0.2), 1
+                    )
+                elif new_temp < 0:
+                    # 低溫段：濕度緩慢下降至接近 0（結霜效果）
+                    item["humidity"] = round(
+                        max(0.0, current_humi - 0.1 + random.uniform(-0.05, 0.05)), 1
                     )
                 else:
-                    new_temp = current_temp
-                item["temperature"] = round(new_temp + random.uniform(-0.1, 0.1), 2)
+                    # 無濕度控制：在現有值附近小幅抖動
+                    item["humidity"] = round(
+                        max(0.0, min(100.0, current_humi + random.uniform(-0.3, 0.3))),
+                        1,
+                    )
 
             elif status == "FINISHING":
                 diff = 25.0 - current_temp
@@ -460,6 +573,8 @@ async def data_simulator():
                             "running_sop_name": "STANDBY",
                             "running_sop_id": None,
                             "standard_id": None,
+                            "sim_phase": "idle",
+                            "sim_cycle": 0,
                         }
                     )
                     _save_device_state(device_id, item)
@@ -467,13 +582,20 @@ async def data_simulator():
                     asyncio.create_task(
                         push_message(f"✅ [{device_id}] 測試完成，已回到待機狀態。")
                     )
+                # fix #10: FINISHING 時濕度也小幅抖動
+                item["humidity"] = round(
+                    max(0.0, min(100.0, current_humi + random.uniform(-0.2, 0.2))), 1
+                )
 
             elif status == "EMERGENCY":
                 item["temperature"] = round(
                     current_temp + random.uniform(-0.05, 0.05), 2
                 )
+                # fix #10: EMERGENCY 時濕度也小幅抖動
+                item["humidity"] = round(
+                    max(0.0, min(100.0, current_humi + random.uniform(-0.1, 0.1))), 1
+                )
 
-            # fix: PAUSED 狀態不累積 write_counters，不寫 DB，避免浪費 IO
             if status in ["RUNNING", "FINISHING", "EMERGENCY"]:
                 write_counters[device_id] += 1
                 if write_counters[device_id] >= 10:
