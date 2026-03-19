@@ -1,5 +1,5 @@
 // client/src/ai/ChatSidebar.jsx
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { exportChat } from "./aiStorage";
 
 export default function ChatSidebar({
@@ -22,17 +22,15 @@ export default function ChatSidebar({
   const [editingTitle, setEditingTitle] = useState("");
   const [newGroupInput, setNewGroupInput] = useState("");
   const [showGroupInput, setShowGroupInput] = useState(false);
-  const [movingId, setMovingId] = useState(null);
+  // fix: 移除 movingId — 移動分組已改為拖曳，select UI 已廢棄，movingId 是死 code
   const [dragId, setDragId] = useState(null);
   const [dragOverGroup, setDragOverGroup] = useState(null);
 
-  // 以 projectGroups 為主，「未分組」永遠最後
   const sortedGroups = useMemo(
     () => [...projectGroups.filter((g) => g !== "未分組"), "未分組"],
     [projectGroups],
   );
 
-  // 依分組聚合對話
   const grouped = useMemo(
     () =>
       sortedGroups.reduce((acc, g) => {
@@ -49,12 +47,9 @@ export default function ChatSidebar({
     setEditingId(null);
   };
 
-  // 新增分組後不自動建立新對話，讓使用者自行決定要不要在新分組裡開對話
   const commitAddGroup = () => {
     const name = newGroupInput.trim();
-    if (name) {
-      onAddGroup(name);
-    }
+    if (name) onAddGroup(name);
     setNewGroupInput("");
     setShowGroupInput(false);
   };
@@ -99,7 +94,6 @@ export default function ChatSidebar({
           <div style={S.listArea}>
             {sortedGroups.map((group) => {
               const items = grouped[group] ?? [];
-              // fix: 未分組且空時不顯示，其他分組即使空也要顯示（讓使用者可以拖曳）
               if (group === "未分組" && items.length === 0) return null;
               return (
                 <div key={group}>
@@ -164,38 +158,6 @@ export default function ChatSidebar({
                               取消
                             </button>
                           </div>
-                        ) : movingId === conv.id ? (
-                          <div style={S.moveRow}>
-                            <span
-                              style={{
-                                fontSize: 11,
-                                color: "#8b949e",
-                                flexShrink: 0,
-                              }}
-                            >
-                              移至：
-                            </span>
-                            <select
-                              style={S.moveSelect}
-                              defaultValue={conv.projectGroup}
-                              onChange={(e) => {
-                                onSetGroup(conv.id, e.target.value);
-                                setMovingId(null);
-                              }}
-                            >
-                              {sortedGroups.map((g) => (
-                                <option key={g} value={g}>
-                                  {g}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              style={S.confirmNo}
-                              onClick={() => setMovingId(null)}
-                            >
-                              取消
-                            </button>
-                          </div>
                         ) : (
                           <div
                             style={{
@@ -234,7 +196,6 @@ export default function ChatSidebar({
                               >
                                 ✏️
                               </button>
-
                               <button
                                 style={S.iconBtn}
                                 title="匯出"
@@ -309,8 +270,9 @@ export default function ChatSidebar({
             </button>
           )}
 
+          {/* fix: 更新為實際使用的模型 qwen2.5:7b */}
           <div style={S.modelBadge}>
-            <span style={{ color: "#3fb950" }}>●</span> llama3.1:8b（本機）
+            <span style={{ color: "#3fb950" }}>●</span> qwen2.5:7b（本機）
           </div>
         </>
       )}
@@ -439,24 +401,6 @@ const S = {
     padding: "4px 8px",
     background: "#21262d",
     borderRadius: 6,
-  },
-  moveRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "4px 8px",
-    background: "#21262d",
-    borderRadius: 6,
-  },
-  moveSelect: {
-    flex: 1,
-    background: "#0d1117",
-    border: "1px solid #30363d",
-    borderRadius: 4,
-    color: "#cdd9e5",
-    fontSize: 11,
-    padding: "3px 6px",
-    outline: "none",
   },
   confirmText: { fontSize: 11, color: "#f85149", flex: 1 },
   confirmYes: {

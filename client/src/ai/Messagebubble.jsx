@@ -6,8 +6,6 @@ export const DISCLAIMER =
 
 const COLLAPSE_HEIGHT = 300;
 
-// fix: 只保留「繁體中文完全不使用、簡體中文獨有」的字
-// 移除「話、問、題、時、機、動、為、對」等繁簡共用字
 const SIMPLIFIED_ONLY = new Set([
   "设",
   "备",
@@ -149,12 +147,10 @@ export function renderMarkdown(rawText) {
 
 // ── 可折疊泡泡 ───────────────────────────────────────────────
 function CollapsibleBubble({ children, contentKey }) {
-  // fix: 預設展開，使用者看完後才能手動收合
   const [expanded, setExpanded] = useState(true);
   const [overflow, setOverflow] = useState(false);
   const innerRef = useRef(null);
 
-  // fix: 用 contentKey（訊息長度）而非 children reference 判斷是否重新測量
   useEffect(() => {
     if (innerRef.current)
       setOverflow(innerRef.current.scrollHeight > COLLAPSE_HEIGHT);
@@ -188,7 +184,6 @@ export default function MessageBubble({ m, onRetry, isFirstAssistant = true }) {
   const [copied, setCopied] = useState(false);
   const simplified = m.role === "assistant" && hasSimplified(m.content);
 
-  // fix: clipboard 加 fallback，支援 HTTP 環境
   const handleCopy = () => {
     const text = cleanText(m.content);
     if (navigator.clipboard && window.isSecureContext) {
@@ -197,7 +192,6 @@ export default function MessageBubble({ m, onRetry, isFirstAssistant = true }) {
         setTimeout(() => setCopied(false), 2000);
       });
     } else {
-      // fallback for HTTP
       const el = document.createElement("textarea");
       el.value = text;
       el.style.position = "fixed";
@@ -210,7 +204,7 @@ export default function MessageBubble({ m, onRetry, isFirstAssistant = true }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch {
-        /* 複製失敗靜默處理 */
+        /* 靜默處理 */
       }
       document.body.removeChild(el);
     }
@@ -236,7 +230,7 @@ export default function MessageBubble({ m, onRetry, isFirstAssistant = true }) {
 
         {m.role === "assistant" && (
           <>
-            {/* 始終顯示完整免責文字 */}
+            {/* fix: 免責聲明只在這裡顯示一次，system prompt 已移除 */}
             <div style={S.disclaimer}>{DISCLAIMER}</div>
 
             <div style={S.meta}>

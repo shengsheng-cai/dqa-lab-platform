@@ -1,7 +1,8 @@
 // 對話區域（包含對話列表、輸入框及控制按鈕）
 
 import { useState, useEffect, useRef } from "react";
-import MessageBubble, { DISCLAIMER, renderMarkdown } from "./Messagebubble";
+// fix: 修正大小寫，原為 ./Messagebubble，Linux 區分大小寫會找不到檔案
+import MessageBubble, { DISCLAIMER, renderMarkdown } from "./MessageBubble";
 
 /**
  * 串流泡泡：顯示已經過秒數

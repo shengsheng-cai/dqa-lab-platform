@@ -16,6 +16,7 @@ from .sop import router as sop_router, execution_router, DEVICE_IDS
 from .reports import router as reports_router
 from .errors import router as errors_router
 from .ai import router as ai_router, _warmup_ollama
+from .rag import warmup_rag
 from .line import router as line_router, push_message
 from .models import SessionLocal, DeviceData, ErrorLog, DeviceState
 from .standards import get_ramp_rate, get_standard
@@ -77,6 +78,7 @@ async def lifespan(app: FastAPI):
     print(f"✅ System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
 
     await _warmup_ollama()
+    await warmup_rag()
 
     yield
 
@@ -342,7 +344,6 @@ async def emergency_stop(device_id: str):
     _save_device_state(device_id, device)
     print(f"🚨 [{device_id}] EMERGENCY STOP")
     # 推播 LINE 通知
-    import asyncio
 
     asyncio.create_task(
         push_message(

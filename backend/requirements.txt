@@ -5,3 +5,4 @@ sqlalchemy
 python-dotenv
 alembic
 httpx
+numpy

@@ -1,58 +1,36 @@
-import httpx  # <--- imported for OLLAMA_URL request
+import httpx
 import json
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
-from .standards import get_standard_tree
+from .rag import (
+    retrieve,
+    retrieve_by_std,
+    retrieve_multi,
+    match_std_keys,
+    extract_temperatures,
+)
 
-# 定義 AI 模組的路由器
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
-# OLLAMA_URL 是 Ollama 服務的 URL
 OLLAMA_URL = "http://localhost:11434/api/chat"
-OLLAMA_MODEL = "llama3.1:8b"
+OLLAMA_MODEL = "qwen2.5:7b"
 
-# 重啟後自動重建
-_SYSTEM_PROMPT_CACHE: Optional[str] = None
+# 免責聲明由前端固定顯示，system prompt 不再重複
+_SYSTEM_PROMPT = """你是工業環境測試法規顧問，專注於溫箱測試。
+只能用繁體中文回答，禁止簡體中文。
+回答簡潔，推薦時標注法規正式版本號（例如 IEC 60068-2-1:2007）。
+你只能根據【參考資料】區塊的內容回答。
+若參考資料中找不到相關條目，請說「查無此資料」。
+禁止引用參考資料以外的任何標準版本號、測試名稱或數值參數。"""
 
-
-def _build_system_prompt() -> str:
-    global _SYSTEM_PROMPT_CACHE
-    if _SYSTEM_PROMPT_CACHE is not None:
-        return _SYSTEM_PROMPT_CACHE
-
-    # 取得標準樹的資料
-    tree = get_standard_tree()
-
-    # 建立系統提示的內容
-    lines = [
-        "你是工業環境測試法規顧問，專注於溫箱測試。",
-        "只能用繁體中文回答，禁止簡體中文。繁體範例：設備、測試、標準、循環、穩態。",
-        "回答簡潔不重複，推薦時標注法規正式版本號（例如 IEC 60068-2-1:2007）。",
-        "依據下方表格回答，若表格沒寫就回「查無此資料」，禁止瞎掰。",
-        "| 標準 | 測試名稱 |",
-        "|---|---|",
-    ]
-
-    # 取得各個標準的測試名稱
-    for std_key, std_data in tree.items():
-        test_names = []
-        for ver_data in std_data["versions"].values():
-            for test_data in ver_data["tests"].values():
-                test_names.append(test_data["name"])
-        lines.append(f"| {std_key} | {'、'.join(test_names)} |")
-
-    # 將內容組合成系統提示
-    _SYSTEM_PROMPT_CACHE = "\n".join(lines)
-    return _SYSTEM_PROMPT_CACHE
+_COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
 
 
-# 套用 Ollama 服務的暖機功能
 async def _warmup_ollama():
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
-            # 發送訊息給 Ollama 服務，檢查是否有回應
             await client.post(
                 OLLAMA_URL,
                 json={
@@ -63,43 +41,102 @@ async def _warmup_ollama():
             )
         print(f"✅ Ollama warm-up 完成（{OLLAMA_MODEL}）")
     except Exception as e:
-        # 如果有錯誤，就打印出錯誤訊息
-        print(f"⚠️  Ollama warm-up 失敗（服務可能尚未啟動）：{e}")
+        print(f"⚠️  Ollama warm-up 失敗：{e}")
 
 
-# 定義查詢模型的請求類別
 class QueryRequest(BaseModel):
     message: str
     history: Optional[list] = []
 
 
-# 定義查詢模型的回應類別
 class QueryResponse(BaseModel):
     reply: str
 
 
-def _build_messages(req: QueryRequest) -> list:
-    """組裝送給 Ollama 的 messages，history 為前端傳入的乾淨字串。"""
-    # 取得系統提示內容
-    messages = [{"role": "system", "content": _build_system_prompt()}]
+async def _build_messages(req: QueryRequest) -> list:
+    """
+    查詢路由策略：
+    1. 比對到標準名稱（含簡寫）且有比較關鍵字 → retrieve_multi 跨標準搜尋
+    2. 比對到單一標準名稱（含簡寫）→ retrieve_by_std 撈該標準全部條目
+    3. 含明確溫度數字（如 -40°C）→ 向量搜尋 + 溫度直接過濾補強
+    4. 其他 → 一般向量搜尋 top_k=5
+    """
+    msg = req.message
 
-    # 將 history 陣列加入訊息列表中
+    # fix: 使用 match_std_keys 支援簡寫比對（如 '50155'、'60068'）
+    matched_stds = match_std_keys(msg)
+    is_compare = any(k in msg for k in _COMPARE_KEYWORDS) and len(matched_stds) >= 2
+    temps = extract_temperatures(msg)
+
+    hits: list[dict] = []
+    seen_keys: set = set()
+
+    def _add_hits(new_hits: list[dict]):
+        for h in new_hits:
+            uid = f"{h['std_key']}_{h['ver_key']}_{h['test_key']}"
+            if uid not in seen_keys:
+                seen_keys.add(uid)
+                hits.append(h)
+
+    if is_compare:
+        # 跨標準比較：對每個標準分別搜尋高溫/低溫/通用
+        queries = []
+        for std in matched_stds:
+            queries.append(f"{std} 高溫測試")
+            queries.append(f"{std} 低溫測試")
+            queries.append(f"{std} 測試條件")
+        _add_hits(await retrieve_multi(queries, top_k_each=3))
+
+    elif len(matched_stds) == 1:
+        # 點名單一標準：直接撈該標準全部條目
+        _add_hits(retrieve_by_std(matched_stds))
+
+    elif temps:
+        # 含明確溫度：向量搜尋 + 溫度直接過濾雙保險
+        _add_hits(await retrieve(msg, top_k=8))
+        for chunk in _get_chunks_by_temp(temps):
+            _add_hits([chunk])
+
+    else:
+        # 一般查詢
+        _add_hits(await retrieve(msg, top_k=5))
+
+    if hits:
+        ref_block = "\n".join(f"- {h['text']}" for h in hits)
+        system_content = f"{_SYSTEM_PROMPT}\n\n【參考資料】\n{ref_block}"
+    else:
+        system_content = (
+            _SYSTEM_PROMPT + "\n\n【參考資料】查無相關資料，請直接回覆「查無此資料」。"
+        )
+
+    messages = [{"role": "system", "content": system_content}]
     for h in req.history:
         messages.append(h)
-
-    # 將使用者輸入的訊息加到最後面
-    messages.append({"role": "user", "content": req.message})
-
+    messages.append({"role": "user", "content": msg})
     return messages
 
 
-# 定義查詢模型的路由器
+def _get_chunks_by_temp(temps: list[float]) -> list[dict]:
+    """從 _CHUNKS 直接過濾含有指定溫度的條目，補強向量搜尋在溫度數字上的不足。"""
+    from .rag import _CHUNKS
+
+    results = []
+    for chunk in _CHUNKS:
+        raw = chunk.get("raw", {})
+        chunk_temps = set()
+        for key in ("target_temperature", "high_temperature", "low_temperature"):
+            v = raw.get(key)
+            if v is not None:
+                chunk_temps.add(float(v))
+        if any(abs(t - ct) < 0.5 for t in temps for ct in chunk_temps):
+            results.append(chunk)
+    return results
+
+
 @router.post("/standards-query", response_model=QueryResponse)
 async def standards_query(req: QueryRequest):
-    # 取得訊息列表
-    messages = _build_messages(req)
+    messages = await _build_messages(req)
 
-    # 發送訊息給 Ollama 服務，檢查是否有回應
     async with httpx.AsyncClient(timeout=180.0) as client:
         response = await client.post(
             OLLAMA_URL,
@@ -110,30 +147,18 @@ async def standards_query(req: QueryRequest):
                 "options": {"num_ctx": 4096, "temperature": 0.1, "top_p": 0.4},
             },
         )
-
-        # 如果有錯誤，就丟掉錯誤
         response.raise_for_status()
-
-        # 取得回應的 JSON 資料
         data = response.json()
 
-    # 取得 Ollama 的回覆
-    reply = data["message"]["content"]
-
-    # 回傳查詢模型的回應
-    return QueryResponse(reply=reply)
+    return QueryResponse(reply=data["message"]["content"])
 
 
-# 定義查詢模型的流式資料路由器
 @router.post("/standards-query-stream")
 async def standards_query_stream(req: QueryRequest):
-    # 取得訊息列表
-    messages = _build_messages(req)
+    messages = await _build_messages(req)
 
-    # 建立一個產生器，供 Ollama 服務回應的資料
     async def generate():
         async with httpx.AsyncClient(timeout=180.0) as client:
-            # 發送訊息給 Ollama 服務，檢查是否有回應
             async with client.stream(
                 "POST",
                 OLLAMA_URL,
@@ -141,14 +166,9 @@ async def standards_query_stream(req: QueryRequest):
                     "model": OLLAMA_MODEL,
                     "messages": messages,
                     "stream": True,
-                    "options": {
-                        "num_ctx": 4096,
-                        "temperature": 0.1,
-                        "top_p": 0.4,
-                    },
+                    "options": {"num_ctx": 4096, "temperature": 0.1, "top_p": 0.4},
                 },
             ) as response:
-                # 取得 Ollama 的回應
                 async for line in response.aiter_lines():
                     if line.strip():
                         try:
@@ -159,5 +179,4 @@ async def standards_query_stream(req: QueryRequest):
                         except Exception:
                             pass
 
-    # 回傳查詢模型的流式資料
     return StreamingResponse(generate(), media_type="text/plain")
