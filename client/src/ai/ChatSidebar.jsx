@@ -270,9 +270,9 @@ export default function ChatSidebar({
             </button>
           )}
 
-          {/* fix: 更新為實際使用的模型 qwen2.5:7b */}
           <div style={S.modelBadge}>
-            <span style={{ color: "#3fb950" }}>●</span> qwen2.5:7b（本機）
+            <span style={{ color: "#3fb950" }}>●</span> Gemini
+            Flash-Lite(Gemini)
           </div>
         </>
       )}

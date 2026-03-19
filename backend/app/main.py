@@ -15,7 +15,7 @@ from typing import Optional
 from .sop import router as sop_router, execution_router, DEVICE_IDS
 from .reports import router as reports_router
 from .errors import router as errors_router
-from .ai import router as ai_router, _warmup_ollama
+from .ai import router as ai_router
 from .rag import warmup_rag
 from .line import router as line_router, push_message
 from .models import SessionLocal, DeviceData, ErrorLog, DeviceState
@@ -77,7 +77,6 @@ async def lifespan(app: FastAPI):
     sim_task.add_done_callback(background_tasks.discard)
     print(f"✅ System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
 
-    await _warmup_ollama()
     await warmup_rag()
 
     yield
