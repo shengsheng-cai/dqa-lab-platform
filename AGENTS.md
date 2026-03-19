@@ -66,18 +66,18 @@
 | 模組 | 位置 | 說明 |
 |------|------|------|
 | 共用工具函式 | `backend/app/utils.py` | `_now_utc()`、`_save_device_state()`，避免 circular import |
-| 物理模擬引擎 | `backend/app/main.py` | 升降溫斜率（含低溫先降後升）、每 10 秒寫 DB、PAUSED 不寫 DB |
+| 物理模擬引擎 | `backend/app/main.py` | 升降溫斜率（含低溫先降後升）、完整多 cycle 狀態機（sim_phase）、濕度追蹤 SOP 設定值並加噪音抖動、每 10 秒寫 DB、PAUSED 不寫 DB |
 | 設備狀態持久化 | `backend/app/main.py` + `models.py` | DeviceState 表、重啟後自動恢復狀態 |
 | 環境測試標準 | `backend/app/standards/` | 三層 STANDARD_TREE，5 法規 78 條件 |
 | SOP 路由 + 執行紀錄 | `backend/app/sop.py` | 標準樹展開、三步驟選擇、執行紀錄；`standards/tree` 含 steps 欄位 |
-| CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，查詢上限 10000 筆 |
+| CSV 報告 | `backend/app/reports.py` | ISO 17025 格式，big5，含操作人員欄位，查詢上限 10000 筆 |
 | LINE Bot | `backend/app/line.py` | 狀態查詢、推播、簽名驗證、白名單、Flex Message 視覺化、Quick Replies 免打字互動 |
-| 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs |
+| 異常紀錄 | `backend/app/errors.py` | EMERGENCY 自動寫入 error_logs；防重複觸發；記錄已完成步驟數；查詢上限 500 筆 |
 | RAG 知識庫 | `backend/app/rag.py` | nomic-embed-text 向量化 78 條件、in-memory 搜尋、簡寫比對、溫度過濾、top_k=20 |
 | AI 法規諮詢後端 | `backend/app/ai.py` | 串流 + 非串流，Gemini 2.5 Flash-Lite，RAG 動態注入 context |
 | AI 法規諮詢前端 | `client/src/ai/` | 多對話管理、專案分組、拖曳移動分組、串流計時器、前端固定免責聲明、localStorage 持久化 |
 | 儀表板 | `client/src/Dashboard.jsx` | 六狀態、趨勢圖、步驟進度條、倒數計時器、active prop 控制輪詢 |
-| SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇、SP+PV 波型曲線、執行資訊面板、防重複提交、切換回來立刻打 API |
+| SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟法規選擇（重啟後自動還原）、SP+PV 波型曲線（低溫路徑與後端一致）、執行資訊面板、operator 欄位、防重複提交、切換回來立刻打 API、EMERGENCY 操作引導 |
 | 異常看板 | `client/src/Errorlog.jsx` | 統計卡片 + 完整紀錄列表，60s 自動刷新 |
 | 全域路由 | `client/src/App.jsx` | CSS display 切換，四頁面常駐 DOM，active prop 傳遞 |
 
@@ -133,7 +133,13 @@
 **狀態機**
 ```
 IDLE → RUNNING ↔ PAUSED → FINISHING → IDLE
-RUNNING → EMERGENCY（任意時刻）
+RUNNING → EMERGENCY（任意時刻，防重複觸發）
+```
+
+**模擬器 cycle 狀態機（sim_phase）**
+```
+idle → ramp_to_low（低溫測試）或 ramp_to_high（其他）
+ramp_to_low → ramp_to_high → dwell_high → ramp_to_low2 → dwell_low → (loop) → ramp_to_ambient
 ```
 
 **資料庫**
@@ -141,9 +147,9 @@ RUNNING → EMERGENCY（任意時刻）
 |------|------|
 | `device_data` | 歷史溫濕度，每 10 秒，composite index (device_id, timestamp) |
 | `device_states` | 設備狀態持久化 |
-| `sop_executions` | 執行歷程主表 |
+| `sop_executions` | 執行歷程主表，含 operator 欄位 |
 | `step_records` | 步驟完成狀態 |
-| `error_logs` | 緊急停止事件 |
+| `error_logs` | 緊急停止事件，含 completed_steps、total_steps |
 
 **前端輪詢**
 | 元件 | 頻率 |
@@ -158,6 +164,18 @@ RUNNING → EMERGENCY（任意時刻）
 |------|------|
 | `dwell_time_hours` | `dwell_time` |
 | `humidity_rh_percent` | `humidity` |
+
+**Alembic 注意事項**
+
+autogenerate 對 SQLite 有時會產生空的 `upgrade()`，需手動填入：
+```python
+def upgrade() -> None:
+    op.add_column('table_name', sa.Column('col', sa.Integer(), nullable=True))
+```
+若確認 migration 檔案內容正確但 `alembic upgrade head` 仍無動作，表示 Alembic 認為該版本已執行，改用 SQLite 直接加欄位：
+```bash
+sqlite3 backend/test.db "ALTER TABLE table_name ADD COLUMN col_name INTEGER;"
+```
 
 **常用指令**
 ```bash
@@ -179,7 +197,9 @@ alembic upgrade head
 ### 物理模擬引擎
 
 - 斜率控制：`get_ramp_rate()` 動態讀取各標準速率限制
-- 低溫測試：先降至 `low_temperature`，再升至 `high_temperature`
+- 低溫測試：先降至 `low_temperature`，再升至 `high_temperature`，支援多 cycle 完整循環
+- cycle 狀態機：`sim_phase` 追蹤當前階段，`sim_cycle` 計數已完成循環數
+- 濕度模擬：RUNNING 時追蹤 SOP 的 `humidity_rh_percent` 設定值（每秒最多變化 0.3%RH）並加 ±0.2%RH 噪音；低溫段（< 0°C）濕度緩降模擬結霜；無濕度控制時在現有值附近 ±0.3%RH 抖動
 - 狀態機：`EMERGENCY` 微幅抖動；`PAUSED` 鎖定數值不寫 DB；`FINISHING` 降溫至 25°C 後回 `IDLE`
 
 ### RAG 架構

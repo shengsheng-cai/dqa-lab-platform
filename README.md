@@ -32,16 +32,16 @@
 
 - **多設備同步監控** — 5 台溫箱（KSON_CH01～CH05）各自獨立模擬運作，SELECT DEVICE 按鈕即時反映各設備狀態顏色
 - **儀表板** — 即時溫濕度監控（每秒更新）、趨勢圖雙 Y 軸、步驟進度條、倒數計時器、六種狀態顏色區分；低溫（< 0°C）自動隱藏濕度顯示
-- **三步驟法規選擇** — 法規 → 版本/Class → 測試條件，5 大法規、78 個官方測試條件，各設備選擇獨立儲存
+- **三步驟法規選擇** — 法規 → 版本/Class → 測試條件，5 大法規、78 個官方測試條件，各設備選擇獨立儲存；伺服器重啟後自動還原選擇狀態
 - **SOP 步驟依序確認** — 步驟必須依序勾選，取消時連鎖清除後續，Optional 步驟可跳過，每次勾選即時同步後端
-- **完整波型曲線** — SP 目標曲線（虛線）與 PV 實際曲線（實線）疊加顯示，X 軸為完整測試時長；低溫段（< 0°C）濕度線自動斷開
+- **完整波型曲線** — SP 目標曲線（虛線）與 PV 實際曲線（實線）疊加顯示，X 軸為完整測試時長；低溫段（< 0°C）濕度線自動斷開；低溫測試路徑與後端模擬引擎邏輯一致
 - **執行資訊面板** — Pgm / Step / Free Time / Cycle / Now Time / End Time，對應 KSON 溫箱面板格式
 - **LINE 互動儀表板** — 透過 Flex Message 提供結構化設備資訊，支持 Quick Replies 一鍵切換監看設備，減少輸入摩擦
 - **AI 法規諮詢（RAG）** — 多對話管理、專案分組、自然語言描述需求、串流逐字回覆，支援中途停止、複製（含 HTTP fallback）、計時、對話持久化、智慧捲動；RAG 確保回覆內容僅來自內建法規資料；前端固定免責聲明
-- **物理模擬引擎** — 即時升降溫斜率模擬，遵守各標準速率限制，每 10 秒寫 DB，依 ISO/IEC 17025:2017 §7.5 & §8.4 永久保存
-- **異常看板** — 緊急停止自動寫入事件紀錄，記錄當下溫濕度與執行中 SOP，每 60 秒自動刷新
-- **ISO 17025 測試報告** — 7 節格式，big5 編碼，PASS/FAIL 由授權工程師人工判定
-- **重啟恢復** — 伺服器重啟後自動恢復 RUNNING 狀態、步驟進度與 SOP 資料
+- **物理模擬引擎** — 即時升降溫斜率模擬，遵守各標準速率限制，支援完整多 cycle 低溫循環；濕度依 SOP 設定值追蹤並加感測器噪音抖動；每 10 秒寫 DB，依 ISO/IEC 17025:2017 §7.5 & §8.4 永久保存
+- **異常看板** — 緊急停止自動寫入事件紀錄，記錄當下溫濕度、執行中 SOP 及已完成步驟數；防重複觸發；每 60 秒自動刷新
+- **ISO 17025 測試報告** — 7 節格式，big5 編碼，含操作人員姓名，PASS/FAIL 由授權工程師人工判定
+- **重啟恢復** — 伺服器重啟後自動恢復 RUNNING 狀態、步驟進度、SOP 資料與三步驟法規選擇
 - **瞬間頁面切換** — App.jsx 採 CSS display 切換取代路由 unmount，四頁面狀態常駐記憶體，切換無延遲
 
 ## 支持的環境測試標準（78 個測試條件）
@@ -71,6 +71,7 @@ make dev
 ```
 
 > ⚠️ DB 結構有變更時：改 `models.py` → `alembic revision --autogenerate -m "描述"` → `alembic upgrade head`（需在 `backend/` 目錄下執行）
+> 若 autogenerate 產生空的 `upgrade()`，請手動填入 `op.add_column()` 後再執行 `alembic upgrade head`。
 
 > ⚠️ 使用 LINE Bot 功能時，需另開 terminal 執行 `make ngrok`，並將產生的 HTTPS URL 設定至 LINE Developers Console 的 Webhook URL。
 
@@ -97,8 +98,8 @@ make dev
 | GET  | `/api/sop-executions/{id}` | 讀取執行紀錄 |
 | GET  | `/api/reports/csv/{id}` | 下載測試報告 CSV（ISO 17025 七節格式，RFC 5987 檔名） |
 | GET  | `/api/reports/list` | 所有執行紀錄列表 |
-| GET  | `/api/errors/` | 異常紀錄列表 |
-| POST | `/api/stop/{device_id}/emergency` | 緊急停止 |
+| GET  | `/api/errors/` | 異常紀錄列表（最多 500 筆） |
+| POST | `/api/stop/{device_id}/emergency` | 緊急停止（防重複觸發） |
 | POST | `/api/stop/{device_id}/pause` | 暫停切換（RUNNING ↔ PAUSED） |
 | POST | `/api/stop/{device_id}/normal` | 正常停止（自動降溫回 IDLE） |
 | POST | `/api/ai/standards-query` | AI 法規諮詢（非串流） |
