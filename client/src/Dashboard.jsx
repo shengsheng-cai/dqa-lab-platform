@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import axios from "axios";
+import api, { API_BASE } from "./api";
 import {
   LineChart,
   Line,
@@ -10,8 +10,6 @@ import {
   Tooltip,
   Brush,
 } from "recharts";
-
-const API = "http://localhost:8000";
 
 const STATUS_CONFIG = {
   OFFLINE: { color: "#484f58", bg: "#21262d", label: "OFFLINE" },
@@ -45,19 +43,16 @@ const useCountdown = (estimatedEndAt) => {
       setRemaining(null);
       return;
     }
-
     const calc = () => {
       const diff = new Date(estimatedEndAt) - new Date();
       setRemaining(Math.max(0, Math.floor(diff / 1000)));
     };
-
     calc();
     const timer = setInterval(calc, 1000);
     return () => clearInterval(timer);
   }, [estimatedEndAt]);
 
   if (remaining === null) return null;
-
   const h = Math.floor(remaining / 3600);
   const m = Math.floor((remaining % 3600) / 60);
   const s = remaining % 60;
@@ -76,7 +71,6 @@ const DeviceCard = ({ device, selected, onClick }) => {
   const countdown = useCountdown(
     showCountdown ? device.estimated_end_at : null,
   );
-
   const showHumi = device.temperature >= 0;
 
   return (
@@ -286,7 +280,6 @@ const DeviceCard = ({ device, selected, onClick }) => {
   );
 };
 
-// fix: 加入 active prop，頁面隱藏時暫停所有輪詢
 const Dashboard = ({ active = true }) => {
   const [devices, setDevices] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState("KSON_CH01");
@@ -298,28 +291,25 @@ const Dashboard = ({ active = true }) => {
   const [executions, setExecutions] = useState([]);
 
   useEffect(() => {
-    axios
-      .get(`${API}/api/devices/${selectedDevice}/history`)
+    api
+      .get(`/api/devices/${selectedDevice}/history`)
       .then((r) => {
-        historyRef.current[selectedDevice] = [
-          ...r.data.map((p) => ({
-            time: p.time,
-            temperature: p.temperature,
-            humidity: p.temperature < 0 ? null : p.humidity,
-          })),
-        ];
+        historyRef.current[selectedDevice] = r.data.map((p) => ({
+          time: p.time,
+          temperature: p.temperature,
+          humidity: p.temperature < 0 ? null : p.humidity,
+        }));
         setHistoryTick((t) => t + 1);
       })
       .catch((err) => console.error("[Dashboard] history fetch:", err));
   }, [selectedDevice]);
 
-  // fix: active 為 false 時不啟動 interval，切回頁面時重新啟動
   useEffect(() => {
     if (!active) return;
 
     const fetchDevices = async () => {
       try {
-        const res = await axios.get(`${API}/api/devices`);
+        const res = await api.get("/api/devices");
         setDevices(res.data);
 
         const now = new Date();
@@ -353,10 +343,9 @@ const Dashboard = ({ active = true }) => {
 
   useEffect(() => {
     if (!active) return;
-
     const fetchExecutions = () => {
-      axios
-        .get(`${API}/api/reports/list`)
+      api
+        .get("/api/reports/list")
         .then((r) => setExecutions(r.data))
         .catch((err) => console.error("[Dashboard] executions fetch:", err));
     };
@@ -448,7 +437,7 @@ const Dashboard = ({ active = true }) => {
             {DEVICE_IDS.map((id) => {
               const d = devices.find((x) => x.device_id === id);
               const sc = STATUS_CONFIG[d?.status] || STATUS_CONFIG.OFFLINE;
-              const active = id === selectedDevice;
+              const isActive = id === selectedDevice;
               return (
                 <button
                   key={id}
@@ -459,15 +448,11 @@ const Dashboard = ({ active = true }) => {
                     fontSize: 10,
                     cursor: "pointer",
                     fontFamily: "monospace",
-                    fontWeight: active ? 700 : 400,
-                    border: `1px solid ${active ? sc.color : "#30363d"}`,
-                    background: active ? sc.bg : "#0d1117",
-                    color: active ? sc.color : "#484f58",
+                    fontWeight: isActive ? 700 : 400,
+                    border: `1px solid ${isActive ? sc.color : "#30363d"}`,
+                    background: isActive ? sc.bg : "#0d1117",
+                    color: isActive ? sc.color : "#484f58",
                     transition: "all .15s",
-                    boxShadow:
-                      active && d?.status === "RUNNING"
-                        ? `0 0 6px ${sc.color}66`
-                        : "none",
                   }}
                 >
                   {id.replace("KSON_", "")}
@@ -662,7 +647,10 @@ const Dashboard = ({ active = true }) => {
                   <td style={{ padding: "8px 12px" }}>
                     <button
                       onClick={() =>
-                        window.open(`${API}/api/reports/csv/${ex.id}`, "_blank")
+                        window.open(
+                          `${API_BASE}/api/reports/csv/${ex.id}`,
+                          "_blank",
+                        )
                       }
                       style={{
                         padding: "4px 10px",

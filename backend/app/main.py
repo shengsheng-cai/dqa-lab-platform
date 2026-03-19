@@ -93,6 +93,7 @@ app.include_router(errors_router)
 app.include_router(ai_router)
 app.include_router(line_router)
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -100,7 +101,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from .auth import auth_middleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
+app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
 # ============================================================
 # 工具函式
 # ============================================================

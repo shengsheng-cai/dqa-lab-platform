@@ -6,9 +6,17 @@ import {
   createConversation,
   deleteConversation as _deleteConv,
 } from "./aiStorage";
+import { API_BASE } from "../api";
 
-const API_BASE = "http://localhost:8000";
 const MAX_HISTORY = 4;
+
+function getAuthHeaders() {
+  const pwd = localStorage.getItem("demo_password") || "";
+  return {
+    "Content-Type": "application/json",
+    ...(pwd ? { "X-Demo-Password": pwd } : {}),
+  };
+}
 
 export default function useAIChat() {
   const [store, setStore] = useState(() => loadChats());
@@ -34,7 +42,6 @@ export default function useAIChat() {
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
-
   useEffect(() => {
     saveChats(store);
   }, [store]);
@@ -51,12 +58,9 @@ export default function useAIChat() {
   }, []);
 
   useEffect(() => {
-    // 只有新訊息時才捲底，串流更新中若使用者往上滾則不強制
     if (!userScrolledUpRef.current)
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  // 串流更新時不強制捲動，避免與使用者手動滾動衝突
 
   const scrollToBottomForce = useCallback(() => {
     userScrolledUpRef.current = false;
@@ -228,7 +232,7 @@ export default function useAIChat() {
       try {
         const res = await fetch(`${API_BASE}/api/ai/standards-query-stream`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ message: rawMsg, history }),
           signal: controller.signal,
         });
@@ -249,11 +253,10 @@ export default function useAIChat() {
           const elapsed = ((Date.now() - startTimeRef.current) / 1000).toFixed(
             1,
           );
-          const finalMessages = [
-            ...newMessages,
-            { role: "assistant", content: fullText, elapsed },
-          ];
-          updateMessages(finalMessages, sendingConvId);
+          updateMessages(
+            [...newMessages, { role: "assistant", content: fullText, elapsed }],
+            sendingConvId,
+          );
         }
       } catch (err) {
         if (err.name !== "AbortError") {
@@ -262,7 +265,7 @@ export default function useAIChat() {
               ...newMessages,
               {
                 role: "assistant",
-                content: "⚠️ 連線失敗，請確認後端與 Ollama 是否正常運行。",
+                content: "⚠️ 連線失敗，請確認後端是否正常運行。",
               },
             ],
             sendingConvId,
@@ -291,8 +294,7 @@ export default function useAIChat() {
         }
       }
       if (!userMsg) return;
-      const trimmed = messages.slice(0, msgIndex);
-      updateMessages(trimmed);
+      updateMessages(messages.slice(0, msgIndex));
       sendMessage(userMsg);
     },
     [messages, sendMessage, updateMessages],

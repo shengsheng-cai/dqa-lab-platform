@@ -1,48 +1,48 @@
 """
-RAG 模組 — 從 STANDARD_TREE 自動產生知識庫，使用 Ollama nomic-embed-text 向量化，
-numpy 餘弦相似度搜尋，零額外套件依賴（除 numpy）。
+RAG 模組 — 從 STANDARD_TREE 自動產生知識庫，使用 Gemini embedding API 向量化，
+numpy 餘弦相似度搜尋，零額外套件依賴（除 numpy、google-genai）。
 """
 
+import os
 import re
-import httpx
+import asyncio
 import numpy as np
 from typing import Optional
+from google import genai
+from google.genai import types as genai_types
 from .standards import get_standard_tree
 
-OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
-OLLAMA_EMBED_MODEL = "nomic-embed-text"
+GEMINI_EMBED_MODEL = "gemini-embedding-001"
 
 # In-memory 知識庫
 _CHUNKS: list[dict] = []
 _EMBEDDINGS: Optional[np.ndarray] = None  # shape: (N, dim)
 
 # 使用者可能的簡寫 → 對應到 STANDARD_TREE 的完整 std_key
-# 涵蓋各種不完整、省略、口語化寫法
 _STD_ALIAS_MAP: dict[str, str] = {
-    # IEC 60068
     "IEC 60068": "IEC 60068",
     "60068": "IEC 60068",
     "iec60068": "IEC 60068",
-    # EN 50155
     "EN 50155": "EN 50155",
     "50155": "EN 50155",
     "en50155": "EN 50155",
-    # IEC 61850-3
     "IEC 61850-3": "IEC 61850-3",
     "IEC 61850": "IEC 61850-3",
     "61850": "IEC 61850-3",
     "iec61850": "IEC 61850-3",
-    # IEC 60945
     "IEC 60945": "IEC 60945",
     "60945": "IEC 60945",
     "iec60945": "IEC 60945",
-    # DNV
     "DNV": "DNV",
     "dnv": "DNV",
 }
 
-# 比較關鍵字
 _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
+
+
+def _get_client() -> genai.Client:
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    return genai.Client(api_key=api_key)
 
 
 def _build_chunks() -> list[dict]:
@@ -92,35 +92,41 @@ def _build_chunks() -> list[dict]:
     return chunks
 
 
-async def _embed(texts: list[str]) -> np.ndarray:
-    """呼叫 Ollama nomic-embed-text，回傳 numpy array。"""
-    vectors = []
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        for text in texts:
-            resp = await client.post(
-                OLLAMA_EMBED_URL,
-                json={"model": OLLAMA_EMBED_MODEL, "prompt": text},
-            )
-            resp.raise_for_status()
-            vectors.append(resp.json()["embedding"])
-    return np.array(vectors, dtype=np.float32)
+async def _embed(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> np.ndarray:
+    """呼叫 Gemini embedding API，批次處理避免 rate limit。"""
+    client = _get_client()
+    BATCH_SIZE = 20
+    all_vectors = []
+
+    for i in range(0, len(texts), BATCH_SIZE):
+        batch = texts[i : i + BATCH_SIZE]
+        result = client.models.embed_content(
+            model=GEMINI_EMBED_MODEL,
+            contents=batch,
+            config=genai_types.EmbedContentConfig(task_type=task_type),
+        )
+        all_vectors.extend([e.values for e in result.embeddings])
+        # 不是最後一批才等
+        if i + BATCH_SIZE < len(texts):
+            await asyncio.sleep(5)
+
+    return np.array(all_vectors, dtype=np.float32)
 
 
 async def warmup_rag():
     """啟動時呼叫：建立 chunks + 向量化，存入 in-memory。"""
     global _CHUNKS, _EMBEDDINGS
-    print("⏳ RAG 知識庫建立中...")
+    print("⏳ RAG 知識庫建立中（分批向量化，約需 20 秒）...")
 
     try:
         _CHUNKS = _build_chunks()
         texts = [c["text"] for c in _CHUNKS]
-        _EMBEDDINGS = await _embed(texts)
+        _EMBEDDINGS = await _embed(texts, task_type="RETRIEVAL_DOCUMENT")
         norms = np.linalg.norm(_EMBEDDINGS, axis=1, keepdims=True)
         _EMBEDDINGS = _EMBEDDINGS / np.clip(norms, 1e-9, None)
         print(f"✅ RAG 完成：{len(_CHUNKS)} 個測試條件已向量化")
     except Exception as e:
-        print(f"⚠️  RAG 向量化失敗（nomic-embed-text 是否已安裝？）：{e}")
-        print("   執行：ollama pull nomic-embed-text")
+        print(f"⚠️  RAG 向量化失敗：{e}")
         _CHUNKS = []
         _EMBEDDINGS = None
 
@@ -130,7 +136,7 @@ async def retrieve(query: str, top_k: int = 5) -> list[dict]:
     if _EMBEDDINGS is None or len(_CHUNKS) == 0:
         return []
 
-    q_vec = await _embed([query])
+    q_vec = await _embed([query], task_type="RETRIEVAL_QUERY")
     q_norm = q_vec / np.clip(np.linalg.norm(q_vec), 1e-9, None)
     scores = (_EMBEDDINGS @ q_norm.T).flatten()
     top_indices = np.argsort(scores)[::-1][:top_k]
@@ -139,11 +145,7 @@ async def retrieve(query: str, top_k: int = 5) -> list[dict]:
 
 
 def match_std_keys(msg: str) -> list[str]:
-    """
-    從使用者訊息中比對出對應的 STANDARD_TREE std_key。
-    支援簡寫、省略、口語化（如 '50155'、'60068'、'IEC 61850'）。
-    回傳去重後的 std_key 清單（使用 STANDARD_TREE 的完整 key）。
-    """
+    """從使用者訊息中比對出對應的 std_key。"""
     found = set()
     msg_lower = msg.lower().replace("-", "").replace(" ", "")
 
@@ -156,31 +158,20 @@ def match_std_keys(msg: str) -> list[str]:
 
 
 def retrieve_by_std(std_keys: list[str]) -> list[dict]:
-    """
-    直接用 STANDARD_TREE std_key 精確比對，不經過向量搜尋。
-    確保點名標準時撈到該標準所有條目。
-    """
+    """直接用 std_key 精確比對，不經過向量搜尋。"""
     if not _CHUNKS:
         return []
-
-    results = []
-    for chunk in _CHUNKS:
-        if chunk["std_key"] in std_keys:
-            results.append(chunk)
-    return results
+    return [c for c in _CHUNKS if c["std_key"] in std_keys]
 
 
 def extract_temperatures(text: str) -> list[float]:
-    """從 query 文字抽取溫度數字，例如 '-40°C' → [-40.0]。"""
+    """從 query 文字抽取溫度數字。"""
     matches = re.findall(r"[-+]?\d+(?:\.\d+)?(?=\s*°[Cc]|度)", text)
     return [float(m) for m in matches]
 
 
 async def retrieve_multi(queries: list[str], top_k_each: int = 3) -> list[dict]:
-    """
-    多個 query 分別搜尋，結果合併去重。
-    適用於跨標準比較問題。
-    """
+    """多個 query 分別搜尋，結果合併去重。"""
     seen_keys = set()
     results = []
     for q in queries:

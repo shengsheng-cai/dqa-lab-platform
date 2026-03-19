@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import axios from "axios";
+import api, { API_BASE } from "./api";
 import {
   ComposedChart,
   Line,
@@ -12,7 +12,6 @@ import {
 } from "recharts";
 import "./SOPPage.css";
 
-const API = "http://localhost:8000";
 const DEVICE_IDS = [
   "KSON_CH01",
   "KSON_CH02",
@@ -47,11 +46,6 @@ function fmtMin(min) {
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}m` : `${m}m`;
 }
 
-// fix #13: generateSP 低溫路徑與後端 _calc_estimated_end_at 對齊
-// 路徑：
-//   有 low_temp < ambient：ambient→low→(low→high→dwell→low→dwell)×cycles→ambient
-//   有 low_temp >= ambient：ambient→high→(dwell→low→dwell→high)×cycles→ambient
-//   無 low_temp：ambient→target→dwell→ambient
 function generateSP(sop) {
   if (!sop) return [];
   const ramp = sop.ramp_rate || 1;
@@ -72,7 +66,6 @@ function generateSP(sop) {
       t++;
     }
   };
-
   const pushDwell = (temp, duration) => {
     for (let i = 0; i < duration; i++) {
       pts.push({ min: t, sp_temp: temp });
@@ -81,7 +74,6 @@ function generateSP(sop) {
   };
 
   if (low !== null && low < ambientTemp) {
-    // 低溫測試：ambient → low → (low→high→dwell→low→dwell)×cycles → ambient
     pushRamp(ambientTemp, low);
     for (let c = 0; c < cycles; c++) {
       pushRamp(low, high);
@@ -91,7 +83,6 @@ function generateSP(sop) {
     }
     pushRamp(low, ambientTemp);
   } else if (low !== null) {
-    // 雙溫循環（low >= ambient）：ambient → high → (dwell→low→dwell→high)×cycles → ambient
     pushRamp(ambientTemp, high);
     for (let c = 0; c < cycles; c++) {
       pushDwell(high, dwell);
@@ -101,7 +92,6 @@ function generateSP(sop) {
     }
     pushRamp(low, ambientTemp);
   } else {
-    // 單溫段
     pushRamp(ambientTemp, high);
     pushDwell(high, dwell);
     pushRamp(high, ambientTemp);
@@ -465,19 +455,17 @@ const TempChart = ({ sop, pvData, startedAt }) => {
   );
 };
 
-// fix #1: 從 sop_id 反查標準樹，還原三步驟選擇
 function restoreSelectionFromSopId(sopId, standardTree) {
   if (!sopId || !standardTree) return null;
   for (const [stdKey, stdData] of Object.entries(standardTree)) {
     for (const [verKey, verData] of Object.entries(stdData.versions || {})) {
       for (const [testKey, testData] of Object.entries(verData.tests || {})) {
-        if (testData.sop_id === sopId) {
+        if (testData.sop_id === sopId)
           return {
             selectedStd: stdKey,
             selectedVer: verKey,
             selectedTest: testKey,
           };
-        }
       }
     }
   }
@@ -495,12 +483,10 @@ const SOPPage = ({ active = true }) => {
   const [treeLoaded, setTreeLoaded] = useState(false);
   const [startError, setStartError] = useState("");
   const [saving, setSaving] = useState(false);
-  // fix #2: operator 輸入
   const [operator, setOperator] = useState(
     () => localStorage.getItem("dqa_operator") || "",
   );
 
-  // fix #4: 用 ref 記住正在 fetch 的 device，避免競態
   const historyFetchingRef = useRef(null);
   const lastHistoryMinuteRef = useRef(-1);
 
@@ -553,8 +539,8 @@ const SOPPage = ({ active = true }) => {
   }, [isEmergency]);
 
   useEffect(() => {
-    axios
-      .get(`${API}/api/sop/standards/tree`)
+    api
+      .get("/api/sop/standards/tree")
       .then((r) => {
         setStandardTree(r.data);
         setTreeLoaded(true);
@@ -562,14 +548,12 @@ const SOPPage = ({ active = true }) => {
       .catch(() => setTreeLoaded(true));
   }, []);
 
-  // fix #4: 統一 history fetch 函式，切換設備時重置 lastHistoryMinuteRef
   const fetchHistory = useCallback((deviceId, startedAt) => {
     if (!startedAt) return;
     historyFetchingRef.current = deviceId;
-    axios
-      .get(`${API}/api/devices/${deviceId}/history`)
+    api
+      .get(`/api/devices/${deviceId}/history`)
       .then((res) => {
-        // 只更新仍是目標設備的 state，避免過期回應覆蓋
         if (historyFetchingRef.current === deviceId) {
           setDeviceStates((prev) => ({
             ...prev,
@@ -586,16 +570,11 @@ const SOPPage = ({ active = true }) => {
 
   useEffect(() => {
     if (!active) return;
-
-    // 切換設備時重置分鐘 ref，確保新設備立刻可刷新
     lastHistoryMinuteRef.current = -1;
-
     const selDevice = allDevices[selectedDevice];
-    if (selDevice?.started_at) {
+    if (selDevice?.started_at)
       fetchHistory(selectedDevice, selDevice.started_at);
-    } else {
-      updateDS(selectedDevice, { chartHistory: [], chartStartedAt: null });
-    }
+    else updateDS(selectedDevice, { chartHistory: [], chartStartedAt: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDevice]);
 
@@ -603,8 +582,8 @@ const SOPPage = ({ active = true }) => {
     if (!active) return;
 
     const fetchDevices = () => {
-      axios
-        .get(`${API}/api/devices`)
+      api
+        .get("/api/devices")
         .then((r) => {
           const map = {};
           r.data.forEach((d) => {
@@ -619,7 +598,6 @@ const SOPPage = ({ active = true }) => {
               if (!current) return;
               const prevDS = prev[id];
               let restoredSop = prevDS.activeSop;
-
               if (!restoredSop && current.active_sop_json) {
                 try {
                   restoredSop = JSON.parse(current.active_sop_json);
@@ -631,26 +609,16 @@ const SOPPage = ({ active = true }) => {
                 !current.active_sop_json &&
                 prevDS.activeSop &&
                 !["RUNNING", "PAUSED"].includes(current.status)
-              ) {
+              )
                 restoredSop = null;
-              }
-
-              // fix #1: 還原三步驟選擇（只在尚未選擇的情況下還原）
               let selectionPatch = {};
               if (
                 restoredSop &&
                 !prevDS.selectedStd &&
                 current.active_sop_json
               ) {
-                const restored = restoreSelectionFromSopId(
-                  restoredSop.sop_id,
-                  prev[id].selectedStd ? null : /* trigger lookup */ null,
-                );
-                // 使用 standardTree 需在 closure 外，改用 functional update 時機
-                // 這裡先存 sopId，由下方 effect 處理
                 selectionPatch = { _pendingRestoreSopId: restoredSop.sop_id };
               }
-
               next[id] = {
                 ...prevDS,
                 activeSop: restoredSop,
@@ -660,7 +628,6 @@ const SOPPage = ({ active = true }) => {
             return next;
           });
 
-          // fix #4: 分鐘級 history 刷新，使用統一 fetchHistory
           const now = new Date();
           const currentMinute = now.getHours() * 60 + now.getMinutes();
           if (
@@ -669,9 +636,8 @@ const SOPPage = ({ active = true }) => {
           ) {
             lastHistoryMinuteRef.current = currentMinute;
             const selDevice = map[selectedDevice];
-            if (selDevice?.started_at) {
+            if (selDevice?.started_at)
               fetchHistory(selectedDevice, selDevice.started_at);
-            }
           }
         })
         .catch(() => {});
@@ -682,7 +648,6 @@ const SOPPage = ({ active = true }) => {
     return () => clearInterval(t);
   }, [selectedDevice, active, fetchHistory]);
 
-  // fix #1: 當 standardTree 載入完成後，補全待還原的三步驟選擇
   useEffect(() => {
     if (!treeLoaded) return;
     setDeviceStates((prev) => {
@@ -694,13 +659,12 @@ const SOPPage = ({ active = true }) => {
             pendingSopId,
             standardTree,
           );
-          if (restored) {
+          if (restored)
             next[id] = {
               ...prev[id],
               ...restored,
               _pendingRestoreSopId: undefined,
             };
-          }
         }
       });
       return next;
@@ -739,14 +703,12 @@ const SOPPage = ({ active = true }) => {
 
   const toggleStep = async (stepId, stepIndex) => {
     const newCompleted = { ...ds.completedSteps };
-    if (newCompleted[stepId]) {
+    if (newCompleted[stepId])
       steps.slice(stepIndex).forEach((s) => delete newCompleted[s.step_id]);
-    } else {
-      newCompleted[stepId] = true;
-    }
+    else newCompleted[stepId] = true;
     updateDS(selectedDevice, { completedSteps: newCompleted });
     try {
-      await axios.post(`${API}/api/devices/${selectedDevice}/progress`, {
+      await api.post(`/api/devices/${selectedDevice}/progress`, {
         completed: Object.values(newCompleted).filter(Boolean).length,
       });
     } catch (e) {
@@ -758,7 +720,7 @@ const SOPPage = ({ active = true }) => {
     if (!testData) return;
     setStartError("");
     try {
-      await axios.post(`${API}/api/sop/start`, {
+      await api.post("/api/sop/start", {
         sop_id: testData.sop_id,
         device_id: selectedDevice,
       });
@@ -773,14 +735,15 @@ const SOPPage = ({ active = true }) => {
         savedExecutionId: null,
       });
     } catch (err) {
-      const msg = err?.response?.data?.detail || err?.message || "未知錯誤";
-      setStartError(`❌ 啟動程序失敗：${msg}。請確認後端是否正常運作。`);
+      setStartError(
+        `❌ 啟動程序失敗：${err?.response?.data?.detail || err?.message || "未知錯誤"}。請確認後端是否正常運作。`,
+      );
     }
   };
 
   const handleAction = async (type) => {
     try {
-      await axios.post(`${API}/api/stop/${selectedDevice}/${type}`);
+      await api.post(`/api/stop/${selectedDevice}/${type}`);
       if (type === "normal" || type === "emergency") {
         updateDS(selectedDevice, {
           activeSop: null,
@@ -795,7 +758,6 @@ const SOPPage = ({ active = true }) => {
     }
   };
 
-  // fix #2: saveExecution 加入 operator
   const saveExecution = async () => {
     if (saving) return;
     setSaving(true);
@@ -805,7 +767,7 @@ const SOPPage = ({ active = true }) => {
         completed: !!ds.completedSteps[s.step_id],
         parameters: null,
       }));
-      const res = await axios.post(`${API}/api/sop-executions/`, {
+      const res = await api.post("/api/sop-executions/", {
         sop_id: ds.activeSop.sop_id,
         device_id: selectedDevice,
         operator: operator.trim() || null,
@@ -813,7 +775,6 @@ const SOPPage = ({ active = true }) => {
         steps: stepPayload,
       });
       updateDS(selectedDevice, { savedExecutionId: res.data.id });
-      // 記住 operator 到 localStorage
       if (operator.trim())
         localStorage.setItem("dqa_operator", operator.trim());
     } catch {
@@ -824,7 +785,7 @@ const SOPPage = ({ active = true }) => {
   };
 
   const downloadReport = () =>
-    window.open(`${API}/api/reports/csv/${ds.savedExecutionId}`, "_blank");
+    window.open(`${API_BASE}/api/reports/csv/${ds.savedExecutionId}`, "_blank");
 
   return (
     <div className="sop-page-layout">
@@ -1084,7 +1045,6 @@ const SOPPage = ({ active = true }) => {
                 >
                   ⏹ 正常停止
                 </button>
-                {/* fix #12: EMERGENCY 狀態下顯示引導說明 */}
                 {isEmergency && (
                   <div
                     style={{
@@ -1214,7 +1174,6 @@ const SOPPage = ({ active = true }) => {
 
               {allStepsDone && !ds.savedExecutionId && (
                 <div style={{ marginTop: 12 }}>
-                  {/* fix #2: operator 輸入欄位 */}
                   <div style={{ marginBottom: 8 }}>
                     <label
                       style={{
