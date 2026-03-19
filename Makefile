@@ -4,48 +4,44 @@
 # 預設顯示幫助資訊
 help:
 	@echo "🛠️  DQA Lab 控制指令："
-	@echo "  make install - 1. 自動安裝後端、模擬器與前端依賴"
-	@echo "  make dev     - 2. 一鍵啟動 (自動處理虛擬串口與所有服務)"
-	@echo "  make clean   - 3. 強制關閉所有服務並清理殘留連線"
-	@echo "  make logs    - 4. 查看串口連線狀態日誌"
-	@echo "  make ngrok   - 5. 啟動 ngrok（LINE Bot Webhook 用，另開 terminal）"
+	@echo "  make install - 安裝後端、模擬器與前端依賴"
+	@echo "  make dev     - 一鍵啟動所有服務（含 ngrok 自動更新 LINE Webhook）"
+	@echo "  make clean   - 關閉所有服務並清理殘留程序"
+	@echo "  make logs    - 查看虛擬串口連線日誌"
+	@echo "  make ngrok   - 單獨啟動 ngrok（通常不需要）"
 
 # 1. 安裝流程
 install:
-	@echo "📦 正在檢查並安裝後端依賴 (Python)..."
+	@echo "📦 正在安裝後端依賴 (Python)..."
 	pip install -r backend/requirements.txt
-	@echo "📦 正在檢查並安裝模擬器依賴 (Python)..."
+	@echo "📦 正在安裝模擬器依賴 (Python)..."
 	pip install -r simulator/requirements.txt
-	@echo "📦 正在檢查並安裝前端依賴 (Node.js)..."
+	@echo "📦 正在安裝前端依賴 (Node.js)..."
 	cd client && npm install
-	@echo "✅ [SUCCESS] 所有依賴已就緒！"
+	@echo "✅ 所有依賴已就緒！"
 
-# 2. 啟動流程：呼叫啟動腳本
+# 2. 啟動流程
 dev:
 	@echo "🚀 系統全面啟動中..."
 	@bash dev_start.sh
 
-# 3. 清理流程：強制終止所有程序並回收資源
+# 3. 清理流程
 clean:
-	@echo "🧹 正在執行深度清理..."
-	@echo "  → 終止後端與模擬器..."
+	@echo "🧹 正在清理所有服務..."
 	-@pkill -9 -f "uvicorn"
 	-@pkill -9 -f "python3 simulator/main.py"
-	@echo "  → 終止前端 Vite..."
 	-@pkill -9 -f "node.*vite"
-	@echo "  → 終止虛擬串口 socat..."
 	-@pkill -9 -f "socat"
-	@echo "  → 刪除暫存檔..."
+	-@pkill -9 -f "ngrok"
 	@rm -f .socat_info.log .serial_ports.tmp .backend.log
-	@echo "✨ 清理完成，開發環境已重置。"
+	@echo "✨ 清理完成。"
 
-# 4. 日誌追蹤：查看串口底層資訊
+# 4. 日誌追蹤
 logs:
-	@echo "📋 追蹤虛擬串口 (socat) 連線日誌..."
+	@echo "📋 追蹤虛擬串口日誌..."
 	@tail -f .socat_info.log
 
-# 5. ngrok：建立公開 Webhook URL 供 LINE Bot 使用
+# 5. ngrok 單獨啟動（通常不需要，make dev 已包含）
 ngrok:
-	@echo "🌐 啟動 ngrok（LINE Bot Webhook 用）..."
-	@echo "💡 啟動後請將 Forwarding URL + /api/line/webhook 填入 LINE Developers Console"
+	@echo "🌐 單獨啟動 ngrok..."
 	ngrok http 8000

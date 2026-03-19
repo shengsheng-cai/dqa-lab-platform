@@ -4,10 +4,9 @@
 LOG_FILE=".socat_info.log"
 
 cleanup() {
-    echo -e "\n\n👋 正在關閉所有開發服務 (含前端)..."
-    kill $BACK_PID $SIM_PID $SOCAT_PID $CLIENT_PID 2>/dev/null
+    echo -e "\n\n👋 正在關閉所有開發服務..."
+    kill $BACK_PID $SIM_PID $SOCAT_PID $CLIENT_PID $NGROK_PID 2>/dev/null
     pkill -P $$ 2>/dev/null
-    # 保留日誌供 make logs 事後查閱，不自動刪除
     exit
 }
 trap cleanup SIGINT SIGTERM EXIT
@@ -17,7 +16,6 @@ echo "🔗 正在建立虛擬串口..."
 socat -d -d pty,raw,echo=0 pty,raw,echo=0 2> "$LOG_FILE" &
 SOCAT_PID=$!
 
-# 等待 socat 寫入日誌（最多 5 秒，避免系統較慢時抓不到路徑）
 for i in {1..5}; do
     PTYS=$(grep -o "/dev/ttys[0-9]*" "$LOG_FILE" 2>/dev/null | tail -n 2)
     PTY_A=$(echo $PTYS | awk '{print $1}')
@@ -34,15 +32,13 @@ fi
 
 echo "✅ 模擬器連接埠: $PTY_A | 後端 API 連接埠: $PTY_B"
 
-# 3. 啟動程序
+# 3. 啟動後端、模擬器、前端
 echo "🚀 啟動模擬器 (Simulator)..."
 (cd simulator && SIM_PORT="$PTY_A" python3 main.py) &
 SIM_PID=$!
 
 echo "🚀 啟動後端 API (FastAPI)..."
-# 強制釋放 port 8000（避免 make clean 後殘留程序）
 lsof -ti:8000 | xargs kill -9 2>/dev/null || true
-
 (cd backend && SERIAL_PORTS="$PTY_B" ../venv/bin/uvicorn app.main:app --reload --port 8000 --no-access-log) &
 BACK_PID=$!
 
@@ -51,13 +47,70 @@ lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 (cd client && npm run dev) &
 CLIENT_PID=$!
 
+# 4. 啟動 ngrok（背景執行）
+echo "🌐 啟動 ngrok..."
+lsof -ti:4040 | xargs kill -9 2>/dev/null || true
+ngrok http 8000 --log=stdout > .ngrok.log 2>&1 &
+NGROK_PID=$!
+
+# 5. 等 ngrok 就緒後自動更新 LINE Webhook
+echo "⏳ 等待 ngrok 就緒..."
+NGROK_URL=""
+for i in {1..15}; do
+    sleep 1
+    NGROK_URL=$(curl -s http://localhost:4040/api/tunnels \
+        | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for t in data.get('tunnels', []):
+        if t.get('proto') == 'https':
+            print(t['public_url'])
+            break
+except:
+    pass
+" 2>/dev/null)
+    if [ -n "$NGROK_URL" ]; then break; fi
+done
+
+if [ -z "$NGROK_URL" ]; then
+    echo "⚠️  ngrok 未能在時限內就緒，跳過 LINE Webhook 自動更新"
+    echo "   如需使用 LINE Bot，請執行 make ngrok 後手動更新 Webhook URL"
+else
+    # 讀取 LINE Token
+    ENV_FILE="backend/.env"
+    if [ -f "$ENV_FILE" ]; then
+        export $(grep -v '^#' "$ENV_FILE" | xargs 2>/dev/null)
+    fi
+
+    WEBHOOK_URL="${NGROK_URL}/api/line/webhook"
+
+    if [ -z "$LINE_CHANNEL_ACCESS_TOKEN" ]; then
+        echo "⚠️  未設定 LINE_CHANNEL_ACCESS_TOKEN，跳過 Webhook 自動更新"
+        echo "   ngrok URL：$NGROK_URL"
+    else
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X PUT https://api.line.me/v2/bot/channel/webhook/endpoint \
+            -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"webhookEndpointUrl\": \"$WEBHOOK_URL\"}")
+
+        if [ "$RESPONSE" = "200" ]; then
+            echo "✅ LINE Webhook 已自動更新：$WEBHOOK_URL"
+        else
+            echo "⚠️  LINE Webhook 自動更新失敗（HTTP $RESPONSE）"
+            echo "   請手動填入：$WEBHOOK_URL"
+        fi
+    fi
+fi
+
 echo "------------------------------------------------"
 echo "✅ 系統已全面啟動！"
-echo "🌐 前端網址: http://localhost:5173"
-echo "📡 後端網址: http://127.0.0.1:8000/api/latest"
-echo "💡 提示: 已隱藏 API 輪詢日誌，僅顯示關鍵邏輯。"
+echo "🌐 前端網址:    http://localhost:5173"
+echo "📡 後端網址:    http://localhost:8000/api/latest"
+echo "🔍 API 文件:    http://localhost:8000/docs"
+echo "🌐 ngrok 面板:  http://localhost:4040"
 echo "💡 按下 Ctrl+C 同時停止所有服務"
 echo "------------------------------------------------"
 
-# 等待主要服務，任一個結束即觸發 cleanup
 wait $BACK_PID $SIM_PID $CLIENT_PID
