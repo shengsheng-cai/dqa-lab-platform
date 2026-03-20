@@ -20,29 +20,50 @@ GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_M
 
 _SYSTEM_PROMPT = """你是工業環境測試法規顧問，專注於溫箱測試。只能用繁體中文回答，禁止簡體中文。
 
-【核心原則】
-1. 只根據【參考資料】區塊的內容回答，禁止引用資料以外的任何標準版本號、測試名稱或數值參數。
-2. 若參考資料中找不到相關條目，回覆「查無此資料」，不要追問或猜測。
-3. 禁止自行計算總測試時間。列出各條件的停留時間與循環次數，說明「總時間需依測試順序自行加總」。
+【資料使用規則】
+- 只能根據【參考資料】區塊的內容回答。
+- 禁止引用資料以外的任何標準版本號、測試名稱或數值參數。
+- 若參考資料中找不到相關條目，直接回覆「查無此資料」，不要追問或猜測。
 
-【回答方式】
-- 使用者說「低溫開關機」→ 找通電且有低溫的測試條件
-- 使用者說「純高溫」→ 找只有高溫目標、無低溫的測試條件
-- 使用者說「高溫高濕」→ 找有濕度設定的測試條件
-- 使用者說「溫度循環」→ 找有 cycles 且同時有高低溫的測試條件
-- 使用者沒有指定標準 → 列出參考資料中所有符合的條目，依標準分組呈現
-- 使用者已在對話中指定過標準 → 優先回答該標準的條目，不需再追問
-- 回答要直接、具體，標注法規正式版本號（例如 IEC 60068-2-1:2007）
-- 格式用分組條列，每條附上關鍵參數（溫度、時間、循環、通電狀態）
-- 回答結尾固定加：⚠️ 本建議僅供初步評估參考，實際條件請以原始法規文件為準。"""
+【回答風格】
+- 直接給答案，不要反問「你要哪個標準？」或「請提供版本號」。
+- 未指定標準時，列出所有符合的條目，依標準分組。
+- 已在對話中指定過標準，後續問題優先回答該標準，不需再詢問。
+- 每個條目只列：版本號、測試名稱、關鍵參數（溫度/時間/循環/通電狀態）。不要重複列一堆相似條件，每個測試類型選最具代表性的 2～3 條即可。
+
+【測試類型對應語義】
+- 「低溫開關機」「低溫啟動」「低溫工作」→ 找通電（power_on=true）且有低溫的條目
+- 「低溫儲存」「低溫冷測」→ 找非通電且有低溫的條目
+- 「純高溫」「乾熱」→ 找只有高溫、無低溫、無濕度的條目
+- 「高溫高濕」「濕熱」→ 找有濕度設定的條目
+- 「溫度循環」「熱衝擊」→ 找有循環次數且同時有高低溫的條目
+
+【時間計算規則】
+使用者問「總共要測多久」時，用以下公式計算並直接給出結果：
+
+單溫段測試：
+  總時間 = 升溫時間 + 停留時間 + 降溫時間
+  升降溫時間 = |目標溫度 - 室溫(25°C)| ÷ 升降溫速率
+
+溫度循環測試（每端停留 dwell 小時，共 N 循環）：
+  單循環 = 高溫停留 + 降溫時間 + 低溫停留 + 升溫時間
+  總時間 = 初始升溫 + 單循環 × N + 最終降回室溫
+
+若無升降溫速率資料，說明「升降溫時間需依設備實際速率另計」，只加總停留時間。
+
+計算後列出：
+  各項測試時間小計 → 總計（停留時間總和 + 備註升降溫另計）
+
+回答結尾固定加：⚠️ 本建議僅供初步評估參考，實際條件請以原始法規文件為準。"""
 
 _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
 
-# 測試類型關鍵字對應篩選條件
 _TEST_TYPE_HINTS = {
     "低溫開關機": {"power_on": True, "has_low": True},
+    "低溫啟動": {"power_on": True, "has_low": True},
     "低溫工作": {"power_on": True, "has_low": True},
     "低溫儲存": {"power_on": False, "has_low": True},
+    "低溫冷測": {"has_low": True},
     "純高溫": {"has_low": False, "has_high": True, "no_humidity": True},
     "乾熱": {"has_low": False, "has_high": True, "no_humidity": True},
     "高溫高濕": {"has_humidity": True},
@@ -66,7 +87,6 @@ class QueryResponse(BaseModel):
 
 
 def _filter_chunks_by_hints(chunks: list[dict], hints: dict) -> list[dict]:
-    """根據測試類型關鍵字篩選 chunk。"""
     results = []
     for c in chunks:
         raw = c.get("raw", {})
@@ -94,7 +114,6 @@ def _filter_chunks_by_hints(chunks: list[dict], hints: dict) -> list[dict]:
 
 
 def _extract_test_type_hints(msg: str) -> dict:
-    """從訊息中抽取測試類型關鍵字，合併對應的篩選條件。"""
     merged = {}
     for keyword, hints in _TEST_TYPE_HINTS.items():
         if keyword in msg:
@@ -103,19 +122,15 @@ def _extract_test_type_hints(msg: str) -> dict:
 
 
 def _extract_std_from_history(history: list) -> list[str]:
-    """從對話歷史中抽取曾提及的標準。"""
     all_text = " ".join(
         m.get("content", "") for m in history if m.get("role") == "user"
     )
-    from .rag import match_std_keys
-
     return match_std_keys(all_text)
 
 
 async def _build_context(msg: str, history: list = []) -> str:
     matched_stds = match_std_keys(msg)
 
-    # 若當前訊息沒有指定標準，從歷史中找
     if not matched_stds and history:
         matched_stds = _extract_std_from_history(history)
 
@@ -142,23 +157,19 @@ async def _build_context(msg: str, history: list = []) -> str:
         _add_hits(await retrieve_multi(queries, top_k_each=5))
 
     elif matched_stds:
-        # 指定標準：直接全撈該標準，再用 type_hints 篩選
         raw_hits = retrieve_by_std(matched_stds)
         if type_hints:
             filtered = _filter_chunks_by_hints(raw_hits, type_hints)
-            # 若篩選後太少（< 3），退回全撈避免漏掉
             _add_hits(filtered if len(filtered) >= 3 else raw_hits)
         else:
             _add_hits(raw_hits)
 
     elif type_hints:
-        # 沒有指定標準但有測試類型關鍵字：向量搜尋後篩選
         raw_hits = await retrieve(msg, top_k=30)
-        _add_hits(_filter_chunks_by_hints(raw_hits, type_hints))
-        # 如果篩選後太少，退回向量搜尋結果
-        if len(hits) < 3:
-            hits.clear()
-            seen_keys.clear()
+        filtered = _filter_chunks_by_hints(raw_hits, type_hints)
+        if len(filtered) >= 3:
+            _add_hits(filtered)
+        else:
             _add_hits(raw_hits[:20])
 
     elif temps:

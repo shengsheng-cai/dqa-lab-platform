@@ -1,12 +1,8 @@
 // 對話區域（包含對話列表、輸入框及控制按鈕）
 
 import { useState, useEffect, useRef } from "react";
-// fix: 修正大小寫，原為 ./Messagebubble，Linux 區分大小寫會找不到檔案
 import MessageBubble, { DISCLAIMER, renderMarkdown } from "./MessageBubble";
 
-/**
- * 串流泡泡：顯示已經過秒數
- */
 function StreamingBubble({ streamText }) {
   const [elapsed, setElapsed] = useState(0);
   const startRef = useRef(Date.now());
@@ -46,7 +42,6 @@ export default function ChatArea({
 }) {
   return (
     <div style={S.main}>
-      {/* ── 訊息區 ── */}
       <div ref={chatAreaRef} style={S.chatArea}>
         {messages.length === 0 && !loading && (
           <div style={S.emptyHint}>
@@ -90,7 +85,6 @@ export default function ChatArea({
         <div ref={bottomRef} />
       </div>
 
-      {/* ── 輸入區 ── */}
       <div style={S.inputArea}>
         <textarea
           ref={(el) => {
@@ -101,7 +95,7 @@ export default function ChatArea({
           value={input}
           onChange={onInputChange}
           onKeyDown={onKeyDown}
-          placeholder="描述你的產品與測試需求，按 Enter 送出（Shift+Enter 換行）..."
+          placeholder="描述你的測試需求，連按兩下 Enter 送出..."
           rows={3}
           disabled={loading}
         />
