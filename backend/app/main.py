@@ -79,8 +79,9 @@ async def lifespan(app: FastAPI):
     sim_task.add_done_callback(background_tasks.discard)
     print(f"✅ System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
 
-    await warmup_rag()
-
+    task = asyncio.create_task(warmup_rag())
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
     yield
 
 
