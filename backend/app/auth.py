@@ -9,7 +9,7 @@ DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "")
 
 _fail_tracker: dict = defaultdict(lambda: {"count": 0, "blocked_until": 0.0})
 
-SKIP_PATHS = {"/api/line/webhook", "/docs", "/openapi.json"}
+SKIP_PATHS = {"/api/line/webhook", "/docs", "/openapi.json", "/api/latest"}
 MAX_ATTEMPTS = 5
 BLOCK_SECONDS = 600
 
