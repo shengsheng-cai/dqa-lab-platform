@@ -10,7 +10,19 @@
 
 ---
 
-## 快速啟動
+## 線上 Demo
+
+| 服務 | 網址 |
+|------|------|
+| 前端（Vercel） | https://dqa-lab-digital-twin-icvw-9m0ygc6ob.vercel.app |
+| 後端 API（Railway） | https://dqa-lab-digital-twin-production.up.railway.app |
+
+> ⚠️ Railway 後端為 Trial 方案，展示前請先至 Railway Dashboard Redeploy。
+> 前端 Vercel 為 24 小時常駐，無需重啟。
+
+---
+
+## 快速啟動（本地開發）
 
 ```bash
 # 1. 安裝所有依賴
@@ -39,6 +51,20 @@ make dev
 > ⚠️ Demo 存取密碼需在 `backend/.env` 設定 `DEMO_PASSWORD`，前端登入頁會要求輸入，Session 有效期限 8 小時
 
 > ⚠️ DB 結構有變更時，在 `backend/` 目錄下執行：`alembic revision --autogenerate -m "描述"` → `alembic upgrade head`
+
+---
+
+## 重新部署（Railway 後端）
+
+Railway Trial 方案不支援自動休眠，不使用時建議 Remove deployment。需要展示時：
+
+```bash
+# 方法一：推空 commit 觸發 Railway 自動重新部署
+git commit --allow-empty -m "chore: redeploy to Railway"
+git push
+
+# 方法二：至 Railway Dashboard → ⋮ → Redeploy
+```
 
 ---
 
@@ -120,6 +146,7 @@ make dev
 | 前端 | React 18、Vite、Recharts、Axios |
 | AI | Gemini Embedding API、Gemini 2.5 Flash-Lite、RAG in-memory |
 | 通知 | LINE Messaging API、ngrok |
+| 部署 | Railway（後端）、Vercel（前端） |
 | 環境 | Python 3.9+、Node.js 18+、macOS/Linux |
 
 ---

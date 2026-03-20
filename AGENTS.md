@@ -4,7 +4,20 @@
 
 ---
 
-## 當前狀態快照（2026-03-19）
+## 當前狀態快照（2026-03-20）
+
+### 雲端部署
+
+| 服務 | 平台 | 網址 |
+|------|------|------|
+| 前端 | Vercel | https://dqa-lab-digital-twin-icvw-9m0ygc6ob.vercel.app |
+| 後端 | Railway | https://dqa-lab-digital-twin-production.up.railway.app |
+
+**部署說明：**
+- Vercel：GitHub push 自動觸發重新部署，24 小時常駐
+- Railway：Trial 方案，不使用時手動 Remove；展示前用 `git commit --allow-empty -m "chore: redeploy" && git push` 觸發重新部署
+- 前端環境變數：`VITE_API_URL` 已設定於 Vercel Dashboard
+- 後端環境變數：`GEMINI_API_KEY`、`DEMO_PASSWORD` 等已設定於 Railway Dashboard → Variables
 
 ### 專案目錄結構
 
@@ -84,13 +97,13 @@
 | SOP 執行頁 | `client/src/SOPPage.jsx` | 三步驟選擇（重啟自動還原）、SP+PV 波型、operator 欄位、EMERGENCY 引導 |
 | 異常看板 | `client/src/ErrorLog.jsx` | 統計卡片 + 紀錄列表，60s 刷新 |
 | 全域路由 | `client/src/App.jsx` | CSS display 切換，四頁面常駐 DOM，登入頁 + 8小時 session 過期 + 登出按鈕 |
+| 雲端部署 | Railway + Vercel | 前後端分離部署，`VITE_API_URL` 環境變數串接 |
 
 ### 待開發（依優先度）
 
-1. **雲端部署**：Railway（後端）+ Vercel（前端），SQLite 保留，Gemini embedding 已就緒
-2. **AI 治具管理助手**（`/api/ai/fixture-recommend`）
-3. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
-4. **Phase 3**：RS-485 真實通訊、治具資料庫、認證系統
+1. **AI 治具管理助手**（`/api/ai/fixture-recommend`）
+2. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
+3. **Phase 3**：RS-485 真實通訊、治具資料庫、認證系統
 
 ---
 
@@ -151,7 +164,7 @@ idle → ramp_to_low（低溫）或 ramp_to_high（其他）
 - Webhook：`POST /api/line/webhook`，SHA256 簽名驗證 + User ID 白名單
 - 推播觸發：EMERGENCY、FINISHING → IDLE
 - 指令：`狀態`/`status`、`CH01`~`CH05`、`help`
-- ngrok：`make dev` 自動背景啟動並更新 Webhook URL，每次重啟全程自動處理
+- ngrok：`make dev` 自動背景啟動並更新 Webhook URL，每次重啟全程自動處理（僅本地開發用）
 - 金鑰：`LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`LINE_USER_ID`（存於 `backend/.env`）
 
 ### 欄位命名規範
@@ -186,4 +199,8 @@ make clean                     # 清理所有殘留程序
 # DB 結構變更（在 backend/ 目錄下）
 alembic revision --autogenerate -m "描述"
 alembic upgrade head
+
+# 觸發 Railway 重新部署
+git commit --allow-empty -m "chore: redeploy to Railway"
+git push
 ```
