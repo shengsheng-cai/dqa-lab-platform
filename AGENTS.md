@@ -34,22 +34,22 @@
 | 存取控制 | ✅ | X-Demo-Password、IP Rate Limiting、8h session |
 | 儀表板 | ✅ | 六狀態、趨勢圖、倒數計時、設備切換即時更新 |
 | 登入頁 | ✅ | offline fallback、Demo 密碼提示 |
-| SOPPage 重構 | ✅ | 拆分為 7 個子元件，主頁面壓到 ~200 行（2026-03-20） |
+| SOPPage 重構 | ✅ | 拆分為 10 個子元件，主頁面壓到 ~323 行（2026-03-20） |
+| operator 流程修復 | ✅ | 啟動前 modal 確認姓名、POST /api/sop/start 帶入 operator、EMERGENCY 推播帶操作人員姓名（2026-03-20） |
+| 報告下載修復 | ✅ | ExecutionPanel 移除冗餘 reportUrl state，改由 savedExecutionId 計算 URL；備用 `<a>` 連結已緩解 window.open 攔截問題（2026-03-20） |
 
 ### 待開發（依優先度）
 
 1. **AI 治具管理助手**（`/api/ai/fixture-recommend`）
 2. **AI 設備排程預估**（`/api/ai/schedule-estimate`）
-3. **報告下載優化**：`saveExecution()` 成功後自動觸發下載（目前為 `window.open`，瀏覽器可能攔截彈出視窗，待改為 `<a download>` blob 方式）
-4. **Phase 3**：RS-485 真實通訊、治具資料庫、JWT 認證
+3. **Phase 3**：RS-485 真實通訊、治具資料庫、JWT 認證、步驟自動確認（PV 到達 SP → 後端 emit → 前端自動勾選）
 
 ### 已知未修問題
 
 | # | 問題 | 原因 |
 |---|------|------|
-| B4 | `dwell_counters` 秒單位 vs `generateSP` 分鐘單位，SP/PV 波形對不上 | 架構層問題，留待 Phase 3 |
+| B4 | `dwell_counters` 秒單位 vs `generateSP` 分鐘單位，SP/PV 波形對不上；`_calc_estimated_end_at`（後端）與 `generateSP`（前端）各自維護一套時間計算邏輯 | 架構層問題，留待 Phase 3 |
 | U7 | Dashboard 點卡片 vs SOPPage 點按鈕組切換設備，互動不一致 | 可接受差異，留待未來統一 |
-| U8 | 報告下載用 `window.open`，瀏覽器可能攔截彈出視窗 | 留待後續改為 blob `<a download>` |
 
 ### SOPPage 重構說明（2026-03-20）
 
@@ -63,16 +63,20 @@ src/
     SelectGroup.jsx        # 單一步驟選擇器（法規/版本/條件 共用）
     StepList.jsx           # SOP 步驟勾選清單 + 進度條
     ExecutionPanel.jsx     # 儲存執行紀錄 + 報告下載
-    SafetyChecklist.jsx    # 上架驗證注意事項 + 啟動按鈕
-  SOPPage.jsx              # 主頁面 ~200 行，只負責狀態與資料協調
+    ExecutionInfoPanel.jsx # 執行中資訊面板（Pgm/Step/Free Time/Cycle）
+    SafetyChecklist.jsx    # 上架驗證注意事項 + 啟動前 modal + 啟動按鈕
+    MonitorSide.jsx        # 左側監控欄（設備選擇、任務、圖表）
+    ControlPanel.jsx       # 斷放/暫停/緊急停止按鈕組
+  SOPPage.jsx              # 主頁面 ~323 行，只負責狀態與資料協調
   SOPPage.css              # 樣式不動
 ```
 
-**UX 變更**：
-- 操作人員姓名移至「上架驗證注意事項」區塊頂部，啟動前必填（非必填但建議填）
-- 啟動按鈕在 operator 欄位為空時顯示提示但不強制擋住（仍可啟動）
-- `saveExecution()` 成功後自動呼叫 `window.open` 下載報告，同時顯示下載連結供備用
-- 步驟改為**系統自動確認**設計備註：目前仍為手動勾選；自動確認（PV 到達 SP 觸發）為 Phase 3 後端 event 架構，前端 checkbox UI 保留但標注為暫時方案
+**UX 設計**：
+- 操作人員姓名：點擊啟動按鈕後跳出 inline modal，填姓名並確認後才真正送出啟動
+- operator 在 `startSop()` 時帶入 POST body，後端存進 cache，EMERGENCY 推播時帶出姓名
+- `saveExecution()` 成功後自動呼叫 `window.open` 下載報告，同時顯示備用 `<a>` 連結
+- 步驟為**手動勾選**（Phase 3 自動確認架構實作後升級）
+- `ExecutionPanel` 的報告 URL 由 `savedExecutionId` 直接計算，不另存 local state
 
 ---
 
