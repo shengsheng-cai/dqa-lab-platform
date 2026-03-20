@@ -5,4 +5,5 @@ sqlalchemy
 python-dotenv
 alembic
 httpx
-numpygoogle-genai
+numpy
+google-genai
