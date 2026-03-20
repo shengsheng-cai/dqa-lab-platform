@@ -482,6 +482,8 @@ const SOPPage = ({ active = true }) => {
   const [standardTree, setStandardTree] = useState({});
   const [treeLoaded, setTreeLoaded] = useState(false);
   const [startError, setStartError] = useState("");
+  const [starting, setStarting] = useState(false); // U1: 啟動 loading 狀態
+  const [pauseOptimistic, setPauseOptimistic] = useState(null); // U5: 暫停樂觀更新
   const [saving, setSaving] = useState(false);
   const [operator, setOperator] = useState(
     () => localStorage.getItem("dqa_operator") || "",
@@ -506,7 +508,12 @@ const SOPPage = ({ active = true }) => {
   const canStop = isActive || isEmergency;
   const sc = STATUS_CONFIG[data.status] || STATUS_CONFIG.OFFLINE;
 
+  // U5: 用樂觀狀態決定暫停按鈕顯示，輪詢回來後清除樂觀狀態
+  const effectiveStatus = pauseOptimistic ?? data.status;
+  const effectiveIsActive = ACTIVE_STATUSES.includes(effectiveStatus);
+
   const allChecked = ds.safetyChecked.every(Boolean);
+  const checkedCount = ds.safetyChecked.filter(Boolean).length; // U2: 計算已勾數
   const totalSteps = ds.activeSop?.steps?.length ?? 0;
   const doneCnt = Object.values(ds.completedSteps).filter(Boolean).length;
   const allStepsDone = ds.activeSop && doneCnt === totalSteps;
@@ -537,6 +544,13 @@ const SOPPage = ({ active = true }) => {
     const t = setInterval(() => setEmergencyFlash((f) => !f), 600);
     return () => clearInterval(t);
   }, [isEmergency]);
+
+  // U5: 當輪詢資料回來後，清除樂觀狀態
+  useEffect(() => {
+    if (pauseOptimistic && data.status !== "OFFLINE") {
+      setPauseOptimistic(null);
+    }
+  }, [data.status]);
 
   useEffect(() => {
     api
@@ -694,18 +708,28 @@ const SOPPage = ({ active = true }) => {
 
   const steps = ds.activeSop?.steps || [];
 
+  // fix F4: 檢查所有前置非 optional 步驟是否都完成，而非只看最近一個
   const isStepUnlocked = (stepIndex) => {
-    for (let i = stepIndex - 1; i >= 0; i--) {
-      if (!steps[i].optional) return !!ds.completedSteps[steps[i].step_id];
+    for (let i = 0; i < stepIndex; i++) {
+      if (!steps[i].optional && !ds.completedSteps[steps[i].step_id]) {
+        return false;
+      }
     }
     return true;
   };
 
+  // fix U4: 取消步驟時加確認對話框
   const toggleStep = async (stepId, stepIndex) => {
     const newCompleted = { ...ds.completedSteps };
-    if (newCompleted[stepId])
+    if (newCompleted[stepId]) {
+      const confirmed = window.confirm(
+        `取消「Step ${stepId}」將同時清除後續所有步驟的完成狀態，確定繼續？`,
+      );
+      if (!confirmed) return;
       steps.slice(stepIndex).forEach((s) => delete newCompleted[s.step_id]);
-    else newCompleted[stepId] = true;
+    } else {
+      newCompleted[stepId] = true;
+    }
     updateDS(selectedDevice, { completedSteps: newCompleted });
     try {
       await api.post(`/api/devices/${selectedDevice}/progress`, {
@@ -716,9 +740,11 @@ const SOPPage = ({ active = true }) => {
     }
   };
 
+  // fix U1: 加 loading 狀態，按鈕禁用並顯示「啟動中...」
   const startSop = async () => {
-    if (!testData) return;
+    if (!testData || starting) return;
     setStartError("");
+    setStarting(true);
     try {
       await api.post("/api/sop/start", {
         sop_id: testData.sop_id,
@@ -738,10 +764,16 @@ const SOPPage = ({ active = true }) => {
       setStartError(
         `❌ 啟動程序失敗：${err?.response?.data?.detail || err?.message || "未知錯誤"}。請確認後端是否正常運作。`,
       );
+    } finally {
+      setStarting(false);
     }
   };
 
+  // fix U5: pause 樂觀更新，立即切換按鈕文字
   const handleAction = async (type) => {
+    if (type === "pause") {
+      setPauseOptimistic(effectiveStatus === "RUNNING" ? "PAUSED" : "RUNNING");
+    }
     try {
       await api.post(`/api/stop/${selectedDevice}/${type}`);
       if (type === "normal" || type === "emergency") {
@@ -752,9 +784,12 @@ const SOPPage = ({ active = true }) => {
           safetyChecked: [false, false, false, false],
         });
         setStartError("");
+        setPauseOptimistic(null);
       }
     } catch (e) {
       console.error("[SOPPage] action:", e);
+      // 失敗時回復樂觀狀態
+      setPauseOptimistic(null);
     }
   };
 
@@ -1011,20 +1046,21 @@ const SOPPage = ({ active = true }) => {
               {isOffline
                 ? "⚠️ 後端未連線，請確認伺服器是否正常啟動。"
                 : isEmergency
-                  ? "🚨 緊急停止已觸發，請確認設備安全後按正常停止。"
+                  ? "🚨 緊急停止已觸發，請確認設備安全後，點下方按鈕觸發自動降溫。"
                   : data.description}
             </p>
             <div className="btn-group-row">
+              {/* U5: 按鈕文字依樂觀狀態即時切換 */}
               <button
                 className="ctrl-btn amber"
                 onClick={() => handleAction("pause")}
-                disabled={!isActive}
+                disabled={!effectiveIsActive}
                 style={{
-                  opacity: isActive ? 1 : 0.35,
-                  cursor: isActive ? "pointer" : "not-allowed",
+                  opacity: effectiveIsActive ? 1 : 0.35,
+                  cursor: effectiveIsActive ? "pointer" : "not-allowed",
                 }}
               >
-                ⏸ 暫停切換
+                {effectiveStatus === "PAUSED" ? "▶ 繼續執行" : "⏸ 暫停切換"}
               </button>
               <div
                 style={{
@@ -1034,6 +1070,7 @@ const SOPPage = ({ active = true }) => {
                   flex: 1,
                 }}
               >
+                {/* U3: EMERGENCY 時「正常停止」改成明顯引導按鈕 */}
                 <button
                   className="ctrl-btn grey"
                   onClick={() => handleAction("normal")}
@@ -1041,9 +1078,15 @@ const SOPPage = ({ active = true }) => {
                   style={{
                     opacity: canStop ? 1 : 0.35,
                     cursor: canStop ? "pointer" : "not-allowed",
+                    ...(isEmergency && {
+                      background: "#1f4f8f",
+                      border: "1px solid #58a6ff",
+                      color: "#a5d6ff",
+                      fontWeight: 700,
+                    }),
                   }}
                 >
-                  ⏹ 正常停止
+                  {isEmergency ? "🌡 確認安全，開始降溫" : "⏹ 正常停止"}
                 </button>
                 {isEmergency && (
                   <div
@@ -1054,7 +1097,7 @@ const SOPPage = ({ active = true }) => {
                       lineHeight: 1.4,
                     }}
                   >
-                    ↑ 點此觸發自動降溫，設備將緩慢回到 25°C
+                    設備將緩慢回到 25°C 後自動待機
                   </div>
                 )}
               </div>
@@ -1222,6 +1265,7 @@ const SOPPage = ({ active = true }) => {
                   </button>
                 </div>
               )}
+              {/* U6: 儲存成功後加下一步引導 */}
               {ds.savedExecutionId && (
                 <div
                   style={{
@@ -1243,6 +1287,19 @@ const SOPPage = ({ active = true }) => {
                     }}
                   >
                     ✅ 紀錄已儲存（ID: {ds.savedExecutionId}）
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "#8b949e",
+                      lineHeight: 1.6,
+                      padding: "6px 10px",
+                      background: "#0d1117",
+                      borderRadius: 6,
+                      border: "1px solid #21262d",
+                    }}
+                  >
+                    下一步：先下載報告存檔，再點「正常停止」讓設備自動降溫回待機。
                   </div>
                   <button
                     onClick={downloadReport}
@@ -1361,10 +1418,12 @@ const SOPPage = ({ active = true }) => {
                     <span>⚠️</span>
                     <h2>上架驗證注意事項</h2>
                   </div>
+                  {/* U2: 加進度顯示，視覺連動到啟動按鈕 */}
                   <p
                     style={{ color: "#8b949e", fontSize: 12, marginBottom: 14 }}
                   >
-                    啟動測試前，請確認以下所有項目：
+                    啟動測試前，請確認以下所有項目（{checkedCount} /{" "}
+                    {SAFETY_CHECKS.length} 已確認）：
                   </p>
                   {SAFETY_CHECKS.map((item, i) => (
                     <label
@@ -1397,35 +1456,60 @@ const SOPPage = ({ active = true }) => {
                       </span>
                     </label>
                   ))}
+                  {/* U2: 進度條連動 checklist */}
+                  <div
+                    style={{
+                      height: 3,
+                      background: "#21262d",
+                      borderRadius: 2,
+                      overflow: "hidden",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        borderRadius: 2,
+                        background: allChecked ? "#57ab5a" : "#f0a500",
+                        width: `${(checkedCount / SAFETY_CHECKS.length) * 100}%`,
+                        transition: "width 0.2s ease",
+                      }}
+                    />
+                  </div>
                   {allChecked ? (
                     <p style={{ color: "#57ab5a", fontSize: 12, marginTop: 6 }}>
                       ✅ 所有注意事項已確認，可以啟動測試
                     </p>
                   ) : (
                     <p style={{ color: "#f0a500", fontSize: 12, marginTop: 6 }}>
-                      ⚠️ 請確認所有注意事項後才能啟動測試
+                      ⚠️ 還差 {SAFETY_CHECKS.length - checkedCount} 項未確認
                     </p>
                   )}
+                  {/* U1: 啟動按鈕加 loading 狀態 */}
                   <button
                     onClick={startSop}
-                    disabled={!allChecked}
+                    disabled={!allChecked || starting}
                     style={{
                       marginTop: 14,
                       width: "100%",
                       padding: "12px",
-                      background: allChecked ? "#238636" : "#21262d",
-                      color: allChecked ? "#fff" : "#484f58",
-                      border: `1px solid ${allChecked ? "#2ea043" : "#30363d"}`,
+                      background:
+                        !allChecked || starting ? "#21262d" : "#238636",
+                      color: !allChecked || starting ? "#484f58" : "#fff",
+                      border: `1px solid ${!allChecked || starting ? "#30363d" : "#2ea043"}`,
                       borderRadius: 6,
-                      cursor: allChecked ? "pointer" : "not-allowed",
+                      cursor:
+                        !allChecked || starting ? "not-allowed" : "pointer",
                       fontWeight: 700,
                       fontSize: 14,
                       transition: "all .2s",
                     }}
                   >
-                    {allChecked
-                      ? `🚀 啟動 ${selectedDevice}：${testData.name}`
-                      : "請先確認所有注意事項"}
+                    {starting
+                      ? "⏳ 啟動中..."
+                      : allChecked
+                        ? `🚀 啟動 ${selectedDevice}：${testData.name}`
+                        : "請先確認所有注意事項"}
                   </button>
                   {startError && (
                     <div
