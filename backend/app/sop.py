@@ -147,6 +147,9 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
             "completed_steps": 0,
             "started_at": now,
             "total_steps": len(std_data.get("steps", [])),
+            # fix B7: 明確重置模擬狀態，避免殘留上次 sim_phase
+            "sim_phase": "idle",
+            "sim_cycle": 0,
         }
     )
 
