@@ -940,7 +940,10 @@ const SOPPage = ({ active = true }) => {
                 "Free Time",
                 `${String(freeH).padStart(4, "0")}:${String(freeM).padStart(2, "0")}`,
               ],
-              ["Cycle", `0001/${String(cycles).padStart(4, "0")}`],
+              [
+                "Cycle",
+                `${String((allDevices[selectedDevice]?.sim_cycle ?? 0) + 1).padStart(4, "0")}/${String(cycles).padStart(4, "0")}`,
+              ],
               ["Now Time", fmt(now)],
               ["End Time", fmt(endTime)],
             ];

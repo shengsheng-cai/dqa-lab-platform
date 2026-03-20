@@ -51,8 +51,6 @@ async def lifespan(app: FastAPI):
                 "active_sop_json": s.active_sop_json,
                 "completed_steps": s.completed_steps or 0,
                 "started_at": started_at,
-                # fix B1: 恢復時設為 "idle"，讓 data_simulator 重新初始化
-                # sim_phase 會在下一個 loop 由 data_simulator 根據 SOP 參數決定起點
                 "sim_phase": "idle",
                 "sim_cycle": 0,
             }
@@ -94,7 +92,6 @@ app.include_router(errors_router)
 app.include_router(ai_router)
 app.include_router(line_router)
 
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -106,9 +103,6 @@ from .auth import auth_middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
-# ============================================================
-# 工具函式
-# ============================================================
 
 
 def _get_device(device_id: str) -> dict:
@@ -129,16 +123,6 @@ def _make_description(status: str, sop_name: str) -> str:
 
 
 def _calc_estimated_end_at(item: dict) -> Optional[str]:
-    """
-    fix #5: 低溫邏輯與前端 generateSP 對齊。
-    路徑：
-      有 low_temp 且 low_temp < ambient（低溫測試）：
-        ambient → low → (high → dwell → low → dwell) × cycles → ambient
-      有 low_temp 且 low_temp >= ambient（雙溫循環）：
-        ambient → high → (dwell → low → dwell → high) × cycles → ambient
-      無 low_temp（單溫段）：
-        ambient → target → dwell → ambient
-    """
     status = item.get("status")
     if status not in ("RUNNING", "PAUSED"):
         return None
@@ -168,13 +152,14 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
         one_cycle_min = ramp_low_to_high + dwell_min + ramp_low_to_high + dwell_min
         total_min = ramp_ambient_to_low + one_cycle_min * cycles + ramp_ambient_to_low
     elif low_temp is not None:
-        # 雙溫循環（low >= ambient）：ambient→high, (dwell→low→dwell→high)×cycles, →ambient
+        # fix B5: 雙溫循環對齊前端 generateSP
+        # 最後一個 cycle 不含 ramp(low→high)
         ramp_up = abs(high_temp - ambient) / ramp_rate
         ramp_hl = abs(high_temp - low_temp) / ramp_rate
-        one_cycle_min = dwell_min + ramp_hl + dwell_min + ramp_hl
-        total_min = (
-            ramp_up + one_cycle_min * cycles + abs(low_temp - ambient) / ramp_rate
-        )
+        ramp_down = abs(low_temp - ambient) / ramp_rate
+        full_cycle = dwell_min * 2 + ramp_hl * 2
+        last_cycle = dwell_min * 2 + ramp_hl
+        total_min = ramp_up + full_cycle * (cycles - 1) + last_cycle + ramp_down
     else:
         # 單溫段
         ramp_up = abs(high_temp - ambient) / ramp_rate
@@ -191,11 +176,6 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
 
     estimated_end = started_dt + datetime.timedelta(seconds=total_seconds)
     return estimated_end.isoformat()
-
-
-# ============================================================
-# 設備狀態 API
-# ============================================================
 
 
 @app.get("/api/devices")
@@ -219,6 +199,8 @@ async def get_all_devices():
             if item.get("started_at")
             else None,
             "estimated_end_at": _calc_estimated_end_at(item),
+            # fix F1: 回傳 sim_cycle，讓前端執行資訊面板顯示正確 Cycle 數
+            "sim_cycle": item.get("sim_cycle", 0),
         }
         for device_id, item in app.state.AICM_CACHE.items()
     ]
@@ -310,16 +292,10 @@ async def get_latest():
     }
 
 
-# ============================================================
-# 各設備獨立控制 API
-# ============================================================
-
-
 @app.post("/api/stop/{device_id}/emergency")
 async def emergency_stop(device_id: str):
     device = _get_device(device_id)
 
-    # fix #3: 已是 EMERGENCY 直接 return，避免重複寫入 ErrorLog
     if device.get("status") == "EMERGENCY":
         return {
             "status": "already_emergency",
@@ -336,7 +312,6 @@ async def emergency_stop(device_id: str):
                 temperature=device.get("temperature"),
                 humidity=device.get("humidity"),
                 note="操作人員觸發緊急停止",
-                # fix #9: 記錄當下步驟進度
                 completed_steps=device.get("completed_steps", 0),
                 total_steps=device.get("total_steps", 0),
                 created_at=_now_utc(),
@@ -401,7 +376,6 @@ async def normal_stop(device_id: str):
             "active_sop_json": None,
             "completed_steps": 0,
             "started_at": None,
-            # fix #11: 同步清除 standard_id，避免 IDLE 後讀到舊值
             "standard_id": None,
             "sim_phase": "idle",
             "sim_cycle": 0,
@@ -411,27 +385,8 @@ async def normal_stop(device_id: str):
     return {"status": "success"}
 
 
-# ============================================================
-# 物理模擬引擎
-# ============================================================
-
-
 async def data_simulator():
-    """
-    物理模擬器 — 5 台各自獨立運作，每 10 秒寫一次資料庫。
-
-    fix #6: 完整 cycle 邏輯，使用 sim_phase 追蹤當前階段：
-      - "ramp_to_low"   : 降至低溫目標（低溫測試第一段）
-      - "ramp_to_high"  : 升至高溫目標
-      - "dwell_high"    : 高溫停留
-      - "ramp_to_low2"  : 降至低溫（cycle 中間段）
-      - "dwell_low"     : 低溫停留
-      - "ramp_to_ambient": 回到 ambient
-
-    fix #10: 濕度從上次值為基礎抖動，RUNNING 時追蹤 SOP 設定值。
-    """
     write_counters: dict = {}
-    # 每個設備的停留計時器（秒）
     dwell_counters: dict = {}
 
     while True:
@@ -472,7 +427,6 @@ async def data_simulator():
                 sim_phase = item.get("sim_phase", "")
                 sim_cycle = item.get("sim_cycle", 0)
 
-                # fix #6: 初始化 sim_phase（剛啟動時）
                 if not sim_phase or sim_phase == "idle":
                     if low_temp is not None and low_temp < ambient:
                         item["sim_phase"] = "ramp_to_low"
@@ -541,9 +495,7 @@ async def data_simulator():
 
                 item["temperature"] = round(new_temp + random.uniform(-0.1, 0.1), 2)
 
-                # fix #10: 濕度追蹤 SOP 設定值，從上次值為基礎抖動
                 if target_humi is not None and new_temp >= 0:
-                    # 往目標值緩慢追蹤（每秒最多變化 0.3%RH）
                     humi_diff = target_humi - current_humi
                     humi_change = min(abs(humi_diff), 0.3)
                     tracked_humi = current_humi + (
@@ -553,20 +505,16 @@ async def data_simulator():
                         tracked_humi + random.uniform(-0.2, 0.2), 1
                     )
                 elif new_temp < 0:
-                    # 低溫段：濕度緩慢下降至接近 0（結霜效果）
                     item["humidity"] = round(
                         max(0.0, current_humi - 0.1 + random.uniform(-0.05, 0.05)), 1
                     )
                 else:
-                    # 無濕度控制：在現有值附近小幅抖動
                     item["humidity"] = round(
                         max(0.0, min(100.0, current_humi + random.uniform(-0.3, 0.3))),
                         1,
                     )
 
             elif status == "FINISHING":
-                # fix B6: 降溫速率改用 SOP 的 ramp_rate，而非寫死 0.4°C/s
-                # 從 active_sop_json 讀取，若已清除則 fallback 到 1.0°C/min
                 finishing_sop_json = item.get("active_sop_json")
                 if finishing_sop_json:
                     try:
@@ -575,7 +523,7 @@ async def data_simulator():
                     except Exception:
                         finishing_ramp = 1.0 / 60.0
                 else:
-                    finishing_ramp = 1.0 / 60.0  # 預設 1°C/min
+                    finishing_ramp = 1.0 / 60.0
 
                 diff = 25.0 - current_temp
                 if abs(diff) > 0.5:
@@ -601,7 +549,6 @@ async def data_simulator():
                     asyncio.create_task(
                         push_message(f"✅ [{device_id}] 測試完成，已回到待機狀態。")
                     )
-                # fix #10: FINISHING 時濕度也小幅抖動
                 item["humidity"] = round(
                     max(0.0, min(100.0, current_humi + random.uniform(-0.2, 0.2))), 1
                 )
@@ -610,7 +557,6 @@ async def data_simulator():
                 item["temperature"] = round(
                     current_temp + random.uniform(-0.05, 0.05), 2
                 )
-                # fix #10: EMERGENCY 時濕度也小幅抖動
                 item["humidity"] = round(
                     max(0.0, min(100.0, current_humi + random.uniform(-0.1, 0.1))), 1
                 )
