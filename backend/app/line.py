@@ -19,7 +19,7 @@ LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 REPLY_URL = "https://api.line.me/v2/bot/message/reply"
 PUSH_URL = "https://api.line.me/v2/bot/message/push"
 
-# 狀態顏色與 Emoji 配置 (用於視覺化優化)
+# 狀態顏色與 Emoji 配置
 STATUS_CONFIG = {
     "RUNNING": {"emoji": "🟢", "color": "#28a745"},
     "PAUSED": {"emoji": "🟡", "color": "#ffc107"},
@@ -28,8 +28,6 @@ STATUS_CONFIG = {
     "IDLE": {"emoji": "⚪", "color": "#6c757d"},
     "OFFLINE": {"emoji": "⚫", "color": "#343a40"},
 }
-
-# --- 核心工具 ---
 
 
 async def push_message(text: str):
@@ -41,7 +39,6 @@ async def push_message(text: str):
         logger.warning("[LINE] 未設定 TOKEN 或 USER_ID，跳過推播")
         return
 
-    print(f"[LINE DEBUG] token prefix: {token[:20]!r}")
     async with httpx.AsyncClient() as client:
         try:
             res = await client.post(
@@ -97,11 +94,8 @@ async def _send_to_line(
         logger.error(f"[LINE] 連線異常: {e}")
 
 
-# --- 訊息元件產生器 (UX 優化核心) ---
-
-
 def _get_quick_reply_items(cache: Dict[str, Any]) -> List[Dict]:
-    """產生快速回覆按鈕，方便點擊查詢單機"""
+    """產生快速回覆按鈕"""
     items = []
     items.append(
         {
@@ -237,9 +231,6 @@ def _create_flex_detail_card(device_id: str, data: Dict[str, Any]) -> Dict:
     }
 
 
-# --- 核心邏輯 ---
-
-
 def _dispatch_command(text: str, cache: Dict[str, Any]) -> List[Dict]:
     """解析指令並決定回傳格式"""
     cmd = text.strip().lower()
@@ -287,9 +278,6 @@ def _dispatch_command(text: str, cache: Dict[str, Any]) -> List[Dict]:
             "quickReply": {"items": _get_quick_reply_items(cache)},
         }
     ]
-
-
-# --- API 端點 ---
 
 
 @router.post("/webhook")
