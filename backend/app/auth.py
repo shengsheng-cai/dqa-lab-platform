@@ -15,7 +15,7 @@ BLOCK_SECONDS = 600
 
 
 async def auth_middleware(request: Request, call_next):
-    if request.url.path in SKIP_PATHS:
+    if any(request.url.path.startswith(p) for p in SKIP_PATHS):
         return await call_next(request)
 
     if request.method == "OPTIONS":
