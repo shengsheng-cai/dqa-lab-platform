@@ -63,6 +63,7 @@ export default function AIPage() {
         onStop={stopStream}
         onRetry={retryInTraditional}
         onInputChange={handleInputChange}
+        onKeyDown={handleKeyDown}
       />
     </div>
   );
