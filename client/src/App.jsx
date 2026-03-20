@@ -80,15 +80,12 @@ const NavBar = ({ current, onChange, onLogout }) => (
         padding: "4px 12px",
         borderRadius: 6,
         cursor: "pointer",
-        transition: "all .15s",
       }}
     >
       登出
     </button>
   </nav>
 );
-
-const DEMO_PASSWORD = "poqwieuqrpsky4106764";
 
 function LoginPage({ onLogin }) {
   const [pwdInput, setPwdInput] = useState("");
@@ -272,7 +269,6 @@ function LoginPage({ onLogin }) {
                 cursor: loading ? "not-allowed" : "pointer",
                 fontWeight: 700,
                 fontSize: 14,
-                transition: "all .15s",
               }}
             >
               {loading ? "驗證中..." : "進入系統"}
@@ -280,36 +276,6 @@ function LoginPage({ onLogin }) {
             {error && (
               <span style={{ color: "#f85149", fontSize: 13 }}>{error}</span>
             )}
-            <div
-              style={{
-                padding: "10px 12px",
-                background: "#0d1117",
-                border: "1px solid #21262d",
-                borderRadius: 6,
-                fontSize: 11,
-                color: "#484f58",
-                lineHeight: 1.6,
-              }}
-            >
-              Demo 密碼：
-              <span
-                style={{
-                  color: "#8b949e",
-                  fontFamily: "monospace",
-                  marginLeft: 4,
-                  cursor: "pointer",
-                  userSelect: "all",
-                  textDecoration: "underline dotted",
-                }}
-                onClick={() => setPwdInput(DEMO_PASSWORD)}
-                title="點擊自動填入"
-              >
-                {DEMO_PASSWORD}
-              </span>
-              <span style={{ marginLeft: 6, color: "#3fb950", fontSize: 10 }}>
-                點擊自動填入
-              </span>
-            </div>
             <span style={{ color: "#484f58", fontSize: 11 }}>
               Session 有效期限：8 小時
             </span>

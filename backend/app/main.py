@@ -112,6 +112,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 def _get_device(device_id: str) -> dict:
     device = app.state.AICM_CACHE.get(device_id)
     if not device:
