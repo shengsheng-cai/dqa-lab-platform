@@ -310,8 +310,16 @@ export default function useAIChat() {
     inputRef.current?.focus();
   }, [updateMessages]);
 
-  // Enter 只換行，送出靠按鈕
-  const handleKeyDown = useCallback(() => {}, []);
+  // Enter 送出，Shift+Enter 換行
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    },
+    [sendMessage],
+  );
 
   return {
     activeId,
