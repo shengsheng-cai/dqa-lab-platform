@@ -10,7 +10,7 @@
 
 ---
 
-## 功能演示
+## 功能展示
 
 本專案涵蓋以下核心功能：
 - **Dashboard**：多台設備實時監控、趨勢圖表、狀態指示
@@ -22,8 +22,8 @@
 
 ---
 
-### 動作演示
-![DQA Lab Digital Twin 演示](./docs/demo.gif)
+### 動作展示
+![DQA Lab Digital Twin 演示](./docs/demo.mov)
 
 ---
 
