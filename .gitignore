@@ -104,4 +104,4 @@ dmypy.json
 *.iml
 
 #demo
-.mov
+*.mov
