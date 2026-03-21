@@ -102,3 +102,6 @@ htmlcov/
 .dmypy.json
 dmypy.json
 *.iml
+
+#demo
+.mov
