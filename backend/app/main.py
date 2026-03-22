@@ -1,6 +1,12 @@
+from dotenv import load_dotenv
+from pathlib import Path
+
+load_dotenv(Path(__file__).parent.parent / ".env")
+
 import asyncio
 import datetime
 import json
+import os
 import random
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
@@ -10,9 +16,12 @@ from typing import Optional
 from .sop import router as sop_router, execution_router, DEVICE_IDS
 from .reports import router as reports_router
 from .errors import router as errors_router
-from .ai import router as ai_router, _warmup_ollama
+from .ai import router as ai_router
+from .rag import warmup_rag
+from .line import router as line_router, push_message
 from .models import SessionLocal, DeviceData, ErrorLog, DeviceState
 from .standards import get_ramp_rate, get_standard
+from .utils import _now_utc, _save_device_state
 
 background_tasks = set()
 
@@ -30,11 +39,9 @@ async def lifespan(app: FastAPI):
     for device_id in DEVICE_IDS:
         s = saved_states.get(device_id)
         if s:
-            # fix: started_at 統一轉為 UTC aware datetime，避免後續型別不一致
             started_at = s.started_at
             if started_at is not None and started_at.tzinfo is None:
                 started_at = started_at.replace(tzinfo=datetime.timezone.utc)
-
             cache[device_id] = {
                 "temperature": s.temperature,
                 "humidity": s.humidity,
@@ -45,6 +52,9 @@ async def lifespan(app: FastAPI):
                 "active_sop_json": s.active_sop_json,
                 "completed_steps": s.completed_steps or 0,
                 "started_at": started_at,
+                "operator": "",
+                "sim_phase": "idle",
+                "sim_cycle": 0,
             }
             print(f"🔄 [{device_id}] 恢復狀態：{s.status}，溫度：{s.temperature}°C")
         else:
@@ -58,6 +68,9 @@ async def lifespan(app: FastAPI):
                 "active_sop_json": None,
                 "completed_steps": 0,
                 "started_at": None,
+                "operator": "",
+                "sim_phase": "idle",
+                "sim_cycle": 0,
             }
 
     app.state.AICM_CACHE = cache
@@ -67,8 +80,9 @@ async def lifespan(app: FastAPI):
     sim_task.add_done_callback(background_tasks.discard)
     print(f"✅ System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
 
-    await _warmup_ollama()
-
+    task = asyncio.create_task(warmup_rag())
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
     yield
 
 
@@ -79,42 +93,28 @@ app.include_router(execution_router)
 app.include_router(reports_router)
 app.include_router(errors_router)
 app.include_router(ai_router)
+app.include_router(line_router)
+
+# CORS：從環境變數讀取，預設只允許本地開發；Railway 部署時設定 ALLOWED_ORIGINS
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
+allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+from .auth import auth_middleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
-# ============================================================
-# 工具函式
-# ============================================================
-
-
-def _now_utc() -> datetime.datetime:
-    return datetime.datetime.now(datetime.timezone.utc)
+app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
 
 
-def _save_device_state(device_id: str, item: dict):
-    """將目前設備狀態寫回 DB，供重啟後恢復使用"""
-    with SessionLocal() as db:
-        state = db.get(DeviceState, device_id)
-        if state is None:
-            state = DeviceState(device_id=device_id)
-            db.add(state)
-        state.status = item.get("status", "IDLE")
-        state.temperature = item.get("temperature", 25.0)
-        state.humidity = item.get("humidity", 55.0)
-        state.running_sop_id = item.get("running_sop_id")
-        state.running_sop_name = item.get("running_sop_name")
-        state.standard_id = item.get("standard_id")
-        state.active_sop_json = item.get("active_sop_json")
-        state.completed_steps = item.get("completed_steps", 0)
-        state.started_at = item.get("started_at")
-        state.updated_at = _now_utc()
-        db.commit()
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 def _get_device(device_id: str) -> dict:
@@ -153,36 +153,25 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
     dwell_hours = sop.get("dwell_time_hours") or 0.0
     dwell_min = dwell_hours * 60.0
     cycles = sop.get("cycles") or 1
-
     high_temp = sop.get("high_temperature") or sop.get("target_temperature") or 25.0
     low_temp = sop.get("low_temperature")
     ambient = 25.0
 
-    # fix: 低溫測試從 ambient 先降至 low_temp，再升至 high_temp
-    if low_temp is not None:
-        if low_temp < ambient:
-            # 低溫測試：ambient → low → high → dwell → low → ... → ambient
-            ramp_to_low_min = abs(ambient - low_temp) / ramp_rate
-            ramp_low_to_high_min = abs(high_temp - low_temp) / ramp_rate
-            one_cycle_min = (
-                ramp_low_to_high_min + dwell_min + ramp_low_to_high_min + dwell_min
-            )
-            total_min = (
-                ramp_to_low_min
-                + one_cycle_min * cycles
-                + abs(low_temp - ambient) / ramp_rate
-            )
-        else:
-            # 雙溫段循環（low_temp >= ambient）
-            ramp_up_min = abs(high_temp - ambient) / ramp_rate
-            ramp_down_min = abs(high_temp - low_temp) / ramp_rate
-            ramp_back_min = abs(low_temp - ambient) / ramp_rate
-            one_cycle_min = ramp_up_min + dwell_min + ramp_down_min + dwell_min
-            total_min = one_cycle_min * cycles + ramp_back_min
+    if low_temp is not None and low_temp < ambient:
+        ramp_ambient_to_low = abs(ambient - low_temp) / ramp_rate
+        ramp_low_to_high = abs(high_temp - low_temp) / ramp_rate
+        one_cycle_min = ramp_low_to_high + dwell_min + ramp_low_to_high + dwell_min
+        total_min = ramp_ambient_to_low + one_cycle_min * cycles + ramp_ambient_to_low
+    elif low_temp is not None:
+        ramp_up = abs(high_temp - ambient) / ramp_rate
+        ramp_hl = abs(high_temp - low_temp) / ramp_rate
+        ramp_down = abs(low_temp - ambient) / ramp_rate
+        full_cycle = dwell_min * 2 + ramp_hl * 2
+        last_cycle = dwell_min * 2 + ramp_hl
+        total_min = ramp_up + full_cycle * (cycles - 1) + last_cycle + ramp_down
     else:
-        ramp_up_min = abs(high_temp - ambient) / ramp_rate
-        ramp_down_min = abs(high_temp - ambient) / ramp_rate
-        total_min = ramp_up_min + dwell_min + ramp_down_min
+        ramp_up = abs(high_temp - ambient) / ramp_rate
+        total_min = ramp_up + dwell_min + ramp_up
 
     total_seconds = total_min * 60.0
 
@@ -195,11 +184,6 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
 
     estimated_end = started_dt + datetime.timedelta(seconds=total_seconds)
     return estimated_end.isoformat()
-
-
-# ============================================================
-# 設備狀態 API
-# ============================================================
 
 
 @app.get("/api/devices")
@@ -223,6 +207,7 @@ async def get_all_devices():
             if item.get("started_at")
             else None,
             "estimated_end_at": _calc_estimated_end_at(item),
+            "sim_cycle": item.get("sim_cycle", 0),
         }
         for device_id, item in app.state.AICM_CACHE.items()
     ]
@@ -238,13 +223,11 @@ async def get_device_history(device_id: str):
     if not started_at:
         return []
 
-    # fix: 統一轉為 UTC naive datetime 再與 DB 比對，避免時區偏移
     if isinstance(started_at, str):
         started_dt = datetime.datetime.fromisoformat(started_at.replace("Z", "+00:00"))
     else:
         started_dt = started_at
 
-    # 轉為 naive UTC（DB 存的是 naive UTC）
     if started_dt.tzinfo is not None:
         started_dt = started_dt.replace(tzinfo=None)
 
@@ -316,14 +299,18 @@ async def get_latest():
     }
 
 
-# ============================================================
-# 各設備獨立控制 API
-# ============================================================
-
-
 @app.post("/api/stop/{device_id}/emergency")
 async def emergency_stop(device_id: str):
     device = _get_device(device_id)
+
+    if device.get("status") == "EMERGENCY":
+        return {
+            "status": "already_emergency",
+            "message": f"{device_id} 已在緊急停止狀態",
+        }
+
+    operator = device.get("operator", "") or "未填寫"
+
     with SessionLocal() as db:
         db.add(
             ErrorLog(
@@ -333,7 +320,9 @@ async def emergency_stop(device_id: str):
                 sop_name=device.get("running_sop_name"),
                 temperature=device.get("temperature"),
                 humidity=device.get("humidity"),
-                note="操作人員觸發緊急停止",
+                note=f"操作人員觸發緊急停止（{operator}）",
+                completed_steps=device.get("completed_steps", 0),
+                total_steps=device.get("total_steps", 0),
                 created_at=_now_utc(),
             )
         )
@@ -348,10 +337,21 @@ async def emergency_stop(device_id: str):
             "completed_steps": 0,
             "started_at": None,
             "total_steps": 0,
+            "operator": "",
+            "sim_phase": "idle",
+            "sim_cycle": 0,
         }
     )
     _save_device_state(device_id, device)
-    print(f"🚨 [{device_id}] EMERGENCY STOP")
+    print(f"🚨 [{device_id}] EMERGENCY STOP by {operator}")
+
+    asyncio.create_task(
+        push_message(
+            f"🚨 [{device_id}] 緊急停止已觸發\n"
+            f"操作人員：{operator}\n"
+            f"溫度：{device.get('temperature', 0.0):.1f}°C"
+        )
+    )
     return {"status": "success", "message": f"{device_id} 緊急停止已觸發"}
 
 
@@ -388,20 +388,19 @@ async def normal_stop(device_id: str):
             "active_sop_json": None,
             "completed_steps": 0,
             "started_at": None,
+            "standard_id": None,
+            "operator": "",
+            "sim_phase": "idle",
+            "sim_cycle": 0,
         }
     )
     _save_device_state(device_id, device)
     return {"status": "success"}
 
 
-# ============================================================
-# 物理模擬引擎
-# ============================================================
-
-
 async def data_simulator():
-    """物理模擬器 — 5 台各自獨立運作，每 10 秒寫一次資料庫"""
     write_counters: dict = {}
+    dwell_start_times: dict = {}  # 改用真實時間戳取代計數器，避免 sleep 漂移
 
     while True:
         cache = app.state.AICM_CACHE
@@ -410,36 +409,143 @@ async def data_simulator():
         for device_id, item in cache.items():
             status = item.get("status", "OFFLINE")
             current_temp = item.get("temperature", 25.0)
+            current_humi = item.get("humidity", 55.0)
 
             if device_id not in write_counters:
                 write_counters[device_id] = 0
 
             if status == "RUNNING":
-                standard_id = item.get("standard_id", "IEC60068_CYCLE")
-                max_ramp_rate = get_ramp_rate(standard_id)
-                standard = get_standard(standard_id)
-                target_temp = 25.0
+                standard_id = item.get("standard_id")
+                standard = get_standard(standard_id) if standard_id else None
+                max_ramp_rate = get_ramp_rate(standard_id) if standard_id else 1.0
+
+                high_temp = 25.0
+                low_temp = None
+                dwell_seconds = 3600.0
+                cycles = 1
+                target_humi = None
+
                 if standard:
-                    target_temp = standard.get("high_temperature") or standard.get(
+                    high_temp = standard.get("high_temperature") or standard.get(
                         "target_temperature", 25.0
                     )
+                    low_temp = standard.get("low_temperature")
+                    dwell_seconds = (standard.get("dwell_time_hours") or 1.0) * 3600.0
+                    cycles = standard.get("cycles") or 1
+                    target_humi = standard.get("humidity_rh_percent")
 
-                temp_diff = target_temp - current_temp
-                if abs(temp_diff) > 0.1:
-                    max_change = max_ramp_rate / 60.0
-                    actual_change = min(abs(temp_diff), max_change)
-                    new_temp = current_temp + (
-                        actual_change if temp_diff > 0 else -actual_change
-                    )
-                else:
-                    new_temp = current_temp
+                ambient = 25.0
+                sim_phase = item.get("sim_phase", "")
+                sim_cycle = item.get("sim_cycle", 0)
+
+                if not sim_phase or sim_phase == "idle":
+                    if low_temp is not None and low_temp < ambient:
+                        item["sim_phase"] = "ramp_to_low"
+                    else:
+                        item["sim_phase"] = "ramp_to_high"
+                    item["sim_cycle"] = 0
+                    sim_phase = item["sim_phase"]
+                    dwell_start_times.pop(device_id, None)
+
+                max_change = max_ramp_rate / 60.0
+
+                def move_toward(current, target):
+                    diff = target - current
+                    if abs(diff) <= 0.1:
+                        return target
+                    change = min(abs(diff), max_change)
+                    return current + (change if diff > 0 else -change)
+
+                new_temp = current_temp
+
+                if sim_phase == "ramp_to_low":
+                    new_temp = move_toward(current_temp, low_temp)
+                    if abs(new_temp - low_temp) <= 0.1:
+                        new_temp = low_temp
+                        item["sim_phase"] = "ramp_to_high"
+
+                elif sim_phase == "ramp_to_high":
+                    new_temp = move_toward(current_temp, high_temp)
+                    if abs(new_temp - high_temp) <= 0.1:
+                        new_temp = high_temp
+                        item["sim_phase"] = "dwell_high"
+                        dwell_start_times[f"{device_id}_high"] = now
+
+                elif sim_phase == "dwell_high":
+                    new_temp = high_temp
+                    dwell_key = f"{device_id}_high"
+                    dwell_start = dwell_start_times.get(dwell_key, now)
+                    elapsed = (now - dwell_start).total_seconds()
+                    if elapsed >= dwell_seconds:
+                        dwell_start_times.pop(dwell_key, None)
+                        if low_temp is not None:
+                            item["sim_phase"] = "ramp_to_low2"
+                        else:
+                            item["sim_phase"] = "ramp_to_ambient"
+
+                elif sim_phase == "ramp_to_low2":
+                    new_temp = move_toward(current_temp, low_temp)
+                    if abs(new_temp - low_temp) <= 0.1:
+                        new_temp = low_temp
+                        item["sim_phase"] = "dwell_low"
+                        dwell_start_times[f"{device_id}_low"] = now
+
+                elif sim_phase == "dwell_low":
+                    new_temp = low_temp
+                    dwell_key = f"{device_id}_low"
+                    dwell_start = dwell_start_times.get(dwell_key, now)
+                    elapsed = (now - dwell_start).total_seconds()
+                    if elapsed >= dwell_seconds:
+                        dwell_start_times.pop(dwell_key, None)
+                        item["sim_cycle"] = sim_cycle + 1
+                        if item["sim_cycle"] < cycles:
+                            item["sim_phase"] = "ramp_to_high"
+                        else:
+                            item["sim_phase"] = "ramp_to_ambient"
+
+                elif sim_phase == "ramp_to_ambient":
+                    new_temp = move_toward(current_temp, ambient)
+                    if abs(new_temp - ambient) <= 0.1:
+                        new_temp = ambient
+
                 item["temperature"] = round(new_temp + random.uniform(-0.1, 0.1), 2)
 
+                if target_humi is not None and new_temp >= 0:
+                    humi_diff = target_humi - current_humi
+                    humi_change = min(abs(humi_diff), 0.3)
+                    tracked_humi = current_humi + (
+                        humi_change if humi_diff > 0 else -humi_change
+                    )
+                    item["humidity"] = round(
+                        tracked_humi + random.uniform(-0.2, 0.2), 1
+                    )
+                elif new_temp < 0:
+                    item["humidity"] = round(
+                        max(0.0, current_humi - 0.1 + random.uniform(-0.05, 0.05)), 1
+                    )
+                else:
+                    item["humidity"] = round(
+                        max(0.0, min(100.0, current_humi + random.uniform(-0.3, 0.3))),
+                        1,
+                    )
+
             elif status == "FINISHING":
+                finishing_sop_json = item.get("active_sop_json")
+                if finishing_sop_json:
+                    try:
+                        finishing_sop = json.loads(finishing_sop_json)
+                        finishing_ramp = (finishing_sop.get("ramp_rate") or 1.0) / 60.0
+                    except Exception:
+                        finishing_ramp = 1.0 / 60.0
+                else:
+                    finishing_ramp = 1.0 / 60.0
+
                 diff = 25.0 - current_temp
                 if abs(diff) > 0.5:
                     item["temperature"] = round(
-                        current_temp + (0.4 if diff > 0 else -0.4), 2
+                        current_temp
+                        + (finishing_ramp if diff > 0 else -finishing_ramp),
+                        2,
                     )
                 else:
                     item["temperature"] = 25.0
@@ -449,17 +555,28 @@ async def data_simulator():
                             "running_sop_name": "STANDBY",
                             "running_sop_id": None,
                             "standard_id": None,
+                            "operator": "",
+                            "sim_phase": "idle",
+                            "sim_cycle": 0,
                         }
                     )
                     _save_device_state(device_id, item)
                     print(f"✅ [{device_id}] 降溫完成，回待機。")
+                    asyncio.create_task(
+                        push_message(f"✅ [{device_id}] 測試完成，已回到待機狀態。")
+                    )
+                item["humidity"] = round(
+                    max(0.0, min(100.0, current_humi + random.uniform(-0.2, 0.2))), 1
+                )
 
             elif status == "EMERGENCY":
                 item["temperature"] = round(
                     current_temp + random.uniform(-0.05, 0.05), 2
                 )
+                item["humidity"] = round(
+                    max(0.0, min(100.0, current_humi + random.uniform(-0.1, 0.1))), 1
+                )
 
-            # fix: PAUSED 狀態不累積 write_counters，不寫 DB，避免浪費 IO
             if status in ["RUNNING", "FINISHING", "EMERGENCY"]:
                 write_counters[device_id] += 1
                 if write_counters[device_id] >= 10:

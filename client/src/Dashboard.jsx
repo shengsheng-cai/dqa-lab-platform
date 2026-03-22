@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import axios from "axios";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import api, { API_BASE } from "./api";
 import {
   LineChart,
   Line,
@@ -10,8 +10,6 @@ import {
   Tooltip,
   Brush,
 } from "recharts";
-
-const API = "http://localhost:8000";
 
 const STATUS_CONFIG = {
   OFFLINE: { color: "#484f58", bg: "#21262d", label: "OFFLINE" },
@@ -45,19 +43,18 @@ const useCountdown = (estimatedEndAt) => {
       setRemaining(null);
       return;
     }
-
     const calc = () => {
       const diff = new Date(estimatedEndAt) - new Date();
       setRemaining(Math.max(0, Math.floor(diff / 1000)));
     };
-
     calc();
     const timer = setInterval(calc, 1000);
     return () => clearInterval(timer);
   }, [estimatedEndAt]);
 
   if (remaining === null) return null;
-
+  // 修改：剩餘 0 秒時顯示「—」而非 00:00:00，避免誤導使用者
+  if (remaining === 0) return "—";
   const h = Math.floor(remaining / 3600);
   const m = Math.floor((remaining % 3600) / 60);
   const s = remaining % 60;
@@ -76,7 +73,6 @@ const DeviceCard = ({ device, selected, onClick }) => {
   const countdown = useCountdown(
     showCountdown ? device.estimated_end_at : null,
   );
-
   const showHumi = device.temperature >= 0;
 
   return (
@@ -275,7 +271,8 @@ const DeviceCard = ({ device, selected, onClick }) => {
               fontSize: 14,
               fontWeight: 700,
               fontFamily: "monospace",
-              color: countdown === "00:00:00" ? "#f85149" : sc.color,
+              // 修改：「—」用灰色，正常倒數用狀態色
+              color: countdown === "—" ? "#484f58" : sc.color,
             }}
           >
             {countdown}
@@ -286,62 +283,90 @@ const DeviceCard = ({ device, selected, onClick }) => {
   );
 };
 
-// fix: 加入 active prop，頁面隱藏時暫停所有輪詢
+// 修改：報告下載改用 axios blob，帶 X-Demo-Password header
+const downloadCsv = async (execId, sopId) => {
+  try {
+    const res = await api.get(`/api/reports/csv/${execId}`, {
+      responseType: "blob",
+    });
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const a = document.createElement("a");
+    a.href = url;
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const safeSopId = (sopId || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
+    a.download = `${safeSopId}_${date}_${execId}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error("[Dashboard] CSV download failed:", e);
+    alert("❌ 報告下載失敗，請確認後端連線。");
+  }
+};
+
 const Dashboard = ({ active = true }) => {
   const [devices, setDevices] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState("KSON_CH01");
-  const historyRef = useRef(
+  const [historyMap, setHistoryMap] = useState(() =>
     Object.fromEntries(DEVICE_IDS.map((id) => [id, []])),
   );
-  const [historyTick, setHistoryTick] = useState(0);
-  const lastMinuteRef = useRef(-1);
+  const lastStartedAtRef = useRef(
+    Object.fromEntries(DEVICE_IDS.map((id) => [id, null])),
+  );
+  const lastFetchMinuteRef = useRef(
+    Object.fromEntries(DEVICE_IDS.map((id) => [id, -1])),
+  );
   const [executions, setExecutions] = useState([]);
 
-  useEffect(() => {
-    axios
-      .get(`${API}/api/devices/${selectedDevice}/history`)
+  const fetchHistory = useCallback((deviceId) => {
+    api
+      .get(`/api/devices/${deviceId}/history`)
       .then((r) => {
-        historyRef.current[selectedDevice] = [
-          ...r.data.map((p) => ({
-            time: p.time,
-            temperature: p.temperature,
-            humidity: p.temperature < 0 ? null : p.humidity,
-          })),
-        ];
-        setHistoryTick((t) => t + 1);
+        const data = r.data.map((p) => ({
+          time: p.time,
+          temperature: p.temperature,
+          humidity: p.temperature < 0 ? null : p.humidity,
+        }));
+        setHistoryMap((prev) => ({ ...prev, [deviceId]: data }));
       })
       .catch((err) => console.error("[Dashboard] history fetch:", err));
-  }, [selectedDevice]);
+  }, []);
 
-  // fix: active 為 false 時不啟動 interval，切回頁面時重新啟動
+  useEffect(() => {
+    fetchHistory(selectedDevice);
+  }, [selectedDevice, fetchHistory]);
+
   useEffect(() => {
     if (!active) return;
-
     const fetchDevices = async () => {
       try {
-        const res = await axios.get(`${API}/api/devices`);
+        const res = await api.get("/api/devices");
         setDevices(res.data);
-
         const now = new Date();
         const currentMinute = now.getHours() * 60 + now.getMinutes();
-        if (now.getSeconds() < 10 && currentMinute !== lastMinuteRef.current) {
-          lastMinuteRef.current = currentMinute;
-          const label = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-          res.data.forEach((d) => {
-            const existing = historyRef.current[d.device_id];
-            if (existing) {
-              const buf = [...existing];
-              buf.push({
-                time: label,
-                temperature: d.temperature,
-                humidity: d.temperature < 0 ? null : d.humidity,
-              });
-              if (buf.length > 5760) buf.shift();
-              historyRef.current[d.device_id] = buf;
+        res.data.forEach((d) => {
+          const id = d.device_id;
+          const isRunning = ["RUNNING", "PAUSED", "FINISHING"].includes(
+            d.status,
+          );
+          if (d.started_at && d.started_at !== lastStartedAtRef.current[id]) {
+            lastStartedAtRef.current[id] = d.started_at;
+            lastFetchMinuteRef.current[id] = currentMinute;
+            fetchHistory(id);
+            return;
+          }
+          if (isRunning && id === selectedDevice) {
+            if (currentMinute !== lastFetchMinuteRef.current[id]) {
+              lastFetchMinuteRef.current[id] = currentMinute;
+              fetchHistory(id);
             }
-          });
-          setHistoryTick((t) => t + 1);
-        }
+          }
+          if (d.status === "IDLE" && lastStartedAtRef.current[id] !== null) {
+            lastStartedAtRef.current[id] = null;
+            setHistoryMap((prev) => ({ ...prev, [id]: [] }));
+          }
+        });
       } catch (err) {
         console.error("[Dashboard] devices fetch:", err);
       }
@@ -349,14 +374,13 @@ const Dashboard = ({ active = true }) => {
     const interval = setInterval(fetchDevices, 10000);
     fetchDevices();
     return () => clearInterval(interval);
-  }, [active]);
+  }, [active, selectedDevice, fetchHistory]);
 
   useEffect(() => {
     if (!active) return;
-
     const fetchExecutions = () => {
-      axios
-        .get(`${API}/api/reports/list`)
+      api
+        .get("/api/reports/list")
         .then((r) => setExecutions(r.data))
         .catch((err) => console.error("[Dashboard] executions fetch:", err));
     };
@@ -370,7 +394,7 @@ const Dashboard = ({ active = true }) => {
   const idleCount = devices.filter((d) =>
     ["IDLE", "OFFLINE"].includes(d.status),
   ).length;
-  const history = historyRef.current[selectedDevice] || [];
+  const history = historyMap[selectedDevice] || [];
 
   return (
     <div
@@ -448,7 +472,7 @@ const Dashboard = ({ active = true }) => {
             {DEVICE_IDS.map((id) => {
               const d = devices.find((x) => x.device_id === id);
               const sc = STATUS_CONFIG[d?.status] || STATUS_CONFIG.OFFLINE;
-              const active = id === selectedDevice;
+              const isActive = id === selectedDevice;
               return (
                 <button
                   key={id}
@@ -459,15 +483,11 @@ const Dashboard = ({ active = true }) => {
                     fontSize: 10,
                     cursor: "pointer",
                     fontFamily: "monospace",
-                    fontWeight: active ? 700 : 400,
-                    border: `1px solid ${active ? sc.color : "#30363d"}`,
-                    background: active ? sc.bg : "#0d1117",
-                    color: active ? sc.color : "#484f58",
+                    fontWeight: isActive ? 700 : 400,
+                    border: `1px solid ${isActive ? sc.color : "#30363d"}`,
+                    background: isActive ? sc.bg : "#0d1117",
+                    color: isActive ? sc.color : "#484f58",
                     transition: "all .15s",
-                    boxShadow:
-                      active && d?.status === "RUNNING"
-                        ? `0 0 6px ${sc.color}66`
-                        : "none",
                   }}
                 >
                   {id.replace("KSON_", "")}
@@ -612,7 +632,8 @@ const Dashboard = ({ active = true }) => {
           >
             <thead>
               <tr style={{ borderBottom: "1px solid #30363d" }}>
-                {["ID", "SOP ID", "設備", "執行人員", "測試開始", "報告"].map(
+                {/* 修改：SOP ID 欄位改為「測試名稱」，顯示人類可讀的名稱 */}
+                {["ID", "測試名稱", "設備", "執行人員", "測試開始", "報告"].map(
                   (h) => (
                     <th
                       key={h}
@@ -635,14 +656,9 @@ const Dashboard = ({ active = true }) => {
                   <td style={{ padding: "8px 12px", color: "#484f58" }}>
                     #{ex.id}
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      color: "#cdd9e5",
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {ex.sop_id}
+                  <td style={{ padding: "8px 12px", color: "#cdd9e5" }}>
+                    {/* 優先顯示 sop_name，沒有就 fallback 到 sop_id */}
+                    <span title={ex.sop_id}>{ex.sop_name || ex.sop_id}</span>
                   </td>
                   <td
                     style={{
@@ -660,10 +676,9 @@ const Dashboard = ({ active = true }) => {
                     {ex.test_started_at || ex.created_at}
                   </td>
                   <td style={{ padding: "8px 12px" }}>
+                    {/* 修改：改用 axios blob 下載，帶 auth header */}
                     <button
-                      onClick={() =>
-                        window.open(`${API}/api/reports/csv/${ex.id}`, "_blank")
-                      }
+                      onClick={() => downloadCsv(ex.id, ex.sop_id)}
                       style={{
                         padding: "4px 10px",
                         background: "#1f6feb",

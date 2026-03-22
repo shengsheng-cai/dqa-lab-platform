@@ -1,29 +1,48 @@
-# Continue 插件相關 (務必加入)
+### Continue 插件相關（務必加入）
 .continue/
 
-# Python 相關
+### Python 相關
 __pycache__/
 *.py[cod]
 *.so
 .Python
+*.egg-info/
+dist/
+build/
+pip-log.txt
+pip-delete-this-directory.txt
+
+### 虛擬環境
 venv/
 env/
 ENV/
+.venv
+.env
+.env.*
+!.env.example
 
-# 資料庫 (不追蹤本地測試數據)
+### 資料庫（不追蹤本地測試數據）
 *.db
 *.sqlite3
 *.sqlite
+backend/dqa_lab.db
+backend/test.db
 
-# 環境變數 (保護敏感資訊)
+### 環境變數與敏感資訊
 .env
 *.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.local
 
-# 前端 (Node/Vite)
+### 本地開發文檔（不公開）
+AGENTS.md
+docs/private/
+.local/
+
+### 前端（Node/Vite）
 node_modules/
 client/node_modules/
 client/dist/
@@ -33,28 +52,59 @@ client/.eslintcache
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-# 數位孿生專案特定檔案
-.socat_info.log
+### 數位孿生專案特定檔案
 simulator/__pycache__/
 simulator/venv/
+.socat_info.log
+backend/rag_cache.pkl
 
-# IDE、系統與臨時檔案
+### IDE、編輯器與系統
 .vscode/
+.vscode/settings.json
+.vscode/launch.json
 .idea/
 *.swp
 *.swo
+*.swn
+*~
 .DS_Store
 **/.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+### 臨時檔案
 *.tmp
 *.bak
 *.pid
 *.seed
 *.pid.lock
-
-# 測試與日誌
-test_*.py
-*_test.py
 *.log
+*.log.*
 *.info
 
+### 測試與覆蓋率
+test_*.py
+*_test.py
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+### 其他開發工具
+.mypy_cache/
+.dmypy.json
+dmypy.json
+*.iml
+
+#demo
+*.mov
+
+#changlog
+git_log.txt

@@ -1,10 +1,31 @@
-// client/src/ai/aiStorage.jsx
+// 對話儲存與管理（localStorage 存取、對話紀錄遷移、對話刪除等）
+
 const STORAGE_KEY = "dqa_ai_chats_v2";
 const LEGACY_KEY = "dqa_ai_chat_history";
 
+/**
+ * 從訊息列表產生標題（取第一則使用者訊息前 20 字）
+ */
+const titleFrom = (msgs) => {
+  const first = msgs.find((m) => m.role === "user");
+  if (!first) return "新對話";
+  const raw = first.content.slice(0, 30);
+  const cut = raw.search(/[，。？！,?!\n]/);
+  return (
+    (cut > 0 && cut <= 24 ? raw.slice(0, cut) : raw.slice(0, 20)) +
+    (first.content.length > 20 ? "…" : "")
+  );
+};
+
+/**
+ * 生成新的對話 ID
+ */
 export const genId = () =>
   `conv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
+/**
+ * 創建新對話
+ */
 export const createConversation = ({
   title = "新對話",
   projectGroup = "未分組",
@@ -17,18 +38,18 @@ export const createConversation = ({
   messages: [],
 });
 
+/**
+ * 初始儲存空白的狀態
+ */
 const emptyStore = () => ({
   activeConversationId: null,
   conversations: {},
   projectGroups: ["未分組"],
 });
 
-const titleFrom = (messages) => {
-  const first = messages?.find((m) => m.role === "user");
-  if (!first) return "新對話";
-  return first.content.slice(0, 20) + (first.content.length > 20 ? "…" : "");
-};
-
+/**
+ * 將舊資料遷移至新的格式
+ */
 const migrate = (store) => {
   try {
     const raw = localStorage.getItem(LEGACY_KEY);
@@ -40,7 +61,7 @@ const migrate = (store) => {
       return store;
     }
     const conv = createConversation({
-      title: titleFrom(msgs),
+      title: titleFrom(msgs), // fix: titleFrom 已定義在上方
       projectGroup: "未分組",
     });
     conv.messages = msgs;
@@ -53,6 +74,9 @@ const migrate = (store) => {
   return store;
 };
 
+/**
+ * 載入儲存的對話紀錄
+ */
 export const loadChats = () => {
   let store;
   try {
@@ -64,12 +88,10 @@ export const loadChats = () => {
 
   if (!store) store = emptyStore();
 
-  // 確保「未分組」永遠存在
   if (!store.projectGroups) store.projectGroups = ["未分組"];
   if (!store.projectGroups.includes("未分組"))
     store.projectGroups = ["未分組", ...store.projectGroups];
 
-  // 舊資料遷移：把「未分類」替換為「未分組」
   if (store.projectGroups.includes("未分類")) {
     store.projectGroups = store.projectGroups.map((g) =>
       g === "未分類" ? "未分組" : g,
@@ -81,14 +103,12 @@ export const loadChats = () => {
 
   store = migrate(store);
 
-  // 掃描所有對話的 projectGroup，若不在 projectGroups 陣列就補進去
   Object.values(store.conversations ?? {}).forEach((c) => {
     if (c.projectGroup && !store.projectGroups.includes(c.projectGroup)) {
       store.projectGroups.push(c.projectGroup);
     }
   });
 
-  // 清除無任何對話的空分組（「未分組」永遠保留）
   const usedGroups = new Set(
     Object.values(store.conversations ?? {}).map((c) => c.projectGroup),
   );
@@ -104,7 +124,6 @@ export const loadChats = () => {
     store.conversations[conv.id] = conv;
     store.activeConversationId = conv.id;
   } else if (!store.conversations[store.activeConversationId]) {
-    // activeConversationId 指向不存在的對話，修正為最新一筆
     const latest = Object.values(store.conversations).sort(
       (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
     )[0];
@@ -113,6 +132,9 @@ export const loadChats = () => {
   return store;
 };
 
+/**
+ * 儲存對話紀錄
+ */
 export const saveChats = (store) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
@@ -121,6 +143,9 @@ export const saveChats = (store) => {
   }
 };
 
+/**
+ * 刪除對話
+ */
 export const deleteConversation = (store, id) => {
   const next = { ...store, conversations: { ...store.conversations } };
   delete next.conversations[id];
@@ -136,7 +161,6 @@ export const deleteConversation = (store, id) => {
     next.activeConversationId = latest.id;
   }
 
-  // 清除已無對話的空分組（「未分組」永遠保留）
   const usedGroups = new Set(
     Object.values(next.conversations).map((c) => c.projectGroup),
   );
@@ -148,6 +172,9 @@ export const deleteConversation = (store, id) => {
   return next;
 };
 
+/**
+ * 匯出對話紀錄
+ */
 export const exportChat = (messages, title = "對話紀錄") => {
   const lines = messages.map((m) => {
     const role = m.role === "user" ? "【使用者】" : "【AI 助手】";

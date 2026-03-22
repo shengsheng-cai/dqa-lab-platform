@@ -16,7 +16,9 @@ class ErrorLogResponse(BaseModel):
     temperature: Optional[float] = None
     humidity: Optional[float] = None
     note: Optional[str] = None
-    # 統一用 datetime，由 FastAPI 自動序列化為 ISO 8601
+    # fix #9: 新增步驟進度欄位
+    completed_steps: Optional[int] = None
+    total_steps: Optional[int] = None
     created_at: datetime.datetime
 
     class Config:
@@ -25,7 +27,8 @@ class ErrorLogResponse(BaseModel):
 
 @router.get("/", response_model=list[ErrorLogResponse])
 def list_errors():
-    """取得所有異常紀錄，最新在前"""
+    """取得異常紀錄，最新在前，最多 500 筆"""
     with SessionLocal() as db:
-        logs = db.query(ErrorLog).order_by(ErrorLog.created_at.desc()).all()
+        # fix #8: 加上 limit(500) 避免長期運行後全表掃描
+        logs = db.query(ErrorLog).order_by(ErrorLog.created_at.desc()).limit(500).all()
         return logs

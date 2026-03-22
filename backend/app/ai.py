@@ -1,68 +1,81 @@
-import httpx
+import os
 import json
+import httpx
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
-from .standards import get_standard_tree
+from .rag import (
+    retrieve,
+    match_std_keys,
+    extract_temperatures,
+    retrieve_multi,
+    retrieve_by_std,
+)
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-OLLAMA_MODEL = "gemma3:4b"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}"
 
-_SYSTEM_PROMPT_CACHE: Optional[str] = None
+_SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速找到適合的溫箱測試條件。只能用繁體中文回答，禁止簡體中文。
+
+【你的角色】
+你不只是查資料庫，你是在幫使用者做決策。回答時要：
+1. 先說你的判斷（為什麼推薦這個條件）
+2. 再列出具體參數
+3. 如果有多個選項，說明差異讓使用者選擇
+
+【資料使用規則】
+- 只根據【參考資料】回答，禁止引用資料以外的版本號、數值或測試名稱
+- 找不到相關資料直接說「查無此資料」，不要追問
+
+【標準選擇原則】
+- 未指定標準時，只推 IEC 60068，絕對不要主動提 EN 50155、DNV、IEC 60945、IEC 61850-3
+- 只有使用者明確說「鐵道」才推 EN 50155
+- 只有使用者明確說「船舶」或「海事」才推 DNV 或 IEC 60945
+- 只有使用者明確說「變電站」才推 IEC 61850-3
+- 已指定標準時，只看該標準，不要混入其他標準的條目
+
+【回答原則】
+- 不要把所有符合條件的條目全部列出，選 1~2 個最具代表性的推薦，說明為什麼
+- 「低溫開關機」→ 只找通電低溫條目，說明「這是模擬設備在低溫下開機的情境」
+- 「純高溫」→ 只找無低溫無濕度的高溫條目
+- 「高溫高濕」→ 只找有濕度設定的條目
+- 「溫度循環」→ 只找有高低溫循環的條目
+
+【時間計算】
+問「要測多久」時，直接算出結果：
+- 室溫統一用 25°C，不要自行假設其他初始溫度
+- 升溫時間 = |目標溫度 - 25°C| ÷ 升降溫速率
+- 降溫時間 = |目標溫度 - 25°C| ÷ 升降溫速率（回到室溫 25°C）
+- 單溫段：升溫 + 停留 + 降溫
+- 溫度循環：初始升溫 + (高溫停留 + 降溫至低溫 + 低溫停留 + 升溫至高溫) × 循環數 + 最終降回 25°C
+- 濕熱循環（如 Test Db）：每循環 = 升溫時間 + 高溫停留 + 降溫時間 + 低溫停留，總時間 = 單循環時間 × 循環數，不要只算高溫段
+- 多項測試：逐項列小計，最後給總計
+- 若無升降溫速率資料，只加總停留時間並註明「升降溫時間依設備另計」
+
+回答結尾固定加：⚠️ 本建議僅供初步評估參考，實際條件請以原始法規文件為準。"""
+
+_COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
+
+_TEST_TYPE_HINTS = {
+    "低溫開關機": {"power_on": True, "has_low": True},
+    "低溫啟動": {"power_on": True, "has_low": True},
+    "低溫工作": {"power_on": True, "has_low": True},
+    "低溫儲存": {"power_on": False, "has_low": True},
+    "低溫冷測": {"has_low": True},
+    "純高溫": {"has_low": False, "has_high": True, "no_humidity": True},
+    "乾熱": {"has_low": False, "has_high": True, "no_humidity": True},
+    "高溫高濕": {"has_humidity": True},
+    "濕熱": {"has_humidity": True},
+    "溫度循環": {"has_cycles": True, "has_low": True, "has_high": True},
+    "熱衝擊": {"has_cycles": True, "has_low": True, "has_high": True},
+}
 
 
-def _build_system_prompt() -> str:
-    global _SYSTEM_PROMPT_CACHE
-    if _SYSTEM_PROMPT_CACHE is not None:
-        return _SYSTEM_PROMPT_CACHE
-
-    tree = get_standard_tree()
-    lines = [
-        "You are a professional industrial environmental testing standards consultant.",
-        "CRITICAL LANGUAGE RULE: You MUST respond in Traditional Chinese (zh-TW) ONLY.",
-        "CRITICAL LANGUAGE RULE: Simplified Chinese is STRICTLY FORBIDDEN.",
-        "Traditional Chinese examples: 台灣、設備、標準、測試、循環、資訊、評估、導航、娛樂、通過、進行、穩態",
-        "Simplified Chinese examples (DO NOT USE): 设备、标准、测试、循环、信息、评估、导航、娱乐、通过、进行、稳态",
-        "FORMAT RULE: Do NOT use markdown code blocks (```). Use - or numbers for lists directly.",
-        "CONTENT RULE: Only recommend test standards from the list below. Do not recommend standards outside this list.",
-        "DISCLAIMER RULE: At the end of every reply, add a blank line then this exact disclaimer:",
-        "「⚠️ 本建議僅供初步評估參考，實際測試條件與判定標準請以原始法規文件為準，並由授權工程師確認。」",
-        "DISCLAIMER RULE: When recommending a specific standard, include its official version number (e.g. IEC 60068-2-1:2007).",
-        "Based on the user's product description and requirements, recommend the most suitable standards, versions and test conditions, and explain your reasoning.",
-        "",
-        "=== 支援的環境測試標準 ===",
-    ]
-
-    for std_key, std_data in tree.items():
-        lines.append(f"\n【{std_data['label']}】{std_data.get('description', '')}")
-        for ver_key, ver_data in std_data["versions"].items():
-            lines.append(
-                f"  版本：{ver_data['label']} — {ver_data.get('description', '')}"
-            )
-            for test_key, test_data in ver_data["tests"].items():
-                lines.append(f"    - {test_data['name']}")
-
-    _SYSTEM_PROMPT_CACHE = "\n".join(lines)
-    return _SYSTEM_PROMPT_CACHE
-
-
-async def _warmup_ollama():
-    try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            await client.post(
-                OLLAMA_URL,
-                json={
-                    "model": OLLAMA_MODEL,
-                    "messages": [{"role": "user", "content": "hi"}],
-                    "stream": False,
-                },
-            )
-        print(f"✅ Ollama warm-up 完成（{OLLAMA_MODEL}）")
-    except Exception as e:
-        print(f"⚠️  Ollama warm-up 失敗（服務可能尚未啟動）：{e}")
+def _get_api_key() -> str:
+    return os.environ["GEMINI_API_KEY"]
 
 
 class QueryRequest(BaseModel):
@@ -74,49 +87,178 @@ class QueryResponse(BaseModel):
     reply: str
 
 
-def _build_messages(req: QueryRequest) -> list:
-    """
-    組裝送給 Ollama 的 messages。
-    fix: 前端已在 message 加入 TC_PREFIX，後端不再重複加前綴，避免雙重前綴。
-    history 內容也是前端傳入的乾淨字串，直接使用。
-    """
-    messages = [{"role": "system", "content": _build_system_prompt()}]
-    for h in req.history:
-        messages.append(h)
-    messages.append({"role": "user", "content": req.message})
-    return messages
+def _filter_chunks_by_hints(chunks: list[dict], hints: dict) -> list[dict]:
+    results = []
+    for c in chunks:
+        raw = c.get("raw", {})
+        if hints.get("power_on") is not None:
+            if raw.get("power_on") != hints["power_on"]:
+                continue
+        if hints.get("has_low") and raw.get("low_temperature") is None:
+            continue
+        if (
+            hints.get("has_high")
+            and raw.get("high_temperature") is None
+            and raw.get("target_temperature") is None
+        ):
+            continue
+        if hints.get("no_humidity") and raw.get("humidity_rh_percent") is not None:
+            continue
+        if hints.get("has_humidity") and raw.get("humidity_rh_percent") is None:
+            continue
+        if hints.get("has_cycles") and (
+            raw.get("cycles") is None or raw.get("cycles", 1) <= 1
+        ):
+            continue
+        results.append(c)
+    return results
+
+
+def _extract_test_type_hints(msg: str) -> dict:
+    merged = {}
+    for keyword, hints in _TEST_TYPE_HINTS.items():
+        if keyword in msg:
+            merged.update(hints)
+    return merged
+
+
+def _extract_std_from_history(history: list) -> list[str]:
+    all_text = " ".join(
+        m.get("content", "") for m in history if m.get("role") == "user"
+    )
+    return match_std_keys(all_text)
+
+
+async def _build_context(msg: str, history: list = []) -> str:
+    matched_stds = match_std_keys(msg)
+    if not matched_stds and history:
+        matched_stds = _extract_std_from_history(history)
+
+    is_compare = any(k in msg for k in _COMPARE_KEYWORDS) and len(matched_stds) >= 2
+    temps = extract_temperatures(msg)
+    type_hints = _extract_test_type_hints(msg)
+
+    hits: list[dict] = []
+    seen_keys: set = set()
+
+    def _add_hits(new_hits: list[dict]):
+        for h in new_hits:
+            uid = f"{h['std_key']}_{h['ver_key']}_{h['test_key']}"
+            if uid not in seen_keys:
+                seen_keys.add(uid)
+                hits.append(h)
+
+    if is_compare:
+        queries = []
+        for std in matched_stds:
+            queries.append(f"{std} 高溫測試")
+            queries.append(f"{std} 低溫測試")
+            queries.append(f"{std} 測試條件")
+        _add_hits(await retrieve_multi(queries, top_k_each=5))
+
+    elif matched_stds:
+        raw_hits = retrieve_by_std(matched_stds)
+        if type_hints:
+            filtered = _filter_chunks_by_hints(raw_hits, type_hints)
+            _add_hits(filtered if len(filtered) >= 2 else raw_hits)
+        else:
+            _add_hits(raw_hits)
+
+    elif type_hints:
+        raw_hits = await retrieve(msg, top_k=30)
+        filtered = _filter_chunks_by_hints(raw_hits, type_hints)
+        _add_hits(filtered if len(filtered) >= 2 else raw_hits[:20])
+
+    elif temps:
+        _add_hits(await retrieve(msg, top_k=20))
+
+    else:
+        _add_hits(await retrieve(msg, top_k=20))
+
+    if hits:
+        return "\n".join(f"- {h['text']}" for h in hits)
+    return ""
+
+
+def _build_gemini_payload(messages: list, system_prompt: str) -> dict:
+    contents = []
+    for m in messages:
+        role = "user" if m["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": m["content"]}]})
+    return {
+        "system_instruction": {"parts": [{"text": system_prompt}]},
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 1500,
+        },
+    }
 
 
 @router.post("/standards-query", response_model=QueryResponse)
 async def standards_query(req: QueryRequest):
-    messages = _build_messages(req)
-    async with httpx.AsyncClient(timeout=180.0) as client:
-        response = await client.post(
-            OLLAMA_URL,
-            json={"model": OLLAMA_MODEL, "messages": messages, "stream": False},
+    ref_block = await _build_context(req.message, req.history)
+    if ref_block:
+        system_content = f"{_SYSTEM_PROMPT}\n\n【參考資料】\n{ref_block}"
+    else:
+        system_content = (
+            _SYSTEM_PROMPT + "\n\n【參考資料】查無相關資料，請直接回覆「查無此資料」。"
         )
-        response.raise_for_status()
-        data = response.json()
-    reply = data["message"]["content"]
+
+    messages = [{"role": m["role"], "content": m["content"]} for m in req.history]
+    messages.append({"role": "user", "content": req.message})
+
+    payload = _build_gemini_payload(messages, system_content)
+    api_key = _get_api_key()
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{GEMINI_URL}:generateContent?key={api_key}",
+            json=payload,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    reply = data["candidates"][0]["content"]["parts"][0]["text"]
     return QueryResponse(reply=reply)
 
 
 @router.post("/standards-query-stream")
 async def standards_query_stream(req: QueryRequest):
-    messages = _build_messages(req)
+    ref_block = await _build_context(req.message, req.history)
+    if ref_block:
+        system_content = f"{_SYSTEM_PROMPT}\n\n【參考資料】\n{ref_block}"
+    else:
+        system_content = (
+            _SYSTEM_PROMPT + "\n\n【參考資料】查無相關資料，請直接回覆「查無此資料」。"
+        )
+
+    messages = [{"role": m["role"], "content": m["content"]} for m in req.history]
+    messages.append({"role": "user", "content": req.message})
+
+    payload = _build_gemini_payload(messages, system_content)
+    api_key = _get_api_key()
 
     async def generate():
-        async with httpx.AsyncClient(timeout=180.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(
                 "POST",
-                OLLAMA_URL,
-                json={"model": OLLAMA_MODEL, "messages": messages, "stream": True},
-            ) as response:
-                async for line in response.aiter_lines():
-                    if line.strip():
+                f"{GEMINI_URL}:streamGenerateContent?alt=sse&key={api_key}",
+                json=payload,
+            ) as resp:
+                async for line in resp.aiter_lines():
+                    if line.startswith("data: "):
+                        raw = line[6:].strip()
+                        if raw == "[DONE]":
+                            break
                         try:
-                            data = json.loads(line)
-                            token = data.get("message", {}).get("content", "")
+                            data = json.loads(raw)
+                            token = (
+                                data.get("candidates", [{}])[0]
+                                .get("content", {})
+                                .get("parts", [{}])[0]
+                                .get("text", "")
+                            )
                             if token:
                                 yield token
                         except Exception:

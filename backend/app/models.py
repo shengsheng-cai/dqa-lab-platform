@@ -89,9 +89,6 @@ class DeviceData(Base):
     humidity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     raw_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # fix: 加入 composite index (device_id, timestamp)
-    # reports.py 與 history API 都用 device_id + timestamp 範圍查詢
-    # 資料量大時避免全表掃描
     __table_args__ = (
         Index("ix_device_data_device_timestamp", "device_id", "timestamp"),
     )
@@ -113,7 +110,6 @@ class DeviceState(Base):
     started_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
     )
-    # fix: 移除無效的 onupdate lambda（SQLite 不觸發），改由 _save_device_state 手動更新
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
@@ -132,6 +128,9 @@ class ErrorLog(Base):
     temperature: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     humidity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # fix: 新增步驟進度欄位，緊急停止時記錄當下執行到幾步
+    completed_steps: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    total_steps: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
     )

@@ -15,8 +15,6 @@ export default function AIPage() {
     input,
     loading,
     streamText,
-    suggestions,
-    suggestLoading,
     bottomRef,
     chatAreaRef,
     inputRef,
@@ -56,8 +54,6 @@ export default function AIPage() {
         messages={messages}
         loading={loading}
         streamText={streamText}
-        suggestions={suggestions}
-        suggestLoading={suggestLoading}
         input={input}
         chatAreaRef={chatAreaRef}
         bottomRef={bottomRef}

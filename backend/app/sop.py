@@ -1,3 +1,5 @@
+# SOP 模組：提供標準樹與 SOP 列表、啟動 SOP 測試、取得 SOP 執行紀錄等功能
+
 import json
 import datetime
 from fastapi import APIRouter, HTTPException, Body, Request
@@ -5,13 +7,17 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
+from .utils import _save_device_state
 
+# 導出 API 路由器
 router = APIRouter()
 execution_router = APIRouter(prefix="/api/sop-executions", tags=["sop-executions"])
 
+# 定義設備 ID 清單（目前支援的五個設備）
 DEVICE_IDS = ["KSON_CH01", "KSON_CH02", "KSON_CH03", "KSON_CH04", "KSON_CH05"]
 
 
+# 呈現 SOP 列表用的資料類型
 class SopResponse(BaseModel):
     sop_id: str
     name: str
@@ -21,11 +27,7 @@ class SopResponse(BaseModel):
     description: Optional[str] = ""
 
 
-# ============================================================
-# 標準樹 & SOP 列表
-# ============================================================
-
-
+# 標準樹與 SOP 列表路由
 @router.get("/standards/tree")
 def get_standards_tree():
     """完整三層標準樹：法規 → 版本 → 測試條件（不含 steps 欄位，節省傳輸量）"""
@@ -60,7 +62,6 @@ def get_standards_tree():
                     "reference": test_data.get("reference", ""),
                     "temp_tolerance": test_data.get("temp_tolerance", 2.0),
                     "humi_tolerance": test_data.get("humi_tolerance", 5.0),
-                    # fix: 一併回傳 steps，前端啟動時不需再打 /api/sop/ 取得步驟
                     "steps": test_data.get("steps", []),
                 }
     return result
@@ -100,16 +101,13 @@ def list_sops():
     return sops
 
 
-# ============================================================
-# 啟動 SOP
-# ============================================================
-
-
+# 啟動 SOP 路由
 @router.post("/start")
 async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
     """啟動指定設備的 SOP 測試"""
     sop_id: str = payload.get("sop_id", "")
     device_id: str = payload.get("device_id", "KSON_CH01")
+    operator: str = payload.get("operator", "")  # 操作人員姓名
 
     if not sop_id:
         raise HTTPException(status_code=400, detail="sop_id 不能為空")
@@ -149,23 +147,21 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
             "completed_steps": 0,
             "started_at": now,
             "total_steps": len(std_data.get("steps", [])),
+            "operator": operator.strip() if operator else "",  # 存入 cache
+            "sim_phase": "idle",
+            "sim_cycle": 0,
         }
     )
 
-    # fix: 統一使用 _save_device_state，移除重複的手動 DB 寫入邏輯
-    from .main import _save_device_state
-
     _save_device_state(device_id, device)
 
-    print(f"🔥 [{device_id}] Started SOP: {sop_id} ({sop_name})")
+    print(
+        f"🔥 [{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}"
+    )
     return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
 
 
-# ============================================================
-# SOP 執行紀錄
-# ============================================================
-
-
+# SOP 執行紀錄路由
 class StepRecordSchema(BaseModel):
     step_id: int
     completed: bool

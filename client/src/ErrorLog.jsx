@@ -1,9 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
-import axios from "axios";
+import React, { useState, useEffect } from "react";
+import api from "./api";
 
-const API = "http://localhost:8000";
-
-// ISO 8601 或一般時間字串統一格式化為 YYYY-MM-DD HH:MM:SS
 function fmtDatetime(str) {
   if (!str) return "—";
   try {
@@ -26,15 +23,11 @@ const ErrorLog = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 異常紀錄：改為每 60 秒刷新（原本 10 秒）
-  // 異常事件由後端 EMERGENCY 動作寫入，前端只需定時同步，60 秒已足夠
   useEffect(() => {
     const fetchLogs = () => {
-      axios
-        .get(`${API}/api/errors/`)
-        .then((r) => {
-          setLogs(r.data);
-        })
+      api
+        .get("/api/errors/")
+        .then((r) => setLogs(r.data))
         .catch((err) => console.error("[ErrorLog] fetch:", err))
         .finally(() => setLoading(false));
     };
@@ -56,7 +49,6 @@ const ErrorLog = () => {
         width: "100%",
       }}
     >
-      {/* 標題 */}
       <div
         style={{
           display: "flex",
@@ -87,7 +79,6 @@ const ErrorLog = () => {
         </span>
       </div>
 
-      {/* 統計卡片 */}
       <div
         style={{
           display: "grid",
@@ -167,7 +158,6 @@ const ErrorLog = () => {
         </div>
       </div>
 
-      {/* 紀錄列表 */}
       <div style={card}>
         <div
           style={{
@@ -180,7 +170,6 @@ const ErrorLog = () => {
         >
           異常紀錄列表 ERROR LOG
         </div>
-
         {loading ? (
           <div
             style={{
