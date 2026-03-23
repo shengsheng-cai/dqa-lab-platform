@@ -1,0 +1,377 @@
+29ff8dd Wave 5-6 完成：stopStream focus 競爭、saveChats debounce、IDLE 設備跳過模擬迴圈
+78d0bf7 Wave 5-6 第一批：pauseOptimistic 修正、匯出延遲 revoke、modelBadge 文字、移除廢棄端點
+d2069c1 Wave 5 完成：StepList useMemo、錯誤訊息細節、RAG 快取自動失效、auth 記憶體清理
+951ea40 修正安全確認 operator 帶入、AI 折疊偵測、輸入框高度重置、異常看板隱藏時暫停輪詢
+2a542dc 修正儀表板載入骨架、時間格式、執行紀錄顯示測試名稱、LINE client 資源洩漏
+c4df466 修正圖表波形合併、AI 訊息閉包、空分組消失問題
+33770c0 fix: S1 allStepsDone 防止 steps 為空時誤判
+5d66021 fix: B1 API key 503, B2 DB URL from env, C1 time ticker, C2 null display
+6036a7d docs: correct project structure, module organization, and polling frequencies
+d55933b docs: correct project structure, module organization, and polling frequencies
+34d5cef docs: portfolio-ready README with technical architecture highlights
+3f274fb docs:update gitignore
+055ebe5 chore: untrack git_log.txt
+d7ce791 docs:update gitignore
+f94aa68 docs: add demo gifs
+76ccd8a docs: add demo gifs
+4acde13 docs: add demo gifs
+208f8fe docs:update
+dded06d docs:update
+688e2f8 feat:add demo
+c8154d2 chore: remove demo.mov
+0603065 docs:update .gitignore
+60b67fe feat:add demo.mov
+9271377 feat: add demo
+2245dcd chore: update gitignore and cleanup tracked files
+3cb3463 chore: remove AGENTS.md from tracking
+1a5fc99 docs: refactor README for public GitHub
+6700bcb docs: clean up AGENTS.md
+9cc1134 docs: update AGENTS.md with 2026-03-20 changes
+5854948 fix: remove hardcoded password; add /health endpoint
+05ea70b fix: UX improvements and code quality
+5f0be0e fix(report): blob 下載帶 auth header、檔名改為 device_id+sop_id+日期+execId 格式；docs(agents): 關掉 U8
+d6fcc30 fix(report): 改用 axios blob 下載報告，帶 auth header 避免 401
+1d1a495 docs(agents): 更新狀態快照 - operator 流程修復、報告下載修復、SOPPage 重構結構補完
+28dc998 fix(operator): 啟動前 modal 確認姓名、POST /sop/start 帶 operator、EMERGENCY 推播帶操作人員、ExecutionPanel 移除冗餘 reportUrl state
+35a3c37 docs(agents): 更新狀態快照 - operator 流程修復、報告下載修復、SOPPage 重構結構補完
+88c17a7 refactor(sop): 拆分 SOPPage 為 10 個子元件，主頁面從 1500 行縮至 323 行
+bebcb91 refactor(sop): 拆分 SOPPage 為 10 個子元件，主頁面從 1500 行縮至 323 行
+971da5e fix(ai): enforce IEC 60068 default, fix humid cycle time calculation
+72b04ed docs(agents): update AI module specs, routing logic, prompt improvements
+2df6e99 fix(ai-page): pass onKeyDown to ChatArea
+0b0245f fix(ai-page): pass onKeyDown to ChatArea
+e4b92e6 fix(ai): restore Enter-to-send, improve prompt reasoning and conciseness
+59b0d00 fix(ai): remove keyboard send, button-only submit
+c6760b4 fix(ai): double-enter to send, improve prompt with time calculation and concise output
+1986560 fix(rag): add semantic tags to chunks, add query embedding LRU cache
+94d154d fix(ai): improve prompt, add test type routing, inherit std from history
+6c683f8 docs(agents): simplify and restructure, add modularization plan
+71623b7 docs(agents): mark all sessions complete, 2026-03-20 audit fully resolved
+f68c587 fix(app): offline fallback, demo password hint
+a708d48 fix(session6-7): expose sim_cycle, fix estimated_end_at, offline fallback, demo password hint
+8cca389 fix(dashboard): replace historyRef with state, fetch history from API instead of polling snapshots
+d7fbb4f docs(agents): mark Session 1-4 complete, update bug tracking status
+0e5e604 fix(sop-page): add loading state, optimistic pause, emergency guidance, step confirm, checklist progress
+de24148 fix(sop): reset sim_phase and sim_cycle on SOP start
+462b422 fix(sim): restore sim_phase on restart, fix low-temp cycle skip, use ramp_rate for FINISHING
+f2ceef4 docs(agents): add bug tracking and fix roadmap from 2026-03-20 audit
+2fbf7d5 fix(utils): persist started_at in _save_device_state
+0da9fba docs: update AGENTS with rag_cache gitignore and dual-env notes
+3a2d120 chore: add rag_cache.pkl to gitignore
+dd0465c docs: update AGENTS with LINE token fix and RAG cache notes
+5bb8ead fix: remove debug print, fix LINE token env loading in dev_start.sh
+14f4acb fix: remove debug print, fix LINE token env loading in dev_start.sh
+73cc340 fix: read LINE token with cut to avoid shell env pollution
+6554380 fix: cache RAG embeddings to disk to avoid Gemini API quota exhaustion
+4a575c4 fix: use startswith for SKIP_PATHS to fix Railway healthcheck 401
+b78df04 fix: run warmup_rag as background task to unblock startup healthcheck
+e3dd52f docs: fix Railway deployment instructions
+ea83e64 docs: update deployment info and cloud URLs
+a15a78e fix: rename Messagebubble.jsx to MessageBubble.jsx for case-sensitive Linux fs
+7e1646a fix: rename Errorlog.jsx to ErrorLog.jsx for case-sensitive Linux fs
+84135e5 fix: rename Errorlog.jsx to ErrorLog.jsx for case-sensitive Linux fs
+9cee8bf feat: add production API URL for Vercel deployment
+a675514 fix: exempt /api/latest from auth for Railway healthcheck
+fd08600 fix: correct numpy and google-genai in requirements.txt
+7124962 fix: add google-genai to requirements.txt
+4b77642 fix: increase Railway healthcheck timeout to 180s for RAG warmup
+bbb44e4 chore: add Railway and Vercel deployment configs
+b1e79e3 chore: update .env.example with DEMO_PASSWORD, GEMINI_API_KEY, LINE keys
+dd03bed docs: update README and AGENTS for Gemini embedding, auth middleware, and session management
+95005fb feat: add auth middleware, session expiry, logout, and Gemini embedding with rate limiting
+90e5f55 docs: 重新整理 README 與 AGENTS 結構
+42269d5 feat(dev): LINE Webhook 自動更新，改用 GET 驗證取代 HTTP status 判斷
+8857d7d feat(dev): ngrok 自動背景啟動並更新 LINE Webhook
+c486bf6 docs: 更新 README 與 AGENTS 反映本次 13 項修復
+5df8372 fix(db): 手動補 error_logs completed_steps total_steps 欄位
+5f316c3 fix(frontend): 重啟還原三步驟、operator欄位、波型競態、低溫SP路徑、EMERGENCY引導
+03e2e06 fix(backend): emergency guard、cycle模擬、濕度抖動、ErrorLog步驟紀錄、筆數上限
+e934dbc docs: 更新 AI 模組為 Gemini 2.5 Flash-Lite + RAG top_k=20
+51d6239 feat(ai): 換用 Gemini 2.5 Flash-Lite，RAG top_k=20 修正跨法規查詢
+5c44150 docs: 更新 AI 模組為 RAG 架構，qwen2.5:7b + nomic-embed-text
+538e846 feat(ai): 導入 RAG 架構，nomic-embed-text 向量化，修正前端 import 與死 code
+ed03531 fix:調整參數
+2db1cf6 docs: 更新專案背景與 LINE Bot UX 優化說明
+3e98a50 feat(line): 優化 LINE Bot 使用者體驗與修復匯入錯誤
+463357b fix:變更參數
+2f5054a fix:變更參數
+f20a651 fix:變更參數
+4f0446d fix: 更新模型
+724f8eb fix:調整參數
+f91ea44 docs:加入註解
+8f1ad0c docs:加入註解
+a01fbbc docs:加入註解
+0495828 docs:加入註解
+1da436d docs:加入註解
+ae66b54 docs:加入註解
+88c19fb docs:加入註解
+4560bdf docs:變更模型
+bfd5a02 docs:變更模型
+ed60369 docs:變更模型
+f86abbd fix:/* 始終顯示完整免責文字 */
+90ee759 fix:/* 始終顯示完整免責文字 */
+5bf25f0 fix:大小寫差異
+ace57c3 fix: json{options}參數
+dbdce63 docs:update
+47c5b83 fix(ai): 移除串流強制捲動避免與使用者滾動衝突；移除多餘的移動分組按鈕
+e682794 fix(ai): 空分組正常顯示並加拖曳提示，未分組空時維持隱藏
+6c090ee docs: 更新 AI 模組規格，TC_PREFIX 改由 system prompt 統一管理
+71eb5ea refactor(ai): 重寫 system prompt（負面禁止優先、語言規則移至最後）；移除前端 TC_PREFIX 改由 system prompt 統一管理
+77ee6d2 docs: 更新 AI 模組說明、待修問題清單、SOPPage 優化說明
+1f509ef refactor(ai): 重寫 system prompt，移除 78 條清單，改用模型訓練知識回答，限制五大法規與溫箱設備
+957d7d6 fix: SOPPage 切換立刻打 API、新增分組不自動建對話
+4fba204 fix(ai): 回答預設展開、串流中可滾動歷史、移除 num_predict 截斷、拖曳移動分組
+b5ebe0c fix(ai): 回答預設展開、串流中可滾動歷史、移除 num_predict 截斷、拖曳移動分組
+1dc627b refactor(ai): 移除建議功能；串流計時器；免責聲明精簡；useCallback 優化
+e65dfe1 perf(ai): 新增 suggest-stream 端點（num_predict 128），建議主回答結束後立即觸發，移除 1s 延遲
+2e2a77e perf(ai): 加入 num_predict 512 限制回答長度，加 BREVITY RULE 縮短推理時間
+40e429e perf(ai): num_ctx 2048 + temperature 0.3 加速推理；建議延遲 3s→1s；useMemo/useCallback 優化渲染
+7309238 perf(ai): num_ctx 2048 + temperature 0.3 加速推理；建議延遲 3s→1s；useMemo/useCallback 優化渲染
+f585080 docs: 新增已知待修問題清單，重整 AGENTS.md 結構與內容精簡
+da6340a docs: 更新 LINE Bot 完成狀態、ngrok 啟動說明；Makefile 加入 make ngrok
+ec6ef01 fix(line): 強制簽名驗證、加入 User ID 白名單，修正資安漏洞
+4fbb45e feat(line): 新增 LINE Bot 整合，支援設備狀態查詢、單一設備查詢、EMERGENCY 與測試完成主動推播
+128ecd0 docs: 新增 LINE Bot 整合規劃，補充 MQTT 與 Phase 3 說明，精簡 AGENTS.md，移除已完成規劃文件與冗餘說明
+5ee0e33 chore: 移除 CHANGELOG.md，改以 git log 與 AGENTS.md 作為版本紀錄；修正 AGENTS/README 過時內容
+ad2f979 refactor: 抽離 _now_utc/_save_device_state 至 utils.py 解決 circular import；補低溫模擬邏輯；ChatSidebar model badge 更新為 gemma3:4b
+6c5b7d0 docs(changelog): 重整所有版本紀錄，每個日期統一呈現最終狀態，移除中間修改過程
+5e3a582 docs: 更新模型規格為 gemma3:4b，TC_PREFIX 與 system prompt 說明同步更新
+6e37162 docs: 更新模型規格為 gemma3:4b，TC_PREFIX 與 system prompt 說明同步更新
+74b6752 feat(ai): 換用 gemma3:4b 模型；加強繁體強制規則（英文指令）；TC_PREFIX 改為中英混合提升遵從度
+9edbf97 docs: 更新 AGENTS.md、CHANGELOG.md 反映後端與前端系統性優化內容
+5138e63 fix(models): 加入 DeviceData composite index (device_id, timestamp)；移除 DeviceState onupdate 無效 lambda
+5e50039 fix(reports): DeviceData 查詢加入 limit(10000) 防止大量資料塞爆記憶體，截斷時報告標注警告
+c0984f4 fix(SOPPage): active prop 控制輪詢；saveExecution 加防重複提交；startSop 從 standardTree 直接取 steps 不再二次請求；isStepUnlocked 改迭代避免 O(n²) 遞迴
+3c20933 fix(Dashboard): active prop 控制 setInterval，隱藏時停止輪詢；歷史陣列改用展開運算子避免 React StrictMode 凍結
+a1c7af1 fix(App): 傳入 active prop 給 Dashboard 與 SOPPage，頁面隱藏時暫停輪詢
+64185c6 fix(main): 修正 history API 時區偏移、lifespan started_at 統一轉 UTC aware、低溫測試預估結束時間計算錯誤、PAUSED 狀態不再累積寫 DB
+209ac44 fix(sop): start_sop 改用 _save_device_state 統一寫 DB，移除重複手動寫入；standards/tree 補回 steps 欄位，前端啟動不需再打第二次 API
+872e562 fix(ai): 移除後端重複 TC_PREFIX，前端已附加不需後端再加
+7bc7e9b docs: 更新 AGENTS.md、CHANGELOG.md、README.md 反映 AI 諮詢模組 bug 修正內容
+274ddf4 fix(ai): 修正 AI 諮詢模組分組管理、串流狀態、簡體偵測與 Dashboard 歷史陣列凍結問題
+e3e7148 fix(ai): 修正 AI 諮詢模組分組管理、串流狀態、簡體偵測與 Dashboard 歷史陣列凍結問題
+275afc2 fix(ai): 修正分組管理邏輯與樣式警告
+2f8d0c7 fix(ai): 修正側欄分組顯示與空分組殘留問題
+190df0c fix(ai): 修正側欄分組顯示與空分組殘留問題
+aaaf664 docs: 更新三份文件，記錄 AI 諮詢 UI 改版完成與 ChatSidebar bug 修正
+aa92d6a fix: ChatSidebar sidebar overflow hidden 改為 overflowX hidden，修正新增分組 input 被裁切
+9ed00b1 fix: AIPage 加 flex:1 修正 ChatSidebar height 100% 不生效
+a5e47eb fix: App.jsx AI 頁容器改為 flex，修正 ChatSidebar height 100% 不生效問題
+e1f9463 fix: ChatSidebar sidebar 加 height 100% overflow hidden，修正新增分組按鈕被裁切問題
+dd1d9d5 fix: ChatSidebar 新增分組按鈕無反應，修正 flex 佈局壓縮問題
+c55d22a feat: AI 諮詢頁重構，拆分為 ai/ 子元件，支援多對話管理與專案分組
+054a220 feat: AI 諮詢頁重構，拆分為 ai/ 子元件，支援多對話管理與專案分組
+c6c4937 docs: AGENTS.md 新增 AI 諮詢 UI 改版規劃（多對話管理）
+ffd6e64 docs: 更新 AGENTS.md 快照日期至 3/15；法規審查標記完成；補充 AI warm-up 說明
+77867b1 docs: 補充 3/15 AI 諮詢效能優化記錄
+58f4f89 fix: 移除 resetBtn；generateSuggestions 加 3s 延遲、history 縮至 2 則；更新條數至 78
+997c051 perf: 精簡 AI system prompt 降低 token 數；加入 Ollama warm-up 解決冷啟動不串流
+4f7515f docs: DNV 法規審查完成，補充 CHANGELOG
+6bd14d0 fix: DNV ClassA Damp Heat power_on False→True、humi_tolerance 10→3；ClassB description 修正
+0e053b0 docs: 整理 CHANGELOG，合併 3/14 所有續篇為單一區塊，新增 3/15 記錄
+3f78c0d docs: 修正法規審查狀態，DNV 待審查
+0b5cf9e refactor: 移除 AGENTS.md 與 README 重複的 API 端點表格
+61c37a2 docs: 補齊 iec60945 相關文件；修正 README 延伸文件連結
+0df31e0 feat: __init__.py 加入 iec60945 import 與 STANDARD_TREE 註冊
+5f5fc94 docs: 新增 IEC 60945 相關文件更新；法規審查完成；sop_id 71→78
+b8a19cc feat: 新建 iec60945.py，IEC 60945:2002 共 7 條測試條件
+5e3850e docs: 同步更新所有文件條數至 71（IEC 61850-3 19 條）
+756d15f feat: IEC 61850-3 Ed.2 新增 C1/C2/C3 Nb 溫度循環；fix: C1 Damp Heat 濕度 95%→93%；sop_id 68→71
+9695982 docs: 合併 architecture.md 進 AGENTS.md；精簡 CHANGELOG；更新 README
+760115b chore: 移除 iec60068.py / iec61850.py 中所有內部參考字串
+0795224 feat: IEC 61850-3 Ed.2 乾熱 Bb→Be（Method IV）；新增 C1/C2/C3 Cab Non-Operating 16h（Method V）；sop_id 65→68；同步更新所有文件
+5cee25f feat: IEC 61850-3 Ed.2 乾熱 reference Bb→Be（Method IV）；新增 C1/C2/C3 Cab Non-Operating 16h（Method V）；sop_id 65→68
+6da0dfd docs: 更新 __init__.py 模組條數注釋（iec60068 17、en50155 21、iec61850 13、dnv 14）
+c3a1edc feat: EN 50155:2017 新增 OT4_High_Operating + OT4_High_Operating_ST1；sop_id 63→65；更新 AGENTS.md / CHANGELOG.md / README.md
+ed32557 feat: EN 50155:2017 新增 OT4_High_Operating + OT4_High_Operating_ST1 兩條通電測試
+7022896 feat: EN 50155:2017 新增 OT4_High_Operating + OT4_High_Operating_ST1 兩條通電測試
+5793130 feat: 新增 IEC 60068-2-78 Test Cab 4條 + IEC 61850-3 Ed.2 C1/C2/C3 Cab 3條；docs: 更新 CHANGELOG
+b36ddaf docs: 更新部分函數的說明註解，提升程式碼可讀性
+ac4b250 update iec60068 and iec61850 test standards
+91de7d2 fix: emergency_stop crash; fix: Dashboard total_steps; perf: ai system prompt cache; docs: update all docs
+48b8b78 fix: emergency_stop 移除未定義 std_data; fix: timestamp 統一用 UTC; perf: ai system prompt 快取; refactor: data_simulator DB 寫入統一用 _save_device_state
+2ca4759 fix: emergency_stop 移除未定義 std_data; refactor: DB 寫入統一用 _save_device_state; perf: ai system prompt 快取
+fab2c28 fix: alembic env.py 改從 models.py 讀取 DB 絕對路徑，與 alembic.ini 解耦
+e85d1dc fix: models.py DB 路徑改為絕對路徑，避免啟動目錄不同產生多餘 test.db
+d0d6008 chore: remove unused simulator/config.json
+cd2dd03 docs: update README 4 laws 56 conditions standards/ refactor
+db7186d docs: update AGENTS snapshot 2026-03-13 standards/ refactor
+337701c docs: update architecture 4 laws 56 conditions standards/ refactor
+a9f4633 docs: update CHANGELOG 2026-03-13 standards refactor
+f1528b0 refactor: standards.py 拆分為模組目錄，移除 KEMA/NMEA
+e37481b docs: update CHANGELOG and standards documentation
+9ba84c0 refactor: standards.py 拆分為模組目錄
+f64eddc docs: 同步免責聲明雙層保護與法規審查計畫
+35b5cba fix: 移除 disclaimer 樣式重複的 paddingLeft key
+6ae7586 feat: AI 諮詢加入雙層免責聲明（前端固定警語 + system prompt 強制標注法規版本）
+7edb5dc docs: 同步 2026-03-12 文件，含濕度邏輯修正、頁面切換優化、tree 端點瘦身
+0a4fcfb perf: tree endpoint移除steps欄位(108kB→12kB)，total_steps改存cache避免重複parse JSON
+4010444 fix: 低溫<0°C時隱藏濕度顯示，趨勢圖低溫段humidity存null自動斷線
+ee0d296 fix: 頁面初始載入skeleton+濕度低溫邏輯修正(temp<0時sp_humi=null)
+456a0ab fix: SOPPage 輪詢3s+history去重+alert改inline錯誤+移除_defaultSteps備案；AIPage localStorage版本控管
+65b1501 docs: 修正輪詢頻率文件（執行紀錄 30s→60s、異常看板 10s→60s），AGENTS 新增完整輪詢策略表
+d7980de docs: 修正輪詢頻率文件（執行紀錄 30s→60s、異常看板 10s→60s），AGENTS 新增完整輪詢策略表
+96ae4d4 docs: 更新四份文件，補齊 2026-03-11 AIPage 修正紀錄
+505e484 fix(ai): 追問建議 prompt 補上繁體前綴，修正建議欄出現簡體問題
+6fba12f fix(ai): 修正簡體偵測誤判，改用簡體專屬字 Set 精確比對
+da96c07 fix(ai): 修正串流輸出時強制捲動導致無法往上閱讀
+7d227bd fix(ai): 修正繁體前綴累積與重試無限迴圈問題
+c180287 feat(AIPage): 回覆折疊、textarea auto-resize、對話匯出、簡體偵測+重問、localStorage容量保護、側欄tooltip、追問失敗保留上輪、送出即loading、空白隱藏匯出、禁用cursor
+a936e1f fix(AIPage): 修正追問建議 key 名稱 response→reply；數字清單 regex 支援 bold 開頭行
+a37a9c8 feat(AIPage): 串流結束後自動產生動態追問建議，替換左側欄快速提問；新增 ↺ 按鈕回預設；suggestLoading 點點動畫
+0c7ca1e fix(Errorlog): 移除未定義的 prevCountRef 殘留呼叫
+3c8f9ad fix(Errorlog): 補上 useRef import，移除未使用的 prevCountRef
+52c5a78 fix(Errorlog): 刷新間隔 10s→60s；補上 useRef import
+b5da675 perf(輪詢): 降低 API 請求頻率，Dashboard 設備狀態 1s→10s、執行紀錄 30s→60s；ErrorLog 10s→60s；倒數計時器維持前端純計算不受影響
+3fbdf98 docs: 更新四份文件，AI 諮詢前端完整交付，補齊串流端點、功能清單與完成度統計
+a0211d7 feat(AI): 強化繁體中文指令、禁止 code block 輸出；AIPage 新增側欄收合、對話捲動、localStorage 儲存、回覆計時、複製按鈕、中途停止保留內容
+eca154b feat(AI): 新增法規諮詢前端 AIPage.jsx，串流輸出、Markdown 渲染、快速提問；修正繁體中文強制指令
+33c3a53 docs: 更新四份文件，新增 AI 法規諮詢後端紀錄，整理格式
+b31a655 fix(dev): 後端改用 venv/bin/uvicorn，確保 httpx 等套件正確載入
+95f68db feat(AI): 新增法規諮詢助手後端 /api/ai/standards-query，串接本機 Ollama qwen2.5:7b
+97fa568 feat(AI): 新增法規諮詢助手後端 /api/ai/standards-query，串接本機 Ollama qwen2.5:7b
+d5aa647 feat(AI): 新增法規諮詢助手後端 /api/ai/standards-query，串接本機 Ollama qwen2.5:7b
+c255e61 docs: 整理 CHANGELOG.md，同日紀錄合併，格式統一
+e0bda15 docs: 更新倒數計時器與 Alembic 相關文件
+404014a feat(Dashboard): DeviceCard 新增倒數計時器，顯示測試剩餘時間
+9077e25 feat(API): /api/devices 新增 estimated_end_at，依 SOP 總時長計算預估結束時間
+1f1fc41 chore(DB): requirements.txt 補上 alembic；init_db.py 加上 Alembic 使用提示
+8dff1c9 chore(DB): requirements.txt 補上 alembic；init_db.py 加上 Alembic 使用提示
+0fcb7f1 docs: 更新 Alembic 導入說明，DB 變更流程改為 alembic revision + upgrade
+b83d2fa feat(DB): 導入 Alembic 資料庫遷移，建立 initial schema 基準版本
+a6a381d docs: 步驟確認功能延後至 Phase 3 前實作
+d2ccf85 docs: 移除 Reports 獨立頁面需求，Dashboard 已滿足下載需求
+d58e297 docs: 更新儀表板趨勢圖文件（完整時長 + Brush）
+fc38458 feat(儀表板): 趨勢圖升級完整測試時長顯示
+a21e265 docs(AGENTS): sync snapshot with code review fixes, add naming convention table, update next steps
+adc54e7 docs: sync README/CHANGELOG/architecture with code review fixes, 62→64 test conditions
+38add79 fix(Errorlog): height+overflowY replaces minHeight, fmtDatetime handles ISO 8601, auto-refresh every 10s
+888720f fix(SOPPage): sequential step locking with cascade clear, progress API sync, per-device std selection state, fix generateSP startTemp, Cycle shows 0001/N, saveExecution sends device_id/started_at
+ded55f8 fix(Dashboard): fetch history on device switch, dual YAxis for temp/humi, executions auto-refresh 30s, console.error on failures
+4c29615 fix(SOPPage.css): add height/overflow/box-sizing to control-side, add all status-dot colors
+0ed5521 fix(index.css): unify background-color to #0d1117
+11a6646 chore(App.css): remove Vite boilerplate
+b432dbb fix(standards): duplicate sop_id warning, add OT5_Low_Cold, add DNV Std.Cert.2.4 ClassC/D dry heat
+6f421f5 fix(errors): created_at as datetime for auto serialization, remove manual strftime loop, simplify to direct ORM return
+72e44d0 fix(reports): correct dwell_time_hours/humidity_rh_percent keys, _fmt_dt helper for DateTime fields, direct sop_id lookup, RFC5987 filename encoding, remove fallback time range
+7e788f9 fix(sop): ExecutionCreate adds device_id/operator/started_at fields, flush+single commit for steps, unified with SessionLocal, import datetime at top
+8df4005 fix(main): lifespan replaces on_event, ProgressPayload model, total_steps in API response, per-device DB session, FINISHING clears sop fields, unified _now_utc()
+9a28537 fix(models): DateTime for started_at fields, ForeignKey on StepRecord, Boolean for completed, onupdate on DeviceState
+ad66ea0 更新文件：記錄 2026-03-10 捲動修復與波型曲線功能
+85ec512 修正版面捲動問題與新增完整波型曲線
+7a6fc58 重構趨勢圖：改為DB歷史資料，支援縮放與設備切換
+f0e5a4f 修正 data_simulator 寫入計數器 bug：改為每台設備獨立計數
+c5edd4e 重構趨勢圖：改為DB歷史資料，支援縮放與設備切換
+2df790d 修正 standards.py 溫變率（ramp_rate）依法規原文更新
+02c0743 docs: 更新四份文件至 2026-03-10 狀態
+1c9bda9 feat: record started_at on SOP start
+b2405b2 feat: split dashboard polling into two timers
+56ebf41 feat: step progress tracking with backend persistence
+8dbcca8 feat: enforce sequential step confirmation with cascade cancel
+3e30090 docs: update AGENTS.md to current state 2026-03-06
+32b81bf refactor: merge sop_execution.py into sop.py, update docs
+b82fb47 docs: update architecture and changelog for project cleanup
+26b434c chore: remove unused assets, mark serial_reader as Phase 3
+0579762 docs: rewrite project background to reflect human error and training cost motivation
+3b9418f docs: update architecture and changelog for 2026-03-06 session
+405da10 chore: remove duplicate QA template from backend/templates
+0fbbcf8 chore: remove unused database.py (functionality in models.py)
+208fb67 fix: restore RUNNING state directly on restart instead of downgrading to PAUSED
+13efc99 feat: persist activeSop state, auto-restore on restart, fix port conflict
+13f9ef1 feat: dashboard trend chart switchable per device, persist state every 10s
+2009093 fix: merge HUMI PV into TEMP TREND card to prevent overflow cutoff
+ce673e2 feat: persist device state to DB for restart recovery
+2d9d246 fix: replace 100vw with 100% in SOPPage layout to prevent overflow bleed
+acf27df fix: change minHeight to height in App root to prevent SOPPage layout bleed
+6704fa5 docs: fix README quickstart, add multi-device note, update architecture
+1b9f5b1 fix: dev_start.sh robustness improvements and Makefile cleanup
+bc32785 fix: clean up Makefile recipe comments and remove redundant || true
+c0d5652 fix: add humidity line and X-axis to TEMP TREND chart
+9cf36da feat: ISO17025 compliance, realtime device status UI, docs update
+cc9bbf7 feat: ISO17025 compliance & realtime device status UI
+76ecbf7 refactor(sop): 步驟改為執行中確認邏輯（選二）
+f4ca00c refactor(sop): 步驟改為執行中確認邏輯（選二）
+e9f97a3 feat: 5 independent device simulators, per-device control API, device selector UI
+69f6f9f chore: remove deprecated Error.py
+be21438 docs: update README, CHANGELOG, architecture for error log feature
+2bf649f fix: rename Error.py to errors.py
+39d0480 feat: add error log system and ErrorLog page
+1354897 docs: update README and architecture, add new demo GIF
+44ba98a feat: unify nav bar theme
+87f25ff feat: unify Dashboard theme with SOPPage
+89d1fa3 docs: update demo GIF with improved UI
+0e66baa feat: UI improvements + fix emergency stop logic
+aa05759 feat: add temp trend chart, disable idle buttons, improve offline state
+a958461 docs: fix demo GIF, remove deleted screenshot reference
+30e9286 docs: remove individual screenshots, replaced by demo GIF
+70d0e1f docs: replace screenshots with demo GIF
+1bd5efb docs: update README with full 7-step workflow screenshots
+8a5f67d docs: update README with full 7-step workflow screenshots
+0d5a517 docs: update README with full 7-step workflow screenshots
+001033d docs: add system screenshots to README
+cb4d945 docs: add system screenshots to README
+55faf93 docs: fix table column header overflow
+1af69fe docs: add badges, project background; clean up README
+1846b98 docs: add CHANGELOG.md
+17c7ad2 docs: split changelog, add AGENTS.md, clean up docs structure
+239c598 docs: update README & architecture for two-layer report flow; add QA report template
+691c044 docs: update README & architecture for two-layer report flow; add QA report template
+cd55ce7 docs: update README & architecture for two-layer report flow; add QA report template
+47112bc feat: add ReportsPage; update sop.py standards tree & SOPPage UI
+66d0659 docs: update README and architecture for 62 test conditions, standards tree, ISO 17025 report
+43124ec feat: complete standards with 62 test conditions, each with official specs and custom steps
+1f55e9e feat: add IEC61850-3, DNV2.4, KEMA, NMEA standards; per-standard tolerances in report
+5d2b53a feat: ISO 17025 compliant test report with PASS/FAIL judgment
+7d02d13 perf: reduce device_data write to every 10s, auto cleanup data older than 7 days
+db64167 feat: save SOP execution record to database on completion
+4aee32c refactor: clean up sop.py logic, merge init_db to models.py, fix Dashboard status colors
+edce174 feat: SOP step tracking, auto state switching, fix pause/stop logic
+0dff2b1 feat: show SOP step checklist after starting test
+33741df feat: register sop_execution router to main.py
+fece2cd chore: remove auto-generated Vite README
+ccdae3e chore: remove obsolete scripts, move settings.json to .vscode
+ac5e56f docs: update architecture  2026-03-03 all changes
+2be978c docs: simplify README
+f55161e feat: add safety checklist before SOP start
+3c8e12a feat: add Pydantic input validation to /api/sop/start
+efe05f5 docs: update architecture and README with 2026-03-03 fixes
+6df661c fix: remove hardcoded standardMap, use standard_id from backend API
+50e8c78 fix: remove hardcoded standardMap, use standard_id from backend API
+a681d13 fix: show running_sop_name for FINISHING, PAUSED, EMERGENCY states
+eba3e2a fix: read target temperature from standards.py instead of SOP name
+fdcb8ad fix: move include_router to app level, fix route registration
+f996ebd docs: update architecture with environmental testing standards
+66ab292 docs: update README with environmental testing standards
+f5415c4 feat: integrate standards and SOP management
+142af69 feat:add standards.py
+b37e261 refactor: simplify user authentication logic
+9145418 feat:update README
+58ddf78 chore: 更新 .gitignore 以保護本地 AI 紀錄檔案
+bbc2c5f chore: 補上 .continue 忽略設定並清理緩存
+03a31ea 更新 ignore 清單
+47169f0 refactor: 重構數位雙生平台核心架構與 UI 佈局
+1e64fa4 docs: 於 README 整合專案樹狀結構與架構模組對照
+9cf13c1 docs: 修正架構文件跳轉連結
+e67a2dc feat: 實作 SOP 控制狀態機與響應式控制面板
+690114c chore: 更新 .gitignore 以保護本地 AI 紀錄檔案
+3f2bc96 chore: 更新 .gitignore 以保護本地 AI 紀錄檔案
+c730046 chore: 更新 .gitignore 以保護本地 AI 紀錄檔案
+6206f94 chore: 更新 .gitignore 以保護本地 AI 紀錄檔案
+c8ddd63 chore: 更新 .gitignore 以保護本地 AI 紀錄檔案
+331642e chore: 更新 .gitignore 以保護本地 AI 紀錄檔案
+d5987f6 docs: 重新排版架構圖(零刪減版)並同步更新後端模型與安全性修正
+a851aea feat: 擴充設備管理模型並修正 Middleware 安全性問題
+12ea200 docs: 完善 README，加入 Mermaid 架構圖與啟動說明
+f243bc3 docs: 完善 README，加入 Mermaid 架構圖與啟動說明
+90d9002 docs: 完善 README，加入 Mermaid 架構圖與啟動說明
+c38ae95 docs: 完善 README，加入 Mermaid 架構圖與啟動說明
+25c46a6 docs: 完善 README，整合 Mermaid 架構圖與快速啟動指南
+cb4284d docs: 完善 README 快速啟動說明與環境配置流程
+9de538b docs: 完善 README 快速啟動說明與環境配置流程
+4b2dcdd docs: 優化開發者體驗，加入 make install、環境範本與 MIT 授權
+3994a59 feat: 實作數位孿生框架，整合虛擬串口、FastAPI 與多執行緒模擬器
+1aeabf2 Fix: apply updated gitignore rules
+d1c6fdb :feat:add docs
+4976f3c 移除不應追蹤的檔案（venv, test.db, .env, .DS_Store）並更新 .gitignore
+3b404de 更新 .gitignore，整理忽略規則
+4ac83da Initial commit
