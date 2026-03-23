@@ -40,8 +40,9 @@ const ExecutionPanel = ({
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch {
-      onError("❌ 報告下載失敗，請確認後端連線。");
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      onError(`❌ 報告下載失敗：${detail || "請確認後端連線"}`);
     } finally {
       setDownloading(false);
     }
@@ -67,8 +68,9 @@ const ExecutionPanel = ({
       const execId = res.data.id;
       onSaved(execId);
       await downloadReport(execId);
-    } catch {
-      onError("❌ 儲存失敗，請確認後端連線。");
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      onError(`❌ 儲存失敗：${detail || "請確認後端連線"}`);
     } finally {
       setSaving(false);
     }

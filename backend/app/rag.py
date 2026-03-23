@@ -144,23 +144,33 @@ async def _embed(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> np.
 
 
 async def warmup_rag():
-    """啟動時呼叫：優先讀取本地快取，避免重複消耗 Gemini API 配額。"""
+    """啟動時呼叫：優先讀取本地快取，chunk 數量不一致時自動重建。"""
     global _CHUNKS, _EMBEDDINGS
+
+    current_chunks = _build_chunks()
+    current_count = len(current_chunks)
 
     if RAG_CACHE_PATH.exists():
         try:
             with open(RAG_CACHE_PATH, "rb") as f:
                 cached = pickle.load(f)
-            _CHUNKS = cached["chunks"]
-            _EMBEDDINGS = cached["embeddings"]
-            print(f"✅ RAG 從快取載入：{len(_CHUNKS)} 個測試條件")
-            return
+            cached_count = len(cached["chunks"])
+
+            if cached_count == current_count:
+                _CHUNKS = cached["chunks"]
+                _EMBEDDINGS = cached["embeddings"]
+                print(f"✅ RAG 從快取載入：{len(_CHUNKS)} 個測試條件")
+                return
+            else:
+                print(
+                    f"⚠️  RAG 快取條件數量不符（快取 {cached_count} vs 現在 {current_count}），重新向量化"
+                )
         except Exception as e:
             print(f"⚠️  RAG 快取讀取失敗，重新向量化：{e}")
 
     print("⏳ RAG 知識庫建立中（分批向量化，約需 20 秒）...")
     try:
-        _CHUNKS = _build_chunks()
+        _CHUNKS = current_chunks
         texts = [c["text"] for c in _CHUNKS]
         _EMBEDDINGS = await _embed(texts, task_type="RETRIEVAL_DOCUMENT")
         norms = np.linalg.norm(_EMBEDDINGS, axis=1, keepdims=True)

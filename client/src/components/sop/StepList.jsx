@@ -1,16 +1,24 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 const StepList = ({ steps, completedSteps, onToggle }) => {
   const totalSteps = steps.length;
   const doneCnt = Object.values(completedSteps).filter(Boolean).length;
   const allStepsDone = totalSteps > 0 && doneCnt === totalSteps;
 
-  const isStepUnlocked = (stepIndex) => {
-    for (let i = 0; i < stepIndex; i++) {
-      if (!steps[i].optional && !completedSteps[steps[i].step_id]) return false;
+  const unlockedMap = useMemo(() => {
+    const map = {};
+    for (let idx = 0; idx < steps.length; idx++) {
+      let unlocked = true;
+      for (let i = 0; i < idx; i++) {
+        if (!steps[i].optional && !completedSteps[steps[i].step_id]) {
+          unlocked = false;
+          break;
+        }
+      }
+      map[idx] = unlocked;
     }
-    return true;
-  };
+    return map;
+  }, [steps, completedSteps]);
 
   return (
     <div>
@@ -19,7 +27,7 @@ const StepList = ({ steps, completedSteps, onToggle }) => {
       </p>
 
       {steps.map((step, idx) => {
-        const unlocked = isStepUnlocked(idx);
+        const unlocked = unlockedMap[idx];
         const checked = !!completedSteps[step.step_id];
         return (
           <label
@@ -30,7 +38,6 @@ const StepList = ({ steps, completedSteps, onToggle }) => {
               gap: 10,
               marginBottom: 12,
               cursor: unlocked ? "pointer" : "not-allowed",
-              // 修改：未解鎖時只降低 checkbox opacity，文字保持可讀
               color: checked ? "#57ab5a" : "#cdd9e5",
             }}
           >
