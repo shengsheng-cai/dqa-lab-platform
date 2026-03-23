@@ -154,8 +154,9 @@ const SOPPage = ({ active = true }) => {
   const effectiveIsActive = ACTIVE_STATUSES.includes(effectiveStatus);
   const doneCnt = Object.values(ds.completedSteps).filter(Boolean).length;
   const allStepsDone =
-    ds.activeSop && doneCnt === (ds.activeSop?.steps?.length ?? 0);
-
+    ds.activeSop &&
+    (ds.activeSop?.steps?.length ?? 0) > 0 &&
+    doneCnt === (ds.activeSop?.steps?.length ?? 0);
   const { selectedStd, selectedVer, selectedTest } = ds;
   const stdData = selectedStd ? standardTree[selectedStd] : null;
   const verData = selectedVer ? stdData?.versions?.[selectedVer] : null;
