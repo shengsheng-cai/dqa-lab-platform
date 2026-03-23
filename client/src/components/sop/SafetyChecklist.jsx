@@ -31,7 +31,7 @@ const SafetyChecklist = ({
       setModalOperator(operator || "");
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [showModal]); // eslint-disable-line
+  }, [showModal, operator]); // eslint-disable-line
 
   const handleLaunchClick = () => {
     setShowModal(true);

@@ -117,7 +117,11 @@ export default function ChatArea({
               opacity: !input.trim() ? 0.4 : 1,
               cursor: !input.trim() ? "not-allowed" : "pointer",
             }}
-            onClick={() => onSend()}
+            onClick={() => {
+              onSend();
+              if (textareaRef.current)
+                textareaRef.current.style.height = "auto";
+            }}
             disabled={!input.trim()}
           >
             送出

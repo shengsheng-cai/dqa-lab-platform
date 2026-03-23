@@ -19,11 +19,12 @@ const card = {
   padding: "20px 24px",
 };
 
-const ErrorLog = () => {
+const ErrorLog = ({ active = true }) => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!active) return;
     const fetchLogs = () => {
       api
         .get("/api/errors/")
@@ -34,7 +35,7 @@ const ErrorLog = () => {
     fetchLogs();
     const t = setInterval(fetchLogs, 60000);
     return () => clearInterval(t);
-  }, []);
+  }, [active]);
 
   return (
     <div
