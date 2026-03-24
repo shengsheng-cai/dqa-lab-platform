@@ -983,46 +983,50 @@ export default function FixturePage({ active, role }) {
             </span>
           )}
         </button>
-        <button
-          style={tabStyle("overdue")}
-          onClick={() => setActiveTab("overdue")}
-        >
-          逾期未還
-          {summary.overdue > 0 && (
-            <span
-              style={{
-                marginLeft: 4,
-                background: "#f8514922",
-                color: "#f85149",
-                borderRadius: 10,
-                padding: "0 6px",
-                fontSize: 11,
-              }}
-            >
-              {summary.overdue}
-            </span>
-          )}
-        </button>
-        <button
-          style={tabStyle("purchase")}
-          onClick={() => setActiveTab("purchase")}
-        >
-          採購清單
-          {purchaseOrders.filter((o) => o.status === "pending").length > 0 && (
-            <span
-              style={{
-                marginLeft: 4,
-                background: "#f0a50022",
-                color: "#f0a500",
-                borderRadius: 10,
-                padding: "0 6px",
-                fontSize: 11,
-              }}
-            >
-              {purchaseOrders.filter((o) => o.status === "pending").length}
-            </span>
-          )}
-        </button>
+        {canOperate && (
+          <button
+            style={tabStyle("overdue")}
+            onClick={() => setActiveTab("overdue")}
+          >
+            逾期未還
+            {summary.overdue > 0 && (
+              <span
+                style={{
+                  marginLeft: 4,
+                  background: "#f8514922",
+                  color: "#f85149",
+                  borderRadius: 10,
+                  padding: "0 6px",
+                  fontSize: 11,
+                }}
+              >
+                {summary.overdue}
+              </span>
+            )}
+          </button>
+        )}
+        {canOperate && (
+          <button
+            style={tabStyle("purchase")}
+            onClick={() => setActiveTab("purchase")}
+          >
+            採購清單
+            {purchaseOrders.filter((o) => o.status === "pending").length > 0 && (
+              <span
+                style={{
+                  marginLeft: 4,
+                  background: "#f0a50022",
+                  color: "#f0a500",
+                  borderRadius: 10,
+                  padding: "0 6px",
+                  fontSize: 11,
+                }}
+              >
+                {purchaseOrders.filter((o) => o.status === "pending").length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {activeTab === "inventory" && (

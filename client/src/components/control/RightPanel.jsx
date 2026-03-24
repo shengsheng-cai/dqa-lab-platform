@@ -2,12 +2,30 @@ import { useState, useRef, useEffect } from "react";
 import useAIChat from "../../ai/useAIChat";
 import ChatArea from "../../ai/ChatArea";
 
-const QUICK_QUESTIONS = [
+const QUESTION_POOL = [
   { label: "查庫存", text: "目前治具庫存不足的有哪些？" },
+  { label: "借出狀況", text: "目前借出中的治具有哪些類型？" },
+  { label: "Ethernet 庫存", text: "Ethernet 相關治具庫存如何？" },
   { label: "問法規", text: "IEC 60068 有哪些常用測試條件？" },
+  { label: "濕熱測試", text: "IEC 60068-2-78 濕熱測試條件是什麼？" },
+  { label: "溫度循環", text: "IEC 60068-2-14 有哪些溫度循環條件？" },
+  { label: "鐵道標準", text: "EN 50155 鐵道設備有哪些常用測試條件？" },
+  { label: "海事標準", text: "IEC 60945 海事設備測試條件是什麼？" },
+  { label: "變電站標準", text: "IEC 61850-3 變電站設備測試要求是什麼？" },
   { label: "問測試時長", text: "IEC 60068-2-14 Na 測試需要多久？" },
+  { label: "EN 50155 時長", text: "EN 50155 高溫通電測試需要多久？" },
   { label: "比較法規", text: "EN 50155 和 IEC 60068 的濕熱循環有什麼差異？" },
+  { label: "IEC vs DNV", text: "IEC 60068 和 DNV 的乾熱測試有什麼差異？" },
+  { label: "推薦標準", text: "工業乙太網設備要選哪個測試標準？" },
+  { label: "低溫測試", text: "低溫開關機測試條件有哪些？" },
+  { label: "高溫高濕", text: "高溫高濕測試條件有哪些選擇？" },
 ];
+
+function pickRandom(n, pool, exclude = []) {
+  const available = pool.filter((q) => !exclude.includes(q.label));
+  const shuffled = [...available].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
 
 export default function RightPanel() {
   const {
@@ -36,6 +54,9 @@ export default function RightPanel() {
     addProjectGroup,
   } = useAIChat();
 
+  const [quickQuestions, setQuickQuestions] = useState(() =>
+    pickRandom(4, QUESTION_POOL)
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -354,10 +375,13 @@ export default function RightPanel() {
           borderBottom: "1px solid #21262d",
         }}
       >
-        {QUICK_QUESTIONS.map((q) => (
+        {quickQuestions.map((q) => (
           <button
             key={q.label}
-            onClick={() => sendMessage(q.text)}
+            onClick={() => {
+              sendMessage(q.text);
+              setQuickQuestions(pickRandom(4, QUESTION_POOL));
+            }}
             disabled={loading}
             style={{
               padding: "5px 8px",

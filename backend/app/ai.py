@@ -81,12 +81,23 @@ def _query_fixture_context() -> str:
         )
         if not shortage_items:
             return "【治具庫存資料】目前無庫存不足的治具。"
-        lines = ["【治具庫存資料】庫存不足的治具："]
+        # 依 (interface_type, form_factor) 去重，取 shortage 最大值那筆
+        seen: dict[tuple, dict] = {}
         for f in shortage_items:
-            desc = f"{f.interface_type} {f.form_factor or ''}".strip()
+            key = (f.interface_type, (f.form_factor or "").strip())
+            if key not in seen or f.shortage > seen[key]["shortage"]:
+                seen[key] = {
+                    "desc": f"{f.interface_type} {f.form_factor or ''}".strip(),
+                    "total": f.total_quantity,
+                    "shortage": f.shortage,
+                    "note": f.note,
+                }
+        sorted_items = sorted(seen.values(), key=lambda x: x["shortage"], reverse=True)
+        lines = ["【治具庫存資料】庫存不足的治具："]
+        for item in sorted_items:
             lines.append(
-                f"- {desc}：庫存 {f.total_quantity} 件，缺 {f.shortage} 件"
-                + (f"（備註：{f.note}）" if f.note else "")
+                f"- {item['desc']}：庫存 {item['total']} 件，缺 {item['shortage']} 件"
+                + (f"（備註：{item['note']}）" if item["note"] else "")
             )
         return "\n".join(lines)
     except Exception:
