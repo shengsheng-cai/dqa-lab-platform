@@ -301,12 +301,17 @@ function LoanModal({ onClose, onSubmit, fixtures }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [users, setUsers] = useState([]);
+  const [usersError, setUsersError] = useState("");
 
   useEffect(() => {
     api
       .get("/api/fixtures/users")
-      .then((r) => setUsers(r.data))
-      .catch(() => setUsers([]));
+      .then((r) => { setUsers(r.data); setUsersError(""); })
+      .catch((e) => {
+        const msg = e.response?.data?.detail || `載入失敗（${e.response?.status || "網路錯誤"}）`;
+        setUsersError(msg);
+        setUsers([]);
+      });
   }, []);
 
   const handleSubmit = async () => {
@@ -407,6 +412,11 @@ function LoanModal({ onClose, onSubmit, fixtures }) {
             </option>
           ))}
         </select>
+        {usersError && (
+          <div style={{ color: "#f85149", fontSize: 11, marginTop: -8 }}>
+            借用人載入失敗：{usersError}
+          </div>
+        )}
         <select
           value={deviceId}
           onChange={(e) => setDeviceId(e.target.value)}

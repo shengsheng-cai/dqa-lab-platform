@@ -248,6 +248,28 @@ def get_interface_types():
         db.close()
 
 
+@router.get("/users")
+def list_users(request: Request):
+    """回傳使用者清單（供借出登記下拉選單用，任何已登入使用者皆可呼叫）"""
+    role = getattr(request.state, "user_role", None)
+    if role is None:
+        raise HTTPException(status_code=401, detail="請先登入")
+    db = SessionLocal()
+    try:
+        users = (
+            db.query(User)
+            .filter(User.is_active == True)
+            .order_by(User.display_name.asc())
+            .all()
+        )
+        return [
+            {"id": u.id, "display_name": u.display_name, "role": u.role}
+            for u in users
+        ]
+    finally:
+        db.close()
+
+
 @router.get("/{fixture_id}")
 def get_fixture(fixture_id: int):
     db = SessionLocal()
@@ -510,30 +532,6 @@ async def import_fixtures(file: UploadFile = File(...)):
     finally:
         db.close()
 
-
-# ---------- 使用者清單（供借用人下拉選單）----------
-
-
-@router.get("/users")
-def list_users(request: Request):
-    """回傳使用者清單（供借出登記下拉選單用，任何已登入使用者皆可呼叫）"""
-    role = getattr(request.state, "user_role", None)
-    if role is None:
-        raise HTTPException(status_code=401, detail="請先登入")
-    db = SessionLocal()
-    try:
-        users = (
-            db.query(User)
-            .filter(User.is_active == True)
-            .order_by(User.display_name.asc())
-            .all()
-        )
-        return [
-            {"id": u.id, "display_name": u.display_name, "role": u.role}
-            for u in users
-        ]
-    finally:
-        db.close()
 
 
 # ---------- 設定保管人 ----------
