@@ -3,12 +3,14 @@ import Dashboard from "./Dashboard";
 import SOPPage from "./SOPPage";
 import ErrorLog from "./ErrorLog";
 import AIPage from "./AIPage";
+import FixturePage from "./FixturePage";
 import { API_BASE } from "./api";
 import api from "./api";
 
 const PAGES = [
   { key: "/", label: "儀表板" },
   { key: "/sop", label: "SOP 執行" },
+  { key: "/fixtures", label: "治具管理" },
   { key: "/errors", label: "異常看板" },
   { key: "/ai", label: "AI 諮詢" },
 ];
@@ -16,15 +18,11 @@ const PAGES = [
 const SESSION_DURATION = 8 * 60 * 60 * 1000;
 
 function isSessionValid() {
-  // 帳號登入：有 user_token 就算有效（後端 token 8 小時，前端不另外計時）
   const userToken = localStorage.getItem("user_token");
   if (userToken) return true;
-
-  // 訪客登入：demo 密碼 + 8 小時 session
   const pwd = localStorage.getItem("demo_password");
   const loginAt = parseInt(localStorage.getItem("demo_login_at") || "0");
   if (pwd && Date.now() - loginAt < SESSION_DURATION) return true;
-
   clearSession();
   return false;
 }
@@ -147,7 +145,7 @@ const NavBar = ({ current, onChange, onLogout, role, displayName }) => (
 );
 
 function LoginPage({ onLogin }) {
-  const [mode, setMode] = useState("user"); // "user" | "demo"
+  const [mode, setMode] = useState("user");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [pwdInput, setPwdInput] = useState("");
@@ -472,7 +470,6 @@ function LoginPage({ onLogin }) {
                 </span>
               </div>
             )}
-
             {error && (
               <span style={{ color: "#f85149", fontSize: 13 }}>{error}</span>
             )}
@@ -539,6 +536,14 @@ function App() {
           }}
         >
           <SOPPage active={page === "/sop"} />
+        </div>
+        <div
+          style={{
+            display: page === "/fixtures" ? "block" : "none",
+            height: "100%",
+          }}
+        >
+          <FixturePage active={page === "/fixtures"} role={role} />
         </div>
         <div
           style={{
