@@ -394,7 +394,12 @@ function App() {
     setAuthed(false);
   };
 
-  if (!authed) return <LoginPage onLogin={() => setAuthed(true)} />;
+  const handleLogin = () => {
+    setRole(getCurrentRole());
+    setDisplayName(localStorage.getItem("user_display_name") || "");
+    setAuthed(true);
+  };
+  if (!authed) return <LoginPage onLogin={handleLogin} />;
 
   return (
     <div style={{ height: "100vh", backgroundColor: "#0d1117", overflow: "hidden" }}>

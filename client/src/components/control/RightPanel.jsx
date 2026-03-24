@@ -115,7 +115,7 @@ export default function RightPanel() {
   return (
     <div
       style={{
-        width: 300,
+        width: 360,
         flexShrink: 0,
         borderLeft: "1px solid #30363d",
         display: "flex",
@@ -360,8 +360,8 @@ export default function RightPanel() {
             onClick={() => sendMessage(q.text)}
             disabled={loading}
             style={{
-              padding: "4px 6px",
-              fontSize: 10,
+              padding: "5px 8px",
+              fontSize: 12,
               borderRadius: 4,
               border: "1px solid #30363d",
               background: "transparent",

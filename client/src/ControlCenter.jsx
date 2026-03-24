@@ -139,7 +139,7 @@ function DeviceCard({ device, isSelected, onClick }) {
     <div
       onClick={onClick}
       style={{
-        padding: "7px 9px",
+        padding: "6px 8px",
         borderRadius: 6,
         border: `1px solid ${isSelected ? cfg.color : isEmergency ? "#f8514944" : "#30363d"}`,
         background: isEmergency ? "#2d0f0f" : isSelected ? "#161b22" : "transparent",
@@ -189,7 +189,7 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, onSwitchTab }) {
   return (
     <div
       style={{
-        width: 160,
+        width: 155,
         flexShrink: 0,
         borderRight: "1px solid #30363d",
         display: "flex",
@@ -216,7 +216,7 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, onSwitchTab }) {
           padding: "0 8px",
           display: "flex",
           flexDirection: "column",
-          gap: 5,
+          gap: 4,
           overflowY: "auto",
         }}
       >

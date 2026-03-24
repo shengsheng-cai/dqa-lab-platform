@@ -61,7 +61,7 @@ _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速
 - 多項測試：逐項列小計，最後給總計
 - 若無升降溫速率資料，只加總停留時間並註明「升降溫時間依設備另計」
 
-回答結尾固定加：⚠️ 本建議僅供初步評估參考，實際條件請以原始法規文件為準。"""
+回答不要自行加任何免責聲明，UI 會自動附加。"""
 
 _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
 
@@ -85,8 +85,7 @@ def _query_fixture_context() -> str:
         for f in shortage_items:
             desc = f"{f.interface_type} {f.form_factor or ''}".strip()
             lines.append(
-                f"- {desc}：總數 {f.total_quantity} 件，借出 {f.loaned_quantity} 件，"
-                f"缺 {f.shortage} 件"
+                f"- {desc}：庫存 {f.total_quantity} 件，缺 {f.shortage} 件"
                 + (f"（備註：{f.note}）" if f.note else "")
             )
         return "\n".join(lines)
