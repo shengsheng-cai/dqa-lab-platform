@@ -11,6 +11,10 @@ import { API_BASE } from "../api";
 const MAX_HISTORY = 4;
 
 function getAuthHeaders() {
+  const userToken = localStorage.getItem("user_token");
+  if (userToken) {
+    return { "Content-Type": "application/json", "X-User-Token": userToken };
+  }
   const pwd = localStorage.getItem("demo_password") || "";
   return {
     "Content-Type": "application/json",
