@@ -316,8 +316,8 @@ function LoginPage({ onLogin }) {
                 }}
               >
                 <input
-                  type="password"
-                  placeholder="請輸入存取密碼"
+                  type="text"
+                  placeholder="請輸入訪客 Token（8 碼）"
                   value={pwdInput}
                   onChange={(e) => setPwdInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleDemoLogin()}
@@ -350,7 +350,7 @@ function LoginPage({ onLogin }) {
                   {loading ? "驗證中..." : "進入系統"}
                 </button>
                 <span style={{ color: "#484f58", fontSize: 11 }}>
-                  Session 有效期限：8 小時
+                  Token 由管理者生成，Session 有效期限：8 小時
                 </span>
               </div>
             )}

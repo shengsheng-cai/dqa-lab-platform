@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from .models import SessionLocal, User
+from .models import SessionLocal, User, DemoToken
 
 DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "")
 
@@ -303,6 +303,147 @@ def delete_user(user_id: int, request: Request):
         db.close()
 
 
+# ---------- Demo Token ----------
+
+_DEMO_TOKEN_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _gen_demo_token() -> str:
+    return "".join(secrets.choice(_DEMO_TOKEN_CHARS) for _ in range(8))
+
+
+class DemoTokenCreate(BaseModel):
+    label: Optional[str] = None
+    expires_days: Optional[int] = None  # None = 永不到期
+    max_uses: Optional[int] = None      # None = 無限次
+
+
+def _require_admin(request: Request):
+    if getattr(request.state, "user_role", None) != "admin":
+        raise HTTPException(status_code=403, detail="僅管理者可操作")
+
+
+@router.get("/demo-tokens")
+def list_demo_tokens(request: Request):
+    _require_admin(request)
+    db = SessionLocal()
+    try:
+        rows = db.query(DemoToken).order_by(DemoToken.created_at.desc()).all()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        result = []
+        for t in rows:
+            expires_at = t.expires_at
+            expired = (
+                expires_at is not None
+                and expires_at.replace(tzinfo=datetime.timezone.utc) < now
+            )
+            used_up = t.max_uses is not None and t.use_count >= t.max_uses
+            result.append({
+                "id": t.id,
+                "token": t.token,
+                "label": t.label,
+                "expires_at": t.expires_at.isoformat() if t.expires_at else None,
+                "max_uses": t.max_uses,
+                "use_count": t.use_count,
+                "is_active": t.is_active,
+                "expired": expired,
+                "used_up": used_up,
+                "created_at": t.created_at.isoformat(),
+            })
+        return result
+    finally:
+        db.close()
+
+
+@router.post("/demo-tokens")
+def create_demo_token(req: DemoTokenCreate, request: Request):
+    _require_admin(request)
+    db = SessionLocal()
+    try:
+        expires_at = None
+        if req.expires_days:
+            expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=req.expires_days)
+        token_str = _gen_demo_token()
+        # 確保唯一
+        while db.query(DemoToken).filter(DemoToken.token == token_str).first():
+            token_str = _gen_demo_token()
+        t = DemoToken(
+            token=token_str,
+            label=req.label,
+            created_by=getattr(request.state, "user_id", None),
+            expires_at=expires_at,
+            max_uses=req.max_uses,
+        )
+        db.add(t)
+        db.commit()
+        db.refresh(t)
+        return {
+            "id": t.id,
+            "token": t.token,
+            "label": t.label,
+            "expires_at": t.expires_at.isoformat() if t.expires_at else None,
+            "max_uses": t.max_uses,
+            "use_count": 0,
+            "is_active": True,
+        }
+    finally:
+        db.close()
+
+
+@router.delete("/demo-tokens/{token_id}")
+def delete_demo_token(token_id: int, request: Request):
+    _require_admin(request)
+    db = SessionLocal()
+    try:
+        t = db.query(DemoToken).filter(DemoToken.id == token_id).first()
+        if not t:
+            raise HTTPException(status_code=404, detail="Token 不存在")
+        db.delete(t)
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@router.patch("/demo-tokens/{token_id}/toggle")
+def toggle_demo_token(token_id: int, request: Request):
+    _require_admin(request)
+    db = SessionLocal()
+    try:
+        t = db.query(DemoToken).filter(DemoToken.id == token_id).first()
+        if not t:
+            raise HTTPException(status_code=404, detail="Token 不存在")
+        t.is_active = not t.is_active
+        db.commit()
+        return {"id": t.id, "is_active": t.is_active}
+    finally:
+        db.close()
+
+
+def _check_demo_token(provided: str) -> bool:
+    """驗證訪客 token，有效則遞增 use_count 並回傳 True。"""
+    db = SessionLocal()
+    try:
+        t = db.query(DemoToken).filter(
+            DemoToken.token == provided,
+            DemoToken.is_active == True,
+        ).first()
+        if not t:
+            return False
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if t.expires_at and t.expires_at.replace(tzinfo=datetime.timezone.utc) < now:
+            return False
+        if t.max_uses is not None and t.use_count >= t.max_uses:
+            return False
+        t.use_count += 1
+        db.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        db.close()
+
+
 # ---------- Middleware ----------
 async def auth_middleware(request: Request, call_next):
     if any(request.url.path.startswith(p) for p in SKIP_PATHS):
@@ -311,6 +452,7 @@ async def auth_middleware(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
 
+    # 未設定 DEMO_PASSWORD 時放行（開發環境，未設定任何認證）
     if not DEMO_PASSWORD:
         return await call_next(request)
 
@@ -338,12 +480,14 @@ async def auth_middleware(request: Request, call_next):
         )
 
     # 方式二：X-Demo-Password（訪客模式）
+    # 優先查 demo_tokens DB；後備：環境變數 DEMO_PASSWORD（master key）
     provided = request.headers.get("X-Demo-Password", "")
-    if provided == DEMO_PASSWORD:
-        request.state.user_role = "guest"
-        request.state.user_id = None
-        tracker["count"] = 0
-        return await call_next(request)
+    if provided:
+        if _check_demo_token(provided) or (DEMO_PASSWORD and provided == DEMO_PASSWORD):
+            request.state.user_role = "guest"
+            request.state.user_id = None
+            tracker["count"] = 0
+            return await call_next(request)
 
     tracker["count"] += 1
     if tracker["count"] >= MAX_ATTEMPTS:

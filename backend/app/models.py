@@ -147,6 +147,27 @@ class PurchaseOrder(Base):
     )
 
 
+# ---------- 訪客 Token ----------
+class DemoToken(Base):
+    __tablename__ = "demo_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    token: Mapped[str] = mapped_column(String, unique=True, index=True)
+    label: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    expires_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    max_uses: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    use_count: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+    )
+
+
 # ---------- SOP 模板 ----------
 class SopTemplate(Base):
     __tablename__ = "sop_templates"
