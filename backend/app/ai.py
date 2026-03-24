@@ -26,8 +26,14 @@ _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速
 2. 再列出具體參數
 3. 如果有多個選項，說明差異讓使用者選擇
 
+【治具與測試條件的區別】
+- 「治具」= 實驗室治具室中管理的物理工具、夾具、接頭（例如 M12 連接器、FC 光纖接頭、RS-485 轉換器等），不是測試設備或溫箱
+- 「測試條件」= 溫箱執行的環境測試參數（溫度、濕度、時間、循環數）
+- 若問「推薦治具」「哪些治具適合」→ 說明你只能提供測試條件建議，物理治具的選用與庫存請至系統「治具管理」頁面查詢
+- 若有【治具庫存資料】區塊，直接根據其內容回答庫存問題；若無此區塊，說明目前無法取得即時庫存
+
 【資料使用規則】
-- 只根據【參考資料】回答，禁止引用資料以外的版本號、數值或測試名稱
+- 只根據【參考資料】和【治具庫存資料】回答，禁止引用資料以外的版本號、數值或測試名稱
 - 找不到相關資料直接說「查無此資料」，不要追問
 
 【標準選擇原則】
@@ -58,6 +64,37 @@ _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速
 回答結尾固定加：⚠️ 本建議僅供初步評估參考，實際條件請以原始法規文件為準。"""
 
 _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
+
+_FIXTURE_KEYWORDS = ["治具", "庫存", "借出", "逾期", "缺貨", "可借", "缺少"]
+
+
+def _query_fixture_context() -> str:
+    """查詢治具庫存不足清單，注入 AI context。"""
+    from .models import SessionLocal, Fixture
+    db = SessionLocal()
+    try:
+        shortage_items = (
+            db.query(Fixture)
+            .filter(Fixture.is_active == True, Fixture.shortage > 0)
+            .order_by(Fixture.shortage.desc())
+            .all()
+        )
+        if not shortage_items:
+            return "【治具庫存資料】目前無庫存不足的治具。"
+        lines = ["【治具庫存資料】庫存不足的治具："]
+        for f in shortage_items:
+            desc = f"{f.interface_type} {f.form_factor or ''}".strip()
+            lines.append(
+                f"- {desc}：總數 {f.total_quantity} 件，借出 {f.loaned_quantity} 件，"
+                f"缺 {f.shortage} 件"
+                + (f"（備註：{f.note}）" if f.note else "")
+            )
+        return "\n".join(lines)
+    except Exception:
+        return ""
+    finally:
+        db.close()
+
 
 _TEST_TYPE_HINTS = {
     "低溫開關機": {"power_on": True, "has_low": True},
@@ -178,9 +215,17 @@ async def _build_context(msg: str, history: list = []) -> str:
     else:
         _add_hits(await retrieve(msg, top_k=20))
 
+    parts = []
     if hits:
-        return "\n".join(f"- {h['text']}" for h in hits)
-    return ""
+        parts.append("\n".join(f"- {h['text']}" for h in hits))
+
+    # 偵測到治具相關關鍵字時，從 DB 注入即時庫存資料
+    if any(kw in msg for kw in _FIXTURE_KEYWORDS):
+        fixture_ctx = _query_fixture_context()
+        if fixture_ctx:
+            parts.append(fixture_ctx)
+
+    return "\n\n".join(parts) if parts else ""
 
 
 def _build_gemini_payload(messages: list, system_prompt: str) -> dict:

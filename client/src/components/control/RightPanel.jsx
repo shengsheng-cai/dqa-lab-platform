@@ -1,40 +1,19 @@
+import { useState, useRef, useEffect } from "react";
 import useAIChat from "../../ai/useAIChat";
 import ChatArea from "../../ai/ChatArea";
 
 const QUICK_QUESTIONS = [
-  { label: "查庫存", text: "目前哪些治具庫存不足？" },
+  { label: "查庫存", text: "目前治具庫存不足的有哪些？" },
   { label: "問法規", text: "IEC 60068 有哪些常用測試條件？" },
-  { label: "推薦治具", text: "推薦適合溫度循環測試的治具？" },
-  { label: "算時長", text: "IEC 60068-2-14 Na 測試需要多久？" },
+  { label: "問測試時長", text: "IEC 60068-2-14 Na 測試需要多久？" },
+  { label: "比較法規", text: "EN 50155 和 IEC 60068 的濕熱循環有什麼差異？" },
 ];
-
-const navBtn = (disabled) => ({
-  background: "transparent",
-  border: "none",
-  color: disabled ? "#30363d" : "#8b949e",
-  cursor: disabled ? "default" : "pointer",
-  fontSize: 14,
-  lineHeight: 1,
-  padding: "0 3px",
-  borderRadius: 3,
-  flexShrink: 0,
-});
-
-const iconBtn = (disabled) => ({
-  background: "transparent",
-  border: "1px solid #30363d",
-  color: disabled ? "#30363d" : "#8b949e",
-  cursor: disabled ? "default" : "pointer",
-  fontSize: 11,
-  padding: "1px 5px",
-  borderRadius: 3,
-  flexShrink: 0,
-});
 
 export default function RightPanel() {
   const {
     activeId,
     conversations,
+    projectGroups,
     messages,
     input,
     loading,
@@ -50,17 +29,33 @@ export default function RightPanel() {
     handleKeyDown,
     switchConversation,
     addConversation,
+    deleteConversation,
     clearConversation,
+    renameConversation,
+    setConversationGroup,
+    addProjectGroup,
   } = useAIChat();
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [newGroupInput, setNewGroupInput] = useState("");
+  const menuRef = useRef(null);
+  const renameRef = useRef(null);
 
   // 依最後更新時間排序對話
   const convIds = Object.keys(conversations).sort(
-    (a, b) => new Date(conversations[b]?.updatedAt || 0) - new Date(conversations[a]?.updatedAt || 0)
+    (a, b) =>
+      new Date(conversations[b]?.updatedAt || 0) -
+      new Date(conversations[a]?.updatedAt || 0)
   );
   const total = convIds.length;
   const currentIdx = convIds.indexOf(activeId);
-  const activeTitle = conversations[activeId]?.title || "新對話";
-  const truncTitle = activeTitle.length > 10 ? activeTitle.slice(0, 10) + "…" : activeTitle;
+  const activeConv = conversations[activeId];
+  const activeTitle = activeConv?.title || "新對話";
+  const truncTitle =
+    activeTitle.length > 10 ? activeTitle.slice(0, 10) + "…" : activeTitle;
+  const currentGroup = activeConv?.projectGroup || "未分組";
 
   const goPrev = () => {
     if (loading || total <= 1) return;
@@ -69,6 +64,52 @@ export default function RightPanel() {
   const goNext = () => {
     if (loading || total <= 1) return;
     switchConversation(convIds[(currentIdx + 1) % total]);
+  };
+
+  // 點外部關閉選單
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target))
+        setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
+  // 開始重新命名
+  const startRename = () => {
+    setRenameValue(activeTitle === "新對話" ? "" : activeTitle);
+    setRenaming(true);
+    setMenuOpen(false);
+    setTimeout(() => renameRef.current?.focus(), 50);
+  };
+
+  const commitRename = () => {
+    const v = renameValue.trim();
+    if (v) renameConversation(activeId, v);
+    setRenaming(false);
+  };
+
+  const handleDelete = () => {
+    if (window.confirm(`確定刪除「${activeTitle}」？`)) {
+      deleteConversation(activeId);
+    }
+    setMenuOpen(false);
+  };
+
+  const handleGroupChange = (group) => {
+    setConversationGroup(activeId, group);
+    setMenuOpen(false);
+  };
+
+  const handleAddGroup = () => {
+    const g = newGroupInput.trim();
+    if (!g) return;
+    addProjectGroup(g);
+    setConversationGroup(activeId, g);
+    setNewGroupInput("");
+    setMenuOpen(false);
   };
 
   return (
@@ -82,7 +123,7 @@ export default function RightPanel() {
         overflow: "hidden",
       }}
     >
-      {/* Header：標題 + 對話切換列 */}
+      {/* Header */}
       <div
         style={{
           padding: "5px 8px",
@@ -92,6 +133,7 @@ export default function RightPanel() {
           alignItems: "center",
           gap: 4,
           minHeight: 30,
+          position: "relative",
         }}
       >
         <span
@@ -106,7 +148,7 @@ export default function RightPanel() {
           AI 諮詢
         </span>
 
-        {/* 迷你對話切換 */}
+        {/* 對話切換 */}
         <div
           style={{
             flex: 1,
@@ -121,28 +163,57 @@ export default function RightPanel() {
             onClick={goPrev}
             disabled={loading || total <= 1}
             title="上一個對話"
-            style={navBtn(loading || total <= 1)}
+            style={navBtnS(loading || total <= 1)}
           >
             ‹
           </button>
-          <span
-            title={activeTitle}
-            style={{
-              fontSize: 10,
-              color: "#8b949e",
-              maxWidth: 80,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {truncTitle}
-          </span>
+
+          {/* 標題：可點擊重新命名 */}
+          {renaming ? (
+            <input
+              ref={renameRef}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRename();
+                if (e.key === "Escape") setRenaming(false);
+              }}
+              style={{
+                width: 80,
+                fontSize: 10,
+                background: "#21262d",
+                border: "1px solid #58a6ff",
+                borderRadius: 3,
+                color: "#cdd9e5",
+                padding: "1px 4px",
+                outline: "none",
+              }}
+              placeholder="對話名稱"
+            />
+          ) : (
+            <span
+              title={`${activeTitle}\n點擊重新命名`}
+              onClick={startRename}
+              style={{
+                fontSize: 10,
+                color: "#8b949e",
+                maxWidth: 80,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                cursor: "text",
+              }}
+            >
+              {truncTitle}
+            </span>
+          )}
+
           <button
             onClick={goNext}
             disabled={loading || total <= 1}
             title="下一個對話"
-            style={navBtn(loading || total <= 1)}
+            style={navBtnS(loading || total <= 1)}
           >
             ›
           </button>
@@ -153,23 +224,123 @@ export default function RightPanel() {
           )}
         </div>
 
-        {/* 新增 & 清除 */}
+        {/* 新增 & ⋮ 選單 */}
         <button
           onClick={() => addConversation()}
           disabled={loading}
           title="新增對話"
-          style={iconBtn(loading)}
+          style={iconBtnS(loading)}
         >
           +
         </button>
-        <button
-          onClick={clearConversation}
-          disabled={loading || messages.length === 0}
-          title="清除目前對話"
-          style={iconBtn(loading || messages.length === 0)}
-        >
-          ✕
-        </button>
+
+        <div ref={menuRef} style={{ position: "relative" }}>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            title="更多選項"
+            style={iconBtnS(false)}
+          >
+            ⋮
+          </button>
+
+          {/* 下拉選單 */}
+          {menuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                right: 0,
+                width: 160,
+                background: "#161b22",
+                border: "1px solid #30363d",
+                borderRadius: 6,
+                boxShadow: "0 8px 24px rgba(0,0,0,.4)",
+                zIndex: 999,
+                overflow: "hidden",
+              }}
+            >
+              {/* 重新命名 */}
+              <MenuItem onClick={startRename}>✏ 重新命名</MenuItem>
+
+              {/* 分組 */}
+              <div
+                style={{
+                  padding: "6px 12px 4px",
+                  fontSize: 10,
+                  color: "#484f58",
+                  letterSpacing: 0.5,
+                  borderTop: "1px solid #21262d",
+                }}
+              >
+                分組
+              </div>
+              {projectGroups.map((g) => (
+                <MenuItem
+                  key={g}
+                  onClick={() => handleGroupChange(g)}
+                  active={g === currentGroup}
+                >
+                  {g === currentGroup ? "● " : "○ "}
+                  {g}
+                </MenuItem>
+              ))}
+              <div
+                style={{
+                  padding: "4px 8px",
+                  display: "flex",
+                  gap: 4,
+                  borderTop: "1px solid #21262d",
+                }}
+              >
+                <input
+                  value={newGroupInput}
+                  onChange={(e) => setNewGroupInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddGroup()}
+                  placeholder="新分組名稱"
+                  style={{
+                    flex: 1,
+                    fontSize: 10,
+                    background: "#0d1117",
+                    border: "1px solid #30363d",
+                    borderRadius: 3,
+                    color: "#cdd9e5",
+                    padding: "2px 6px",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  onClick={handleAddGroup}
+                  style={{
+                    fontSize: 10,
+                    background: "transparent",
+                    border: "1px solid #30363d",
+                    borderRadius: 3,
+                    color: "#8b949e",
+                    padding: "2px 6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  +
+                </button>
+              </div>
+
+              {/* 清除 & 刪除 */}
+              <div style={{ borderTop: "1px solid #21262d" }} />
+              <MenuItem
+                onClick={() => {
+                  clearConversation();
+                  setMenuOpen(false);
+                }}
+                disabled={messages.length === 0}
+              >
+                ✕ 清除內容
+              </MenuItem>
+              <MenuItem onClick={handleDelete} danger>
+                🗑 刪除對話
+              </MenuItem>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 快速問題 */}
@@ -205,7 +376,15 @@ export default function RightPanel() {
       </div>
 
       {/* 對話區 */}
-      <div style={{ flex: 1, overflow: "hidden", minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div
+        style={{
+          flex: 1,
+          overflow: "hidden",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         <ChatArea
           messages={messages}
           loading={loading}
@@ -226,3 +405,56 @@ export default function RightPanel() {
     </div>
   );
 }
+
+// ── 小元件 ────────────────────────────────────────────────────
+
+function MenuItem({ children, onClick, disabled, danger, active }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onClick={disabled ? undefined : onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        padding: "7px 12px",
+        fontSize: 11,
+        cursor: disabled ? "default" : "pointer",
+        color: disabled
+          ? "#484f58"
+          : danger
+            ? hover ? "#ff7b72" : "#f85149"
+            : active
+              ? "#58a6ff"
+              : hover ? "#cdd9e5" : "#8b949e",
+        background: hover && !disabled ? "#21262d" : "transparent",
+        transition: "color .1s, background .1s",
+        userSelect: "none",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+const navBtnS = (disabled) => ({
+  background: "transparent",
+  border: "none",
+  color: disabled ? "#30363d" : "#8b949e",
+  cursor: disabled ? "default" : "pointer",
+  fontSize: 14,
+  lineHeight: 1,
+  padding: "0 3px",
+  borderRadius: 3,
+  flexShrink: 0,
+});
+
+const iconBtnS = (disabled) => ({
+  background: "transparent",
+  border: "1px solid #30363d",
+  color: disabled ? "#30363d" : "#8b949e",
+  cursor: disabled ? "default" : "pointer",
+  fontSize: 11,
+  padding: "1px 5px",
+  borderRadius: 3,
+  flexShrink: 0,
+});
