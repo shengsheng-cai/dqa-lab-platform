@@ -83,6 +83,7 @@ export function mergeSpPv(spData, pvData) {
     map[p.min] = { ...p };
   });
   const spMins = spData.map((p) => p.min);
+  if (spMins.length === 0) return [];
   pvData.forEach((p) => {
     if (p.min == null) return;
     // 找最近的 SP 時間點，容差 ±2 分鐘
