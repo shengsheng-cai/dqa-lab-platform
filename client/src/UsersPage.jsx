@@ -121,8 +121,6 @@ function UserModal({ user, onClose, onSaved }) {
             style={inputStyle}
           >
             <option value="engineer">工程師</option>
-            <option value="keeper">保管人</option>
-            <option value="admin">管理者</option>
           </select>
         </div>
 
@@ -331,7 +329,7 @@ export default function UsersPage({ active }) {
             人員管理
           </div>
           <div style={{ fontSize: 12, color: "#8b949e", marginTop: 2 }}>
-            管理借用人名冊，可設定角色與 LINE 推播 ID
+            管理借用人名冊（工程師）與 LINE 推播 ID，保管人／管理者帳號請洽系統管理員
           </div>
         </div>
         <button
