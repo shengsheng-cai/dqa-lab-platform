@@ -8,7 +8,7 @@ logger = logging.getLogger("fixture_notifications")
 
 
 async def notify_loan_created(loan_id: int):
-    """借出登記後立即推播借用人確認訊息"""
+    """借出登記後立即推播借用人確認訊息 + 通知保管人"""
     try:
         with SessionLocal() as db:
             loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
@@ -20,30 +20,50 @@ async def notify_loan_created(loan_id: int):
             if loan.borrower_user_id:
                 borrower_user = db.query(User).filter(User.id == loan.borrower_user_id).first()
 
-            if not borrower_user or not borrower_user.line_user_id:
-                logger.info(f"[Notify] 借用人無 LINE ID，跳過推播（loan_id={loan_id}）")
-                return
-
             fixture_name = (
                 f"{fixture.interface_type} {fixture.form_factor}" if fixture else "未知治具"
             )
             due_str = loan.due_date.strftime("%Y/%m/%d") if loan.due_date else "未設定"
 
-            text = (
-                f"📦 治具借出確認\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"治具：{fixture_name}\n"
-                f"借出數量：{loan.quantity} 件\n"
-                f"應還日期：{due_str}\n"
-                f"專案：{loan.project_name or '—'}\n"
-                f"設備：{loan.device_id or '—'}\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"請於到期前歸還，謝謝！"
-            )
-            await push_to_user(borrower_user.line_user_id, text)
-            logger.info(
-                f"[Notify] 借出通知已推播給 {borrower_user.display_name}（loan_id={loan_id}）"
-            )
+            # 推播借用人
+            if borrower_user and borrower_user.line_user_id:
+                text = (
+                    f"📦 治具借出確認\n"
+                    f"━━━━━━━━━━━━━━\n"
+                    f"治具：{fixture_name}\n"
+                    f"借出數量：{loan.quantity} 件\n"
+                    f"應還日期：{due_str}\n"
+                    f"專案：{loan.project_name or '—'}\n"
+                    f"設備：{loan.device_id or '—'}\n"
+                    f"━━━━━━━━━━━━━━\n"
+                    f"請於到期前歸還，謝謝！"
+                )
+                await push_to_user(borrower_user.line_user_id, text)
+                logger.info(
+                    f"[Notify] 借出通知已推播給借用人 {borrower_user.display_name}（loan_id={loan_id}）"
+                )
+            else:
+                logger.info(f"[Notify] 借用人無 LINE ID，跳過推播（loan_id={loan_id}）")
+
+            # 推播保管人
+            if fixture and fixture.keeper_user_id:
+                keeper = db.query(User).filter(User.id == fixture.keeper_user_id).first()
+                if keeper and keeper.line_user_id:
+                    borrower_name = borrower_user.display_name if borrower_user else (loan.borrower_name or "未知")
+                    keeper_text = (
+                        f"🔔 治具已借出通知\n"
+                        f"━━━━━━━━━━━━━━\n"
+                        f"治具：{fixture_name}\n"
+                        f"借用人：{borrower_name}\n"
+                        f"借出數量：{loan.quantity} 件\n"
+                        f"應還日期：{due_str}\n"
+                        f"專案：{loan.project_name or '—'}\n"
+                        f"━━━━━━━━━━━━━━"
+                    )
+                    await push_to_user(keeper.line_user_id, keeper_text)
+                    logger.info(
+                        f"[Notify] 借出通知已推播給保管人 {keeper.display_name}（loan_id={loan_id}）"
+                    )
     except Exception as e:
         logger.error(f"[Notify] notify_loan_created 失敗：{e}")
 

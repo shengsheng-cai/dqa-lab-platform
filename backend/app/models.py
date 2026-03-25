@@ -253,6 +253,8 @@ class DeviceState(Base):
     started_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
     )
+    sim_phase: Mapped[Optional[str]] = mapped_column(String, nullable=True, default="idle")
+    sim_cycle: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.datetime.now(datetime.timezone.utc),

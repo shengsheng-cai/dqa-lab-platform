@@ -11,7 +11,7 @@ from typing import List, Optional, Dict, Any
 from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _save_device_state
-from .line import push_message, push_to_user
+from .line import push_message, push_to_user, push_sop_notification
 
 PHOTO_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "photos")
 os.makedirs(PHOTO_UPLOAD_DIR, exist_ok=True)
@@ -132,28 +132,9 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
         f"操作人員：{op or '未填寫'}\n"
         f"請記得拍上架前照片 📷"
     )
-    asyncio.create_task(_push_sop_start_notif(op, notif_text))
+    asyncio.create_task(push_sop_notification(op, notif_text))
 
     return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
-
-
-async def _push_sop_start_notif(operator: str, text: str):
-    """推播 SOP 啟動通知給操作人員，找不到 LINE ID 時推給群組。"""
-    from .models import User
-    if operator:
-        try:
-            with SessionLocal() as db:
-                user = (
-                    db.query(User)
-                    .filter(User.display_name == operator, User.is_active == True)
-                    .first()
-                )
-                if user and user.line_user_id:
-                    await push_to_user(user.line_user_id, text)
-                    return
-        except Exception:
-            pass
-    await push_message(text)
 
 
 # SOP 執行紀錄路由

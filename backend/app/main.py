@@ -18,7 +18,7 @@ from .reports import router as reports_router
 from .errors import router as errors_router
 from .ai import router as ai_router
 from .rag import warmup_rag
-from .line import router as line_router, push_message, push_to_user
+from .line import router as line_router, push_message, push_to_user, push_sop_notification
 from .auth import router as auth_router
 from .fixtures import router as fixtures_router
 from .fixture_notifications import scan_overdue_loans, notify_monthly_inventory, scan_replacement_reminders
@@ -59,8 +59,8 @@ async def lifespan(app: FastAPI):
                 "completed_steps": s.completed_steps or 0,
                 "started_at": started_at,
                 "operator": "",
-                "sim_phase": "idle",
-                "sim_cycle": 0,
+                "sim_phase": s.sim_phase or "idle",
+                "sim_cycle": s.sim_cycle or 0,
             }
             print(f"🔄 [{device_id}] 恢復狀態：{s.status}，溫度：{s.temperature}°C")
         else:
@@ -369,7 +369,8 @@ async def emergency_stop(device_id: str):
     print(f"🚨 [{device_id}] EMERGENCY STOP by {operator}")
 
     asyncio.create_task(
-        push_message(
+        push_sop_notification(
+            operator,
             f"🚨 [{device_id}] 緊急停止已觸發\n"
             f"操作人員：{operator}\n"
             f"溫度：{device.get('temperature', 0.0):.1f}°C"
@@ -421,23 +422,6 @@ async def normal_stop(device_id: str):
     return {"status": "success"}
 
 
-async def _push_sop_notification(operator_name: str, text: str):
-    """推播 SOP 通知給操作人員，無法取得 LINE ID 時推給管理員。"""
-    from .models import User
-    if operator_name:
-        try:
-            with SessionLocal() as db:
-                user = (
-                    db.query(User)
-                    .filter(User.display_name == operator_name, User.is_active == True)
-                    .first()
-                )
-                if user and user.line_user_id:
-                    await push_to_user(user.line_user_id, text)
-                    return
-        except Exception:
-            pass
-    await push_message(text)
 
 
 async def data_simulator():
@@ -573,7 +557,7 @@ async def data_simulator():
                             f"測試：{sop_name_for_notif}\n"
                             f"進入恆溫停留，計時開始"
                         )
-                        asyncio.create_task(_push_sop_notification(op, notif_text))
+                        asyncio.create_task(push_sop_notification(op, notif_text))
 
                     elif sim_phase_after == "ramp_to_ambient" and "ramp_to_ambient" not in notif_set:
                         notif_set.add("ramp_to_ambient")
@@ -582,7 +566,7 @@ async def data_simulator():
                             f"報告已自動存檔，回常溫中\n"
                             f"請補充結束照片 📷"
                         )
-                        asyncio.create_task(_push_sop_notification(op, notif_text))
+                        asyncio.create_task(push_sop_notification(op, notif_text))
 
                 item["temperature"] = round(new_temp + random.uniform(-0.1, 0.1), 2)
 

@@ -390,12 +390,12 @@ def create_schedule(body: ScheduleCreate, request: Request):
 @router.patch("/{schedule_id}")
 def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request):
     """
-    更新排程（admin/keeper）。
+    更新排程（admin only）。
     status=已確認 時若無指定設備，自動排程。
     """
     role = getattr(request.state, "user_role", None)
-    if role not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="僅管理者/保管人可操作")
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="僅管理者可審核排程")
 
     user_id = getattr(request.state, "user_id", None)
 

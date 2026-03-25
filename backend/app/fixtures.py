@@ -416,8 +416,11 @@ def list_damaged_lost_loans():
 
 
 @router.post("/loans")
-async def create_loan(body: LoanCreate):
+async def create_loan(body: LoanCreate, request: Request):
     from .fixture_notifications import notify_loan_created
+
+    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
+        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
 
     db = SessionLocal()
     try:
@@ -456,7 +459,10 @@ async def create_loan(body: LoanCreate):
 
 
 @router.post("/loans/{loan_id}/return")
-def return_loan(loan_id: int, body: ReturnUpdate):
+def return_loan(loan_id: int, body: ReturnUpdate, request: Request):
+    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
+        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+
     db = SessionLocal()
     try:
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
@@ -493,7 +499,10 @@ def return_loan(loan_id: int, body: ReturnUpdate):
 
 
 @router.post("/loans/{loan_id}/extend")
-def extend_loan(loan_id: int, body: ExtensionRequest):
+def extend_loan(loan_id: int, body: ExtensionRequest, request: Request):
+    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
+        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+
     db = SessionLocal()
     try:
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
@@ -514,8 +523,10 @@ def extend_loan(loan_id: int, body: ExtensionRequest):
 
 
 @router.post("/import")
-async def import_fixtures(file: UploadFile = File(...)):
+async def import_fixtures(request: Request, file: UploadFile = File(...)):
     """從 Excel 匯入治具資料（保管人/管理者操作）"""
+    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
+        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
     try:
         import pandas as pd
     except ImportError:
@@ -635,7 +646,10 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request):
 
 
 @router.post("/{fixture_id}/inventory")
-def update_inventory(fixture_id: int, actual_quantity: int):
+def update_inventory(fixture_id: int, actual_quantity: int, request: Request):
+    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
+        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+
     db = SessionLocal()
     try:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()

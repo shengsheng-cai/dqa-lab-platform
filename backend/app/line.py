@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
+from .models import SessionLocal, User
 
 # --- 設定 ---
 logger = logging.getLogger("line_bot")
@@ -265,6 +266,41 @@ def _create_flex_detail_card(device_id: str, data: Dict[str, Any]) -> Dict:
     }
 
 
+async def push_sop_notification(operator_name: str, text: str):
+    """推播 SOP 通知給操作人員，找不到個人 LINE ID 時 fallback 推給環境變數設定的預設帳號。"""
+    if operator_name:
+        try:
+            with SessionLocal() as db:
+                user = (
+                    db.query(User)
+                    .filter(User.display_name == operator_name, User.is_active == True)
+                    .first()
+                )
+                if user and user.line_user_id:
+                    await push_to_user(user.line_user_id, text)
+                    return
+        except Exception as e:
+            logger.warning(f"[LINE] push_sop_notification 查詢失敗，fallback 廣播：{e}")
+    await push_message(text)
+
+
+def _handle_bind_command(sender_id: str, name: str) -> str:
+    """處理「綁定 姓名」指令，將 LINE User ID 寫入工程師帳號"""
+    name = name.strip()
+    if not name:
+        return "❌ 請輸入姓名，例如：綁定 張三"
+
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.display_name == name).first()
+        if not user:
+            return f"❌ 找不到「{name}」，請確認姓名是否正確（須與系統中的顯示名稱完全相符）"
+        if user.line_user_id == sender_id:
+            return "✅ 已完成綁定，無需重複操作"
+        user.line_user_id = sender_id
+        db.commit()
+        return f"✅ 綁定成功！{name} 已連結此 LINE 帳號，往後測試通知將推送至此。"
+
+
 def _dispatch_command(text: str, cache: Dict[str, Any]) -> List[Dict]:
     """解析指令並決定回傳格式"""
     cmd = text.strip().lower()
@@ -326,19 +362,43 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
     cache = getattr(request.app.state, "AICM_CACHE", {})
     client = request.app.state.http_client
 
-    line_user_id = os.getenv("LINE_USER_ID", "")
-
     for event in data.get("events", []):
-        if event.get("type") != "message" or event["message"].get("type") != "text":
-            continue
-
+        event_type = event.get("type")
         sender_id = event.get("source", {}).get("userId", "")
-        if line_user_id and sender_id != line_user_id:
+        reply_token = event.get("replyToken")
+
+        # 加好友事件：發送歡迎訊息與綁定說明
+        if event_type == "follow":
+            welcome = (
+                "👋 歡迎加入 DQA Lab Bot！\n\n"
+                "若要接收測試通知，請傳送：\n"
+                "綁定 你的姓名\n\n"
+                "例如：綁定 張三\n\n"
+                "其他指令：\n"
+                "• 狀態 — 查設備概覽\n"
+                "• 幫助 — 查所有指令"
+            )
+            background_tasks.add_task(
+                _send_to_line, reply_token, [{"type": "text", "text": welcome}], client
+            )
             continue
 
-        reply_token = event.get("replyToken")
-        user_text = event["message"]["text"]
+        # 只處理文字訊息
+        if event_type != "message" or event.get("message", {}).get("type") != "text":
+            continue
 
+        user_text = event["message"]["text"].strip()
+
+        # 綁定指令
+        if user_text.startswith("綁定"):
+            name = user_text[2:].strip()
+            reply_text = _handle_bind_command(sender_id, name)
+            background_tasks.add_task(
+                _send_to_line, reply_token, [{"type": "text", "text": reply_text}], client
+            )
+            continue
+
+        # 一般指令
         messages = _dispatch_command(user_text, cache)
         background_tasks.add_task(_send_to_line, reply_token, messages, client)
 
