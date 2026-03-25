@@ -47,11 +47,16 @@ export function generateSP(sop) {
 
   if (low !== null && low < ambientTemp) {
     pushRamp(ambientTemp, low);
-    for (let c = 0; c < cycles; c++) {
-      pushRamp(low, high);
-      pushDwell(high, dwell);
-      pushRamp(high, low);
+    if (Math.abs(high - low) < 0.1) {
+      // 單溫冷測（high == low）：只有一段 dwell，對齊狀態機行為
       pushDwell(low, dwell);
+    } else {
+      for (let c = 0; c < cycles; c++) {
+        pushRamp(low, high);
+        pushDwell(high, dwell);
+        pushRamp(high, low);
+        pushDwell(low, dwell);
+      }
     }
     pushRamp(low, ambientTemp);
   } else if (low !== null) {
