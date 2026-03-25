@@ -337,6 +337,7 @@ async def emergency_stop(device_id: str):
         }
 
     operator = device.get("operator", "") or "未填寫"
+    sop_name = device.get("running_sop_name", "") or "未知測試"
 
     with SessionLocal() as db:
         db.add(
@@ -376,6 +377,7 @@ async def emergency_stop(device_id: str):
         push_sop_notification(
             operator,
             f"🚨 [{device_id}] 緊急停止已觸發\n"
+            f"測試：{sop_name}\n"
             f"操作人員：{operator}\n"
             f"溫度：{device.get('temperature', 0.0):.1f}°C"
         )
@@ -418,7 +420,7 @@ async def normal_stop(device_id: str):
             "started_at": None,
             "standard_id": None,
             "operator": "",
-            "sim_phase": "idle",
+            "sim_phase": "ramp_to_ambient",
             "sim_cycle": 0,
         }
     )

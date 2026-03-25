@@ -54,6 +54,24 @@ class SetKeeperBody(BaseModel):
     keeper_user_id: Optional[int] = None
 
 
+class FixtureUpsert(BaseModel):
+    interface_type: str
+    form_factor: str
+    priority: Optional[int] = None
+    size: Optional[str] = None
+    purpose: Optional[str] = None
+    total_quantity: int = 0
+    shortage: int = 0
+    usage_frequency: Optional[int] = None
+    replacement_years: Optional[str] = None
+    note: Optional[str] = None
+    keeper_name: Optional[str] = None
+    deputy_name: Optional[str] = None
+    vendor: Optional[str] = None
+    model_number: Optional[str] = None
+    unit_price: Optional[float] = None
+
+
 class LoanOut(BaseModel):
     id: int
     fixture_id: int
@@ -568,6 +586,7 @@ async def import_fixtures(request: Request, file: UploadFile = File(...)):
         except (KeyError, IndexError, ValueError, TypeError):
             return None
 
+    updated = 0
     try:
         for idx, row in df.iterrows():
             if idx == 0:
@@ -580,10 +599,15 @@ async def import_fixtures(request: Request, file: UploadFile = File(...)):
                 skipped += 1
                 continue
 
-            fixture = Fixture(
+            # Upsert：相同 interface_type + form_factor 則更新，否則新增
+            existing = db.query(Fixture).filter(
+                Fixture.interface_type == interface_type,
+                Fixture.form_factor == form_factor,
+                Fixture.is_active == True,
+            ).first()
+
+            fields = dict(
                 priority=safe_int_col(row, 0, None),
-                interface_type=interface_type,
-                form_factor=form_factor,
                 size=safe_col(row, 4),
                 purpose=safe_col(row, 5),
                 estimated_usage=safe_float_col(row, 6),
@@ -598,11 +622,22 @@ async def import_fixtures(request: Request, file: UploadFile = File(...)):
                 model_number=safe_col(row, 15),
                 unit_price=safe_float_col(row, 16),
             )
-            db.add(fixture)
-            imported += 1
+
+            if existing:
+                for k, v in fields.items():
+                    setattr(existing, k, v)
+                updated += 1
+            else:
+                fixture = Fixture(
+                    interface_type=interface_type,
+                    form_factor=form_factor,
+                    **fields,
+                )
+                db.add(fixture)
+                imported += 1
 
         db.commit()
-        return {"status": "success", "imported": imported, "skipped": skipped}
+        return {"status": "success", "imported": imported, "updated": updated, "skipped": skipped}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -665,5 +700,97 @@ def update_inventory(fixture_id: int, actual_quantity: int, request: Request):
             "actual": actual_quantity,
             "diff": diff,
         }
+    finally:
+        db.close()
+
+
+# ---------- 新增治具 ----------
+
+
+@router.post("/")
+def create_fixture(body: FixtureUpsert, request: Request):
+    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
+        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    db = SessionLocal()
+    try:
+        f = Fixture(
+            interface_type=body.interface_type,
+            form_factor=body.form_factor,
+            priority=body.priority,
+            size=body.size,
+            purpose=body.purpose,
+            total_quantity=body.total_quantity,
+            shortage=body.shortage,
+            usage_frequency=body.usage_frequency,
+            replacement_years=body.replacement_years,
+            note=body.note,
+            keeper_name=body.keeper_name,
+            deputy_name=body.deputy_name,
+            vendor=body.vendor,
+            model_number=body.model_number,
+            unit_price=body.unit_price,
+        )
+        db.add(f)
+        db.commit()
+        db.refresh(f)
+        return _fixture_to_out(db, f)
+    finally:
+        db.close()
+
+
+# ---------- 編輯治具 ----------
+
+
+@router.patch("/{fixture_id}")
+def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request):
+    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
+        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    db = SessionLocal()
+    try:
+        f = db.query(Fixture).filter(Fixture.id == fixture_id, Fixture.is_active == True).first()
+        if not f:
+            raise HTTPException(status_code=404, detail="治具不存在")
+        f.interface_type = body.interface_type
+        f.form_factor = body.form_factor
+        f.priority = body.priority
+        f.size = body.size
+        f.purpose = body.purpose
+        f.total_quantity = body.total_quantity
+        f.shortage = body.shortage
+        f.usage_frequency = body.usage_frequency
+        f.replacement_years = body.replacement_years
+        f.note = body.note
+        f.keeper_name = body.keeper_name
+        f.deputy_name = body.deputy_name
+        f.vendor = body.vendor
+        f.model_number = body.model_number
+        f.unit_price = body.unit_price
+        db.commit()
+        return _fixture_to_out(db, f)
+    finally:
+        db.close()
+
+
+# ---------- 刪除治具（軟刪除）----------
+
+
+@router.delete("/{fixture_id}")
+def delete_fixture(fixture_id: int, request: Request):
+    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
+        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    db = SessionLocal()
+    try:
+        f = db.query(Fixture).filter(Fixture.id == fixture_id, Fixture.is_active == True).first()
+        if not f:
+            raise HTTPException(status_code=404, detail="治具不存在")
+        active_loans = db.query(FixtureLoan).filter(
+            FixtureLoan.fixture_id == fixture_id,
+            FixtureLoan.status == "loaned",
+        ).count()
+        if active_loans > 0:
+            raise HTTPException(status_code=400, detail=f"此治具有 {active_loans} 筆借出未歸還，無法刪除")
+        f.is_active = False
+        db.commit()
+        return {"status": "success"}
     finally:
         db.close()

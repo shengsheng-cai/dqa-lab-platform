@@ -20,14 +20,23 @@
     box-sizing: border-box;
 }
 
+.monitor-side.embedded {
+    padding: 12px 16px;
+    gap: 10px;
+}
+
 /* 右側 60% */
 .control-side {
     width: 60%;
-    background: #010409;
+    background: #0d1117;
     padding: 30px;
     height: 100%;           /* 讓 scroll-wrapper 有參照高度 */
     overflow: hidden;       /* 自身不捲動，由 scroll-wrapper 負責 */
     box-sizing: border-box;
+}
+
+.control-side.embedded {
+    padding: 12px 16px;
 }
 
 .scroll-wrapper {

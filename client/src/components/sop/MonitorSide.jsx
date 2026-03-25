@@ -34,7 +34,7 @@ const MonitorSide = ({
   const sc = STATUS_CONFIG[data.status] || STATUS_CONFIG.OFFLINE;
 
   return (
-    <aside className="monitor-side">
+    <aside className={`monitor-side${embedded ? " embedded" : ""}`}>
       {/* Brand + status（嵌入模式隱藏標題）*/}
       {!embedded && (
         <div className="brand-box">
@@ -60,18 +60,10 @@ const MonitorSide = ({
         </div>
       )}
 
-      {/* 嵌入模式：簡化狀態列 */}
+      {/* 嵌入模式：僅顯示更新時間 */}
       {embedded && (
-        <div style={{ padding: "10px 16px 6px", display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            style={{
-              padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700,
-              color: sc.color, background: sc.bg, border: `1px solid ${sc.color}44`,
-            }}
-          >
-            {selectedDevice} — {data.status}
-          </span>
-          <span style={{ fontSize: 11, color: "#484f58" }}>{data.timestamp}</span>
+        <div style={{ paddingBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 10, color: "#484f58" }}>updated {data.timestamp}</span>
         </div>
       )}
 

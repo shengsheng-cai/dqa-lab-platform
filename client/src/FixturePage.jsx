@@ -231,8 +231,13 @@ function ImportModal({ onClose, onSuccess }) {
               ✅ 匯入完成
             </span>
             <span style={{ color: "#cdd9e5", marginLeft: 10 }}>
-              成功 {result.imported} 筆
+              新增 {result.imported} 筆
             </span>
+            {result.updated > 0 && (
+              <span style={{ color: "#58a6ff", marginLeft: 8 }}>
+                更新 {result.updated} 筆
+              </span>
+            )}
             {result.skipped > 0 && (
               <span style={{ color: "#8b949e", marginLeft: 8 }}>
                 跳過 {result.skipped} 筆（空行或缺少必填欄位）
@@ -787,6 +792,166 @@ function ReturnModal({ loan, onClose, onSubmit }) {
   );
 }
 
+function AddEditModal({ fixture, onClose, onSuccess }) {
+  const isEdit = !!fixture;
+  const [form, setForm] = useState({
+    interface_type: fixture?.interface_type || "",
+    form_factor: fixture?.form_factor || "",
+    priority: fixture?.priority ?? "",
+    size: fixture?.size || "",
+    purpose: fixture?.purpose || "",
+    total_quantity: fixture?.total_quantity ?? 0,
+    shortage: fixture?.shortage ?? 0,
+    usage_frequency: fixture?.usage_frequency ?? "",
+    replacement_years: fixture?.replacement_years || "",
+    note: fixture?.note || "",
+    keeper_name: fixture?.keeper_name || "",
+    deputy_name: fixture?.deputy_name || "",
+    vendor: fixture?.vendor || "",
+    model_number: fixture?.model_number || "",
+    unit_price: fixture?.unit_price ?? "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const handleSubmit = async () => {
+    if (!form.interface_type || !form.form_factor) {
+      setError("介面和型態為必填");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const body = {
+        ...form,
+        priority: form.priority === "" ? null : Number(form.priority),
+        total_quantity: Number(form.total_quantity) || 0,
+        shortage: Number(form.shortage) || 0,
+        usage_frequency: form.usage_frequency === "" ? null : Number(form.usage_frequency),
+        unit_price: form.unit_price === "" ? null : Number(form.unit_price),
+        size: form.size || null,
+        purpose: form.purpose || null,
+        replacement_years: form.replacement_years || null,
+        note: form.note || null,
+        keeper_name: form.keeper_name || null,
+        deputy_name: form.deputy_name || null,
+        vendor: form.vendor || null,
+        model_number: form.model_number || null,
+      };
+      if (isEdit) {
+        await api.patch(`/api/fixtures/${fixture.id}`, body);
+      } else {
+        await api.post("/api/fixtures/", body);
+      }
+      onSuccess();
+      onClose();
+    } catch (e) {
+      setError(e.response?.data?.detail || "操作失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputStyle = {
+    padding: "7px 10px", borderRadius: 6, border: "1px solid #30363d",
+    background: "#0d1117", color: "#cdd9e5", fontSize: 13,
+    width: "100%", boxSizing: "border-box",
+  };
+  const label = (txt) => (
+    <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 3 }}>{txt}</div>
+  );
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000 }}>
+      <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 24, width: 520, maxHeight: "85vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
+          {isEdit ? "編輯治具" : "新增治具"}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            {label("介面 *")}
+            <input value={form.interface_type} onChange={(e) => set("interface_type", e.target.value)} style={inputStyle} placeholder="e.g. USB-C" />
+          </div>
+          <div>
+            {label("型態 *")}
+            <input value={form.form_factor} onChange={(e) => set("form_factor", e.target.value)} style={inputStyle} placeholder="e.g. 轉接頭" />
+          </div>
+          <div>
+            {label("優先度")}
+            <input type="number" value={form.priority} onChange={(e) => set("priority", e.target.value)} style={inputStyle} placeholder="數字越小越前" />
+          </div>
+          <div>
+            {label("尺寸")}
+            <input value={form.size} onChange={(e) => set("size", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("現有數量")}
+            <input type="number" min={0} value={form.total_quantity} onChange={(e) => set("total_quantity", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("缺貨數")}
+            <input type="number" min={0} value={form.shortage} onChange={(e) => set("shortage", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("使用頻率")}
+            <select value={form.usage_frequency} onChange={(e) => set("usage_frequency", e.target.value)} style={inputStyle}>
+              <option value="">—</option>
+              <option value="1">每天</option>
+              <option value="2">週</option>
+              <option value="3">月</option>
+              <option value="4">季</option>
+              <option value="5">年</option>
+            </select>
+          </div>
+          <div>
+            {label("汰換年限")}
+            <input value={form.replacement_years} onChange={(e) => set("replacement_years", e.target.value)} style={inputStyle} placeholder="e.g. 3年" />
+          </div>
+          <div>
+            {label("保管人")}
+            <input value={form.keeper_name} onChange={(e) => set("keeper_name", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("代理人")}
+            <input value={form.deputy_name} onChange={(e) => set("deputy_name", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("廠商")}
+            <input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("型號")}
+            <input value={form.model_number} onChange={(e) => set("model_number", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("單價")}
+            <input type="number" min={0} value={form.unit_price} onChange={(e) => set("unit_price", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("用途")}
+            <input value={form.purpose} onChange={(e) => set("purpose", e.target.value)} style={inputStyle} />
+          </div>
+        </div>
+        <div>
+          {label("備註")}
+          <input value={form.note} onChange={(e) => set("note", e.target.value)} style={inputStyle} />
+        </div>
+        {error && <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>}
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: "8px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 13 }}>
+            取消
+          </button>
+          <button onClick={handleSubmit} disabled={loading} style={{ flex: 1, padding: "8px", borderRadius: 6, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+            {loading ? "儲存中..." : isEdit ? "儲存" : "新增"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function FixturePage({ active, role }) {
   const [fixtures, setFixtures] = useState([]);
   const [summary, setSummary] = useState({
@@ -805,6 +970,7 @@ export default function FixturePage({ active, role }) {
   const [showImportModal, setShowImportModal] = useState(false);
   const [returnTarget, setReturnTarget] = useState(null);
   const [keeperTarget, setKeeperTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null); // null=關閉, false=新增, object=編輯
   const [inventoryEdits, setInventoryEdits] = useState({});
   const [loading, setLoading] = useState(false);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
@@ -926,30 +1092,19 @@ export default function FixturePage({ active, role }) {
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={() => setShowImportModal(true)}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 6,
-                background: "transparent",
-                color: "#8b949e",
-                border: "1px solid #30363d",
-                cursor: "pointer",
-                fontSize: 13,
-              }}
+              style={{ padding: "6px 14px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 13 }}
             >
               匯入 Excel
             </button>
             <button
+              onClick={() => setEditTarget(false)}
+              style={{ padding: "6px 14px", borderRadius: 6, background: "transparent", color: "#58a6ff", border: "1px solid #58a6ff44", cursor: "pointer", fontSize: 13 }}
+            >
+              + 新增治具
+            </button>
+            <button
               onClick={() => setShowLoanModal(true)}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 6,
-                background: "#238636",
-                color: "#fff",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
+              style={{ padding: "6px 14px", borderRadius: 6, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
             >
               + 借出登記
             </button>
@@ -1253,42 +1408,41 @@ export default function FixturePage({ active, role }) {
                       </td>
                       {canOperate && (
                         <td style={tdStyle}>
-                          <div style={{ display: "flex", gap: 4 }}>
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                            <button
+                              onClick={() => setEditTarget(f)}
+                              style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #58a6ff44", background: "transparent", color: "#58a6ff", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
+                            >
+                              編輯
+                            </button>
                             <button
                               onClick={() => setKeeperTarget(f)}
-                              style={{
-                                padding: "3px 10px",
-                                borderRadius: 4,
-                                border: "1px solid #30363d",
-                                background: "transparent",
-                                color: "#8b949e",
-                                fontSize: 11,
-                                cursor: "pointer",
-                                whiteSpace: "nowrap",
-                              }}
+                              style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #30363d", background: "transparent", color: "#8b949e", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
                             >
-                              設定保管人
+                              保管人
                             </button>
                             {f.available_quantity === 0 && (
                               <button
-                                onClick={() => {
-                                  setPurchasePreFill(f);
-                                  setShowPurchaseModal(true);
-                                }}
-                                style={{
-                                  padding: "3px 10px",
-                                  borderRadius: 4,
-                                  border: "1px solid #f0a500",
-                                  background: "transparent",
-                                  color: "#f0a500",
-                                  fontSize: 11,
-                                  cursor: "pointer",
-                                  whiteSpace: "nowrap",
-                                }}
+                                onClick={() => { setPurchasePreFill(f); setShowPurchaseModal(true); }}
+                                style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #f0a500", background: "transparent", color: "#f0a500", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
                               >
                                 採購
                               </button>
                             )}
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm(`確定刪除「${f.interface_type} — ${f.form_factor}」？`)) return;
+                                try {
+                                  await api.delete(`/api/fixtures/${f.id}`);
+                                  fetchAll();
+                                } catch (e) {
+                                  alert(e.response?.data?.detail || "刪除失敗");
+                                }
+                              }}
+                              style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #f8514944", background: "transparent", color: "#f85149", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
+                            >
+                              刪除
+                            </button>
                           </div>
                         </td>
                       )}
@@ -1436,6 +1590,13 @@ export default function FixturePage({ active, role }) {
       {showImportModal && (
         <ImportModal
           onClose={() => setShowImportModal(false)}
+          onSuccess={fetchAll}
+        />
+      )}
+      {editTarget !== null && (
+        <AddEditModal
+          fixture={editTarget || null}
+          onClose={() => setEditTarget(null)}
           onSuccess={fetchAll}
         />
       )}

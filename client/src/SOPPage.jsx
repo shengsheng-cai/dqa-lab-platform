@@ -532,7 +532,7 @@ const SOPPage = ({ active = true, externalDevice }) => {
         embedded={!!externalDevice}
       />
 
-      <main className="control-side">
+      <main className={`control-side${externalDevice ? " embedded" : ""}`}>
         <div className="scroll-wrapper">
           <ControlPanel
             selectedDevice={selectedDevice}
