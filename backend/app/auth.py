@@ -1,6 +1,5 @@
 import os
 import time
-import hashlib
 import secrets
 import datetime
 from typing import Optional
@@ -32,12 +31,15 @@ router = APIRouter()
 
 
 # ---------- 密碼雜湊 ----------
+import bcrypt as _bcrypt
+
+
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    return hash_password(password) == hashed
+    return _bcrypt.checkpw(password.encode(), hashed.encode())
 
 
 # ---------- Token（存 DB，重啟不失效）----------
