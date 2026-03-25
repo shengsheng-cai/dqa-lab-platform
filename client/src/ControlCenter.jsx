@@ -279,13 +279,16 @@ function fmtDatetime(str) {
 function ExecutionList({ active }) {
   const [executions, setExecutions] = useState([]);
   const [downloading, setDownloading] = useState(null);
+  const [uploading, setUploading] = useState(null); // { id, type }
+  const [expandedId, setExpandedId] = useState(null);
+
+  const fetchList = () =>
+    api.get("/api/reports/list").then((r) => setExecutions(r.data)).catch(() => {});
 
   useEffect(() => {
     if (!active) return;
-    const fetch_ = () =>
-      api.get("/api/reports/list").then((r) => setExecutions(r.data)).catch(() => {});
-    fetch_();
-    const t = setInterval(fetch_, 60000);
+    fetchList();
+    const t = setInterval(fetchList, 60000);
     return () => clearInterval(t);
   }, [active]);
 
@@ -304,8 +307,30 @@ function ExecutionList({ active }) {
     } catch (_) {} finally { setDownloading(null); }
   };
 
+  const uploadPhoto = async (exId, photoType, file) => {
+    setUploading({ id: exId, type: photoType });
+    try {
+      const form = new FormData();
+      form.append("photo_type", photoType);
+      form.append("file", file);
+      await api.post(`/api/sop-executions/${exId}/photos`, form);
+      await fetchList();
+    } catch (_) {} finally { setUploading(null); }
+  };
+
   const thStyle = { padding: "6px 12px", textAlign: "left", color: "#8b949e", fontWeight: 600, fontSize: 12 };
   const tdStyle = { padding: "8px 12px", fontSize: 12 };
+
+  const PhotoBadge = ({ has, label }) => (
+    <span style={{
+      fontSize: 10, padding: "1px 5px", borderRadius: 3, marginRight: 3,
+      background: has ? "#0f2318" : "#21262d",
+      color: has ? "#57ab5a" : "#8b949e",
+      border: `1px solid ${has ? "#2d5a3a" : "#30363d"}`,
+    }}>
+      {has ? "✅" : "⚠️"} {label}
+    </span>
+  );
 
   return (
     <div style={{ backgroundColor: "#0d1117", color: "#cdd9e5", height: "100%", overflowY: "auto", padding: "20px 24px", boxSizing: "border-box" }}>
@@ -319,33 +344,83 @@ function ExecutionList({ active }) {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #30363d" }}>
-              {["ID", "測試名稱", "設備", "執行人員", "測試開始", "報告"].map((h) => (
+              {["ID", "測試名稱", "設備", "執行人員", "測試開始", "照片", "報告"].map((h) => (
                 <th key={h} style={thStyle}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {executions.map((ex) => (
-              <tr key={ex.id} style={{ borderBottom: "1px solid #21262d" }}>
-                <td style={{ ...tdStyle, color: "#484f58" }}>#{ex.id}</td>
-                <td style={{ ...tdStyle, color: "#cdd9e5" }}><span title={ex.sop_id}>{ex.sop_name || ex.sop_id}</span></td>
-                <td style={{ ...tdStyle, color: "#8b949e", fontFamily: "monospace" }}>{ex.device_id || "—"}</td>
-                <td style={{ ...tdStyle, color: "#8b949e" }}>{ex.operator || "—"}</td>
-                <td style={{ ...tdStyle, color: "#8b949e" }}>{fmtDatetime(ex.test_started_at || ex.created_at)}</td>
-                <td style={tdStyle}>
-                  <button
-                    onClick={() => downloadReport(ex)}
-                    disabled={downloading === ex.id}
-                    style={{
-                      padding: "3px 10px", fontSize: 11, borderRadius: 4, cursor: "pointer",
-                      background: "transparent", border: "1px solid #30363d", color: "#58a6ff",
-                      opacity: downloading === ex.id ? 0.5 : 1,
-                    }}
-                  >
-                    {downloading === ex.id ? "⏳" : "📥 CSV"}
-                  </button>
-                </td>
-              </tr>
+              <>
+                <tr key={ex.id} style={{ borderBottom: expandedId === ex.id ? "none" : "1px solid #21262d" }}>
+                  <td style={{ ...tdStyle, color: "#484f58" }}>#{ex.id}</td>
+                  <td style={{ ...tdStyle, color: "#cdd9e5" }}><span title={ex.sop_id}>{ex.sop_name || ex.sop_id}</span></td>
+                  <td style={{ ...tdStyle, color: "#8b949e", fontFamily: "monospace" }}>{ex.device_id || "—"}</td>
+                  <td style={{ ...tdStyle, color: "#8b949e" }}>{ex.operator || "—"}</td>
+                  <td style={{ ...tdStyle, color: "#8b949e" }}>{fmtDatetime(ex.test_started_at || ex.created_at)}</td>
+                  <td style={tdStyle}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                      <PhotoBadge has={ex.photo_before} label="上架" />
+                      <PhotoBadge has={ex.photo_after} label="結束" />
+                      <button
+                        onClick={() => setExpandedId(expandedId === ex.id ? null : ex.id)}
+                        style={{
+                          fontSize: 10, padding: "1px 6px", borderRadius: 3, cursor: "pointer",
+                          background: "transparent", border: "1px solid #30363d", color: "#8b949e",
+                        }}
+                      >
+                        補充
+                      </button>
+                    </div>
+                  </td>
+                  <td style={tdStyle}>
+                    <button
+                      onClick={() => downloadReport(ex)}
+                      disabled={downloading === ex.id}
+                      style={{
+                        padding: "3px 10px", fontSize: 11, borderRadius: 4, cursor: "pointer",
+                        background: "transparent", border: "1px solid #30363d", color: "#58a6ff",
+                        opacity: downloading === ex.id ? 0.5 : 1,
+                      }}
+                    >
+                      {downloading === ex.id ? "⏳" : "📥 CSV"}
+                    </button>
+                  </td>
+                </tr>
+                {expandedId === ex.id && (
+                  <tr key={`${ex.id}-expand`} style={{ borderBottom: "1px solid #21262d" }}>
+                    <td colSpan={7} style={{ padding: "8px 12px 12px 48px", background: "#161b22" }}>
+                      <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                        {[
+                          { type: "before", label: "上架前照片", has: ex.photo_before },
+                          { type: "after",  label: "測試結束照片", has: ex.photo_after },
+                        ].map(({ type, label, has }) => (
+                          <label key={type} style={{
+                            display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
+                            padding: "5px 10px", borderRadius: 4, fontSize: 11,
+                            border: "1px dashed #30363d", color: has ? "#57ab5a" : "#8b949e",
+                          }}>
+                            {uploading?.id === ex.id && uploading?.type === type
+                              ? "⏳ 上傳中..."
+                              : has ? `✅ ${label}（重新上傳）` : `📷 上傳${label}`}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              style={{ display: "none" }}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) uploadPhoto(ex.id, type, f);
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                        ))}
+                        <span style={{ fontSize: 10, color: "#484f58" }}>照片以相機 EXIF 時間為準</span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
             ))}
           </tbody>
         </table>

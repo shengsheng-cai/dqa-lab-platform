@@ -254,6 +254,8 @@ def list_executions():
                 "test_started_at": _fmt_dt(e.test_started_at),
                 "test_ended_at": _fmt_dt(e.test_ended_at),
                 "created_at": _fmt_dt(e.created_at),
+                "photo_before": bool(getattr(e, "photo_before_path", None)),
+                "photo_after": bool(getattr(e, "photo_after_path", None)),
             }
             for e in executions
         ]

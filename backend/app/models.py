@@ -198,6 +198,8 @@ class SopExecution(Base):
     test_ended_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
     )
+    photo_before_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    photo_after_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
     )

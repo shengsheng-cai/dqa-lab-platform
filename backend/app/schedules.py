@@ -85,8 +85,11 @@ class BlockedPeriodOut(BaseModel):
 # ── 時長計算工具 ────────────────────────────────────────────────────────────
 
 
+STABILIZATION_HOURS = 0.5  # 每個條件前 30min 常溫穩定時間（ISO 17025）
+
+
 def _calc_condition_hours(sop_id: str) -> float:
-    """計算單一測試條件的完整時長（含回常溫），單位：小時"""
+    """計算單一測試條件的完整時長（含回常溫 + 30min 常溫穩定），單位：小時"""
     std = get_standard(sop_id)
     if not std:
         return 1.0
@@ -120,7 +123,7 @@ def _calc_condition_hours(sop_id: str) -> float:
         ramp_up = abs(high_temp - ambient) / ramp_rate
         total_min = ramp_up + dwell_min + ramp_up
 
-    return total_min / 60.0
+    return total_min / 60.0 + STABILIZATION_HOURS
 
 
 def _calc_total_hours(conditions: List[str]) -> float:

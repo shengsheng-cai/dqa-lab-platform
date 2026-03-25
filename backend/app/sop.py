@@ -1,13 +1,20 @@
 # SOP 模組：提供標準樹與 SOP 列表、啟動 SOP 測試、取得 SOP 執行紀錄等功能
 
+import asyncio
 import json
 import datetime
-from fastapi import APIRouter, HTTPException, Body, Request
+import os
+import shutil
+from fastapi import APIRouter, HTTPException, Body, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _save_device_state
+from .line import push_message, push_to_user
+
+PHOTO_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "photos")
+os.makedirs(PHOTO_UPLOAD_DIR, exist_ok=True)
 
 # 導出 API 路由器
 router = APIRouter()
@@ -117,7 +124,36 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
     print(
         f"🔥 [{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}"
     )
+
+    # Phase 9-4：啟動通知
+    op = operator.strip() if operator else ""
+    notif_text = (
+        f"🔬 [{device_id}] 已啟動測試：{sop_name}\n"
+        f"操作人員：{op or '未填寫'}\n"
+        f"請記得拍上架前照片 📷"
+    )
+    asyncio.create_task(_push_sop_start_notif(op, notif_text))
+
     return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
+
+
+async def _push_sop_start_notif(operator: str, text: str):
+    """推播 SOP 啟動通知給操作人員，找不到 LINE ID 時推給群組。"""
+    from .models import User
+    if operator:
+        try:
+            with SessionLocal() as db:
+                user = (
+                    db.query(User)
+                    .filter(User.display_name == operator, User.is_active == True)
+                    .first()
+                )
+                if user and user.line_user_id:
+                    await push_to_user(user.line_user_id, text)
+                    return
+        except Exception:
+            pass
+    await push_message(text)
 
 
 # SOP 執行紀錄路由
@@ -227,3 +263,34 @@ def get_execution(execution_id: int):
             created_at=execution.created_at,
             steps=steps,
         )
+
+
+@execution_router.post("/{execution_id}/photos")
+async def upload_execution_photo(
+    execution_id: int,
+    photo_type: str = Form(...),  # "before" | "after"
+    file: UploadFile = File(...),
+):
+    """補充照片：上架前照（before）或測試結束照（after）"""
+    if photo_type not in ("before", "after"):
+        raise HTTPException(status_code=400, detail="photo_type 必須為 before 或 after")
+
+    ext = os.path.splitext(file.filename or "photo.jpg")[1] or ".jpg"
+    filename = f"{execution_id}_{photo_type}{ext}"
+    dest = os.path.join(PHOTO_UPLOAD_DIR, filename)
+
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    with SessionLocal() as db:
+        execution = db.query(SopExecution).filter(SopExecution.id == execution_id).first()
+        if not execution:
+            os.remove(dest)
+            raise HTTPException(status_code=404, detail="Execution not found")
+        if photo_type == "before":
+            execution.photo_before_path = filename
+        else:
+            execution.photo_after_path = filename
+        db.commit()
+
+    return {"status": "ok", "filename": filename}

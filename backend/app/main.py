@@ -486,6 +486,7 @@ async def data_simulator():
                 ambient = 25.0
                 sim_phase = item.get("sim_phase", "")
                 sim_cycle = item.get("sim_cycle", 0)
+                sim_phase_before = sim_phase  # Phase 9-4：記錄轉換前 phase
 
                 if not sim_phase or sim_phase == "idle":
                     if low_temp is not None and low_temp < ambient:
@@ -495,6 +496,7 @@ async def data_simulator():
                     item["sim_cycle"] = 0
                     sim_phase = item["sim_phase"]
                     dwell_start_times.pop(device_id, None)
+                    sop_notif_sent[device_id] = set()  # 新測試開始，重置通知紀錄
 
                 max_change = max_ramp_rate / 60.0
 
@@ -556,6 +558,31 @@ async def data_simulator():
                     new_temp = move_toward(current_temp, ambient)
                     if abs(new_temp - ambient) <= 0.1:
                         new_temp = ambient
+
+                # Phase 9-4：偵測 sim_phase 轉換並推播通知
+                sim_phase_after = item.get("sim_phase", "")
+                if sim_phase_after != sim_phase_before:
+                    notif_set = sop_notif_sent.setdefault(device_id, set())
+                    op = item.get("operator", "")
+                    sop_name_for_notif = item.get("running_sop_name", "測試")
+
+                    if sim_phase_after == "dwell_high" and "dwell_high" not in notif_set:
+                        notif_set.add("dwell_high")
+                        notif_text = (
+                            f"🌡️ [{device_id}] 已達目標溫度 {high_temp:.0f}°C\n"
+                            f"測試：{sop_name_for_notif}\n"
+                            f"進入恆溫停留，計時開始"
+                        )
+                        asyncio.create_task(_push_sop_notification(op, notif_text))
+
+                    elif sim_phase_after == "ramp_to_ambient" and "ramp_to_ambient" not in notif_set:
+                        notif_set.add("ramp_to_ambient")
+                        notif_text = (
+                            f"✅ [{device_id}] 測試完成：{sop_name_for_notif}\n"
+                            f"報告已自動存檔，回常溫中\n"
+                            f"請補充結束照片 📷"
+                        )
+                        asyncio.create_task(_push_sop_notification(op, notif_text))
 
                 item["temperature"] = round(new_temp + random.uniform(-0.1, 0.1), 2)
 

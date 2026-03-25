@@ -29,7 +29,7 @@
 TopBar 設備摘要列、LeftPanel 設備卡片與紀錄連結、CenterPanel 多 tab 切換（設備 / 治具 / 排程 / 人員管理）、RightPanel 常駐 AI 側欄（含迷你對話切換列）。多台溫箱設備即時監控，顯示溫濕度、運行狀態、倒數計時，支援雙 Y 軸趨勢圖與六種狀態指示。
 
 ### 🔧 SOP 執行引擎
-三步驟選擇法規 → 版本 → 測試條件，自動載入參數。支援進度持久化、步驟鎖定、SP+PV 波形疊加、ISO 17025 報告下載。
+三步驟選擇法規 → 版本 → 測試條件，自動載入參數。支援步驟自動確認（監聽 sim_phase 轉換，無需手動勾選）、測試完成自動存報告、LINE 三時機推播（啟動 / 達溫 / 完成）、照片補充（執行紀錄頁行內上傳）、ISO 17025 CSV 報告下載。
 
 ### 🗄️ 治具借還管理
 治具總表、借出登記、歸還確認（支援補填歸還日期）、逾期追蹤、月盤點回填、Excel 批次匯入。保管人中心制，LINE Bot 推播借用人確認。採購清單閉環（缺貨警示 → 採購單 → 到貨入庫），汰換提醒（APScheduler 每週推播保管人）。
@@ -220,6 +220,7 @@ dqa-lab-digital-twin/
 - **排程系統**：`GET /api/schedules/gantt`、`GET /api/schedules`、`POST /api/schedules`、`PATCH /api/schedules/{id}`、`DELETE /api/schedules/{id}`、`GET /api/schedules/standards-tree`、`GET /api/device-blocked-periods`、`POST /api/device-blocked-periods`、`DELETE /api/device-blocked-periods/{id}`
 - **AI 諮詢**：`POST /api/ai/query`（串流）
 - **Auth**：`POST /api/auth/login`、`POST /api/auth/demo-login`、`GET /api/auth/me`、`GET /api/auth/users`、`POST /api/auth/users`、`PATCH /api/auth/users/{id}`、`DELETE /api/auth/users/{id}`、`GET /api/auth/demo-tokens`、`POST /api/auth/demo-tokens`、`DELETE /api/auth/demo-tokens/{id}`、`PATCH /api/auth/demo-tokens/{id}/toggle`
+- **SOP 執行紀錄**：`POST /api/sop-executions/`、`GET /api/sop-executions/{id}`、`POST /api/sop-executions/{id}/photos`
 - **異常紀錄**：`GET /api/error-logs`
 
 ---
@@ -258,7 +259,7 @@ make clean        # 清理殘留程序
 - [x] 訪客模式功能開放（AI 諮詢全開放、治具唯讀、逾期未還 / 採購清單 tab 隱藏）
 - [x] AI 快速按鈕隨機池（16 題隨機抽 4，每次點擊後刷新；訪客每次登入清空對話紀錄）
 - [x] 排程系統（甘特圖 + 自動排程 + 設備不可用時段 + 三層條件選擇器）
-- [ ] SOP 流程重構（步驟自動確認 + 自動存報告 + 照片補充 + LINE 推播）
+- [x] SOP 流程重構（步驟自動確認 + 自動存報告 + 照片補充 + LINE 三時機推播 + 排程時長 +30min 穩定時間）
 - [ ] RS-485 真實設備通訊（Phase 3）
 - [ ] JWT 完整替換（單一 Authorization: Bearer header）
 - [ ] 密碼雜湊升級（passlib bcrypt 取代 SHA-256）
