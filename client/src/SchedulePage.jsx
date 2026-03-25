@@ -496,9 +496,9 @@ function ScheduleDetailModal({ schedule, role, onClose, onUpdated, onDeleted }) 
       if (deviceId) payload.device_id = deviceId;
       const res = await api.patch(`/api/schedules/${schedule.id}`, payload);
       onUpdated(res.data);
+      onClose();
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
-    } finally {
       setSaving(false);
     }
   }
