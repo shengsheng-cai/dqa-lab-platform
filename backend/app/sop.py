@@ -130,7 +130,7 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
     notif_text = (
         f"🔬 [{device_id}] 已啟動測試：{sop_name}\n"
         f"操作人員：{op or '未填寫'}\n"
-        f"請記得拍上架前照片 📷"
+        f"請記得拍上架時照片 📷"
     )
     asyncio.create_task(push_sop_notification(op, notif_text))
 
@@ -264,7 +264,9 @@ async def upload_execution_photo(
         shutil.copyfileobj(file.file, f)
 
     with SessionLocal() as db:
-        execution = db.query(SopExecution).filter(SopExecution.id == execution_id).first()
+        execution = (
+            db.query(SopExecution).filter(SopExecution.id == execution_id).first()
+        )
         if not execution:
             os.remove(dest)
             raise HTTPException(status_code=404, detail="Execution not found")
