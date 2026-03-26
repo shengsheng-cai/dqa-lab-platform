@@ -992,6 +992,7 @@ export default function FixturePage({ active, role }) {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [purchasePreFill, setPurchasePreFill] = useState(null);
+  const [showStocktakeModal, setShowStocktakeModal] = useState(false);
   const canOperate = role === "admin" || role === "keeper";
   const [sortKey, setSortKey] = useState("interface_type");
   const [sortDir, setSortDir] = useState("asc");
@@ -1227,7 +1228,7 @@ export default function FixturePage({ active, role }) {
 
       {activeTab === "inventory" && (
         <>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
             <input
               placeholder="搜尋治具..."
               value={search}
@@ -1242,6 +1243,24 @@ export default function FixturePage({ active, role }) {
                 fontSize: 13,
               }}
             />
+            {canOperate && (
+              <button
+                onClick={() => setShowStocktakeModal(true)}
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: 6,
+                  border: "1px solid #30363d",
+                  background: "#1a3828",
+                  color: "#3fb950",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                🔍 開始月盤點
+              </button>
+            )}
             <select
               value={filterInterface}
               onChange={(e) => setFilterInterface(e.target.value)}
@@ -1694,6 +1713,156 @@ export default function FixturePage({ active, role }) {
           }}
         />
       )}
+      {showStocktakeModal && (
+        <StocktakeModal
+          fixtures={fixtures}
+          onClose={() => setShowStocktakeModal(false)}
+          onComplete={() => {
+            setShowStocktakeModal(false);
+            fetchAll();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function StocktakeModal({ fixtures, onClose, onComplete }) {
+  const { showToast } = useToast();
+  const [actuals, setActuals] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  const active = fixtures.filter((f) => f.status === "ok" || f.status === "shortage" || f.status === "out_of_stock");
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    try {
+      const results = { normal: 0, diff: 0 };
+      for (const f of active) {
+        const actual = parseInt(actuals[f.id] || f.total_quantity);
+        if (actual !== f.total_quantity) {
+          await api.put(`/api/fixtures/${f.id}/inventory`, { actual_quantity: actual });
+          results.diff++;
+        } else {
+          results.normal++;
+        }
+      }
+      showToast(`盤點完成：正常 ${results.normal} 、差異 ${results.diff}`, "success");
+      onComplete();
+    } catch (e) {
+      showToast(e.response?.data?.detail || "盤點失敗", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.6)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 2000,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#161b22",
+          border: "1px solid #30363d",
+          borderRadius: 12,
+          padding: 24,
+          width: 600,
+          maxHeight: "80vh",
+          overflowY: "auto",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5", marginBottom: 16 }}>
+          🔍 月盤點
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {active.map((f) => {
+            const actual = actuals[f.id];
+            const isDiff = actual !== undefined && parseInt(actual) !== f.total_quantity;
+            return (
+              <div
+                key={f.id}
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "center",
+                  padding: "10px",
+                  background: isDiff ? "#3d1f1a" : "#0d1117",
+                  borderRadius: 6,
+                  border: `1px solid ${isDiff ? "#da3633" : "#30363d"}`,
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, color: "#cdd9e5" }}>
+                    {f.interface_type} / {f.form_factor}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#8b949e" }}>
+                    系統庫存：{f.total_quantity}
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  value={actual !== undefined ? actual : f.total_quantity}
+                  onChange={(e) => setActuals((p) => ({ ...p, [f.id]: e.target.value }))}
+                  style={{
+                    width: 80,
+                    padding: "6px 8px",
+                    borderRadius: 4,
+                    border: `1px solid ${isDiff ? "#f85149" : "#30363d"}`,
+                    background: "#0d1117",
+                    color: isDiff ? "#f85149" : "#cdd9e5",
+                    fontSize: 12,
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 6,
+              border: "1px solid #30363d",
+              background: "transparent",
+              color: "#8b949e",
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            取消
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 6,
+              border: "none",
+              background: "#238636",
+              color: "#fff",
+              cursor: loading ? "not-allowed" : "pointer",
+              fontSize: 13,
+              opacity: loading ? 0.7 : 1,
+            }}
+          >
+            {loading ? "提交中..." : "完成盤點"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
