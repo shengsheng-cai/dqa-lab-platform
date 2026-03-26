@@ -680,6 +680,11 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) 
   const visibleTabs = TABS.filter((t) => !t.adminOnly || role === "admin");
   const [failureCount, setFailureCount] = useState(0);
 
+  // 切換 tab 時重置滾動位置
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeTab]);
+
   useEffect(() => {
     if (role !== "admin") return;
     const fetchCount = () => {
@@ -830,7 +835,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   const [fixtureSummary, setFixtureSummary] = useState({});
   const [selectedDevice, setSelectedDevice] = useState("CH-01");
 
-  // 輪詢設備狀態（10s）
+  // 輪詢設備狀態（3s）
   useEffect(() => {
     const fetchDevices = async () => {
       try {
@@ -841,7 +846,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       }
     };
     fetchDevices();
-    const t = setInterval(fetchDevices, 10000);
+    const t = setInterval(fetchDevices, 3000);
     return () => clearInterval(t);
   }, []);
 

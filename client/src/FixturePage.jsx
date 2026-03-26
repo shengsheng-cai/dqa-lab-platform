@@ -1261,6 +1261,20 @@ export default function FixturePage({ active, role }) {
                 🔍 開始月盤點
               </button>
             )}
+            <input
+              type="text"
+              placeholder="🔍 按介面/型態搜尋..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                padding: "7px 10px",
+                borderRadius: 6,
+                border: "1px solid #30363d",
+                background: "#161b22",
+                color: "#cdd9e5",
+                fontSize: 13,
+              }}
+            />
             <select
               value={filterInterface}
               onChange={(e) => setFilterInterface(e.target.value)}

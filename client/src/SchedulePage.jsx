@@ -363,11 +363,28 @@ function NewScheduleModal({ standardsTree, onClose, onCreated }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [previewing, setPreviewing] = useState(false);
 
   const totalHours = form.conditions.reduce((acc, sop_id) => {
     const std = findStd(standardsTree, sop_id);
     return acc + (std?.estimated_hours || 0);
   }, 0) + Math.max(0, form.conditions.length - 1) * 0.5;
+
+  // 條件改變時自動獲取預覽
+  useEffect(() => {
+    if (form.conditions.length === 0) {
+      setPreview(null);
+      return;
+    }
+    const conditions = form.conditions.join(",");
+    setPreviewing(true);
+    api
+      .get("/api/schedules/preview", { params: { conditions } })
+      .then((r) => setPreview(r.data))
+      .catch(() => setPreview(null))
+      .finally(() => setPreviewing(false));
+  }, [form.conditions]);
 
   function findStd(tree, sop_id) {
     for (const std of Object.values(tree)) {
@@ -431,6 +448,7 @@ function NewScheduleModal({ standardsTree, onClose, onCreated }) {
           </div>
 
           {form.conditions.length > 0 && (
+            <>
             <div style={{
               background: "#161b22", borderRadius: 6, padding: "10px 12px",
               border: "1px solid #30363d",
@@ -455,6 +473,30 @@ function NewScheduleModal({ standardsTree, onClose, onCreated }) {
                 <span style={{ fontSize: 10, marginLeft: 6 }}>（含 {Math.max(0, form.conditions.length - 1)} × 30min 緩衝）</span>
               </div>
             </div>
+
+            {/* 預覽結果 */}
+            {previewing ? (
+              <div style={{ background: "#161b22", borderRadius: 6, padding: "10px 12px", border: "1px solid #30363d", color: "#8b949e", fontSize: 12 }}>
+                ⏳ 計算推薦排程中...
+              </div>
+            ) : preview ? (
+              <div style={{
+                background: "#1a2d1a", borderRadius: 6, padding: "10px 12px",
+                border: "1px solid #3fb950", borderLeft: "3px solid #3fb950",
+              }}>
+                <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 6 }}>⚡ 預覽（自動推薦）</div>
+                <div style={{ fontSize: 12, color: "#cdd9e5", marginBottom: 4 }}>
+                  📍 設備：<span style={{ color: "#7ee787", fontWeight: 600 }}>{preview.device_id || "待排程"}</span>
+                </div>
+                <div style={{ fontSize: 12, color: "#cdd9e5", marginBottom: 4 }}>
+                  🕐 開始：<span style={{ color: "#79c0ff" }}>{fmtDt(preview.start_time)}</span>
+                </div>
+                <div style={{ fontSize: 12, color: "#cdd9e5" }}>
+                  🏁 結束：<span style={{ color: "#79c0ff" }}>{fmtDt(preview.end_time)}</span>
+                </div>
+              </div>
+            ) : null}
+            </>
           )}
 
           <LabelInput label="備註" value={form.note}
@@ -1019,6 +1061,32 @@ export default function SchedulePage({ active, role, userId }) {
 
       {/* 主內容（可捲動） */}
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+
+        {/* 待審核警示條 */}
+        {summary["待審核"] > 0 && (
+          <div
+            style={{
+              background: "#3a2a1a",
+              border: "1px solid #f0a50044",
+              borderRadius: 6,
+              padding: "10px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              const pending = document.querySelector('[style*="待審核排程隊列"]');
+              pending?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }}
+          >
+            <span style={{ fontSize: 14, color: "#f0a500", fontWeight: 700 }}>⚠️</span>
+            <span style={{ color: "#f0a500", fontSize: 13, fontWeight: 600 }}>
+              有 {summary["待審核"]} 筆排程申請待審核
+            </span>
+            <span style={{ fontSize: 11, color: "#8b949e" }}>— 點擊滾動至隊列</span>
+          </div>
+        )}
 
         {/* 甘特圖 */}
         {loading ? (
