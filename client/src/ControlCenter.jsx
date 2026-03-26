@@ -668,7 +668,7 @@ const TABS = [
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, activeTab, setActiveTab, selectedDevice }) {
+function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) {
   const visibleTabs = TABS.filter((t) => !t.adminOnly || role === "admin");
   const [failureCount, setFailureCount] = useState(0);
 
@@ -771,7 +771,7 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice }) {
             height: "100%",
           }}
         >
-          <SchedulePage active={activeTab === "schedule"} role={role} />
+          <SchedulePage active={activeTab === "schedule"} role={role} userId={userId} />
         </div>
         {role === "admin" && (
           <div
@@ -806,7 +806,7 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice }) {
 
 // ── ControlCenter ─────────────────────────────────────────────────────────────
 
-export default function ControlCenter({ role, displayName, onLogout }) {
+export default function ControlCenter({ role, userId, displayName, onLogout }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const activeTab = PATH_TO_TAB[pathname] ?? "device";
@@ -866,6 +866,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
         />
         <CenterPanel
           role={role}
+          userId={userId}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           selectedDevice={selectedDevice}

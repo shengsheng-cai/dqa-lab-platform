@@ -125,6 +125,7 @@ class LoginResponse(BaseModel):
     token: str
     role: str
     display_name: str
+    user_id: int
 
 
 @router.post("/api/auth/login", response_model=LoginResponse)
@@ -160,7 +161,7 @@ def login(body: LoginRequest, request: Request):
         tracker["count"] = 0
         token = create_token(user, db)
         return LoginResponse(
-            token=token, role=user.role, display_name=user.display_name
+            token=token, role=user.role, display_name=user.display_name, user_id=user.id
         )
     finally:
         db.close()

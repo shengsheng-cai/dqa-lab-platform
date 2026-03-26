@@ -26,6 +26,7 @@ api.interceptors.response.use(
       localStorage.removeItem("user_token");
       localStorage.removeItem("user_role");
       localStorage.removeItem("user_display_name");
+      localStorage.removeItem("user_id");
       window.location.href = "/";
     }
     return Promise.reject(err);

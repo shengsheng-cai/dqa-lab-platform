@@ -1,6 +1,7 @@
 """
 排程系統 API
 """
+import asyncio
 import datetime
 import json
 from typing import Optional, List
@@ -11,6 +12,7 @@ from pydantic import BaseModel
 from .models import SessionLocal, Schedule, DeviceBlockedPeriod, User
 from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
+from .line import push_sop_notification
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
@@ -464,21 +466,37 @@ def create_schedule(body: ScheduleCreate, request: Request):
 
 
 @router.patch("/{schedule_id}")
-def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request):
+async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request):
     """
     更新排程（admin only）。
     status=已確認 時若無指定設備，自動排程。
     """
     role = getattr(request.state, "user_role", None)
-    if role != "admin":
-        raise HTTPException(status_code=403, detail="僅管理者可審核排程")
-
     user_id = getattr(request.state, "user_id", None)
+
+    # 非 admin 只允許取消自己的待審核排程
+    if role != "admin":
+        if body.status != "已取消":
+            raise HTTPException(status_code=403, detail="僅管理者可審核排程")
+        # 後續在讀取 schedule 後再驗證擁有權，這裡先通過
+
+    notif_user_id = None
+    notif_text = None
 
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
             raise HTTPException(status_code=404, detail="找不到排程")
+
+        # 非 admin 取消：只能取消自己的待審核排程
+        if role != "admin":
+            if s.applicant_user_id != user_id:
+                raise HTTPException(status_code=403, detail="只能取消自己的排程")
+            if s.status != "待審核":
+                raise HTTPException(status_code=400, detail="只能取消待審核的排程")
+
+        applicant_user_id = s.applicant_user_id
+        project_label = f"{s.project_number} / {s.sample_name}"
 
         if body.note is not None:
             s.note = body.note
@@ -506,6 +524,21 @@ def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request):
             s.status = "已確認"
             s.confirmed_by = user_id
 
+            def _fmt(dt):
+                if dt is None:
+                    return "—"
+                if dt.tzinfo:
+                    dt = dt.astimezone(datetime.timezone(datetime.timedelta(hours=8)))
+                return dt.strftime("%m/%d %H:%M")
+
+            notif_user_id = applicant_user_id
+            notif_text = (
+                f"[排程確認] {project_label}\n"
+                f"設備：{device_id}\n"
+                f"開始：{_fmt(start)}\n"
+                f"結束：{_fmt(end)}"
+            )
+
         elif body.status in ("已取消", "進行中", "已完成"):
             s.status = body.status
             if body.device_id:
@@ -514,6 +547,16 @@ def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request):
                 s.start_time = body.start_time
             if body.end_time:
                 s.end_time = body.end_time
+
+            if body.status == "已取消":
+                # 只有 admin 取消別人的排程才通知申請人
+                if role == "admin" and applicant_user_id and applicant_user_id != user_id:
+                    notif_user_id = applicant_user_id
+                    notif_text = (
+                        f"[排程取消] {project_label}\n"
+                        f"您的排程申請已被取消"
+                        + (f"\n備註：{body.note}" if body.note else "")
+                    )
         else:
             # 純欄位更新（不改狀態）
             if body.device_id is not None:
@@ -526,7 +569,13 @@ def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request):
         s.updated_at = datetime.datetime.now(datetime.timezone.utc)
         db.commit()
         db.refresh(s)
-        return _enrich(s)
+        result = _enrich(s)
+
+    # DB session 關閉後再推播，避免阻塞
+    if notif_text:
+        asyncio.create_task(push_sop_notification(notif_user_id, notif_text))
+
+    return result
 
 
 @router.delete("/{schedule_id}")

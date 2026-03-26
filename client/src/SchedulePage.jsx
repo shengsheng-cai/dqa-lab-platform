@@ -464,7 +464,7 @@ function NewScheduleModal({ standardsTree, onClose, onCreated }) {
 
 // ── 排程詳情 / 審核 Modal ───────────────────────────────────────────────────
 
-function ScheduleDetailModal({ schedule, role, onClose, onUpdated, onDeleted }) {
+function ScheduleDetailModal({ schedule, role, userId, onClose, onUpdated, onDeleted }) {
   const [status, setStatus] = useState(schedule.status);
   const [deviceId, setDeviceId] = useState(schedule.device_id || "");
   const [note, setNote] = useState(schedule.note || "");
@@ -472,21 +472,33 @@ function ScheduleDetailModal({ schedule, role, onClose, onUpdated, onDeleted }) 
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(null);   // { device_id, start_time, end_time }
   const [previewing, setPreviewing] = useState(false);
-  const canEdit = role === "admin" || role === "keeper";
+  const [previewAt, setPreviewAt] = useState(null); // 上次 preview 計算時間
+  const [confirmedResult, setConfirmedResult] = useState(null); // 確認成功後的實際分配結果
+  const canEdit = role === "admin";
   const isPending = schedule.status === "待審核";
+  // engineer/keeper 可取消自己的待審核排程
+  const canSelfCancel =
+    (role === "engineer" || role === "keeper") &&
+    userId != null &&
+    schedule.applicant_user_id === userId &&
+    isPending;
 
-  // 待審核時自動抓預覽（modal 開啟 or 設備選擇改變時）
-  useEffect(() => {
+  const fetchPreview = useCallback(() => {
     if (!isPending) return;
     const conditions = schedule.conditions?.join(",") || "";
     if (!conditions) return;
     setPreviewing(true);
     api
       .get("/api/schedules/preview", { params: { conditions, device_id: deviceId || undefined } })
-      .then((r) => setPreview(r.data))
+      .then((r) => { setPreview(r.data); setPreviewAt(new Date()); })
       .catch(() => setPreview(null))
       .finally(() => setPreviewing(false));
   }, [deviceId, isPending, schedule.conditions]);
+
+  // 待審核時自動抓預覽（modal 開啟 or 設備選擇改變時）
+  useEffect(() => {
+    fetchPreview();
+  }, [fetchPreview]);
 
   async function confirm() {
     setSaving(true);
@@ -496,7 +508,7 @@ function ScheduleDetailModal({ schedule, role, onClose, onUpdated, onDeleted }) 
       if (deviceId) payload.device_id = deviceId;
       const res = await api.patch(`/api/schedules/${schedule.id}`, payload);
       onUpdated(res.data);
-      onClose();
+      setConfirmedResult(res.data); // 顯示最終分配結果，不立即關閉
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
       setSaving(false);
@@ -509,9 +521,9 @@ function ScheduleDetailModal({ schedule, role, onClose, onUpdated, onDeleted }) 
     try {
       const res = await api.patch(`/api/schedules/${schedule.id}`, { status: "已取消", note: note || null });
       onUpdated(res.data);
+      onClose();
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
-    } finally {
       setSaving(false);
     }
   }
@@ -540,6 +552,36 @@ function ScheduleDetailModal({ schedule, role, onClose, onUpdated, onDeleted }) 
   }
 
   const color = STATUS_COLOR[schedule.status] || STATUS_COLOR["待審核"];
+
+  // 確認成功後顯示最終分配結果
+  if (confirmedResult) {
+    return (
+      <div style={overlayStyle} onClick={onClose}>
+        <div style={{ ...modalStyle, width: 540 }} onClick={(e) => e.stopPropagation()}>
+          <div style={modalHeader}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>排程已確認</span>
+            <button onClick={onClose} style={closeBtn}>✕</button>
+          </div>
+          <div style={{ padding: "20px 24px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{
+              background: "#1a3828", border: "1px solid #3fb950", borderRadius: 8,
+              padding: "12px 16px", fontSize: 13, color: "#7ee787", fontWeight: 600,
+            }}>
+              排程確認成功，以下為最終分配結果：
+            </div>
+            <InfoRow label="專案" value={`${confirmedResult.project_number} / ${confirmedResult.sample_name}`} />
+            <InfoRow label="指定設備" value={confirmedResult.device_id || "—"} />
+            <InfoRow label="開始時間" value={fmtDt(confirmedResult.start_time)} />
+            <InfoRow label="結束時間" value={fmtDt(confirmedResult.end_time)} />
+            <InfoRow label="預估時長" value={fmtHours(confirmedResult.total_hours)} />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+              <button onClick={onClose} style={primaryBtn}>關閉</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={overlayStyle} onClick={onClose}>
@@ -592,7 +634,39 @@ function ScheduleDetailModal({ schedule, role, onClose, onUpdated, onDeleted }) 
             }
             muted={isPending}
           />
+
+          {/* 待審核時顯示 preview 計算時間 + 刷新按鈕 */}
+          {isPending && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, color: "#484f58" }}>
+                {previewAt
+                  ? `預覽計算於 ${previewAt.getHours().toString().padStart(2,"0")}:${previewAt.getMinutes().toString().padStart(2,"0")}:${previewAt.getSeconds().toString().padStart(2,"0")}，確認前建議刷新`
+                  : "預覽計算中..."}
+              </span>
+              <button
+                onClick={fetchPreview}
+                disabled={previewing}
+                style={{ ...cancelBtn, fontSize: 11, padding: "2px 8px" }}
+              >
+                {previewing ? "計算中..." : "↻ 刷新預覽"}
+              </button>
+            </div>
+          )}
+
           <InfoRow label="申請時間" value={fmtDt(schedule.created_at)} />
+
+          {/* 工程師/保管員可取消自己的待審核排程 */}
+          {canSelfCancel && (
+            <>
+              <hr style={{ border: "none", borderTop: "1px solid #21262d", margin: "4px 0" }} />
+              {error && <div style={{ color: "#f85149", fontSize: 13 }}>{error}</div>}
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button onClick={cancel} disabled={saving} style={{ ...cancelBtn, color: "#f85149", borderColor: "#f85149" }}>
+                  {saving ? "處理中..." : "取消排程"}
+                </button>
+              </div>
+            </>
+          )}
 
           {canEdit && (
             <>
@@ -809,11 +883,13 @@ const cancelBtn = {
 
 // ── 主頁面 ───────────────────────────────────────────────────────────────────
 
-export default function SchedulePage({ active, role }) {
+export default function SchedulePage({ active, role, userId }) {
   const [schedules, setSchedules] = useState([]);
   const [blockedPeriods, setBlockedPeriods] = useState([]);
   const [standardsTree, setStandardsTree] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [showNewModal, setShowNewModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
@@ -837,19 +913,26 @@ export default function SchedulePage({ active, role }) {
       setSchedules(ganttRes.data.schedules);
       setBlockedPeriods(ganttRes.data.blocked_periods);
       if (treeRes) setStandardsTree(treeRes.data);
+      setLastRefreshed(new Date());
     } catch (e) {
       console.error("排程資料載入失敗", e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [standardsTree]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchAll();
+  };
 
   useEffect(() => {
     if (active) fetchAll();
   }, [active]);
 
   const canOperate = role === "admin" || role === "keeper" || role === "engineer";
-  const isAdmin = role === "admin" || role === "keeper";
+  const isAdmin = role === "admin";
 
   // 摘要計算
   const summary = {
@@ -882,7 +965,20 @@ export default function SchedulePage({ active, role }) {
           <SummaryCard label="進行中" value={summary["進行中"]} color="#3fb950" />
           <SummaryCard label="已完成" value={summary["已完成"]} color="#238636" />
         </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+          {lastRefreshed && (
+            <span style={{ fontSize: 11, color: "#484f58", whiteSpace: "nowrap" }}>
+              更新於 {lastRefreshed.getHours().toString().padStart(2,"0")}:{lastRefreshed.getMinutes().toString().padStart(2,"0")}:{lastRefreshed.getSeconds().toString().padStart(2,"0")}
+            </span>
+          )}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="重新載入排程資料"
+            style={{ ...cancelBtn, fontSize: 12 }}
+          >
+            {refreshing ? "刷新中..." : "↻ 刷新"}
+          </button>
           {isAdmin && (
             <button
               onClick={() => setShowBlockModal(true)}
@@ -1036,6 +1132,7 @@ export default function SchedulePage({ active, role }) {
         <ScheduleDetailModal
           schedule={selectedSchedule}
           role={role}
+          userId={userId}
           onClose={() => setSelectedSchedule(null)}
           onUpdated={(updated) => {
             setSchedules((prev) => prev.map((s) => s.id === updated.id ? updated : s));
