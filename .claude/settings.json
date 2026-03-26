@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python backend/init_db.py)",
+      "Bash(curl -s -X POST http://localhost:8000/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"username\"\"\"\":\"\"\"\"admin\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"admin\"\"\"\"}')",
+      "Bash(curl -s -X POST http://localhost:8000/api/auth/demo-login -H \"Content-Type: application/json\" -d '{\"\"\"\"password\"\"\"\":\"\"\"\"testpass\"\"\"\"}')"
+    ]
+  }
+}

@@ -792,6 +792,7 @@ function ScheduleDetailModal({ schedule, role, userId, onClose, onUpdated, onDel
 // ── 標記不可用時段 Modal ────────────────────────────────────────────────────
 
 function BlockDeviceModal({ onClose, onCreated }) {
+  const { showToast } = useToast();
   const [form, setForm] = useState({
     device_id: DEVICE_IDS[0],
     start_time: "",
@@ -814,8 +815,12 @@ function BlockDeviceModal({ onClose, onCreated }) {
         reason: form.reason.trim() || null,
       });
       onCreated(res.data);
+      showToast("不可用時段已添加", "success");
+      onClose();
     } catch (e) {
-      setError(e.response?.data?.detail || "操作失敗");
+      const msg = e.response?.data?.detail || "操作失敗";
+      setError(msg);
+      showToast(msg, "error");
     } finally {
       setSaving(false);
     }

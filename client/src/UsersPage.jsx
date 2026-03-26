@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "./api";
+import { useToast } from "./components/Toast";
 
 const ROLE_LABELS = { admin: "管理者", keeper: "保管人", engineer: "工程師" };
 const ROLE_COLORS = { admin: "#f85149", keeper: "#f0a500", engineer: "#58a6ff" };
@@ -24,6 +25,7 @@ function RoleBadge({ role }) {
 
 function UserModal({ user, onClose, onSaved }) {
   const isEdit = !!user;
+  const { showToast } = useToast();
   const [displayName, setDisplayName] = useState(user?.display_name || "");
   const [role, setRole] = useState(user?.role || "engineer");
   const [lineUserId, setLineUserId] = useState(user?.line_user_id || "");
@@ -44,16 +46,20 @@ function UserModal({ user, onClose, onSaved }) {
           role,
           line_user_id: lineUserId.trim() || null,
         });
+        showToast("員工資料已更新", "success");
       } else {
         await api.post("/api/auth/users", {
           display_name: displayName.trim(),
           role,
           line_user_id: lineUserId.trim() || null,
         });
+        showToast("員工已新增", "success");
       }
       onSaved();
     } catch (e) {
-      setError(e.response?.data?.detail || "操作失敗");
+      const msg = e.response?.data?.detail || "操作失敗";
+      setError(msg);
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -249,6 +255,7 @@ function ConfirmModal({ message, onConfirm, onClose }) {
 // ── LINE 綁定申請管理 ───────────────────────────────────────────
 
 function ApproveBindingModal({ request, users, onConfirm, onClose }) {
+  const { showToast } = useToast();
   const [selectedUserId, setSelectedUserId] = useState("");
   const [approving, setApproving] = useState(false);
 
@@ -259,9 +266,11 @@ function ApproveBindingModal({ request, users, onConfirm, onClose }) {
       await api.post(`/api/line/bind-requests/${request.id}/approve`, {
         user_id: parseInt(selectedUserId)
       });
+      showToast("LINE 綁定已核准", "success");
       onConfirm();
     } catch (e) {
-      alert(e.response?.data?.detail || "核准失敗");
+      const msg = e.response?.data?.detail || "核准失敗";
+      showToast(msg, "error");
     } finally {
       setApproving(false);
     }
@@ -326,6 +335,7 @@ function ApproveBindingModal({ request, users, onConfirm, onClose }) {
 }
 
 function LineBindRequestsSection({ active, role }) {
+  const { showToast } = useToast();
   const [requests, setRequests] = useState([]);
   const [users, setUsers] = useState([]);
   const [processing, setProcessing] = useState(null);
@@ -367,9 +377,11 @@ function LineBindRequestsSection({ active, role }) {
     setProcessing(id);
     try {
       await api.post(`/api/line/bind-requests/${id}/reject`);
+      showToast("申請已拒絕", "success");
       fetchRequests();
     } catch (e) {
-      alert(e.response?.data?.detail || "拒絕失敗");
+      const msg = e.response?.data?.detail || "拒絕失敗";
+      showToast(msg, "error");
     } finally {
       setProcessing(null);
     }
@@ -447,6 +459,7 @@ function LineBindRequestsSection({ active, role }) {
 // ── LINE 推播失敗紀錄 ────────────────────────────────────────────
 
 function NotifFailuresSection({ active, role }) {
+  const { showToast } = useToast();
   const [failures, setFailures] = useState([]);
   const [clearing, setClearing] = useState(false);
 
@@ -462,6 +475,10 @@ function NotifFailuresSection({ active, role }) {
     try {
       await api.post("/api/notification-failures/clear");
       setFailures([]);
+      showToast("失敗記錄已清除", "success");
+    } catch (e) {
+      const msg = e.response?.data?.detail || "清除失敗";
+      showToast(msg, "error");
     } finally {
       setClearing(false);
     }
@@ -525,6 +542,7 @@ function NotifFailuresSection({ active, role }) {
 // ── 訪客 Token 管理 ────────────────────────────────────────────
 
 function DemoTokenSection({ active }) {
+  const { showToast } = useToast();
   const [tokens, setTokens] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [label, setLabel] = useState("");
@@ -554,9 +572,11 @@ function DemoTokenSection({ active }) {
       setNewToken(res.data.token);
       setLabel(""); setExpiresDays(""); setMaxUses("");
       setShowForm(false);
+      showToast("訪客 Token 已生成", "success");
       fetchTokens();
     } catch (e) {
-      alert(e.response?.data?.detail || "建立失敗");
+      const msg = e.response?.data?.detail || "建立失敗";
+      showToast(msg, "error");
     } finally {
       setCreating(false);
     }
@@ -565,8 +585,12 @@ function DemoTokenSection({ active }) {
   const handleToggle = async (id) => {
     try {
       await api.patch(`/api/auth/demo-tokens/${id}/toggle`);
+      showToast("Token 狀態已更新", "success");
       fetchTokens();
-    } catch (_) {}
+    } catch (e) {
+      const msg = e.response?.data?.detail || "更新失敗";
+      showToast(msg, "error");
+    }
   };
 
   const handleDelete = async (id) => {

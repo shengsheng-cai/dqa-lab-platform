@@ -25,7 +25,7 @@ from .fixture_notifications import scan_overdue_loans, notify_monthly_inventory,
 from .purchase_orders import router as purchase_orders_router
 from .schedules import router as schedules_router, blocked_router as device_blocked_router, auto_advance_schedules
 from .notification_failures import router as notif_failures_router
-from .models import SessionLocal, DeviceData, ErrorLog, DeviceState
+from .models import SessionLocal, DeviceData, ErrorLog, DeviceState, SopExecution
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc, _save_device_state
 import httpx as _httpx

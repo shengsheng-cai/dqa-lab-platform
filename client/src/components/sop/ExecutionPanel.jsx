@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../../api";
+import { useToast } from "../Toast";
 
 // 儲存執行紀錄 + blob 下載報告（帶 X-Demo-Password header，不會被 auth 擋）
 // operator 由父元件傳入（啟動前 modal 已確認）
@@ -14,6 +15,7 @@ const ExecutionPanel = ({
   onSaved,
   onError,
 }) => {
+  const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
@@ -68,10 +70,12 @@ const ExecutionPanel = ({
 
       const execId = res.data.id;
       onSaved(execId);
+      showToast("執行紀錄已儲存", "success");
       await downloadReport(execId);
     } catch (err) {
-      const detail = err?.response?.data?.detail;
-      onError(`❌ 儲存失敗：${detail || "請確認後端連線"}`);
+      const detail = err?.response?.data?.detail || "請確認後端連線";
+      onError(`❌ 儲存失敗：${detail}`);
+      showToast(`儲存失敗：${detail}`, "error");
     } finally {
       setSaving(false);
     }

@@ -515,6 +515,7 @@ function LoanModal({ onClose, onSubmit, fixtures }) {
 }
 
 function SetKeeperModal({ fixture, onClose, onSubmit }) {
+  const { showToast } = useToast();
   const [users, setUsers] = useState([]);
   const [keeperUserId, setKeeperUserId] = useState(
     fixture.keeper_user_id ? String(fixture.keeper_user_id) : ""
@@ -534,7 +535,12 @@ function SetKeeperModal({ fixture, onClose, onSubmit }) {
       await api.patch(`/api/fixtures/${fixture.id}/keeper`, {
         keeper_user_id: keeperUserId ? parseInt(keeperUserId) : null,
       });
+      showToast("保管人已設定", "success");
       onSubmit();
+      onClose();
+    } catch (e) {
+      const msg = e.response?.data?.detail || "操作失敗";
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -969,6 +975,7 @@ function AddEditModal({ fixture, onClose, onSuccess }) {
 }
 
 export default function FixturePage({ active, role }) {
+  const { showToast } = useToast();
   const [fixtures, setFixtures] = useState([]);
   const [summary, setSummary] = useState({
     total_loaned: 0,
@@ -1037,8 +1044,10 @@ export default function FixturePage({ active, role }) {
       await api.post(`/api/fixtures/${fixtureId}/inventory?actual_quantity=${num}`);
       setInventoryEdits((prev) => { const n = { ...prev }; delete n[fixtureId]; return n; });
       fetchAll();
+      showToast("盤點記錄已保存", "success");
     } catch (e) {
-      console.error("盤點回填失敗", e);
+      const msg = e.response?.data?.detail || "盤點失敗";
+      showToast(msg, "error");
     }
   };
 
@@ -2116,6 +2125,7 @@ const PO_STATUS = {
 };
 
 function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
 
   const handleArrive = async (order) => {
@@ -2123,8 +2133,10 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
     try {
       await api.patch(`/api/purchase-orders/${order.id}`, { status: "arrived" });
       onRefresh();
+      showToast("採購單已標記到貨", "success");
     } catch (e) {
-      console.error("到貨確認失敗", e);
+      const msg = e.response?.data?.detail || "標記失敗";
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -2136,8 +2148,10 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
     try {
       await api.delete(`/api/purchase-orders/${order.id}`);
       onRefresh();
+      showToast("採購單已刪除", "success");
     } catch (e) {
-      alert(e.response?.data?.detail || "刪除失敗");
+      const msg = e.response?.data?.detail || "刪除失敗";
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -2300,6 +2314,7 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
 
 // ── 新增採購單 Modal ────────────────────────────────────────
 function CreatePurchaseModal({ fixtures, preFill, onClose, onSubmit }) {
+  const { showToast } = useToast();
   const [fixtureId, setFixtureId] = useState(preFill ? String(preFill.id) : "");
   const [quantity, setQuantity] = useState(preFill ? String(preFill.shortage || 1) : "1");
   const [vendor, setVendor] = useState("");
@@ -2322,9 +2337,13 @@ function CreatePurchaseModal({ fixtures, preFill, onClose, onSubmit }) {
         unit_price: unitPrice ? parseFloat(unitPrice) : null,
         note: note || null,
       });
+      showToast("採購單已新增", "success");
       onSubmit();
+      onClose();
     } catch (e) {
-      setError(e.response?.data?.detail || "新增失敗");
+      const msg = e.response?.data?.detail || "新增失敗";
+      setError(msg);
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }

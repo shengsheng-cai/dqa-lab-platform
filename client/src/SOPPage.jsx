@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api from "./api";
+import { useToast } from "./components/Toast";
 import MonitorSide from "./components/sop/MonitorSide";
 import ControlPanel from "./components/sop/ControlPanel";
 import ConditionCard from "./components/sop/ConditionCard";
@@ -119,6 +120,7 @@ const ConfirmModal = ({ message, onConfirm, onCancel }) => (
 );
 
 const SOPPage = ({ active = true, externalDevice }) => {
+  const { showToast } = useToast();
   const [selectedDevice, setSelectedDevice] = useState(externalDevice || "CH-01");
 
   // 同步外部設備選擇（ControlCenter LeftPanel 點選時）
@@ -453,10 +455,11 @@ const SOPPage = ({ active = true, externalDevice }) => {
         completedSteps: {},
         savedExecutionId: null,
       });
+      showToast("測試已啟動", "success");
     } catch (err) {
-      setStartError(
-        `❌ 啟動失敗：${err?.response?.data?.detail || err?.message || "未知錯誤"}`,
-      );
+      const msg = err?.response?.data?.detail || err?.message || "未知錯誤";
+      setStartError(`❌ 啟動失敗：${msg}`);
+      showToast(`啟動失敗：${msg}`, "error");
     } finally {
       setStarting(false);
     }
@@ -477,9 +480,16 @@ const SOPPage = ({ active = true, externalDevice }) => {
         });
         setStartError("");
         setPauseOptimistic(null);
+        const msg = type === "emergency" ? "緊急停止已執行" : "測試已停止";
+        showToast(msg, "success");
+      } else if (type === "pause") {
+        const msg = effectiveStatus === "RUNNING" ? "測試已暫停" : "測試已繼續";
+        showToast(msg, "success");
       }
     } catch (e) {
       console.error("[SOPPage] action:", e);
+      const msg = e.response?.data?.detail || "操作失敗";
+      showToast(msg, "error");
       setPauseOptimistic(null);
     }
   };
@@ -501,6 +511,8 @@ const SOPPage = ({ active = true, externalDevice }) => {
             });
           } catch (e) {
             console.error("[SOPPage] progress:", e);
+            const msg = e.response?.data?.detail || "進度更新失敗";
+            showToast(msg, "error");
           }
         },
       });
@@ -604,8 +616,10 @@ const SOPPage = ({ active = true, externalDevice }) => {
                         if (!window.confirm("確定跳至降溫階段？此操作將略過剩餘測試步驟，直接回溫到 25°C。")) return;
                         try {
                           await api.post(`/api/devices/${selectedDevice}/set-phase`, { phase: "ramp_to_ambient" });
+                          showToast("已跳轉至降溫階段", "success");
                         } catch (e) {
-                          alert(e?.response?.data?.detail || "操作失敗");
+                          const msg = e?.response?.data?.detail || "操作失敗";
+                          showToast(msg, "error");
                         }
                       }}
                       title="跳至降溫（略過剩餘測試直接回 25°C）"

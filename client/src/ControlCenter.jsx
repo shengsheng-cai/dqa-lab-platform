@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "./api";
+import { useToast } from "./components/Toast";
 import SOPPage from "./SOPPage";
 import FixturePage from "./FixturePage";
 import SchedulePage from "./SchedulePage";
@@ -372,6 +373,7 @@ function fmtDatetime(str) {
 }
 
 function ExecutionList({ active }) {
+  const { showToast } = useToast();
   const [executions, setExecutions] = useState([]);
   const [downloading, setDownloading] = useState(null);
   const [uploading, setUploading] = useState(null); // { id, type }
@@ -420,7 +422,10 @@ function ExecutionList({ active }) {
       form.append("file", file);
       await api.post(`/api/sop-executions/${exId}/photos`, form);
       await fetchList();
-    } catch (_) {
+      showToast("照片已上傳", "success");
+    } catch (e) {
+      const msg = e.response?.data?.detail || "上傳失敗";
+      showToast(msg, "error");
     } finally {
       setUploading(null);
     }
