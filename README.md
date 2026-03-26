@@ -57,7 +57,15 @@ make dev                      # 啟動全部服務
 | 後端 API | http://localhost:8000 |
 | API 文件 | http://localhost:8000/docs |
 
-複製 `backend/.env.example` 並填入環境變數（Gemini API Key、LINE Token 等）。
+複製 `backend/.env.example` 為 `backend/.env` 並填入環境變數：
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+**必須設置（可選功能會自動跳過）：**
+- `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com) 免費申請（Embedding + Flash-Lite）
+- `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN` — LINE Developers 後台取得（推播功能）
 
 ---
 
