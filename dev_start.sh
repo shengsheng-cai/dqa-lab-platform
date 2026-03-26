@@ -5,55 +5,31 @@ LOG_FILE=".socat_info.log"
 
 cleanup() {
     echo -e "\n\n👋 正在關閉所有開發服務..."
-    kill $BACK_PID $SIM_PID $SOCAT_PID $CLIENT_PID $NGROK_PID 2>/dev/null
+    kill $BACK_PID $CLIENT_PID $NGROK_PID 2>/dev/null
     pkill -P $$ 2>/dev/null
     exit
 }
 trap cleanup SIGINT SIGTERM EXIT
 
-# 1. 建立串口
-echo "🔗 正在建立虛擬串口..."
-socat -d -d pty,raw,echo=0 pty,raw,echo=0 2> "$LOG_FILE" &
-SOCAT_PID=$!
-
-for i in {1..5}; do
-    PTYS=$(grep -o "/dev/ttys[0-9]*" "$LOG_FILE" 2>/dev/null | tail -n 2)
-    PTY_A=$(echo $PTYS | awk '{print $1}')
-    PTY_B=$(echo $PTYS | awk '{print $2}')
-    if [[ -n "$PTY_A" && -n "$PTY_B" ]]; then break; fi
-    sleep 1
-done
-
-# 2. 確認串口路徑
-if [[ -z "$PTY_A" || -z "$PTY_B" ]]; then
-    echo "❌ 串口建立失敗，請確認 socat 已安裝 (brew install socat)"
-    exit 1
-fi
-
-echo "✅ 模擬器連接埠: $PTY_A | 後端 API 連接埠: $PTY_B"
-
-# 3. 啟動後端、模擬器、前端
-echo "🚀 啟動模擬器 (Simulator)..."
-(cd simulator && SIM_PORT="$PTY_A" python3 main.py) &
-SIM_PID=$!
-
+# 1. 啟動後端 API (FastAPI)
 echo "🚀 啟動後端 API (FastAPI)..."
 lsof -ti:8000 | xargs kill -9 2>/dev/null || true
-(cd backend && SERIAL_PORTS="$PTY_B" ../venv/bin/uvicorn app.main:app --reload --port 8000 --no-access-log) &
+(cd backend && ../venv/bin/uvicorn app.main:app --reload --port 8000 --no-access-log) &
 BACK_PID=$!
 
+# 2. 啟動前端網頁 (Vite)
 echo "🚀 啟動前端網頁 (Vite)..."
 lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 (cd client && npm run dev) &
 CLIENT_PID=$!
 
-# 4. 啟動 ngrok（背景執行）
+# 3. 啟動 ngrok（背景執行）
 echo "🌐 啟動 ngrok..."
 lsof -ti:4040 | xargs kill -9 2>/dev/null || true
 ngrok http 8000 --log=stdout > .ngrok.log 2>&1 &
 NGROK_PID=$!
 
-# 5. 等 ngrok 就緒後自動更新 LINE Webhook
+# 4. 等 ngrok 就緒後自動更新 LINE Webhook
 echo "⏳ 等待 ngrok 就緒..."
 NGROK_URL=""
 for i in {1..15}; do
@@ -119,4 +95,4 @@ echo "🌐 ngrok 面板:  http://localhost:4040"
 echo "💡 按下 Ctrl+C 同時停止所有服務"
 echo "------------------------------------------------"
 
-wait $BACK_PID $SIM_PID $CLIENT_PID
+wait $BACK_PID $CLIENT_PID

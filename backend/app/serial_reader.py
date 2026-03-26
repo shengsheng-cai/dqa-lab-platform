@@ -1,7 +1,8 @@
 # =============================================================
 # Phase 3 預留：真實 RS-485 串口通訊
-# 目前系統使用 simulator/main.py 模擬引擎，此檔案尚未啟用。
-# 對接真實溫箱設備時，於 main.py startup 中初始化此 Reader。
+# 目前系統使用內建 data_simulator() asyncio 模擬引擎，此檔案尚未啟用。
+# 對接真實溫箱設備時，於 main.py startup 中初始化此 SerialReader，
+# 並在 main.py 中將 data_simulator() 替換為 SerialReader.read_loop()。
 # =============================================================
 import asyncio
 import serial_asyncio
