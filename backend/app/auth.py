@@ -535,8 +535,16 @@ async def auth_middleware(request: Request, call_next):
             status_code=429, content={"detail": f"太多次錯誤，請 {remaining} 秒後再試"}
         )
 
-    # 方式一：X-User-Token（帳號登入，查 DB）
+    # 檢查雙 token 攻擊（同時送 X-User-Token + X-Demo-Password 是衝突的）
     user_token = request.headers.get("X-User-Token", "")
+    demo_token = request.headers.get("X-Demo-Password", "")
+    if user_token and demo_token:
+        print(f"⚠️ [SECURITY] 雙 token 衝突（IP: {ip}）：同時送 X-User-Token + X-Demo-Password")
+        return JSONResponse(
+            status_code=400, content={"detail": "不能同時使用帳號 Token 與訪客 Token"}
+        )
+
+    # 方式一：X-User-Token（帳號登入，查 DB）
     if user_token:
         info = get_token_info(user_token)
         if info:
@@ -550,9 +558,8 @@ async def auth_middleware(request: Request, call_next):
 
     # 方式二：X-Demo-Password（訪客模式）
     # 優先查 demo_tokens DB；後備：環境變數 DEMO_PASSWORD（master key）
-    provided = request.headers.get("X-Demo-Password", "")
-    if provided:
-        if _validate_demo_token(provided) or (DEMO_PASSWORD and provided == DEMO_PASSWORD):
+    if demo_token:
+        if _validate_demo_token(demo_token) or (DEMO_PASSWORD and demo_token == DEMO_PASSWORD):
             request.state.user_role = "guest"
             request.state.user_id = None
             tracker["count"] = 0

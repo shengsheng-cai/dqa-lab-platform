@@ -82,15 +82,16 @@ function LoginPage({ onLogin }) {
         const data = await res.json();
         setError(data.detail || "Token 無效");
       } else {
-        // 清除帳號登入殘留 token（先清舊會話），避免 useEffect 重新驗證後覆蓋 guest role
+        // 完整清除舊會話（帳號登入的所有殘留），避免憑證混淆（Tier 1-2 安全修復）
         localStorage.removeItem("user_token");
         localStorage.removeItem("user_id");
-        // 再設定訪客會話
+        localStorage.removeItem("user_role");
+        localStorage.removeItem("user_display_name");
+        localStorage.removeItem("dqa_ai_chats_v2");
+        // 設定訪客會話（聲明式清晰設定）
         localStorage.setItem("demo_password", pwdInput);
         localStorage.setItem("demo_login_at", Date.now().toString());
         localStorage.setItem("user_role", "guest");
-        // 訪客每次登入清空 AI 對話，避免看到上一位的記錄
-        localStorage.removeItem("dqa_ai_chats_v2");
         onLogin();
       }
     } catch {
