@@ -245,8 +245,8 @@ def _find_earliest_slot(
     db,
     running_until: Optional[dict] = None,
 ) -> datetime.datetime:
-    """找出指定設備的最早可用開始時間（UTC）"""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    """找出指定設備的最早可用開始時間（naive UTC）"""
+    now = datetime.datetime.utcnow()  # naive UTC，與 DB 存的格式一致
 
     # 先以設備當前實際執行預估結束時間為下限
     candidate_start = now
@@ -325,7 +325,7 @@ def auto_advance_schedules():
     - 已確認 + start_time ≤ now → 進行中
     - 進行中 + end_time   ≤ now → 已完成
     """
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.utcnow()  # naive UTC，與 DB 存的格式一致
     with SessionLocal() as db:
         # 已確認 → 進行中
         to_running = (

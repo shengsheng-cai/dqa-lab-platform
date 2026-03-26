@@ -451,6 +451,7 @@ def _use_demo_token(provided: str) -> bool:
     """驗證訪客 token 並遞增 use_count（僅在登入時呼叫一次）。"""
     db = SessionLocal()
     try:
+        # 先驗證 token 是否有效（不遞增 use_count）
         t = db.query(DemoToken).filter(
             DemoToken.token == provided,
             DemoToken.is_active == True,
@@ -462,9 +463,19 @@ def _use_demo_token(provided: str) -> bool:
             return False
         if t.max_uses is not None and t.use_count >= t.max_uses:
             return False
-        t.use_count += 1
+
+        # SQL-level atomic update，確保 use_count 遞增的原子性
+        updated = (
+            db.query(DemoToken)
+            .filter(
+                DemoToken.token == provided,
+                DemoToken.is_active == True,
+                (DemoToken.max_uses == None) | (DemoToken.use_count < DemoToken.max_uses)
+            )
+            .update({DemoToken.use_count: DemoToken.use_count + 1}, synchronize_session="fetch")
+        )
         db.commit()
-        return True
+        return updated > 0
     except Exception:
         return False
     finally:
