@@ -53,6 +53,11 @@ const ERROR_TRANSLATION_MAP = {
   // 網路相關
   "connection.*timeout": "連線逾時，請稍後重試",
   "network.*error": "網路連線失敗",
+
+  // 後端英文訊息對應
+  "execution not found": "找不到此執行紀錄",
+  "invalid signature": "LINE 簽名驗證失敗",
+  "admin only": "需要管理者權限",
 };
 
 /**

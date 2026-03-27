@@ -85,6 +85,7 @@ function ImportModal({ onClose, onSuccess }) {
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
@@ -109,11 +110,16 @@ function ImportModal({ onClose, onSuccess }) {
   const handleSubmit = async () => {
     if (!file) return;
     setLoading(true);
+    setUploadProgress(0);
     setError("");
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await api.post("/api/fixtures/import", formData);
+      const res = await api.post("/api/fixtures/import", formData, {
+        onUploadProgress: (e) => {
+          if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+        },
+      });
       setResult(res.data);
       const { created, updated, skipped } = res.data;
       showToast(`匯入完成：新增 ${created}、更新 ${updated}、跳過 ${skipped}`, "success");
@@ -122,6 +128,7 @@ function ImportModal({ onClose, onSuccess }) {
       showToast(e.response?.data?.detail || "匯入失敗", "error");
     } finally {
       setLoading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -247,6 +254,18 @@ function ImportModal({ onClose, onSuccess }) {
                 跳過 {result.skipped} 筆（空行或缺少必填欄位）
               </span>
             )}
+          </div>
+        )}
+
+        {loading && uploadProgress > 0 && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#8b949e", marginBottom: 4 }}>
+              <span>上傳中...</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div style={{ background: "#21262d", borderRadius: 4, height: 6, overflow: "hidden" }}>
+              <div style={{ width: `${uploadProgress}%`, height: "100%", background: "#238636", transition: "width .2s ease" }} />
+            </div>
           </div>
         )}
 

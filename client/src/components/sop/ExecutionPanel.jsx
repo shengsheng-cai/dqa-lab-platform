@@ -39,9 +39,7 @@ const ExecutionPanel = ({
       const a = document.createElement("a");
       a.href = url;
       a.download = buildFilename(execId);
-      document.body.appendChild(a);
       a.click();
-      a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
       const detail = err?.response?.data?.detail;

@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
                 "sim_phase": s.sim_phase or "idle",
                 "sim_cycle": s.sim_cycle or 0,
             }
-            print(f"🔄 [{device_id}] 恢復狀態：{s.status}，溫度：{s.temperature}°C")
+            logger.info(f"[{device_id}] 恢復狀態：{s.status}，溫度：{s.temperature}°C")
         else:
             cache[device_id] = {
                 "temperature": round(25.0 + random.uniform(-1.0, 1.0), 2),
@@ -90,7 +90,7 @@ async def lifespan(app: FastAPI):
     sim_task = asyncio.create_task(data_simulator())
     background_tasks.add(sim_task)
     sim_task.add_done_callback(background_tasks.discard)
-    print(f"✅ System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
+    logger.info(f"System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
 
     task = asyncio.create_task(warmup_rag())
     background_tasks.add(task)
@@ -104,7 +104,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(scan_replacement_reminders, "cron", day_of_week="mon", hour=8, minute=0)
     scheduler.add_job(auto_advance_schedules, "interval", minutes=5)
     scheduler.start()
-    print("✅ APScheduler 已啟動（每日 08:00 掃描逾期治具，每月 1 日月盤點提醒，每週一 08:00 汰換提醒，每 5 分鐘推進排程狀態）")
+    logger.info("APScheduler 已啟動（每日 08:00 掃描逾期治具，每月 1 日月盤點提醒，每週一 08:00 汰換提醒，每 5 分鐘推進排程狀態）")
 
     yield
     scheduler.shutdown()
@@ -690,7 +690,7 @@ async def data_simulator():
                             }
                         )
                         _save_device_state(device_id, item)
-                    print(f"✅ [{device_id}] 降溫完成，回待機。")
+                    logger.info(f"[{device_id}] 降溫完成，回待機。")
                     asyncio.create_task(
                         push_sop_notification(
                             finishing_op_user_id,

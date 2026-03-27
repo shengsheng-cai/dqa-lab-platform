@@ -109,10 +109,11 @@ def _get_tracker(ip: str) -> dict:
             for k in expired:
                 del _fail_tracker[k]
             if len(_fail_tracker) >= _FAIL_TRACKER_MAXSIZE:
-                keys_to_remove = list(_fail_tracker.keys())[
-                    : _FAIL_TRACKER_MAXSIZE // 2
-                ]
-                for k in keys_to_remove:
+                # 按 blocked_until 升序排序，刪除最早到期（最無效）的一半
+                sorted_keys = sorted(
+                    _fail_tracker, key=lambda k: _fail_tracker[k]["blocked_until"]
+                )
+                for k in sorted_keys[: _FAIL_TRACKER_MAXSIZE // 2]:
                     del _fail_tracker[k]
         _fail_tracker[ip] = {"count": 0, "blocked_until": 0.0}
     return _fail_tracker[ip]
@@ -324,11 +325,6 @@ class DemoTokenCreate(BaseModel):
     label: Optional[str] = None
     expires_days: Optional[int] = None  # None = 永不到期
     max_uses: Optional[int] = None      # None = 無限次
-
-
-def _require_admin(request: Request):
-    if getattr(request.state, "user_role", None) != "admin":
-        raise HTTPException(status_code=403, detail="僅管理者可操作")
 
 
 @router.get("/api/auth/demo-tokens")
