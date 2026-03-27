@@ -7,7 +7,7 @@ import json
 from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .models import SessionLocal, Schedule, DeviceBlockedPeriod, User
 from .standards import STANDARD_TREE, get_standard
@@ -41,6 +41,8 @@ class SchedulePatch(BaseModel):
 
 
 class ScheduleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_number: str
     sample_name: str
@@ -60,9 +62,6 @@ class ScheduleOut(BaseModel):
     total_hours: Optional[float] = None
     condition_names: Optional[List[str]] = None
 
-    class Config:
-        from_attributes = True
-
 
 class BlockedPeriodCreate(BaseModel):
     device_id: str
@@ -72,6 +71,8 @@ class BlockedPeriodCreate(BaseModel):
 
 
 class BlockedPeriodOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     device_id: str
     start_time: datetime.datetime
@@ -79,9 +80,6 @@ class BlockedPeriodOut(BaseModel):
     reason: Optional[str]
     created_by: Optional[int]
     created_at: datetime.datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ── 時長計算工具 ────────────────────────────────────────────────────────────

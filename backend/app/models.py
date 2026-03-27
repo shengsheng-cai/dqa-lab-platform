@@ -59,7 +59,7 @@ class Fixture(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     priority: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    interface_type: Mapped[str] = mapped_column(String, index=True)
+    interface_type: Mapped[str] = mapped_column(String)
     form_factor: Mapped[str] = mapped_column(String)
     size: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     purpose: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -110,7 +110,7 @@ class FixtureLoan(Base):
     return_date: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
     )
-    status: Mapped[str] = mapped_column(String, default="loaned", index=True)
+    status: Mapped[str] = mapped_column(String, default="loaned")
     return_condition: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     extension_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     keeper_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -302,7 +302,7 @@ class Schedule(Base):
         DateTime, nullable=True
     )
     # 待審核 / 已確認 / 進行中 / 已完成 / 已取消
-    status: Mapped[str] = mapped_column(String, default="待審核", index=True)
+    status: Mapped[str] = mapped_column(String, default="待審核")
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True
