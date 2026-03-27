@@ -7,6 +7,7 @@ import os
 import re
 import asyncio
 import pickle
+import logging
 from pathlib import Path
 from functools import lru_cache
 import numpy as np
@@ -14,6 +15,8 @@ from typing import Optional
 from google import genai
 from google.genai import types as genai_types
 from .standards import get_standard_tree
+
+logger = logging.getLogger("app")
 
 GEMINI_EMBED_MODEL = "gemini-embedding-001"
 RAG_CACHE_PATH = Path(__file__).parent.parent / "rag_cache.pkl"
@@ -159,28 +162,28 @@ async def warmup_rag():
             if cached_count == current_count:
                 _CHUNKS = cached["chunks"]
                 _EMBEDDINGS = cached["embeddings"]
-                print(f"✅ RAG 從快取載入：{len(_CHUNKS)} 個測試條件")
+                logger.info(f"RAG 從快取載入：{len(_CHUNKS)} 個測試條件")
                 return
             else:
-                print(
-                    f"⚠️  RAG 快取條件數量不符（快取 {cached_count} vs 現在 {current_count}），重新向量化"
+                logger.warning(
+                    f"RAG 快取條件數量不符（快取 {cached_count} vs 現在 {current_count}），重新向量化"
                 )
         except Exception as e:
-            print(f"⚠️  RAG 快取讀取失敗，重新向量化：{e}")
+            logger.warning(f"RAG 快取讀取失敗，重新向量化：{e}")
 
-    print("⏳ RAG 知識庫建立中（分批向量化，約需 20 秒）...")
+    logger.info("RAG 知識庫建立中（分批向量化，約需 20 秒）...")
     try:
         _CHUNKS = current_chunks
         texts = [c["text"] for c in _CHUNKS]
         _EMBEDDINGS = await _embed(texts, task_type="RETRIEVAL_DOCUMENT")
         norms = np.linalg.norm(_EMBEDDINGS, axis=1, keepdims=True)
         _EMBEDDINGS = _EMBEDDINGS / np.clip(norms, 1e-9, None)
-        print(f"✅ RAG 完成：{len(_CHUNKS)} 個測試條件已向量化")
+        logger.info(f"RAG 完成：{len(_CHUNKS)} 個測試條件已向量化")
         with open(RAG_CACHE_PATH, "wb") as f:
             pickle.dump({"chunks": _CHUNKS, "embeddings": _EMBEDDINGS}, f)
-        print(f"✅ RAG 快取已儲存：{RAG_CACHE_PATH}")
+        logger.info(f"RAG 快取已儲存：{RAG_CACHE_PATH}")
     except Exception as e:
-        print(f"⚠️  RAG 向量化失敗：{e}")
+        logger.warning(f"RAG 向量化失敗：{e}")
         _CHUNKS = []
         _EMBEDDINGS = None
 

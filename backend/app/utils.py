@@ -48,4 +48,13 @@ def _save_device_state(device_id: str, item: dict):
         state.sim_phase = item.get("sim_phase", "idle")
         state.sim_cycle = item.get("sim_cycle", 0)
 
+        for field in ("dwell_high_start", "dwell_low_start"):
+            val = item.get(field)
+            if val is not None:
+                if isinstance(val, str):
+                    val = datetime.datetime.fromisoformat(val.replace("Z", "+00:00"))
+                setattr(state, field, val.replace(tzinfo=None))
+            else:
+                setattr(state, field, None)
+
         db.commit()

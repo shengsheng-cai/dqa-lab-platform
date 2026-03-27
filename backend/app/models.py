@@ -265,6 +265,8 @@ class DeviceState(Base):
     # --- 模擬器狀態（物理模擬引擎專用，未來可獨立為 SimulatorState 表）---
     sim_phase: Mapped[Optional[str]] = mapped_column(String, nullable=True, default="idle")
     sim_cycle: Mapped[int] = mapped_column(Integer, default=0)
+    dwell_high_start: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    dwell_low_start: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
 
 
 # ---------- 異常紀錄 ----------
