@@ -83,6 +83,7 @@ async def lifespan(app: FastAPI):
             }
 
     app.state.AICM_CACHE = cache
+    app.state.DEVICE_LOCKS = {device_id: asyncio.Lock() for device_id in DEVICE_IDS}
 
     sim_task = asyncio.create_task(data_simulator())
     background_tasks.add(sim_task)
@@ -335,62 +336,63 @@ async def get_latest():
 async def emergency_stop(device_id: str, request: Request):
     device = _get_device(device_id)
 
-    if device.get("status") == "EMERGENCY":
-        return {
-            "status": "already_emergency",
-            "message": f"{device_id} 已在緊急停止狀態",
-        }
+    async with app.state.DEVICE_LOCKS[device_id]:
+        if device.get("status") == "EMERGENCY":
+            return {
+                "status": "already_emergency",
+                "message": f"{device_id} 已在緊急停止狀態",
+            }
 
-    operator = device.get("operator", "") or "未填寫"
-    operator_user_id = device.get("operator_user_id")
-    sop_name = device.get("running_sop_name", "") or "未知測試"
+        operator = device.get("operator", "") or "未填寫"
+        operator_user_id = device.get("operator_user_id")
+        sop_name = device.get("running_sop_name", "") or "未知測試"
 
-    with SessionLocal() as db:
-        # 記錄緊急停止事件
-        db.add(
-            ErrorLog(
-                device_id=device_id,
-                error_type="EMERGENCY",
-                sop_id=device.get("running_sop_id"),
-                sop_name=device.get("running_sop_name"),
-                temperature=device.get("temperature"),
-                humidity=device.get("humidity"),
-                note=f"操作人員觸發緊急停止（{operator}）",
-                completed_steps=device.get("completed_steps", 0),
-                total_steps=device.get("total_steps", 0),
-                created_at=_now_utc(),
+        with SessionLocal() as db:
+            # 記錄緊急停止事件
+            db.add(
+                ErrorLog(
+                    device_id=device_id,
+                    error_type="EMERGENCY",
+                    sop_id=device.get("running_sop_id"),
+                    sop_name=device.get("running_sop_name"),
+                    temperature=device.get("temperature"),
+                    humidity=device.get("humidity"),
+                    note=f"操作人員觸發緊急停止（{operator}）",
+                    completed_steps=device.get("completed_steps", 0),
+                    total_steps=device.get("total_steps", 0),
+                    created_at=_now_utc(),
+                )
             )
+
+            # 更新對應的 SopExecution 記錄，設定 test_ended_at
+            execution = db.query(SopExecution).filter(
+                SopExecution.device_id == device_id,
+                SopExecution.test_ended_at == None,
+                SopExecution.test_started_at != None
+            ).first()
+            if execution:
+                execution.test_ended_at = _now_utc()
+
+            db.commit()
+
+        device.update(
+            {
+                "status": "EMERGENCY",
+                "running_sop_id": None,
+                "running_sop_name": "🚨 緊急停止中 - 待確認安全",
+                "active_sop_json": None,
+                "completed_steps": 0,
+                "started_at": None,
+                "total_steps": 0,
+                "operator": "",
+                "operator_user_id": None,
+                "sim_phase": "idle",
+                "sim_cycle": 0,
+            }
         )
+        _save_device_state(device_id, device)
 
-        # 更新對應的 SopExecution 記錄，設定 test_ended_at
-        execution = db.query(SopExecution).filter(
-            SopExecution.device_id == device_id,
-            SopExecution.test_ended_at == None,
-            SopExecution.test_started_at != None
-        ).first()
-        if execution:
-            execution.test_ended_at = _now_utc()
-
-        db.commit()
-
-    device.update(
-        {
-            "status": "EMERGENCY",
-            "running_sop_id": None,
-            "running_sop_name": "🚨 緊急停止中 - 待確認安全",
-            "active_sop_json": None,
-            "completed_steps": 0,
-            "started_at": None,
-            "total_steps": 0,
-            "operator": "",
-            "operator_user_id": None,
-            "sim_phase": "idle",
-            "sim_cycle": 0,
-        }
-    )
-    _save_device_state(device_id, device)
     print(f"🚨 [{device_id}] EMERGENCY STOP by {operator}")
-
     asyncio.create_task(
         push_sop_notification(
             operator_user_id,
@@ -421,51 +423,59 @@ _VALID_PHASES = {
 async def set_phase(device_id: str, payload: SetPhasePayload):
     """管理員手動跳相位（用於 demo / 手動接管）"""
     device = _get_device(device_id)
-    if device.get("status") not in ("RUNNING", "PAUSED"):
-        raise HTTPException(status_code=400, detail="設備未在執行中")
     if payload.phase not in _VALID_PHASES:
         raise HTTPException(status_code=400, detail=f"無效的 phase：{payload.phase}")
-    device["sim_phase"] = payload.phase
-    _save_device_state(device_id, device)
+    async with app.state.DEVICE_LOCKS[device_id]:
+        if device.get("status") not in ("RUNNING", "PAUSED"):
+            raise HTTPException(status_code=400, detail="設備未在執行中")
+        device["sim_phase"] = payload.phase
+        _save_device_state(device_id, device)
     return {"status": "success", "sim_phase": payload.phase}
 
 
 @app.post("/api/devices/{device_id}/progress")
 async def update_progress(device_id: str, payload: ProgressPayload):
     device = _get_device(device_id)
-    device["completed_steps"] = payload.completed
-    _save_device_state(device_id, device)
+    async with app.state.DEVICE_LOCKS[device_id]:
+        device["completed_steps"] = payload.completed
+        _save_device_state(device_id, device)
     return {"status": "success", "completed_steps": payload.completed}
 
 
 @app.post("/api/stop/{device_id}/pause")
 async def pause_test(device_id: str):
     device = _get_device(device_id)
-    if device["status"] == "RUNNING":
-        device["status"] = "PAUSED"
-    elif device["status"] == "PAUSED":
-        device["status"] = "RUNNING"
-    _save_device_state(device_id, device)
+    async with app.state.DEVICE_LOCKS[device_id]:
+        if device["status"] not in ("RUNNING", "PAUSED"):
+            raise HTTPException(status_code=400, detail=f"{device_id} 非執行中狀態，無法暫停／繼續")
+        if device["status"] == "RUNNING":
+            device["status"] = "PAUSED"
+        else:
+            device["status"] = "RUNNING"
+        _save_device_state(device_id, device)
     return {"status": "success"}
 
 
 @app.post("/api/stop/{device_id}/normal")
 async def normal_stop(device_id: str):
     device = _get_device(device_id)
-    device.update(
-        {
-            "status": "FINISHING",
-            "running_sop_name": "系統自動降溫收尾中...",
-            "active_sop_json": None,
-            "completed_steps": 0,
-            "started_at": None,
-            "standard_id": None,
-            "operator": "",
-            "sim_phase": "ramp_to_ambient",
-            "sim_cycle": 0,
-        }
-    )
-    _save_device_state(device_id, device)
+    async with app.state.DEVICE_LOCKS[device_id]:
+        if device["status"] not in ("RUNNING", "PAUSED"):
+            raise HTTPException(status_code=400, detail=f"{device_id} 非執行中狀態，無法停止")
+        device.update(
+            {
+                "status": "FINISHING",
+                "running_sop_name": "系統自動降溫收尾中...",
+                "active_sop_json": None,
+                "completed_steps": 0,
+                "started_at": None,
+                "standard_id": None,
+                "operator": "",
+                "sim_phase": "ramp_to_ambient",
+                "sim_cycle": 0,
+            }
+        )
+        _save_device_state(device_id, device)
     return {"status": "success"}
 
 
@@ -664,19 +674,20 @@ async def data_simulator():
                 else:
                     item["temperature"] = 25.0
                     finishing_op_user_id = item.get("operator_user_id")
-                    item.update(
-                        {
-                            "status": "IDLE",
-                            "running_sop_name": "STANDBY",
-                            "running_sop_id": None,
-                            "standard_id": None,
-                            "operator": "",
-                            "operator_user_id": None,
-                            "sim_phase": "idle",
-                            "sim_cycle": 0,
-                        }
-                    )
-                    _save_device_state(device_id, item)
+                    async with app.state.DEVICE_LOCKS[device_id]:
+                        item.update(
+                            {
+                                "status": "IDLE",
+                                "running_sop_name": "STANDBY",
+                                "running_sop_id": None,
+                                "standard_id": None,
+                                "operator": "",
+                                "operator_user_id": None,
+                                "sim_phase": "idle",
+                                "sim_cycle": 0,
+                            }
+                        )
+                        _save_device_state(device_id, item)
                     print(f"✅ [{device_id}] 降溫完成，回待機。")
                     asyncio.create_task(
                         push_sop_notification(

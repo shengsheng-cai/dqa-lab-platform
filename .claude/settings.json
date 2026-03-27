@@ -2,10 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(python backend/init_db.py)",
-      "Bash(curl -s -X POST http://localhost:8000/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"username\"\"\"\":\"\"\"\"admin\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"admin\"\"\"\"}')",
-      "Bash(curl -s -X POST http://localhost:8000/api/auth/demo-login -H \"Content-Type: application/json\" -d '{\"\"\"\"password\"\"\"\":\"\"\"\"testpass\"\"\"\"}')",
+      "Bash(curl -s -X POST http://localhost:8000/api/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"admin\",\"password\":\"admin\"}')",
+      "Bash(curl -s -X POST http://localhost:8000/api/auth/demo-login -H \"Content-Type: application/json\" -d '{\"password\":\"testpass\"}')",
       "Bash(curl -s -H \"X-User-Token: fake\" -H \"X-Demo-Password: fake\" http://localhost:8000/api/latest)",
       "Bash(curl -s -H \"X-User-Token: invalid_token\" -H \"X-Demo-Password: invalid_pwd\" http://localhost:8000/api/schedules)"
     ]
   }
 }
+

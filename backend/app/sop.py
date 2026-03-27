@@ -100,10 +100,6 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
 
     if not device:
         raise HTTPException(status_code=404, detail=f"設備 {device_id} 不存在")
-    if device.get("status") == "RUNNING":
-        raise HTTPException(
-            status_code=400, detail=f"{device_id} 正在執行中，請先停止。"
-        )
 
     std_data = STANDARDS_AND_SOPS.get(sop_id, {})
     sop_name = std_data.get("name", sop_id)
@@ -118,24 +114,28 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
     active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
     active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
 
-    device.update(
-        {
-            "status": "RUNNING",
-            "running_sop_id": sop_id,
-            "running_sop_name": sop_name,
-            "standard_id": sop_id,
-            "active_sop_json": active_sop_json,
-            "completed_steps": 0,
-            "started_at": now,
-            "total_steps": len(std_data.get("steps", [])),
-            "operator": operator.strip() if operator else "",
-            "operator_user_id": operator_user_id,
-            "sim_phase": "idle",
-            "sim_cycle": 0,
-        }
-    )
-
-    _save_device_state(device_id, device)
+    async with request.app.state.DEVICE_LOCKS[device_id]:
+        if device.get("status") != "IDLE":
+            raise HTTPException(
+                status_code=400, detail=f"{device_id} 非待機狀態（目前：{device.get('status')}），請先停止現有測試。"
+            )
+        device.update(
+            {
+                "status": "RUNNING",
+                "running_sop_id": sop_id,
+                "running_sop_name": sop_name,
+                "standard_id": sop_id,
+                "active_sop_json": active_sop_json,
+                "completed_steps": 0,
+                "started_at": now,
+                "total_steps": len(std_data.get("steps", [])),
+                "operator": operator.strip() if operator else "",
+                "operator_user_id": operator_user_id,
+                "sim_phase": "idle",
+                "sim_cycle": 0,
+            }
+        )
+        _save_device_state(device_id, device)
 
     print(
         f"🔥 [{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}"
