@@ -249,9 +249,7 @@ function DeviceCard({ device, isSelected, onClick }) {
 
 // ── LeftPanel ─────────────────────────────────────────────────────────────────
 
-function LeftPanel({ devices, selectedDevice, onSelectDevice, onSwitchTab }) {
-  const [recordsOpen, setRecordsOpen] = useState(false);
-
+function LeftPanel({ devices, selectedDevice, onSelectDevice }) {
   return (
     <div
       style={{
@@ -294,57 +292,6 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, onSwitchTab }) {
             onClick={() => onSelectDevice(d.device_id)}
           />
         ))}
-      </div>
-
-      {/* 紀錄收合 */}
-      <div style={{ borderTop: "1px solid #30363d", flexShrink: 0 }}>
-        <button
-          onClick={() => setRecordsOpen((v) => !v)}
-          style={{
-            width: "100%",
-            padding: "7px 10px",
-            background: "transparent",
-            border: "none",
-            color: "#8b949e",
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: "pointer",
-            textAlign: "left",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          紀錄 <span style={{ fontSize: 9 }}>{recordsOpen ? "▲" : "▼"}</span>
-        </button>
-        {recordsOpen && (
-          <div
-            style={{
-              padding: "0 10px 8px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 3,
-            }}
-          >
-            {[
-              { label: "異常紀錄", tab: "errors" },
-              { label: "執行紀錄", tab: "executions" },
-            ].map(({ label, tab }) => (
-              <div
-                key={label}
-                onClick={() => onSwitchTab(tab)}
-                style={{
-                  fontSize: 11,
-                  color: "#58a6ff",
-                  padding: "3px 2px",
-                  cursor: "pointer",
-                }}
-              >
-                {label}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -669,12 +616,15 @@ const TABS = [
   { key: "device", label: "設備" },
   { key: "fixture", label: "治具" },
   { key: "schedule", label: "排程" },
+  { key: "errors", label: "異常紀錄" },
+  { key: "executions", label: "執行紀錄" },
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
 function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) {
   const visibleTabs = TABS.filter((t) => !t.adminOnly || role === "admin");
   const [failureCount, setFailureCount] = useState(0);
+  const [pendingScheduleCount, setPendingScheduleCount] = useState(0);
 
   // 切換 tab 時重置滾動位置
   useEffect(() => {
@@ -690,6 +640,18 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) 
     };
     fetchCount();
     const timer = setInterval(fetchCount, POLL_GENERAL_MS);
+    return () => clearInterval(timer);
+  }, [role]);
+
+  useEffect(() => {
+    if (role === "guest") return;
+    const fetch = () => {
+      api.get("/api/schedules?status=待審核").then((res) => {
+        setPendingScheduleCount(res.data.length);
+      }).catch(() => {});
+    };
+    fetch();
+    const timer = setInterval(fetch, POLL_GENERAL_MS);
     return () => clearInterval(timer);
   }, [role]);
 
@@ -734,6 +696,21 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) 
             }}
           >
             {t.label}
+            {t.key === "schedule" && pendingScheduleCount > 0 && (
+              <span style={{
+                marginLeft: 5,
+                background: "#e3b341",
+                color: "#0d1117",
+                fontSize: 10,
+                fontWeight: 700,
+                borderRadius: 8,
+                padding: "1px 5px",
+                lineHeight: "14px",
+                verticalAlign: "middle",
+              }}>
+                {pendingScheduleCount}
+              </span>
+            )}
             {t.key === "users" && failureCount > 0 && (
               <span style={{
                 marginLeft: 5,
@@ -875,7 +852,6 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           devices={devices}
           selectedDevice={selectedDevice}
           onSelectDevice={setSelectedDevice}
-          onSwitchTab={setActiveTab}
         />
         <CenterPanel
           role={role}

@@ -94,7 +94,7 @@ function GanttChart({ schedules, blockedPeriods, rangeStart, rangeEnd, onClickSc
 
         {/* 可捲動甘特區域 */}
         <div ref={scrollRef} style={{ overflowX: "auto", flex: 1 }}>
-          <div style={{ width: totalPx, position: "relative", minWidth: "100%" }}>
+          <div style={{ width: totalPx, position: "relative", minWidth: "100%", height: HEADER_H + DEVICE_IDS.length * ROW_H }}>
 
             {/* 日期 header */}
             <div style={{ height: HEADER_H, position: "relative", borderBottom: "1px solid #30363d" }}>
@@ -1019,16 +1019,16 @@ export default function SchedulePage({ active, role, userId }) {
       {/* 頁頭 */}
       <div style={{
         padding: "12px 16px", borderBottom: "1px solid #30363d",
-        display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap",
+        display: "flex", flexDirection: "column", gap: 10,
         flexShrink: 0,
       }}>
-        <div style={{ display: "flex", gap: 8, flex: 1, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8 }}>
           <SummaryCard label="待審核" value={summary["待審核"]} color="#8b949e" />
           <SummaryCard label="已確認" value={summary["已確認"]} color="#388bfd" />
           <SummaryCard label="進行中" value={summary["進行中"]} color="#3fb950" />
           <SummaryCard label="已完成" value={summary["已完成"]} color="#238636" />
         </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {lastRefreshed && (
             <span style={{ fontSize: 11, color: "#484f58", whiteSpace: "nowrap" }}>
               更新於 {lastRefreshed.getHours().toString().padStart(2,"0")}:{lastRefreshed.getMinutes().toString().padStart(2,"0")}:{lastRefreshed.getSeconds().toString().padStart(2,"0")}
