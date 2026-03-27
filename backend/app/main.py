@@ -176,7 +176,8 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
 
     try:
         sop = json.loads(active_sop_json)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[_calc_estimated_end_at] active_sop_json 解析失敗：{e}")
         return None
 
     ramp_rate = sop.get("ramp_rate") or 1.0
@@ -661,7 +662,8 @@ async def data_simulator():
                     try:
                         finishing_sop = json.loads(finishing_sop_json)
                         finishing_ramp = (finishing_sop.get("ramp_rate") or 1.0) / 60.0
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"[{device_id}] finishing_sop_json 解析失敗，使用預設 ramp：{e}")
                         finishing_ramp = 1.0 / 60.0
                 else:
                     finishing_ramp = 1.0 / 60.0

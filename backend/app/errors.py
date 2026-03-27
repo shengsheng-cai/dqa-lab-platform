@@ -1,6 +1,6 @@
 import datetime
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from .models import SessionLocal, ErrorLog
 
@@ -8,6 +8,8 @@ router = APIRouter(prefix="/api/errors", tags=["errors"])
 
 
 class ErrorLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     device_id: str
     error_type: str
@@ -20,9 +22,6 @@ class ErrorLogResponse(BaseModel):
     completed_steps: Optional[int] = None
     total_steps: Optional[int] = None
     created_at: datetime.datetime
-
-    class Config:
-        from_attributes = True
 
 
 @router.get("/", response_model=list[ErrorLogResponse])
