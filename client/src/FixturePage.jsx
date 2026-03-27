@@ -107,7 +107,6 @@ function ImportModal({ onClose, onSuccess }) {
   };
 
   const handleSubmit = async () => {
-    console.log("handleSubmit called, file:", file);
     if (!file) return;
     setLoading(true);
     setError("");

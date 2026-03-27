@@ -8,8 +8,7 @@ import SchedulePage from "./SchedulePage";
 import UsersPage from "./UsersPage";
 import ErrorLog from "./ErrorLog";
 import RightPanel from "./components/control/RightPanel";
-
-const DEVICE_IDS = ["CH-01", "CH-02", "CH-03", "CH-04", "CH-05"];
+import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS } from "./constants";
 
 const TAB_TO_PATH = {
   device: "/",
@@ -23,14 +22,6 @@ const PATH_TO_TAB = Object.fromEntries(
   Object.entries(TAB_TO_PATH).map(([k, v]) => [v, k])
 );
 
-const STATUS_CONFIG = {
-  OFFLINE: { color: "#484f58", label: "OFFLINE" },
-  IDLE: { color: "#8b949e", label: "IDLE" },
-  RUNNING: { color: "#3fb950", label: "RUNNING" },
-  PAUSED: { color: "#f0a500", label: "PAUSED" },
-  FINISHING: { color: "#58a6ff", label: "FINISHING" },
-  EMERGENCY: { color: "#f85149", label: "EMERGENCY" },
-};
 
 // ── TopBar ────────────────────────────────────────────────────────────────────
 
@@ -388,7 +379,7 @@ function ExecutionList({ active }) {
   useEffect(() => {
     if (!active) return;
     fetchList();
-    const t = setInterval(fetchList, 60000);
+    const t = setInterval(fetchList, POLL_GENERAL_MS);
     return () => clearInterval(t);
   }, [active]);
 
@@ -698,7 +689,7 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) 
       }).catch(() => {});
     };
     fetchCount();
-    const timer = setInterval(fetchCount, 60000);
+    const timer = setInterval(fetchCount, POLL_GENERAL_MS);
     return () => clearInterval(timer);
   }, [role]);
 
@@ -851,7 +842,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       }
     };
     fetchDevices();
-    const t = setInterval(fetchDevices, 3000);
+    const t = setInterval(fetchDevices, POLL_DEVICES_MS);
     return () => clearInterval(t);
   }, []);
 
@@ -866,7 +857,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       }
     };
     fetchSummary();
-    const t = setInterval(fetchSummary, 30000);
+    const t = setInterval(fetchSummary, POLL_FIXTURE_MS);
     return () => clearInterval(t);
   }, []);
 

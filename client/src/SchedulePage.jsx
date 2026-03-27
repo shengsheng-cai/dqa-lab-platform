@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import api from "./api";
 import { useToast } from "./components/Toast";
+import { DEVICE_IDS } from "./constants";
 
 // ── 常數 ───────────────────────────────────────────────────────────────────
-
-const DEVICE_IDS = ["CH-01", "CH-02", "CH-03", "CH-04", "CH-05"];
 const HOUR_PX = 6;          // 每小時多少像素
 const DAY_PX = HOUR_PX * 24;
 const ROW_H = 52;           // 每台設備的列高

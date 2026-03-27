@@ -9,14 +9,7 @@ import StepList from "./components/sop/StepList";
 import ExecutionPanel from "./components/sop/ExecutionPanel";
 import SafetyChecklist from "./components/sop/SafetyChecklist";
 import "./SOPPage.css";
-
-const DEVICE_IDS = [
-  "CH-01",
-  "CH-02",
-  "CH-03",
-  "CH-04",
-  "CH-05",
-];
+import { DEVICE_IDS } from "./constants";
 const ACTIVE_STATUSES = ["RUNNING", "PAUSED"];
 
 const initDeviceState = () => ({

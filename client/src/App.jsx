@@ -3,8 +3,7 @@ import ControlCenter from "./ControlCenter";
 import { ToastProvider } from "./components/Toast";
 import { API_BASE } from "./api";
 import api from "./api";
-
-const SESSION_DURATION = 8 * 60 * 60 * 1000;
+import { SESSION_DURATION } from "./constants";
 
 function isSessionValid() {
   const userToken = localStorage.getItem("user_token");

@@ -10,23 +10,7 @@ import {
   Tooltip,
   Brush,
 } from "recharts";
-
-const STATUS_CONFIG = {
-  OFFLINE: { color: "#484f58", bg: "#21262d", label: "OFFLINE" },
-  IDLE: { color: "#8b949e", bg: "#21262d", label: "IDLE" },
-  RUNNING: { color: "#3fb950", bg: "#0f2318", label: "RUNNING" },
-  PAUSED: { color: "#f0a500", bg: "#2d1f00", label: "PAUSED" },
-  FINISHING: { color: "#58a6ff", bg: "#0d1f33", label: "FINISHING" },
-  EMERGENCY: { color: "#f85149", bg: "#2d0f0f", label: "EMERGENCY" },
-};
-
-const DEVICE_IDS = [
-  "CH-01",
-  "CH-02",
-  "CH-03",
-  "CH-04",
-  "CH-05",
-];
+import { STATUS_CONFIG, DEVICE_IDS } from "./constants";
 
 const card = {
   background: "#161b22",
