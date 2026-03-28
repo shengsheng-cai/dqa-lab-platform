@@ -280,7 +280,9 @@ async def standards_query_stream(req: QueryRequest):
 
     async def generate():
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(connect=10.0, read=None, write=60.0, pool=10.0)
+            ) as client:
                 async with client.stream(
                     "POST",
                     f"{GEMINI_URL}:streamGenerateContent?alt=sse&key={api_key}",

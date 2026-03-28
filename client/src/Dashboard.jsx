@@ -11,7 +11,7 @@ import {
   Tooltip,
   Brush,
 } from "recharts";
-import { STATUS_CONFIG, DEVICE_IDS } from "./constants";
+import { STATUS_CONFIG, DEVICE_IDS, parseUtcDate } from "./constants";
 
 const card = {
   background: "#161b22",
@@ -279,7 +279,7 @@ const downloadPdf = (execId, sopId) =>
 const fmtDatetime = (str) => {
   if (!str || str === "N/A") return "—";
   try {
-    const d = new Date(str);
+    const d = parseUtcDate(str);
     return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   } catch {
     return str;

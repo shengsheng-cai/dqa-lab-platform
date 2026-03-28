@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "./api";
 import { useToast } from "./components/Toast";
+import { parseUtcDate } from "./constants";
 
 const ROLE_LABELS = { admin: "管理者", keeper: "保管人", engineer: "工程師" };
 const ROLE_COLORS = { admin: "#f85149", keeper: "#f0a500", engineer: "#58a6ff" };
@@ -523,7 +524,7 @@ function NotifFailuresSection({ active, role }) {
               {failures.map((f) => (
                 <tr key={f.id} style={{ borderTop: "1px solid #30363d" }}>
                   <td style={{ padding: "8px 12px", color: "#8b949e", whiteSpace: "nowrap" }}>
-                    {f.created_at ? new Date(f.created_at).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-"}
+                    {f.created_at ? parseUtcDate(f.created_at).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-"}
                   </td>
                   <td style={{ padding: "8px 12px", color: "#cdd9e5" }}>{f.target || "-"}</td>
                   <td style={{ padding: "8px 12px", color: "#8b949e", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.message_preview || "-"}</td>

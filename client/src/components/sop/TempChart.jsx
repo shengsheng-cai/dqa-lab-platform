@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { generateSP, mergeSpPv, toElapsedMin } from "./generateSP";
+import { parseUtcDate } from "../../constants";
 
 function fmtWallClock(ms) {
   const d = new Date(ms);
@@ -29,11 +30,7 @@ const TempChart = ({ sop, pvData, startedAt }) => {
   const merged = React.useMemo(() => {
     const base = mergeSpPv(spData, pvWithMin);
     if (!startedAt) return base;
-    const safeStart =
-      typeof startedAt === "string" && !startedAt.includes("Z") && !startedAt.includes("+")
-        ? startedAt + "Z"
-        : startedAt;
-    const startMs = new Date(safeStart).getTime();
+    const startMs = parseUtcDate(startedAt).getTime();
     return base.map((p) => ({ ...p, label: fmtWallClock(startMs + p.min * 60000) }));
   }, [spData, pvWithMin, startedAt]);
 

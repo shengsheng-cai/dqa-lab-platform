@@ -9,6 +9,22 @@ export const POLL_DEVICES_MS = 3000;    // 設備狀態
 export const POLL_FIXTURE_MS = 30000;   // 治具摘要
 export const POLL_GENERAL_MS = 60000;   // 其他清單（逾期借出、申請數）
 
+// 後端回傳 naive UTC 字串（無 Z），補上 Z 讓瀏覽器正確解析為 UTC
+export function parseUtcDate(s) {
+  if (!s) return null;
+  if (s instanceof Date) return s;
+  return new Date(s.includes("Z") || s.includes("+") ? s : s + "Z");
+}
+
+export const SIM_PHASE_LABEL = {
+  ramp_to_low: "降至低溫",
+  ramp_to_high: "升至高溫",
+  dwell_high: "高溫保持",
+  ramp_to_low2: "降至低溫",
+  dwell_low: "低溫保持",
+  ramp_to_ambient: "降回常溫",
+};
+
 export const STATUS_CONFIG = {
   OFFLINE:   { color: "#484f58", bg: "#21262d", label: "OFFLINE" },
   IDLE:      { color: "#8b949e", bg: "#21262d", label: "IDLE" },

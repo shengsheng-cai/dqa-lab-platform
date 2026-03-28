@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "./api";
 import { useToast } from "./components/Toast";
@@ -8,7 +8,7 @@ import SchedulePage from "./SchedulePage";
 import UsersPage from "./UsersPage";
 import ErrorLog from "./ErrorLog";
 import RightPanel from "./components/control/RightPanel";
-import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS } from "./constants";
+import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL } from "./constants";
 
 const TAB_TO_PATH = {
   device: "/",
@@ -149,11 +149,7 @@ function useCountdown(estimatedEndAt) {
       return;
     }
     const calc = () => {
-      const endMs = new Date(
-        typeof estimatedEndAt === "string" && !estimatedEndAt.includes("Z") && !estimatedEndAt.includes("+")
-          ? estimatedEndAt + "Z"
-          : estimatedEndAt
-      );
+      const endMs = parseUtcDate(estimatedEndAt);
       const diff = endMs - new Date();
       setRemaining(Math.max(0, Math.floor(diff / 1000)));
     };
@@ -176,6 +172,15 @@ function DeviceCard({ device, isSelected, onClick }) {
   const remaining = useCountdown(device.estimated_end_at);
   const isActive = device.status === "RUNNING" || device.status === "PAUSED";
   const isEmergency = device.status === "EMERGENCY";
+
+  const totalMs = useMemo(
+    () => parseUtcDate(device.estimated_end_at) - parseUtcDate(device.started_at),
+    [device.started_at, device.estimated_end_at]
+  );
+  const progressPct =
+    isActive && totalMs > 0 && remaining !== null
+      ? Math.min(100, Math.max(0, ((totalMs - remaining * 1000) / totalMs) * 100))
+      : null;
 
   return (
     <div
@@ -210,10 +215,17 @@ function DeviceCard({ device, isSelected, onClick }) {
 
       {isActive && (
         <div style={{ marginTop: 3 }}>
-          <div style={{ fontSize: 10, color: "#8b949e" }}>
-            {device.temperature != null ? `${device.temperature}°C` : "—"}
-            {device.humidity != null && (
-              <span style={{ marginLeft: 4 }}>{device.humidity}%</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 10, color: "#8b949e" }}>
+              {device.temperature != null ? `${device.temperature}°C` : "—"}
+              {device.humidity != null && (
+                <span style={{ marginLeft: 4 }}>{device.humidity}%</span>
+              )}
+            </span>
+            {SIM_PHASE_LABEL[device.sim_phase] && (
+              <span style={{ fontSize: 8, color: "#484f58" }}>
+                {SIM_PHASE_LABEL[device.sim_phase]}
+              </span>
             )}
           </div>
           {device.running_sop_name && device.running_sop_name !== "STANDBY" && (
@@ -228,6 +240,19 @@ function DeviceCard({ device, isSelected, onClick }) {
               }}
             >
               {device.running_sop_name}
+            </div>
+          )}
+          {progressPct !== null && (
+            <div style={{ margin: "3px 0 1px", height: 3, background: "#21262d", borderRadius: 2, overflow: "hidden" }}>
+              <div
+                style={{
+                  height: "100%",
+                  width: `${progressPct}%`,
+                  background: device.status === "PAUSED" ? "#e3b341" : "#1f6feb",
+                  borderRadius: 2,
+                  transition: "width 1s linear",
+                }}
+              />
             </div>
           )}
           {remaining !== null && (

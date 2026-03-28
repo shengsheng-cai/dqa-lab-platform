@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { generateSP } from "./generateSP";
+import { parseUtcDate } from "../../constants";
 
 function fmtMin(min) {
   const h = Math.floor(min / 60);
@@ -18,11 +19,7 @@ const ExecutionInfoPanel = ({ sop, startedAt, simCycle, doneCnt }) => {
 
   if (!sop || !startedAt) return null;
 
-  const startedAtDate = new Date(
-    typeof startedAt === "string" && !startedAt.includes("Z") && !startedAt.includes("+")
-      ? startedAt + "Z"
-      : startedAt
-  );
+  const startedAtDate = parseUtcDate(startedAt);
 
   const elapsedMin = Math.floor((now - startedAtDate) / 60000);
   const spData = generateSP(sop);

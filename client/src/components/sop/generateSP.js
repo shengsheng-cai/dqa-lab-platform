@@ -1,4 +1,5 @@
-// SP 波形計算（純函式，無 React 依賴）
+// SP 波形計算（純函式）
+import { parseUtcDate } from "../../constants";
 
 export function fmtMin(min) {
   const h = Math.floor(min / 60);
@@ -9,16 +10,7 @@ export function fmtMin(min) {
 export function toElapsedMin(startedAt, fullTime) {
   if (!startedAt || !fullTime) return null;
   try {
-    // Naive UTC 字串補 Z，讓瀏覽器正確解析為 UTC
-    const safeStart = (typeof startedAt === "string" && !startedAt.includes("Z") && !startedAt.includes("+"))
-      ? startedAt + "Z"
-      : startedAt;
-    const safeTime = (typeof fullTime === "string" && !fullTime.includes("Z") && !fullTime.includes("+"))
-      ? fullTime + "Z"
-      : fullTime;
-    const start = new Date(safeStart);
-    const point = new Date(safeTime);
-    return Math.round((point - start) / 60000);
+    return Math.round((parseUtcDate(fullTime) - parseUtcDate(startedAt)) / 60000);
   } catch {
     return null;
   }
