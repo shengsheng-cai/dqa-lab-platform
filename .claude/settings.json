@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make install)",
+      "Bash(make dev)",
+      "Bash(make clean)",
+      "Bash(python backend/init_db.py)",
+      "Bash(cd backend && alembic revision*)",
+      "Bash(cd backend && alembic upgrade head)",
+      "Bash(cd backend && python -m pytest*)",
+      "Bash(bash tests/*.sh)",
+      "Bash(npm list*)",
+      "Bash(npm install*)",
+      "Bash(npx ccusage*)",
+      "Bash(python3*)",
+      "Bash(claude --version)"
+    ]
+  }
+}
