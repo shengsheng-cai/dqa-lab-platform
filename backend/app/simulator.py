@@ -1,0 +1,337 @@
+import asyncio
+import datetime
+import json
+import logging
+import random
+
+from .models import SessionLocal, DeviceData
+from .standards import get_ramp_rate, get_standard
+from .utils import _now_utc, _save_device_state
+from .line import push_sop_notification
+
+logger = logging.getLogger("app")
+
+
+# ── 模擬器輔助函數 ──────────────────────────────────────────────────────────
+
+
+def _move_toward(current: float, target: float, max_change: float) -> float:
+    """以 max_change 步進向 target 移動，抵達後固定在 target。"""
+    diff = target - current
+    if abs(diff) <= 0.1:
+        return target
+    change = min(abs(diff), max_change)
+    return current + (change if diff > 0 else -change)
+
+
+def _update_humidity(
+    item: dict, target_humi, new_temp: float, current_humi: float
+) -> None:
+    """更新 item["humidity"] 模擬值。"""
+    if target_humi is not None and new_temp >= 0:
+        humi_diff = target_humi - current_humi
+        humi_change = min(abs(humi_diff), 0.3)
+        tracked = current_humi + (humi_change if humi_diff > 0 else -humi_change)
+        item["humidity"] = round(tracked + random.uniform(-0.2, 0.2), 1)
+    elif new_temp < 0:
+        item["humidity"] = round(
+            max(0.0, current_humi - 0.1 + random.uniform(-0.05, 0.05)), 1
+        )
+    else:
+        item["humidity"] = round(
+            max(0.0, min(100.0, current_humi + random.uniform(-0.3, 0.3))), 1
+        )
+
+
+def _advance_sim_phase(
+    device_id: str,
+    item: dict,
+    now,
+    dwell_start_times: dict,
+    sop_notif_sent: dict,
+    high_temp: float,
+    low_temp,
+    dwell_seconds: float,
+    cycles: int,
+    max_ramp_rate: float,
+) -> float:
+    """推進模擬相位狀態機，回傳新溫度。"""
+    ambient = 25.0
+    max_change = max_ramp_rate / 60.0
+    sim_phase = item.get("sim_phase", "")
+    sim_cycle = item.get("sim_cycle", 0)
+
+    # 首次啟動或從 idle 恢復
+    if not sim_phase or sim_phase == "idle":
+        item["sim_phase"] = "ramp_to_low" if (low_temp is not None and low_temp < ambient) else "ramp_to_high"
+        item["sim_cycle"] = 0
+        sim_phase = item["sim_phase"]
+        dwell_start_times.pop(device_id, None)
+        sop_notif_sent[device_id] = set()
+
+    current_temp = item.get("temperature", 25.0)
+    new_temp = current_temp
+
+    def _set_dwell_start(key_suffix: str, field: str):
+        dwell_start_times[f"{device_id}_{key_suffix}"] = now
+        item[field] = now.isoformat()
+
+    def _restore_dwell_start(key_suffix: str, field: str) -> datetime.datetime:
+        # 重啟後從 DB 欄位恢復計時起點，避免 dwell 重算
+        key = f"{device_id}_{key_suffix}"
+        if key not in dwell_start_times:
+            stored = item.get(field)
+            if stored:
+                try:
+                    t = datetime.datetime.fromisoformat(stored)
+                    if t.tzinfo is None:
+                        t = t.replace(tzinfo=datetime.timezone.utc)
+                    dwell_start_times[key] = t
+                except Exception:
+                    _set_dwell_start(key_suffix, field)
+            else:
+                _set_dwell_start(key_suffix, field)
+        return dwell_start_times[key]
+
+    if sim_phase == "ramp_to_low":
+        new_temp = _move_toward(current_temp, low_temp, max_change)
+        if abs(new_temp - low_temp) <= 0.1:
+            new_temp = low_temp
+            if abs(high_temp - low_temp) <= 0.1:
+                # 單溫冷測：直接進入 dwell_high
+                item["sim_phase"] = "dwell_high"
+                _set_dwell_start("high", "dwell_high_start")
+            else:
+                item["sim_phase"] = "ramp_to_high"
+
+    elif sim_phase == "ramp_to_high":
+        new_temp = _move_toward(current_temp, high_temp, max_change)
+        if abs(new_temp - high_temp) <= 0.1:
+            new_temp = high_temp
+            item["sim_phase"] = "dwell_high"
+            _set_dwell_start("high", "dwell_high_start")
+
+    elif sim_phase == "dwell_high":
+        new_temp = high_temp
+        dwell_key = f"{device_id}_high"
+        dwell_start = _restore_dwell_start("high", "dwell_high_start")
+        elapsed = (now - dwell_start).total_seconds()
+        if elapsed >= dwell_seconds:
+            dwell_start_times.pop(dwell_key, None)
+            item.pop("dwell_high_start", None)
+            # 兩溫循環：降至 low_temp；單溫：直接回常溫
+            item["sim_phase"] = "ramp_to_low2" if (low_temp is not None and abs(high_temp - low_temp) > 0.1) else "ramp_to_ambient"
+
+    elif sim_phase == "ramp_to_low2":
+        new_temp = _move_toward(current_temp, low_temp, max_change)
+        if abs(new_temp - low_temp) <= 0.1:
+            new_temp = low_temp
+            item["sim_phase"] = "dwell_low"
+            _set_dwell_start("low", "dwell_low_start")
+
+    elif sim_phase == "dwell_low":
+        new_temp = low_temp
+        dwell_key = f"{device_id}_low"
+        dwell_start = _restore_dwell_start("low", "dwell_low_start")
+        elapsed = (now - dwell_start).total_seconds()
+        if elapsed >= dwell_seconds:
+            dwell_start_times.pop(dwell_key, None)
+            item.pop("dwell_low_start", None)
+            item["sim_cycle"] = sim_cycle + 1
+            item["sim_phase"] = "ramp_to_high" if item["sim_cycle"] < cycles else "ramp_to_ambient"
+
+    elif sim_phase == "ramp_to_ambient":
+        new_temp = _move_toward(current_temp, ambient, max_change)
+        if abs(new_temp - ambient) <= 0.1:
+            new_temp = ambient
+            item["sim_phase"] = "done"
+
+    return new_temp
+
+
+async def _sim_handle_running(
+    device_id: str, item: dict, now, dwell_start_times: dict, sop_notif_sent: dict
+) -> None:
+    """處理 RUNNING 狀態：推進相位、更新溫濕度、推播通知。"""
+    standard_id = item.get("standard_id")
+    standard = get_standard(standard_id) if standard_id else None
+    max_ramp_rate = get_ramp_rate(standard_id) if standard_id else 1.0
+
+    high_temp = 25.0
+    low_temp = None
+    dwell_seconds = 3600.0
+    cycles = 1
+    target_humi = None
+
+    if standard:
+        high_temp = standard.get("high_temperature") or standard.get("target_temperature", 25.0)
+        low_temp = standard.get("low_temperature")
+        dwell_seconds = (standard.get("dwell_time_hours") or 1.0) * 3600.0
+        cycles = standard.get("cycles") or 1
+        target_humi = standard.get("humidity_rh_percent")
+
+    sim_phase_before = item.get("sim_phase", "")
+    new_temp = _advance_sim_phase(
+        device_id, item, now, dwell_start_times, sop_notif_sent,
+        high_temp, low_temp, dwell_seconds, cycles, max_ramp_rate,
+    )
+
+    # 偵測相位轉換，推播通知
+    sim_phase_after = item.get("sim_phase", "")
+    if sim_phase_after != sim_phase_before:
+        notif_set = sop_notif_sent.setdefault(device_id, set())
+        op_user_id = item.get("operator_user_id")
+        sop_name = item.get("running_sop_name", "測試")
+
+        if sim_phase_after == "dwell_high" and "dwell_high" not in notif_set:
+            notif_set.add("dwell_high")
+            asyncio.create_task(push_sop_notification(
+                op_user_id,
+                f"🌡️ [{device_id}] 已達目標溫度 {high_temp:.0f}°C\n測試：{sop_name}\n進入恆溫停留，計時開始",
+            ))
+        elif sim_phase_after == "ramp_to_ambient" and "ramp_to_ambient" not in notif_set:
+            notif_set.add("ramp_to_ambient")
+            asyncio.create_task(push_sop_notification(
+                op_user_id,
+                f"✅ [{device_id}] 測試完成：{sop_name}\n報告已自動存檔，回常溫中\n請補充結束照片 📷",
+            ))
+
+    item["temperature"] = round(new_temp + random.uniform(-0.1, 0.1), 2)
+    _update_humidity(item, target_humi, new_temp, item.get("humidity", 55.0))
+
+
+async def _sim_handle_finishing(
+    device_id: str, item: dict, current_temp: float, current_humi: float, locks: dict
+) -> None:
+    """處理 FINISHING 狀態：降溫回 25°C，完成後轉 IDLE 並推播。"""
+    finishing_sop_json = item.get("active_sop_json")
+    if finishing_sop_json:
+        try:
+            finishing_sop = json.loads(finishing_sop_json)
+            finishing_ramp = (finishing_sop.get("ramp_rate") or 1.0) / 60.0
+        except Exception as e:
+            logger.warning(f"[{device_id}] finishing_sop_json 解析失敗，使用預設 ramp：{e}")
+            finishing_ramp = 1.0 / 60.0
+    else:
+        finishing_ramp = 1.0 / 60.0
+
+    diff = 25.0 - current_temp
+    if abs(diff) > 0.5:
+        item["temperature"] = round(
+            current_temp + (finishing_ramp if diff > 0 else -finishing_ramp), 2
+        )
+    else:
+        item["temperature"] = 25.0
+        finishing_op_user_id = item.get("operator_user_id")
+        async with locks[device_id]:
+            item.update({
+                "status": "IDLE",
+                "running_sop_name": "STANDBY",
+                "running_sop_id": None,
+                "standard_id": None,
+                "operator": "",
+                "operator_user_id": None,
+                "sim_phase": "idle",
+                "sim_cycle": 0,
+            })
+            _save_device_state(device_id, item)
+        logger.info(f"[{device_id}] 降溫完成，回待機。")
+        asyncio.create_task(push_sop_notification(
+            finishing_op_user_id,
+            f"✅ [{device_id}] 測試完成，已回到待機狀態。",
+        ))
+
+    item["humidity"] = round(
+        max(0.0, min(100.0, current_humi + random.uniform(-0.2, 0.2))), 1
+    )
+
+
+def _sim_handle_emergency(item: dict, current_temp: float, current_humi: float) -> None:
+    """處理 EMERGENCY 狀態：溫濕度微幅震盪。"""
+    item["temperature"] = round(current_temp + random.uniform(-0.05, 0.05), 2)
+    item["humidity"] = round(
+        max(0.0, min(100.0, current_humi + random.uniform(-0.1, 0.1))), 1
+    )
+
+
+# ── 主模擬迴圈 ───────────────────────────────────────────────────────────────
+
+
+async def data_simulator(cache: dict, locks: dict):
+    write_counters: dict = {}
+    dwell_start_times: dict = {}
+    sop_notif_sent: dict = {}  # {device_id: set[str]}，每次 SOP 啟動時重置
+
+    while True:
+        now = _now_utc()
+
+        for device_id, item in cache.items():
+            status = item.get("status", "OFFLINE")
+
+            # IDLE 設備跳過，不做無謂迭代
+            if status == "IDLE":
+                if write_counters.get(device_id, 0) != 0:
+                    write_counters[device_id] = 0
+                sop_notif_sent.pop(device_id, None)
+                continue
+
+            current_temp = item.get("temperature", 25.0)
+            current_humi = item.get("humidity", 55.0)
+
+            if device_id not in write_counters:
+                write_counters[device_id] = 0
+
+            if status == "RUNNING":
+                await _sim_handle_running(device_id, item, now, dwell_start_times, sop_notif_sent)
+                # 測試自然完成（ramp_to_ambient 降溫到 25°C）
+                if item.get("sim_phase") == "done":
+                    finishing_op_user_id = item.get("operator_user_id")
+                    async with locks[device_id]:
+                        item.update({
+                            "status": "IDLE",
+                            "running_sop_name": "STANDBY",
+                            "running_sop_id": None,
+                            "standard_id": None,
+                            "active_sop_json": None,
+                            "completed_steps": 0,
+                            "started_at": None,
+                            "operator": "",
+                            "operator_user_id": None,
+                            "sim_phase": "idle",
+                            "sim_cycle": 0,
+                            "dwell_high_start": None,
+                            "dwell_low_start": None,
+                        })
+                        _save_device_state(device_id, item)
+                    sop_notif_sent.pop(device_id, None)
+                    logger.info(f"[{device_id}] 測試自然完成，回待機。")
+                    asyncio.create_task(push_sop_notification(
+                        finishing_op_user_id,
+                        f"✅ [{device_id}] 測試完成，已自動回到待機狀態。",
+                    ))
+                    continue
+            elif status == "FINISHING":
+                await _sim_handle_finishing(device_id, item, current_temp, current_humi, locks)
+            elif status == "EMERGENCY":
+                _sim_handle_emergency(item, current_temp, current_humi)
+
+            if status in ["RUNNING", "FINISHING", "EMERGENCY"]:
+                write_counters[device_id] += 1
+                if write_counters[device_id] >= 10:
+                    try:
+                        with SessionLocal() as db:
+                            db.add(DeviceData(
+                                device_id=device_id,
+                                temperature=item["temperature"],
+                                humidity=item.get("humidity", 55.0),
+                                timestamp=now,
+                            ))
+                            db.commit()
+                        _save_device_state(device_id, item)
+                    except Exception as e:
+                        logger.error(f"[{device_id}] DB write error: {e}")
+                    write_counters[device_id] = 0
+            else:
+                write_counters[device_id] = 0
+
+        await asyncio.sleep(1)
