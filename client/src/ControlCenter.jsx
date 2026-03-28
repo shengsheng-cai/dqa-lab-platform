@@ -247,6 +247,21 @@ function DeviceCard({ device, isSelected, onClick }) {
   );
 }
 
+// ── TabBadge ──────────────────────────────────────────────────────────────────
+
+function TabBadge({ count, bg, color = "#0d1117" }) {
+  if (!count) return null;
+  return (
+    <span style={{
+      marginLeft: 5, background: bg, color,
+      fontSize: 10, fontWeight: 700, borderRadius: 8,
+      padding: "1px 5px", lineHeight: "14px", verticalAlign: "middle",
+    }}>
+      {count}
+    </span>
+  );
+}
+
 // ── LeftPanel ─────────────────────────────────────────────────────────────────
 
 function LeftPanel({ devices, selectedDevice, onSelectDevice }) {
@@ -696,36 +711,8 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) 
             }}
           >
             {t.label}
-            {t.key === "schedule" && pendingScheduleCount > 0 && (
-              <span style={{
-                marginLeft: 5,
-                background: "#e3b341",
-                color: "#0d1117",
-                fontSize: 10,
-                fontWeight: 700,
-                borderRadius: 8,
-                padding: "1px 5px",
-                lineHeight: "14px",
-                verticalAlign: "middle",
-              }}>
-                {pendingScheduleCount}
-              </span>
-            )}
-            {t.key === "users" && failureCount > 0 && (
-              <span style={{
-                marginLeft: 5,
-                background: "#da3633",
-                color: "#fff",
-                fontSize: 10,
-                fontWeight: 700,
-                borderRadius: 8,
-                padding: "1px 5px",
-                lineHeight: "14px",
-                verticalAlign: "middle",
-              }}>
-                {failureCount}
-              </span>
-            )}
+            {t.key === "schedule" && <TabBadge count={pendingScheduleCount} bg="#e3b341" />}
+            {t.key === "users" && <TabBadge count={failureCount} bg="#da3633" color="#fff" />}
           </button>
         ))}
       </div>

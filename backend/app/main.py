@@ -547,12 +547,11 @@ def _advance_sim_phase(
     new_temp = current_temp
 
     def _set_dwell_start(key_suffix: str, field: str):
-        """設置 dwell 開始時間並同步持久化到 item。"""
         dwell_start_times[f"{device_id}_{key_suffix}"] = now
         item[field] = now.isoformat()
 
     def _restore_dwell_start(key_suffix: str, field: str) -> datetime.datetime:
-        """從 dwell_start_times 或 item 恢復 dwell 開始時間（重啟後恢復）。"""
+        # 重啟後從 DB 欄位恢復計時起點，避免 dwell 重算
         key = f"{device_id}_{key_suffix}"
         if key not in dwell_start_times:
             stored = item.get(field)
@@ -563,11 +562,9 @@ def _advance_sim_phase(
                         t = t.replace(tzinfo=datetime.timezone.utc)
                     dwell_start_times[key] = t
                 except Exception:
-                    dwell_start_times[key] = now
-                    item[field] = now.isoformat()
+                    _set_dwell_start(key_suffix, field)
             else:
-                dwell_start_times[key] = now
-                item[field] = now.isoformat()
+                _set_dwell_start(key_suffix, field)
         return dwell_start_times[key]
 
     if sim_phase == "ramp_to_low":
