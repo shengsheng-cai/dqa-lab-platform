@@ -29,8 +29,9 @@ const TempChart = ({ sop, pvData, startedAt }) => {
 
   const merged = React.useMemo(() => {
     const base = mergeSpPv(spData, pvWithMin);
-    if (!startedAt) return base;
-    const startMs = parseUtcDate(startedAt).getTime();
+    const startDate = parseUtcDate(startedAt);
+    if (!startDate) return base;
+    const startMs = startDate.getTime();
     return base.map((p) => ({ ...p, label: fmtWallClock(startMs + p.min * 60000) }));
   }, [spData, pvWithMin, startedAt]);
 

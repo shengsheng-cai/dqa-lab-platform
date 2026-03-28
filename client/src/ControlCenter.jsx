@@ -390,15 +390,15 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixture
 function fmtDatetime(str) {
   if (!str) return "—";
   try {
-    const d = new Date(str);
-    if (isNaN(d.getTime())) return str;
+    const d = parseUtcDate(str);
+    if (!d || isNaN(d.getTime())) return str;
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   } catch {
     return str;
   }
 }
 
-function ExecutionList({ active }) {
+function ExecutionList({ active, role }) {
   const { showToast } = useToast();
   const [executions, setExecutions] = useState([]);
   const [downloading, setDownloading] = useState(null);
@@ -534,8 +534,7 @@ function ExecutionList({ active }) {
                 "設備",
                 "執行人員",
                 "測試開始",
-                "照片",
-                "報告",
+                ...(role !== "guest" ? ["照片", "報告"] : []),
               ].map((h) => (
                 <th key={h} style={thStyle}>
                   {h}
@@ -567,11 +566,12 @@ function ExecutionList({ active }) {
                     {ex.device_id || "—"}
                   </td>
                   <td style={{ ...tdStyle, color: "#8b949e" }}>
-                    {ex.operator || "—"}
+                    {role === "guest" ? "—" : (ex.operator || "—")}
                   </td>
                   <td style={{ ...tdStyle, color: "#8b949e" }}>
                     {fmtDatetime(ex.test_started_at || ex.created_at)}
                   </td>
+                  {role !== "guest" && (
                   <td style={tdStyle}>
                     <div
                       style={{
@@ -601,6 +601,8 @@ function ExecutionList({ active }) {
                       </button>
                     </div>
                   </td>
+                  )}
+                  {role !== "guest" && (
                   <td style={tdStyle}>
                     <button
                       onClick={() => downloadReport(ex)}
@@ -619,14 +621,15 @@ function ExecutionList({ active }) {
                       {downloading === ex.id ? "⏳" : "📥 CSV"}
                     </button>
                   </td>
+                  )}
                 </tr>
-                {expandedId === ex.id && (
+                {role !== "guest" && expandedId === ex.id && (
                   <tr
                     key={`${ex.id}-expand`}
                     style={{ borderBottom: "1px solid #21262d" }}
                   >
                     <td
-                      colSpan={7}
+                      colSpan={5}
                       style={{
                         padding: "8px 12px 12px 48px",
                         background: "#161b22",
@@ -704,13 +707,15 @@ const TABS = [
   { key: "device", label: "設備" },
   { key: "fixture", label: "治具" },
   { key: "schedule", label: "排程" },
-  { key: "errors", label: "異常紀錄" },
+  { key: "errors", label: "異常紀錄", guestHidden: true },
   { key: "executions", label: "執行紀錄" },
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
 function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) {
-  const visibleTabs = TABS.filter((t) => !t.adminOnly || role === "admin");
+  const visibleTabs = TABS.filter((t) =>
+    (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
+  );
   const [failureCount, setFailureCount] = useState(0);
   const [pendingScheduleCount, setPendingScheduleCount] = useState(0);
 
@@ -843,7 +848,7 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) 
             height: "100%",
           }}
         >
-          <ExecutionList active={activeTab === "executions"} />
+          <ExecutionList active={activeTab === "executions"} role={role} />
         </div>
       </div>
     </div>
