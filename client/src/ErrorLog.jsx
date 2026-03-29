@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import api from "./api";
+import { parseUtcDate } from "./constants";
 
 function fmtDatetime(str) {
   if (!str) return "—";
   try {
-    const d = new Date(str);
+    const d = parseUtcDate(str);
     if (isNaN(d.getTime())) return str;
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
   } catch {
@@ -19,11 +20,12 @@ const card = {
   padding: "20px 24px",
 };
 
-const ErrorLog = () => {
+const ErrorLog = ({ active = true }) => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!active) return;
     const fetchLogs = () => {
       api
         .get("/api/errors/")
@@ -34,7 +36,7 @@ const ErrorLog = () => {
     fetchLogs();
     const t = setInterval(fetchLogs, 60000);
     return () => clearInterval(t);
-  }, []);
+  }, [active]);
 
   return (
     <div

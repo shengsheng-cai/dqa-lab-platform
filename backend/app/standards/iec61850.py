@@ -44,7 +44,7 @@ TREE = {
                     "power_on": True,
                     "temp_tolerance": 2.0,
                     "humi_tolerance": 5.0,
-                    "reference": "IEC 61850-3:2013 Ed.2 Class C1 + IEC 60068-2-2 Test Be",
+                    "reference": "IEC 61850-3:2013 Ed.2 Class C1 + IEC 60068-2-2 Test Bb",
                     "steps": steps_single_temp(55.0, 16, "high"),
                 },
                 "C1_Cold_-10_Storage": {
@@ -164,7 +164,7 @@ TREE = {
                     "power_on": True,
                     "temp_tolerance": 2.0,
                     "humi_tolerance": 5.0,
-                    "reference": "IEC 61850-3:2013 Ed.2 Class C2 + IEC 60068-2-2 Test Be",
+                    "reference": "IEC 61850-3:2013 Ed.2 Class C2 + IEC 60068-2-2 Test Bb",
                     "steps": steps_single_temp(70.0, 16, "high"),
                 },
                 "C2_Cold_-25_Operational": {
@@ -284,7 +284,7 @@ TREE = {
                     "power_on": True,
                     "temp_tolerance": 2.0,
                     "humi_tolerance": 5.0,
-                    "reference": "IEC 61850-3:2013 Ed.2 Class C3 + IEC 60068-2-2 Test Be",
+                    "reference": "IEC 61850-3:2013 Ed.2 Class C3 + IEC 60068-2-2 Test Bb",
                     "steps": steps_single_temp(70.0, 16, "high"),
                 },
                 "C3_Cold_-40_Storage": {

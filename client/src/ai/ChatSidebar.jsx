@@ -55,7 +55,6 @@ export default function ChatSidebar({
 
   const activeConv = conversations[activeId];
 
-  // 修改：標題超過 20 字截斷，完整標題放在 title tooltip
   const truncateTitle = (title) =>
     title && title.length > 20 ? title.slice(0, 20) + "…" : title;
 
@@ -184,7 +183,6 @@ export default function ChatSidebar({
                                   "transparent";
                             }}
                           >
-                            {/* 修改：截斷標題，完整標題放 title tooltip */}
                             <span style={S.convTitle} title={conv.title}>
                               {truncateTitle(conv.title)}
                             </span>
@@ -274,9 +272,9 @@ export default function ChatSidebar({
             </button>
           )}
 
+          {/* A7 fix: 修正 modelBadge 文字重複問題 */}
           <div style={S.modelBadge}>
-            <span style={{ color: "#3fb950" }}>●</span> Gemini
-            Flash-Lite(Gemini)
+            <span style={{ color: "#3fb950" }}>●</span> Gemini 2.5 Flash-Lite
           </div>
         </>
       )}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import api, { API_BASE } from "./api";
+import { downloadBlob, buildReportFilename } from "./utils/download";
 import {
   LineChart,
   Line,
@@ -10,23 +11,7 @@ import {
   Tooltip,
   Brush,
 } from "recharts";
-
-const STATUS_CONFIG = {
-  OFFLINE: { color: "#484f58", bg: "#21262d", label: "OFFLINE" },
-  IDLE: { color: "#8b949e", bg: "#21262d", label: "IDLE" },
-  RUNNING: { color: "#3fb950", bg: "#0f2318", label: "RUNNING" },
-  PAUSED: { color: "#f0a500", bg: "#2d1f00", label: "PAUSED" },
-  FINISHING: { color: "#58a6ff", bg: "#0d1f33", label: "FINISHING" },
-  EMERGENCY: { color: "#f85149", bg: "#2d0f0f", label: "EMERGENCY" },
-};
-
-const DEVICE_IDS = [
-  "KSON_CH01",
-  "KSON_CH02",
-  "KSON_CH03",
-  "KSON_CH04",
-  "KSON_CH05",
-];
+import { STATUS_CONFIG, DEVICE_IDS, parseUtcDate } from "./constants";
 
 const card = {
   background: "#161b22",
@@ -283,31 +268,27 @@ const DeviceCard = ({ device, selected, onClick }) => {
   );
 };
 
-// 修改：報告下載改用 axios blob，帶 X-Demo-Password header
-const downloadCsv = async (execId, sopId) => {
+const downloadCsv = (execId, sopId) =>
+  downloadBlob(`/api/reports/csv/${execId}`, buildReportFilename(sopId, execId, "csv"))
+    .catch((e) => { console.error("[Dashboard] CSV download failed:", e); alert("❌ 報告下載失敗，請確認後端連線。"); });
+
+const downloadPdf = (execId, sopId) =>
+  downloadBlob(`/api/reports/pdf/${execId}`, buildReportFilename(sopId, execId, "pdf"))
+    .catch((e) => { console.error("[Dashboard] PDF download failed:", e); alert("❌ 報告下載失敗，請確認後端連線。"); });
+
+const fmtDatetime = (str) => {
+  if (!str || str === "N/A") return "—";
   try {
-    const res = await api.get(`/api/reports/csv/${execId}`, {
-      responseType: "blob",
-    });
-    const url = window.URL.createObjectURL(new Blob([res.data]));
-    const a = document.createElement("a");
-    a.href = url;
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const safeSopId = (sopId || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
-    a.download = `${safeSopId}_${date}_${execId}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
-  } catch (e) {
-    console.error("[Dashboard] CSV download failed:", e);
-    alert("❌ 報告下載失敗，請確認後端連線。");
+    const d = parseUtcDate(str);
+    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  } catch {
+    return str;
   }
 };
 
 const Dashboard = ({ active = true }) => {
   const [devices, setDevices] = useState([]);
-  const [selectedDevice, setSelectedDevice] = useState("KSON_CH01");
+  const [selectedDevice, setSelectedDevice] = useState("CH-01");
   const [historyMap, setHistoryMap] = useState(() =>
     Object.fromEntries(DEVICE_IDS.map((id) => [id, []])),
   );
@@ -422,7 +403,7 @@ const Dashboard = ({ active = true }) => {
         <h1
           style={{ color: "#58a6ff", margin: 0, fontSize: 22, fontWeight: 700 }}
         >
-          KSON AICM | Digital Twin
+          DQA Lab | Digital Twin
         </h1>
         <div style={{ display: "flex", gap: 10, fontSize: 12 }}>
           <span style={{ color: "#3fb950" }}>● 執行中 {runningCount}</span>
@@ -439,14 +420,27 @@ const Dashboard = ({ active = true }) => {
           marginBottom: 24,
         }}
       >
-        {devices.map((device) => (
-          <DeviceCard
-            key={device.device_id}
-            device={device}
-            selected={device.device_id === selectedDevice}
-            onClick={() => setSelectedDevice(device.device_id)}
-          />
-        ))}
+        {devices.length === 0
+          ? Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  ...card,
+                  borderLeft: "3px solid #30363d",
+                  height: 180,
+                  background:
+                    "linear-gradient(90deg, #161b22 25%, #1c2128 50%, #161b22 75%)",
+                }}
+              />
+            ))
+          : devices.map((device) => (
+              <DeviceCard
+                key={device.device_id}
+                device={device}
+                selected={device.device_id === selectedDevice}
+                onClick={() => setSelectedDevice(device.device_id)}
+              />
+            ))}
       </div>
 
       <div style={{ ...card, marginBottom: 24 }}>
@@ -490,7 +484,7 @@ const Dashboard = ({ active = true }) => {
                     transition: "all .15s",
                   }}
                 >
-                  {id.replace("KSON_", "")}
+                  {id}
                 </button>
               );
             })}
@@ -673,10 +667,9 @@ const Dashboard = ({ active = true }) => {
                     {ex.operator || "—"}
                   </td>
                   <td style={{ padding: "8px 12px", color: "#8b949e" }}>
-                    {ex.test_started_at || ex.created_at}
+                    {fmtDatetime(ex.test_started_at || ex.created_at)}
                   </td>
-                  <td style={{ padding: "8px 12px" }}>
-                    {/* 修改：改用 axios blob 下載，帶 auth header */}
+                  <td style={{ padding: "8px 12px", display: "flex", gap: 6 }}>
                     <button
                       onClick={() => downloadCsv(ex.id, ex.sop_id)}
                       style={{
@@ -691,6 +684,21 @@ const Dashboard = ({ active = true }) => {
                       }}
                     >
                       📥 CSV
+                    </button>
+                    <button
+                      onClick={() => downloadPdf(ex.id, ex.sop_id)}
+                      style={{
+                        padding: "4px 10px",
+                        background: "#238636",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    >
+                      📄 PDF
                     </button>
                   </td>
                 </tr>

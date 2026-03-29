@@ -4,7 +4,7 @@
 # 預設顯示幫助資訊
 help:
 	@echo "🛠️  DQA Lab 控制指令："
-	@echo "  make install - 安裝後端、模擬器與前端依賴"
+	@echo "  make install - 安裝後端與前端依賴"
 	@echo "  make dev     - 一鍵啟動所有服務（含 ngrok 自動更新 LINE Webhook）"
 	@echo "  make clean   - 關閉所有服務並清理殘留程序"
 	@echo "  make logs    - 查看虛擬串口連線日誌"
@@ -14,8 +14,6 @@ help:
 install:
 	@echo "📦 正在安裝後端依賴 (Python)..."
 	pip install -r backend/requirements.txt
-	@echo "📦 正在安裝模擬器依賴 (Python)..."
-	pip install -r simulator/requirements.txt
 	@echo "📦 正在安裝前端依賴 (Node.js)..."
 	cd client && npm install
 	@echo "✅ 所有依賴已就緒！"
@@ -29,9 +27,7 @@ dev:
 clean:
 	@echo "🧹 正在清理所有服務..."
 	-@pkill -9 -f "uvicorn"
-	-@pkill -9 -f "python3 simulator/main.py"
 	-@pkill -9 -f "node.*vite"
-	-@pkill -9 -f "socat"
 	-@pkill -9 -f "ngrok"
 	@rm -f .socat_info.log .serial_ports.tmp .backend.log
 	@echo "✨ 清理完成。"

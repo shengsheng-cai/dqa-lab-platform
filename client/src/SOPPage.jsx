@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api from "./api";
+import { useToast } from "./components/Toast";
 import MonitorSide from "./components/sop/MonitorSide";
 import ControlPanel from "./components/sop/ControlPanel";
 import ConditionCard from "./components/sop/ConditionCard";
@@ -8,26 +9,22 @@ import StepList from "./components/sop/StepList";
 import ExecutionPanel from "./components/sop/ExecutionPanel";
 import SafetyChecklist from "./components/sop/SafetyChecklist";
 import "./SOPPage.css";
-
-const DEVICE_IDS = [
-  "KSON_CH01",
-  "KSON_CH02",
-  "KSON_CH03",
-  "KSON_CH04",
-  "KSON_CH05",
-];
+import { DEVICE_IDS } from "./constants";
+import ConfirmModal from "./components/ConfirmModal";
 const ACTIVE_STATUSES = ["RUNNING", "PAUSED"];
 
 const initDeviceState = () => ({
   activeSop: null,
   completedSteps: {},
   savedExecutionId: null,
+  autoSave: false,
   safetyChecked: [false, false, false, false],
   chartHistory: [],
   chartStartedAt: null,
   selectedStd: null,
   selectedVer: null,
   selectedTest: null,
+  conditionConfirmed: false,
 });
 
 function restoreSelectionFromSopId(sopId, standardTree) {
@@ -47,77 +44,17 @@ function restoreSelectionFromSopId(sopId, standardTree) {
   return null;
 }
 
-// 自製確認 Modal（取代 window.confirm）
-const ConfirmModal = ({ message, onConfirm, onCancel }) => (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      zIndex: 1000,
-      background: "rgba(0,0,0,0.6)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    <div
-      style={{
-        background: "#161b22",
-        border: "1px solid #30363d",
-        borderRadius: 10,
-        padding: "24px 28px",
-        maxWidth: 360,
-        width: "90%",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 13,
-          color: "#cdd9e5",
-          marginBottom: 20,
-          lineHeight: 1.6,
-        }}
-      >
-        {message}
-      </div>
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button
-          onClick={onCancel}
-          style={{
-            padding: "8px 16px",
-            background: "#21262d",
-            color: "#8b949e",
-            border: "1px solid #30363d",
-            borderRadius: 6,
-            cursor: "pointer",
-            fontSize: 12,
-          }}
-        >
-          取消
-        </button>
-        <button
-          onClick={onConfirm}
-          style={{
-            padding: "8px 16px",
-            background: "#da3633",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            cursor: "pointer",
-            fontSize: 12,
-            fontWeight: 700,
-          }}
-        >
-          確定
-        </button>
-      </div>
-    </div>
-  </div>
-);
 
-const SOPPage = ({ active = true }) => {
-  const [selectedDevice, setSelectedDevice] = useState("KSON_CH01");
+const SOPPage = ({ active = true, externalDevice }) => {
+  const { showToast } = useToast();
+  const [selectedDevice, setSelectedDevice] = useState(externalDevice || "CH-01");
+
+  // 同步外部設備選擇（ControlCenter LeftPanel 點選時）
+  useEffect(() => {
+    if (externalDevice && externalDevice !== selectedDevice) {
+      setSelectedDevice(externalDevice);
+    }
+  }, [externalDevice]); // eslint-disable-line
   const [allDevices, setAllDevices] = useState({});
   const [deviceStates, setDeviceStates] = useState(() =>
     Object.fromEntries(DEVICE_IDS.map((id) => [id, initDeviceState()])),
@@ -131,11 +68,15 @@ const SOPPage = ({ active = true }) => {
   const [operator, setOperator] = useState(
     () => localStorage.getItem("dqa_operator") || "",
   );
-  // 自製 confirm modal 狀態
-  const [confirmModal, setConfirmModal] = useState(null); // { message, onConfirm }
+  const [confirmModal, setConfirmModal] = useState(null);
+  const [manualMode, setManualMode] = useState(false);
+  const role = localStorage.getItem("user_role") || "guest";
+  const isAdmin = role === "admin";
 
   const historyFetchingRef = useRef(null);
   const lastHistoryMinuteRef = useRef(-1);
+  const prevSimPhaseRef = useRef("");
+  const prevSimCycleRef = useRef(0);
 
   const data = allDevices[selectedDevice] || {
     status: "OFFLINE",
@@ -154,8 +95,9 @@ const SOPPage = ({ active = true }) => {
   const effectiveIsActive = ACTIVE_STATUSES.includes(effectiveStatus);
   const doneCnt = Object.values(ds.completedSteps).filter(Boolean).length;
   const allStepsDone =
-    ds.activeSop && doneCnt === (ds.activeSop?.steps?.length ?? 0);
-
+    ds.activeSop &&
+    (ds.activeSop?.steps?.length ?? 0) > 0 &&
+    doneCnt === (ds.activeSop?.steps?.length ?? 0);
   const { selectedStd, selectedVer, selectedTest } = ds;
   const stdData = selectedStd ? standardTree[selectedStd] : null;
   const verData = selectedVer ? stdData?.versions?.[selectedVer] : null;
@@ -173,9 +115,12 @@ const SOPPage = ({ active = true }) => {
     return () => clearInterval(t);
   }, [isEmergency]);
 
+  // S3 fix: 只有當 status 已符合 optimistic 值才清除，避免過早 reset
   useEffect(() => {
-    if (pauseOptimistic && data.status !== "OFFLINE") setPauseOptimistic(null);
-  }, [data.status, pauseOptimistic]);
+    if (pauseOptimistic && data.status === effectiveStatus) {
+      setPauseOptimistic(null);
+    }
+  }, [data.status, pauseOptimistic, effectiveStatus]);
 
   useEffect(() => {
     api
@@ -297,9 +242,127 @@ const SOPPage = ({ active = true }) => {
     fetchHistory(selectedDevice, startedAt);
   }, [startedAt]); // eslint-disable-line
 
+  // Phase 9-2: 根據 sim_phase 自動確認步驟
+  const simPhase = allDevices[selectedDevice]?.sim_phase || "";
+  const simCycle = allDevices[selectedDevice]?.sim_cycle || 0;
+
+  const autoTriggerMap = useMemo(() => {
+    const steps = deviceStates[selectedDevice]?.activeSop?.steps || [];
+    const map = {};
+    steps.forEach((s) => {
+      if (s.auto_trigger) map[s.auto_trigger] = (map[s.auto_trigger] || []).concat(s.step_id);
+    });
+    return map;
+  }, [deviceStates, selectedDevice]);
+  const autoTriggerMapRef = useRef({});
+  autoTriggerMapRef.current = autoTriggerMap;
+  const deviceStatesRef = useRef(deviceStates);
+  deviceStatesRef.current = deviceStates;
+
+  // 切換設備時重置 prev refs，避免誤觸發
+  useEffect(() => {
+    prevSimPhaseRef.current = simPhase;
+    prevSimCycleRef.current = simCycle;
+  }, [selectedDevice]); // eslint-disable-line
+
+  // 載入已執行中設備時，根據當前 sim_phase 恢復自動步驟狀態
+  useEffect(() => {
+    const curDs = deviceStatesRef.current[selectedDevice];
+    if (!curDs?.activeSop || Object.keys(curDs.completedSteps).length > 0) return;
+    // FINISHING 不恢復：正常停止後 active_sop_json 尚未清除會導致誤觸發
+    if (!ACTIVE_STATUSES.includes(allDevices[selectedDevice]?.status)) return;
+
+    const phase = simPhase;
+    const cycle = simCycle;
+    const steps = curDs.activeSop.steps || [];
+    const totalCycles = curDs.activeSop.cycles || 1;
+    const firedTriggers = new Set();
+
+    if (phase && phase !== "idle") firedTriggers.add("first_ramp");
+    if (["dwell_high", "ramp_to_low2", "dwell_low", "ramp_to_ambient"].includes(phase)) firedTriggers.add("first_dwell");
+    if (["dwell_low", "ramp_to_ambient"].includes(phase)) firedTriggers.add("second_dwell");
+    if (phase === "ramp_to_ambient") firedTriggers.add("complete");
+    if (cycle >= Math.ceil(totalCycles / 2)) firedTriggers.add("cycle_half");
+
+    const newCompleted = {};
+    steps.forEach((s) => {
+      if (s.auto_trigger && firedTriggers.has(s.auto_trigger)) newCompleted[s.step_id] = true;
+    });
+
+    if (Object.keys(newCompleted).length > 0) {
+      setDeviceStates((prev) => ({
+        ...prev,
+        [selectedDevice]: { ...prev[selectedDevice], completedSteps: newCompleted },
+      }));
+    }
+  }, [ds.activeSop?.sop_id, selectedDevice, simPhase]); // eslint-disable-line
+
+  useEffect(() => {
+    const prevPhase = prevSimPhaseRef.current;
+    const prevCycle = prevSimCycleRef.current;
+    prevSimPhaseRef.current = simPhase;
+    prevSimCycleRef.current = simCycle;
+
+    // 初次載入或切換設備後第一次 poll，不觸發（refs 已在上方 useEffect 初始化）
+    if (!prevPhase && !prevCycle) return;
+
+    const curDs = deviceStatesRef.current[selectedDevice];
+    if (!curDs?.activeSop || !ACTIVE_STATUSES.includes(allDevices[selectedDevice]?.status)) return;
+
+    const totalCycles = curDs.activeSop.cycles || 1;
+    let changed = false;
+    const pendingChecks = [];
+
+    const autoCheck = (trigger) => {
+      const ids = autoTriggerMapRef.current[trigger] || [];
+      ids.forEach((id) => {
+        if (!curDs.completedSteps[id]) { pendingChecks.push(id); changed = true; }
+      });
+    };
+
+    // 進入第一個 ramp（非 ambient）
+    if (!prevPhase.startsWith("ramp") && simPhase.startsWith("ramp_to") && simPhase !== "ramp_to_ambient") {
+      autoCheck("first_ramp");
+    }
+    // 進入第一個 dwell_high
+    if (prevPhase !== "dwell_high" && simPhase === "dwell_high") {
+      autoCheck("first_dwell");
+    }
+    // 進入 dwell_low
+    if (prevPhase !== "dwell_low" && simPhase === "dwell_low") {
+      autoCheck("second_dwell");
+    }
+    // 循環過半
+    if (simCycle !== prevCycle && simCycle >= Math.ceil(totalCycles / 2)) {
+      autoCheck("cycle_half");
+    }
+
+    // 進入 ramp_to_ambient = 測試自然完成，自動確認剩餘步驟並標記自動存報告
+    let triggerAutoSave = false;
+    if (prevPhase !== "ramp_to_ambient" && simPhase === "ramp_to_ambient") {
+      autoCheck("complete");
+      triggerAutoSave = true;
+    }
+
+    if (changed || triggerAutoSave) {
+      setDeviceStates((prev) => {
+        const prevDs = prev[selectedDevice];
+        const newCompleted = { ...prevDs.completedSteps };
+        pendingChecks.forEach((id) => { newCompleted[id] = true; });
+        return {
+          ...prev,
+          [selectedDevice]: {
+            ...prevDs,
+            completedSteps: newCompleted,
+            ...(triggerAutoSave ? { autoSave: true } : {}),
+          },
+        };
+      });
+    }
+  }, [simPhase, simCycle]); // eslint-disable-line
+
   const startSop = async (confirmedOperator) => {
     if (!testData || starting) return;
-    // 步驟檢查移到 API call 前，避免 finally 之後邏輯繼續跑
     const sopSteps = testData.steps || [];
     if (!sopSteps.length) {
       setStartError("⚠️ SOP 步驟資料不完整，請確認後端設定後重試。");
@@ -318,10 +381,11 @@ const SOPPage = ({ active = true }) => {
         completedSteps: {},
         savedExecutionId: null,
       });
+      showToast("測試已啟動", "success");
     } catch (err) {
-      setStartError(
-        `❌ 啟動失敗：${err?.response?.data?.detail || err?.message || "未知錯誤"}`,
-      );
+      const msg = err?.response?.data?.detail || err?.message || "未知錯誤";
+      setStartError(`❌ 啟動失敗：${msg}`);
+      showToast(`啟動失敗：${msg}`, "error");
     } finally {
       setStarting(false);
     }
@@ -337,18 +401,25 @@ const SOPPage = ({ active = true }) => {
           activeSop: null,
           completedSteps: {},
           savedExecutionId: null,
+          autoSave: false,
           safetyChecked: [false, false, false, false],
         });
         setStartError("");
-        setPauseOptimistic(null);
+        const msg = type === "emergency" ? "緊急停止已執行" : "測試已停止";
+        showToast(msg, "success");
+      } else if (type === "pause") {
+        const msg = effectiveStatus === "RUNNING" ? "測試已暫停" : "測試已繼續";
+        showToast(msg, "success");
       }
     } catch (e) {
       console.error("[SOPPage] action:", e);
+      const msg = e.response?.data?.detail || "操作失敗";
+      showToast(msg, "error");
+    } finally {
       setPauseOptimistic(null);
     }
   };
 
-  // 取消步驟改用自製 modal 取代 window.confirm
   const handleToggleStep = (stepId, stepIndex) => {
     const steps = ds.activeSop?.steps || [];
     const newCompleted = { ...ds.completedSteps };
@@ -366,23 +437,28 @@ const SOPPage = ({ active = true }) => {
             });
           } catch (e) {
             console.error("[SOPPage] progress:", e);
+            const msg = e.response?.data?.detail || "進度更新失敗";
+            showToast(msg, "error");
           }
         },
       });
     } else {
-      newCompleted[stepId] = true;
-      updateDS(selectedDevice, { completedSteps: newCompleted });
-      api
-        .post(`/api/devices/${selectedDevice}/progress`, {
-          completed: Object.values(newCompleted).filter(Boolean).length,
-        })
-        .catch((e) => console.error("[SOPPage] progress:", e));
+      // 用 functional setState 確保讀到最新 completedSteps，避免快速連勾 race condition
+      setDeviceStates((prev) => {
+        const prevDs = prev[selectedDevice];
+        const newComp = { ...prevDs.completedSteps, [stepId]: true };
+        api
+          .post(`/api/devices/${selectedDevice}/progress`, {
+            completed: Object.values(newComp).filter(Boolean).length,
+          })
+          .catch((e) => console.error("[SOPPage] progress:", e));
+        return { ...prev, [selectedDevice]: { ...prevDs, completedSteps: newComp } };
+      });
     }
   };
 
   return (
     <div className="sop-page-layout">
-      {/* 自製 confirm modal */}
       {confirmModal && (
         <ConfirmModal
           message={confirmModal.message}
@@ -401,35 +477,99 @@ const SOPPage = ({ active = true }) => {
         isOffline={isOffline}
         isEmergency={isEmergency}
         onSelectDevice={setSelectedDevice}
+        embedded={!!externalDevice}
       />
 
-      <main className="control-side">
+      <main className={`control-side${externalDevice ? " embedded" : ""}`}>
         <div className="scroll-wrapper">
-          <ControlPanel
-            selectedDevice={selectedDevice}
-            data={data}
-            emergencyFlash={emergencyFlash}
-            effectiveStatus={effectiveStatus}
-            effectiveIsActive={effectiveIsActive}
-            canStop={canStop}
-            isOffline={isOffline}
-            isEmergency={isEmergency}
-            onAction={handleAction}
-          />
+          {role === "guest" ? (
+            <section
+              className="operation-box"
+              style={{
+                borderLeft: "3px solid #f0a500",
+                background: "#1a1500",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ color: "#f0a500", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+                🔒 訪客模式
+              </div>
+              <div style={{ color: "#8b949e", fontSize: 12, lineHeight: 1.6 }}>
+                此模式僅供查看設備狀態和測試歷史，<br />
+                無法進行啟動、暫停或停止等操作。
+              </div>
+            </section>
+          ) : (
+            <ControlPanel
+              selectedDevice={selectedDevice}
+              data={data}
+              emergencyFlash={emergencyFlash}
+              effectiveStatus={effectiveStatus}
+              effectiveIsActive={effectiveIsActive}
+              canStop={canStop}
+              isOffline={isOffline}
+              isEmergency={isEmergency}
+              onAction={handleAction}
+            />
+          )}
 
           {isActive && ds.activeSop && (
             <section
               className="operation-box"
               style={{ borderLeft: "3px solid #58a6ff" }}
             >
-              <div className="box-header">
-                <span>📋</span>
-                <h2 style={{ fontSize: 13 }}>{ds.activeSop.name}</h2>
+              <div className="box-header" style={{ justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>📋</span>
+                  <h2 style={{ fontSize: 13 }}>{ds.activeSop.name}</h2>
+                </div>
+                {isAdmin && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      onClick={() => setManualMode((v) => !v)}
+                      title="手動接管模式：解鎖 Auto 步驟，允許手動勾選"
+                      style={{
+                        padding: "3px 8px", fontSize: 10, borderRadius: 4, cursor: "pointer",
+                        background: manualMode ? "#0f2318" : "#21262d",
+                        color: manualMode ? "#57ab5a" : "#8b949e",
+                        border: `1px solid ${manualMode ? "#2d5a3a" : "#30363d"}`,
+                      }}
+                    >
+                      {manualMode ? "🔓 手動中" : "🔒 自動"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setConfirmModal({
+                          message: "確定跳至降溫階段？此操作將略過剩餘測試步驟，直接回溫到 25°C。",
+                          onConfirm: async () => {
+                            setConfirmModal(null);
+                            try {
+                              await api.post(`/api/devices/${selectedDevice}/set-phase`, { phase: "ramp_to_ambient" });
+                              showToast("已跳轉至降溫階段", "success");
+                            } catch (e) {
+                              const msg = e?.response?.data?.detail || "操作失敗";
+                              showToast(msg, "error");
+                            }
+                          },
+                        });
+                      }}
+                      title="跳至降溫（略過剩餘測試直接回 25°C）"
+                      style={{
+                        padding: "3px 8px", fontSize: 10, borderRadius: 4, cursor: "pointer",
+                        background: "#21262d", color: "#58a6ff",
+                        border: "1px solid #1f6feb",
+                      }}
+                    >
+                      ⏩ 跳至降溫
+                    </button>
+                  </div>
+                )}
               </div>
               <StepList
                 steps={ds.activeSop.steps || []}
                 completedSteps={ds.completedSteps}
                 onToggle={handleToggleStep}
+                manualMode={manualMode}
               />
               {allStepsDone && (
                 <ExecutionPanel
@@ -439,8 +579,9 @@ const SOPPage = ({ active = true }) => {
                   operator={operator}
                   startedAt={data.started_at}
                   savedExecutionId={ds.savedExecutionId}
+                  autoSave={ds.autoSave}
                   onSaved={(id) =>
-                    updateDS(selectedDevice, { savedExecutionId: id })
+                    updateDS(selectedDevice, { savedExecutionId: id, autoSave: false })
                   }
                   onError={setStartError}
                 />
@@ -479,6 +620,7 @@ const SOPPage = ({ active = true }) => {
                         selectedStd: k,
                         selectedVer: null,
                         selectedTest: null,
+                        conditionConfirmed: false,
                       })
                     }
                   />
@@ -514,6 +656,7 @@ const SOPPage = ({ active = true }) => {
                         updateDS(selectedDevice, {
                           selectedVer: k,
                           selectedTest: null,
+                          conditionConfirmed: false,
                         })
                       }
                     />
@@ -547,15 +690,38 @@ const SOPPage = ({ active = true }) => {
                       ])}
                       selected={selectedTest}
                       onSelect={(k) =>
-                        updateDS(selectedDevice, { selectedTest: k })
+                        updateDS(selectedDevice, { selectedTest: k, conditionConfirmed: false })
                       }
                     />
                   </>
                 )}
-                {testData && <ConditionCard test={testData} />}
+                {testData && (
+                  <>
+                    <ConditionCard test={testData} />
+                    {!ds.conditionConfirmed && (
+                      <button
+                        onClick={() => updateDS(selectedDevice, { conditionConfirmed: true })}
+                        style={{
+                          width: "100%",
+                          marginTop: 12,
+                          padding: "10px",
+                          backgroundColor: "#238636",
+                          color: "#fff",
+                          border: "1px solid #2ea043",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          fontSize: 14,
+                          fontWeight: 600,
+                        }}
+                      >
+                        ✅ 確認選擇，進入安全確認
+                      </button>
+                    )}
+                  </>
+                )}
               </section>
 
-              {testData && (
+              {testData && ds.conditionConfirmed && role !== "guest" && (
                 <SafetyChecklist
                   operator={operator}
                   onOperatorChange={(val) => {

@@ -7,6 +7,7 @@ import os
 import re
 import asyncio
 import pickle
+import logging
 from pathlib import Path
 from functools import lru_cache
 import numpy as np
@@ -14,6 +15,8 @@ from typing import Optional
 from google import genai
 from google.genai import types as genai_types
 from .standards import get_standard_tree
+
+logger = logging.getLogger("app")
 
 GEMINI_EMBED_MODEL = "gemini-embedding-001"
 RAG_CACHE_PATH = Path(__file__).parent.parent / "rag_cache.pkl"
@@ -46,9 +49,13 @@ _query_embed_cache: dict[str, np.ndarray] = {}
 _QUERY_CACHE_MAX = 64
 
 
+_genai_client: Optional[genai.Client] = None
+
 def _get_client() -> genai.Client:
-    api_key = os.getenv("GEMINI_API_KEY", "")
-    return genai.Client(api_key=api_key)
+    global _genai_client
+    if _genai_client is None:
+        _genai_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
+    return _genai_client
 
 
 def _build_chunks() -> list[dict]:
@@ -131,7 +138,8 @@ async def _embed(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> np.
 
     for i in range(0, len(texts), BATCH_SIZE):
         batch = texts[i : i + BATCH_SIZE]
-        result = client.models.embed_content(
+        result = await asyncio.to_thread(
+            client.models.embed_content,
             model=GEMINI_EMBED_MODEL,
             contents=batch,
             config=genai_types.EmbedContentConfig(task_type=task_type),
@@ -144,33 +152,43 @@ async def _embed(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> np.
 
 
 async def warmup_rag():
-    """啟動時呼叫：優先讀取本地快取，避免重複消耗 Gemini API 配額。"""
+    """啟動時呼叫：優先讀取本地快取，chunk 數量不一致時自動重建。"""
     global _CHUNKS, _EMBEDDINGS
+
+    current_chunks = _build_chunks()
+    current_count = len(current_chunks)
 
     if RAG_CACHE_PATH.exists():
         try:
             with open(RAG_CACHE_PATH, "rb") as f:
                 cached = pickle.load(f)
-            _CHUNKS = cached["chunks"]
-            _EMBEDDINGS = cached["embeddings"]
-            print(f"✅ RAG 從快取載入：{len(_CHUNKS)} 個測試條件")
-            return
-        except Exception as e:
-            print(f"⚠️  RAG 快取讀取失敗，重新向量化：{e}")
+            cached_count = len(cached["chunks"])
 
-    print("⏳ RAG 知識庫建立中（分批向量化，約需 20 秒）...")
+            if cached_count == current_count:
+                _CHUNKS = cached["chunks"]
+                _EMBEDDINGS = cached["embeddings"]
+                logger.info(f"RAG 從快取載入：{len(_CHUNKS)} 個測試條件")
+                return
+            else:
+                logger.warning(
+                    f"RAG 快取條件數量不符（快取 {cached_count} vs 現在 {current_count}），重新向量化"
+                )
+        except Exception as e:
+            logger.warning(f"RAG 快取讀取失敗，重新向量化：{e}")
+
+    logger.info("RAG 知識庫建立中（分批向量化，約需 20 秒）...")
     try:
-        _CHUNKS = _build_chunks()
+        _CHUNKS = current_chunks
         texts = [c["text"] for c in _CHUNKS]
         _EMBEDDINGS = await _embed(texts, task_type="RETRIEVAL_DOCUMENT")
         norms = np.linalg.norm(_EMBEDDINGS, axis=1, keepdims=True)
         _EMBEDDINGS = _EMBEDDINGS / np.clip(norms, 1e-9, None)
-        print(f"✅ RAG 完成：{len(_CHUNKS)} 個測試條件已向量化")
+        logger.info(f"RAG 完成：{len(_CHUNKS)} 個測試條件已向量化")
         with open(RAG_CACHE_PATH, "wb") as f:
             pickle.dump({"chunks": _CHUNKS, "embeddings": _EMBEDDINGS}, f)
-        print(f"✅ RAG 快取已儲存：{RAG_CACHE_PATH}")
+        logger.info(f"RAG 快取已儲存：{RAG_CACHE_PATH}")
     except Exception as e:
-        print(f"⚠️  RAG 向量化失敗：{e}")
+        logger.warning(f"RAG 向量化失敗：{e}")
         _CHUNKS = []
         _EMBEDDINGS = None
 
@@ -242,3 +260,40 @@ async def retrieve_multi(queries: list[str], top_k_each: int = 3) -> list[dict]:
                 seen_keys.add(uid)
                 results.append(h)
     return results
+
+
+def filter_chunks_by_hints(chunks: list[dict], hints: dict) -> list[dict]:
+    """依測試類型提示（hints）篩選 chunk 清單。"""
+    results = []
+    for c in chunks:
+        raw = c.get("raw", {})
+        if hints.get("power_on") is not None:
+            if raw.get("power_on") != hints["power_on"]:
+                continue
+        if hints.get("has_low") and raw.get("low_temperature") is None:
+            continue
+        if (
+            hints.get("has_high")
+            and raw.get("high_temperature") is None
+            and raw.get("target_temperature") is None
+        ):
+            continue
+        if hints.get("no_humidity") and raw.get("humidity_rh_percent") is not None:
+            continue
+        if hints.get("has_humidity") and raw.get("humidity_rh_percent") is None:
+            continue
+        if hints.get("has_cycles") and (
+            raw.get("cycles") is None or raw.get("cycles", 1) <= 1
+        ):
+            continue
+        results.append(c)
+    return results
+
+
+async def retrieve_filtered(
+    query: str, hints: dict, top_k: int = 30, min_results: int = 2
+) -> list[dict]:
+    """向量搜尋後依 hints 篩選；若結果不足 min_results 則回退至未篩選結果。"""
+    raw_hits = await retrieve(query, top_k=top_k)
+    filtered = filter_chunks_by_hints(raw_hits, hints)
+    return filtered if len(filtered) >= min_results else raw_hits

@@ -1,114 +1,104 @@
-import { useState } from "react";
-import Dashboard from "./Dashboard";
-import SOPPage from "./SOPPage";
-import ErrorLog from "./ErrorLog";
-import AIPage from "./AIPage";
+import { useState, useEffect } from "react";
+import ControlCenter from "./ControlCenter";
+import { ToastProvider } from "./components/Toast";
 import { API_BASE } from "./api";
-
-const PAGES = [
-  { key: "/", label: "儀表板" },
-  { key: "/sop", label: "SOP 執行" },
-  { key: "/errors", label: "異常看板" },
-  { key: "/ai", label: "AI 諮詢" },
-];
-
-const SESSION_DURATION = 8 * 60 * 60 * 1000;
+import api from "./api";
+import { SESSION_DURATION } from "./constants";
 
 function isSessionValid() {
+  const userToken = localStorage.getItem("user_token");
+  if (userToken) return true;
   const pwd = localStorage.getItem("demo_password");
   const loginAt = parseInt(localStorage.getItem("demo_login_at") || "0");
   if (pwd && Date.now() - loginAt < SESSION_DURATION) return true;
-  localStorage.removeItem("demo_password");
-  localStorage.removeItem("demo_login_at");
+  clearSession();
   return false;
 }
 
-const NavBar = ({ current, onChange, onLogout }) => (
-  <nav
-    style={{
-      padding: "10px 24px",
-      backgroundColor: "#161b22",
-      display: "flex",
-      alignItems: "center",
-      gap: "8px",
-      borderBottom: "1px solid #30363d",
-      zIndex: 1000,
-      flexShrink: 0,
-    }}
-  >
-    <span
-      style={{
-        color: "#58a6ff",
-        fontWeight: 700,
-        fontSize: 14,
-        marginRight: 16,
-      }}
-    >
-      DQA Lab
-    </span>
-    {PAGES.map(({ key, label }) => {
-      const active = current === key;
-      return (
-        <button
-          key={key}
-          onClick={() => onChange(key)}
-          style={{
-            color: active ? "#cdd9e5" : "#8b949e",
-            background: active ? "#21262d" : "transparent",
-            border: `1px solid ${active ? "#30363d" : "transparent"}`,
-            fontWeight: 600,
-            fontSize: 14,
-            padding: "4px 12px",
-            borderRadius: 6,
-            cursor: "pointer",
-            transition: "all .15s",
-          }}
-        >
-          {label}
-        </button>
-      );
-    })}
-    <button
-      onClick={onLogout}
-      style={{
-        marginLeft: "auto",
-        color: "#8b949e",
-        background: "transparent",
-        border: "1px solid #30363d",
-        fontWeight: 600,
-        fontSize: 12,
-        padding: "4px 12px",
-        borderRadius: 6,
-        cursor: "pointer",
-      }}
-    >
-      登出
-    </button>
-  </nav>
-);
+function clearSession() {
+  localStorage.removeItem("demo_password");
+  localStorage.removeItem("demo_login_at");
+  localStorage.removeItem("user_token");
+  localStorage.removeItem("user_role");
+  localStorage.removeItem("user_display_name");
+  localStorage.removeItem("user_id");
+}
+
+function getCurrentRole() {
+  return localStorage.getItem("user_role") || "guest";
+}
+
 
 function LoginPage({ onLogin }) {
+  const [mode, setMode] = useState("user");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [pwdInput, setPwdInput] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [backendOffline, setBackendOffline] = useState(false);
 
-  const handleLogin = async () => {
+  const handleUserLogin = async () => {
+    if (!username.trim() || !password.trim()) return;
+    setLoading(true);
+    setError("");
+    setBackendOffline(false);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.detail || "登入失敗");
+      } else {
+        localStorage.setItem("user_token", data.token);
+        localStorage.setItem("user_role", data.role);
+        localStorage.setItem("user_display_name", data.display_name);
+        if (data.user_id) localStorage.setItem("user_id", String(data.user_id));
+        onLogin();
+      }
+    } catch {
+      setBackendOffline(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
     if (!pwdInput.trim()) return;
     setLoading(true);
     setError("");
     setBackendOffline(false);
     try {
-      const res = await fetch(`${API_BASE}/api/devices`, {
-        headers: { "X-Demo-Password": pwdInput },
+      const res = await fetch(`${API_BASE}/api/auth/demo-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: pwdInput }),
       });
       if (res.status === 401 || res.status === 429) {
         const data = await res.json();
-        setError(data.detail || "密碼錯誤");
+        setError(data.detail || "Token 無效");
       } else {
+        // 原子性批量更新 localStorage（Tier 1-4 時序修復）
+        // 先清除所有舊會話相關鍵，再統一設定訪客會話，避免中間狀態被讀取
+        const keysToRemove = [
+          "user_token",
+          "user_id",
+          "user_role",
+          "user_display_name",
+          "dqa_ai_chats_v2",
+        ];
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+
+        // 批量設定訪客會話
         localStorage.setItem("demo_password", pwdInput);
         localStorage.setItem("demo_login_at", Date.now().toString());
-        onLogin();
+        localStorage.setItem("user_role", "guest");
+
+        // 延遲至下個事件循環，確保 localStorage 寫入完成
+        Promise.resolve().then(onLogin);
       }
     } catch {
       setBackendOffline(true);
@@ -147,7 +137,7 @@ function LoginPage({ onLogin }) {
           DQA Lab
         </span>
         <span style={{ color: "#8b949e", fontSize: 13 }}>
-          KSON AICM Digital Twin
+          DQA Lab Digital Twin
         </span>
 
         {backendOffline ? (
@@ -230,56 +220,162 @@ function LoginPage({ onLogin }) {
             </button>
           </div>
         ) : (
-          <div
-            style={{
-              width: "100%",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              marginTop: 8,
-            }}
-          >
-            <input
-              type="password"
-              placeholder="請輸入存取密碼"
-              value={pwdInput}
-              onChange={(e) => setPwdInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              style={{
-                padding: "10px 14px",
-                borderRadius: 6,
-                border: "1px solid #30363d",
-                background: "#0d1117",
-                color: "#cdd9e5",
-                fontSize: 14,
-                width: "100%",
-                boxSizing: "border-box",
-                outline: "none",
-              }}
-            />
-            <button
-              onClick={handleLogin}
-              disabled={loading}
-              style={{
-                padding: "10px",
-                borderRadius: 6,
-                background: loading ? "#21262d" : "#238636",
-                color: loading ? "#484f58" : "#fff",
-                border: "none",
-                cursor: loading ? "not-allowed" : "pointer",
-                fontWeight: 700,
-                fontSize: 14,
-              }}
-            >
-              {loading ? "驗證中..." : "進入系統"}
-            </button>
+          <>
+            <div style={{ display: "flex", gap: 6, width: "100%" }}>
+              <button
+                onClick={() => {
+                  setMode("user");
+                  setError("");
+                }}
+                style={{
+                  flex: 1,
+                  fontSize: 12,
+                  padding: "5px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  background: mode === "user" ? "#21262d" : "transparent",
+                  color: mode === "user" ? "#cdd9e5" : "#8b949e",
+                  border: `1px solid ${mode === "user" ? "#30363d" : "transparent"}`,
+                  fontWeight: mode === "user" ? 600 : 400,
+                }}
+              >
+                帳號登入
+              </button>
+              <button
+                onClick={() => {
+                  setMode("demo");
+                  setError("");
+                }}
+                style={{
+                  flex: 1,
+                  fontSize: 12,
+                  padding: "5px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  background: mode === "demo" ? "#21262d" : "transparent",
+                  color: mode === "demo" ? "#cdd9e5" : "#8b949e",
+                  border: `1px solid ${mode === "demo" ? "#30363d" : "transparent"}`,
+                  fontWeight: mode === "demo" ? 600 : 400,
+                }}
+              >
+                訪客模式
+              </button>
+            </div>
+
+            {mode === "user" ? (
+              <div
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="帳號"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleUserLogin()}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 6,
+                    border: "1px solid #30363d",
+                    background: "#0d1117",
+                    color: "#cdd9e5",
+                    fontSize: 14,
+                    width: "100%",
+                    boxSizing: "border-box",
+                    outline: "none",
+                  }}
+                />
+                <input
+                  type="password"
+                  placeholder="密碼"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleUserLogin()}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 6,
+                    border: "1px solid #30363d",
+                    background: "#0d1117",
+                    color: "#cdd9e5",
+                    fontSize: 14,
+                    width: "100%",
+                    boxSizing: "border-box",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  onClick={handleUserLogin}
+                  disabled={loading}
+                  style={{
+                    padding: "10px",
+                    borderRadius: 6,
+                    background: loading ? "#21262d" : "#238636",
+                    color: loading ? "#484f58" : "#fff",
+                    border: "none",
+                    cursor: loading ? "not-allowed" : "pointer",
+                    fontWeight: 700,
+                    fontSize: 14,
+                  }}
+                >
+                  {loading ? "驗證中..." : "登入"}
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="請輸入訪客 Token（8 碼）"
+                  value={pwdInput}
+                  onChange={(e) => setPwdInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleDemoLogin()}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 6,
+                    border: "1px solid #30363d",
+                    background: "#0d1117",
+                    color: "#cdd9e5",
+                    fontSize: 14,
+                    width: "100%",
+                    boxSizing: "border-box",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  onClick={handleDemoLogin}
+                  disabled={loading}
+                  style={{
+                    padding: "10px",
+                    borderRadius: 6,
+                    background: loading ? "#21262d" : "#238636",
+                    color: loading ? "#484f58" : "#fff",
+                    border: "none",
+                    cursor: loading ? "not-allowed" : "pointer",
+                    fontWeight: 700,
+                    fontSize: 14,
+                  }}
+                >
+                  {loading ? "驗證中..." : "進入系統"}
+                </button>
+                <span style={{ color: "#484f58", fontSize: 11 }}>
+                  Token 由管理者生成，Session 有效期限：8 小時
+                </span>
+              </div>
+            )}
             {error && (
               <span style={{ color: "#f85149", fontSize: 13 }}>{error}</span>
             )}
-            <span style={{ color: "#484f58", fontSize: 11 }}>
-              Session 有效期限：8 小時
-            </span>
-          </div>
+          </>
         )}
       </div>
     </div>
@@ -288,66 +384,54 @@ function LoginPage({ onLogin }) {
 
 function App() {
   const [authed, setAuthed] = useState(() => isSessionValid());
-  const [page, setPage] = useState("/");
+  const [role, setRole] = useState(getCurrentRole);
+  const [displayName, setDisplayName] = useState(
+    () => localStorage.getItem("user_display_name") || ""
+  );
+  const [userId, setUserId] = useState(
+    () => parseInt(localStorage.getItem("user_id") || "0") || null
+  );
 
-  const handleLogout = () => {
-    localStorage.removeItem("demo_password");
-    localStorage.removeItem("demo_login_at");
+  // 有 token 時，從後端驗證並刷新 role（防止 localStorage 被竄改）
+  useEffect(() => {
+    if (!authed) return;
+    const token = localStorage.getItem("user_token");
+    if (!token) return;
+    api.get("/api/auth/me").then((res) => {
+      const { id, role: r, display_name: dn } = res.data;
+      localStorage.setItem("user_role", r);
+      localStorage.setItem("user_display_name", dn);
+      if (id) localStorage.setItem("user_id", String(id));
+      setRole(r);
+      setDisplayName(dn);
+      setUserId(id || null);
+    }).catch(() => {});
+  }, [authed]);
+
+  const handleLogout = async () => {
+    const token = localStorage.getItem("user_token");
+    if (token) {
+      try { await api.post("/api/auth/logout"); } catch (_) {}
+    }
+    clearSession();
     setAuthed(false);
+    setUserId(null);
   };
 
-  if (!authed) return <LoginPage onLogin={() => setAuthed(true)} />;
+  const handleLogin = () => {
+    setRole(getCurrentRole());
+    setDisplayName(localStorage.getItem("user_display_name") || "");
+    setUserId(parseInt(localStorage.getItem("user_id") || "0") || null);
+    setAuthed(true);
+  };
+  if (!authed) return <LoginPage onLogin={handleLogin} />;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100vh",
-        backgroundColor: "#0d1117",
-      }}
-    >
-      <NavBar current={page} onChange={setPage} onLogout={handleLogout} />
-      <main
-        style={{
-          width: "100%",
-          flex: 1,
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
-        <div
-          style={{ display: page === "/" ? "block" : "none", height: "100%" }}
-        >
-          <Dashboard active={page === "/"} />
-        </div>
-        <div
-          style={{
-            display: page === "/sop" ? "block" : "none",
-            height: "100%",
-          }}
-        >
-          <SOPPage active={page === "/sop"} />
-        </div>
-        <div
-          style={{
-            display: page === "/errors" ? "block" : "none",
-            height: "100%",
-          }}
-        >
-          <ErrorLog />
-        </div>
-        <div
-          style={{
-            display: page === "/ai" ? "flex" : "none",
-            flexDirection: "column",
-            height: "100%",
-          }}
-        >
-          <AIPage />
-        </div>
-      </main>
-    </div>
+    <ToastProvider>
+      <div style={{ height: "100vh", backgroundColor: "#0d1117", overflow: "hidden" }}>
+        <ControlCenter role={role} userId={userId} displayName={displayName} onLogout={handleLogout} />
+      </div>
+    </ToastProvider>
   );
 }
 

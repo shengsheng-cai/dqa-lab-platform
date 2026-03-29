@@ -10,6 +10,12 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { generateSP, mergeSpPv, toElapsedMin } from "./generateSP";
+import { parseUtcDate } from "../../constants";
+
+function fmtWallClock(ms) {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 
 const TempChart = ({ sop, pvData, startedAt }) => {
   const spData = React.useMemo(() => generateSP(sop), [sop]);
@@ -21,10 +27,13 @@ const TempChart = ({ sop, pvData, startedAt }) => {
       .filter((p) => p.min != null);
   }, [pvData, startedAt]);
 
-  const merged = React.useMemo(
-    () => mergeSpPv(spData, pvWithMin),
-    [spData, pvWithMin],
-  );
+  const merged = React.useMemo(() => {
+    const base = mergeSpPv(spData, pvWithMin);
+    const startDate = parseUtcDate(startedAt);
+    if (!startDate) return base;
+    const startMs = startDate.getTime();
+    return base.map((p) => ({ ...p, label: fmtWallClock(startMs + p.min * 60000) }));
+  }, [spData, pvWithMin, startedAt]);
 
   if (spData.length === 0) {
     return (
@@ -43,7 +52,13 @@ const TempChart = ({ sop, pvData, startedAt }) => {
     );
   }
 
-  const brushEnd = merged.length - 1;
+  // 預設視窗跟著最新 PV 資料走，讓使用者看到目前進度而非 SP 末端
+  let brushEnd = merged.length - 1;
+  if (pvWithMin.length > 0) {
+    const latestMin = pvWithMin[pvWithMin.length - 1].min;
+    const idx = merged.findIndex((p) => p.min > latestMin + 60);
+    brushEnd = idx === -1 ? merged.length - 1 : idx;
+  }
   const brushStart = Math.max(0, brushEnd - 119);
   const spTemps = spData.map((p) => p.sp_temp);
   const tempMin = Math.min(...spTemps) - 10;
@@ -67,7 +82,7 @@ const TempChart = ({ sop, pvData, startedAt }) => {
           axisLine={{ stroke: "#30363d" }}
           interval={Math.max(1, Math.floor(merged.length / 8))}
           label={{
-            value: "Time (hr:min)",
+            value: startedAt ? "時刻 (HH:MM)" : "時長 (hr:min)",
             position: "insideBottom",
             offset: -16,
             fontSize: 9,
@@ -118,23 +133,23 @@ const TempChart = ({ sop, pvData, startedAt }) => {
         />
         <Line
           yAxisId="temp"
-          type="linear"
-          dataKey="sp_temp"
-          name="sp_temp"
-          stroke="#555e6b"
-          strokeWidth={1.5}
-          strokeDasharray="5 3"
+          type="monotone"
+          dataKey="pv_temp"
+          name="pv_temp"
+          stroke="#ff7b72"
+          strokeWidth={2}
           dot={false}
           isAnimationActive={false}
           connectNulls
         />
         <Line
           yAxisId="temp"
-          type="monotone"
-          dataKey="pv_temp"
-          name="pv_temp"
-          stroke="#ff7b72"
-          strokeWidth={2}
+          type="linear"
+          dataKey="sp_temp"
+          name="sp_temp"
+          stroke="#8b949e"
+          strokeWidth={1.5}
+          strokeDasharray="5 3"
           dot={false}
           isAnimationActive={false}
           connectNulls

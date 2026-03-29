@@ -1,4 +1,5 @@
-// SP 波形計算（純函式，無 React 依賴）
+// SP 波形計算（純函式）
+import { parseUtcDate } from "../../constants";
 
 export function fmtMin(min) {
   const h = Math.floor(min / 60);
@@ -9,9 +10,7 @@ export function fmtMin(min) {
 export function toElapsedMin(startedAt, fullTime) {
   if (!startedAt || !fullTime) return null;
   try {
-    const start = new Date(startedAt);
-    const point = new Date(fullTime);
-    return Math.round((point - start) / 60000);
+    return Math.round((parseUtcDate(fullTime) - parseUtcDate(startedAt)) / 60000);
   } catch {
     return null;
   }
@@ -31,6 +30,7 @@ export function generateSP(sop) {
   let t = 0;
 
   const pushRamp = (from, to) => {
+    if (from === to) return; // ← 加這行
     const steps = Math.max(1, Math.round(Math.abs(to - from) / ramp));
     for (let i = 1; i <= steps; i++) {
       pts.push({ min: t, sp_temp: from + (to - from) * (i / steps) });
@@ -46,11 +46,16 @@ export function generateSP(sop) {
 
   if (low !== null && low < ambientTemp) {
     pushRamp(ambientTemp, low);
-    for (let c = 0; c < cycles; c++) {
-      pushRamp(low, high);
-      pushDwell(high, dwell);
-      pushRamp(high, low);
+    if (Math.abs(high - low) < 0.1) {
+      // 單溫冷測（high == low）：只有一段 dwell，對齊狀態機行為
       pushDwell(low, dwell);
+    } else {
+      for (let c = 0; c < cycles; c++) {
+        pushRamp(low, high);
+        pushDwell(high, dwell);
+        pushRamp(high, low);
+        pushDwell(low, dwell);
+      }
     }
     pushRamp(low, ambientTemp);
   } else if (low !== null) {
@@ -81,10 +86,17 @@ export function mergeSpPv(spData, pvData) {
   spData.forEach((p) => {
     map[p.min] = { ...p };
   });
+  const spMins = spData.map((p) => p.min);
+  if (spMins.length === 0) return [];
   pvData.forEach((p) => {
-    if (p.min != null && map[p.min]) {
-      map[p.min].pv_temp = p.temperature;
-      map[p.min].pv_humi = p.humidity;
+    if (p.min == null) return;
+    // 找最近的 SP 時間點，容差 ±2 分鐘
+    const nearest = spMins.reduce((a, b) =>
+      Math.abs(b - p.min) < Math.abs(a - p.min) ? b : a,
+    );
+    if (Math.abs(nearest - p.min) <= 2) {
+      map[nearest].pv_temp = p.temperature;
+      map[nearest].pv_humi = p.humidity;
     }
   });
   return Object.values(map).sort((a, b) => a.min - b.min);

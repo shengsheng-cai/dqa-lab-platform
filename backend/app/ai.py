@@ -1,7 +1,7 @@
 import os
 import json
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -11,6 +11,8 @@ from .rag import (
     extract_temperatures,
     retrieve_multi,
     retrieve_by_std,
+    filter_chunks_by_hints,
+    retrieve_filtered,
 )
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -26,8 +28,14 @@ _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速
 2. 再列出具體參數
 3. 如果有多個選項，說明差異讓使用者選擇
 
+【治具與測試條件的區別】
+- 「治具」= 實驗室治具室中管理的物理工具、夾具、接頭（例如 M12 連接器、FC 光纖接頭、RS-485 轉換器等），不是測試設備或溫箱
+- 「測試條件」= 溫箱執行的環境測試參數（溫度、濕度、時間、循環數）
+- 若問「推薦治具」「哪些治具適合」→ 說明你只能提供測試條件建議，物理治具的選用與庫存請至系統「治具管理」頁面查詢
+- 若有【治具庫存資料】區塊，直接根據其內容回答庫存問題；若無此區塊，說明目前無法取得即時庫存
+
 【資料使用規則】
-- 只根據【參考資料】回答，禁止引用資料以外的版本號、數值或測試名稱
+- 只根據【參考資料】和【治具庫存資料】回答，禁止引用資料以外的版本號、數值或測試名稱
 - 找不到相關資料直接說「查無此資料」，不要追問
 
 【標準選擇原則】
@@ -38,11 +46,17 @@ _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速
 - 已指定標準時，只看該標準，不要混入其他標準的條目
 
 【回答原則】
+- 回答控制在 200 字以內，超過就精簡，禁止重複描述
 - 不要把所有符合條件的條目全部列出，選 1~2 個最具代表性的推薦，說明為什麼
 - 「低溫開關機」→ 只找通電低溫條目，說明「這是模擬設備在低溫下開機的情境」
 - 「純高溫」→ 只找無低溫無濕度的高溫條目
 - 「高溫高濕」→ 只找有濕度設定的條目
 - 「溫度循環」→ 只找有高低溫循環的條目
+
+【比較題規則】
+- 比較兩個標準時，只說差異，相同的參數一律省略
+- 用 3~5 條差異點列出，每條一句話，不要展開子項目
+- 最後一句給出結論（哪種情境用哪個）
 
 【時間計算】
 問「要測多久」時，直接算出結果：
@@ -55,9 +69,50 @@ _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速
 - 多項測試：逐項列小計，最後給總計
 - 若無升降溫速率資料，只加總停留時間並註明「升降溫時間依設備另計」
 
-回答結尾固定加：⚠️ 本建議僅供初步評估參考，實際條件請以原始法規文件為準。"""
+回答不要自行加任何免責聲明，UI 會自動附加。"""
 
 _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
+
+_FIXTURE_KEYWORDS = ["治具", "庫存", "借出", "逾期", "缺貨", "可借", "缺少"]
+
+
+def _query_fixture_context() -> str:
+    """查詢治具庫存不足清單，注入 AI context。"""
+    from .models import SessionLocal, Fixture
+    db = SessionLocal()
+    try:
+        shortage_items = (
+            db.query(Fixture)
+            .filter(Fixture.is_active == True, Fixture.shortage > 0)
+            .order_by(Fixture.shortage.desc())
+            .all()
+        )
+        if not shortage_items:
+            return "【治具庫存資料】目前無庫存不足的治具。"
+        # 依 (interface_type, form_factor) 去重，取 shortage 最大值那筆
+        seen: dict[tuple, dict] = {}
+        for f in shortage_items:
+            key = (f.interface_type, (f.form_factor or "").strip())
+            if key not in seen or f.shortage > seen[key]["shortage"]:
+                seen[key] = {
+                    "desc": f"{f.interface_type} {f.form_factor or ''}".strip(),
+                    "total": f.total_quantity,
+                    "shortage": f.shortage,
+                    "note": f.note,
+                }
+        sorted_items = sorted(seen.values(), key=lambda x: x["shortage"], reverse=True)
+        lines = ["【治具庫存資料】庫存不足的治具："]
+        for item in sorted_items:
+            lines.append(
+                f"- {item['desc']}：庫存 {item['total']} 件，缺 {item['shortage']} 件"
+                + (f"（備註：{item['note']}）" if item["note"] else "")
+            )
+        return "\n".join(lines)
+    except Exception:
+        return ""
+    finally:
+        db.close()
+
 
 _TEST_TYPE_HINTS = {
     "低溫開關機": {"power_on": True, "has_low": True},
@@ -75,7 +130,10 @@ _TEST_TYPE_HINTS = {
 
 
 def _get_api_key() -> str:
-    return os.environ["GEMINI_API_KEY"]
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        raise HTTPException(status_code=503, detail="AI 服務未設定，請聯絡管理員")
+    return key
 
 
 class QueryRequest(BaseModel):
@@ -85,33 +143,6 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     reply: str
-
-
-def _filter_chunks_by_hints(chunks: list[dict], hints: dict) -> list[dict]:
-    results = []
-    for c in chunks:
-        raw = c.get("raw", {})
-        if hints.get("power_on") is not None:
-            if raw.get("power_on") != hints["power_on"]:
-                continue
-        if hints.get("has_low") and raw.get("low_temperature") is None:
-            continue
-        if (
-            hints.get("has_high")
-            and raw.get("high_temperature") is None
-            and raw.get("target_temperature") is None
-        ):
-            continue
-        if hints.get("no_humidity") and raw.get("humidity_rh_percent") is not None:
-            continue
-        if hints.get("has_humidity") and raw.get("humidity_rh_percent") is None:
-            continue
-        if hints.get("has_cycles") and (
-            raw.get("cycles") is None or raw.get("cycles", 1) <= 1
-        ):
-            continue
-        results.append(c)
-    return results
 
 
 def _extract_test_type_hints(msg: str) -> dict:
@@ -159,14 +190,14 @@ async def _build_context(msg: str, history: list = []) -> str:
     elif matched_stds:
         raw_hits = retrieve_by_std(matched_stds)
         if type_hints:
-            filtered = _filter_chunks_by_hints(raw_hits, type_hints)
+            filtered = filter_chunks_by_hints(raw_hits, type_hints)
             _add_hits(filtered if len(filtered) >= 2 else raw_hits)
         else:
             _add_hits(raw_hits)
 
     elif type_hints:
         raw_hits = await retrieve(msg, top_k=30)
-        filtered = _filter_chunks_by_hints(raw_hits, type_hints)
+        filtered = filter_chunks_by_hints(raw_hits, type_hints)
         _add_hits(filtered if len(filtered) >= 2 else raw_hits[:20])
 
     elif temps:
@@ -175,9 +206,17 @@ async def _build_context(msg: str, history: list = []) -> str:
     else:
         _add_hits(await retrieve(msg, top_k=20))
 
+    parts = []
     if hits:
-        return "\n".join(f"- {h['text']}" for h in hits)
-    return ""
+        parts.append("\n".join(f"- {h['text']}" for h in hits))
+
+    # 偵測到治具相關關鍵字時，從 DB 注入即時庫存資料
+    if any(kw in msg for kw in _FIXTURE_KEYWORDS):
+        fixture_ctx = _query_fixture_context()
+        if fixture_ctx:
+            parts.append(fixture_ctx)
+
+    return "\n\n".join(parts) if parts else ""
 
 
 def _build_gemini_payload(messages: list, system_prompt: str) -> dict:
@@ -190,7 +229,7 @@ def _build_gemini_payload(messages: list, system_prompt: str) -> dict:
         "contents": contents,
         "generationConfig": {
             "temperature": 0.3,
-            "maxOutputTokens": 1500,
+            "maxOutputTokens": 4096,
         },
     }
 
@@ -211,15 +250,21 @@ async def standards_query(req: QueryRequest):
     payload = _build_gemini_payload(messages, system_content)
     api_key = _get_api_key()
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(
-            f"{GEMINI_URL}:generateContent?key={api_key}",
-            json=payload,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-    reply = data["candidates"][0]["content"]["parts"][0]["text"]
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{GEMINI_URL}:generateContent?key={api_key}",
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        reply = data["candidates"][0]["content"]["parts"][0]["text"]
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=503, detail="AI 服務逾時，請稍後再試")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=503, detail=f"AI 服務錯誤：{e.response.status_code}")
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"AI 服務不可用：{e}")
     return QueryResponse(reply=reply)
 
 
@@ -240,28 +285,35 @@ async def standards_query_stream(req: QueryRequest):
     api_key = _get_api_key()
 
     async def generate():
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            async with client.stream(
-                "POST",
-                f"{GEMINI_URL}:streamGenerateContent?alt=sse&key={api_key}",
-                json=payload,
-            ) as resp:
-                async for line in resp.aiter_lines():
-                    if line.startswith("data: "):
-                        raw = line[6:].strip()
-                        if raw == "[DONE]":
-                            break
-                        try:
-                            data = json.loads(raw)
-                            token = (
-                                data.get("candidates", [{}])[0]
-                                .get("content", {})
-                                .get("parts", [{}])[0]
-                                .get("text", "")
-                            )
-                            if token:
-                                yield token
-                        except Exception:
-                            pass
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(connect=10.0, read=None, write=60.0, pool=10.0)
+            ) as client:
+                async with client.stream(
+                    "POST",
+                    f"{GEMINI_URL}:streamGenerateContent?alt=sse&key={api_key}",
+                    json=payload,
+                ) as resp:
+                    async for line in resp.aiter_lines():
+                        if line.startswith("data: "):
+                            raw = line[6:].strip()
+                            if raw == "[DONE]":
+                                break
+                            try:
+                                data = json.loads(raw)
+                                token = (
+                                    data.get("candidates", [{}])[0]
+                                    .get("content", {})
+                                    .get("parts", [{}])[0]
+                                    .get("text", "")
+                                )
+                                if token:
+                                    yield token
+                            except Exception:
+                                pass
+        except httpx.TimeoutException:
+            yield "\n\n[AI 服務逾時，請稍後再試]"
+        except Exception as e:
+            yield f"\n\n[AI 服務不可用：{e}]"
 
     return StreamingResponse(generate(), media_type="text/plain")

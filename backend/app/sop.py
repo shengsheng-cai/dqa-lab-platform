@@ -1,30 +1,47 @@
 # SOP 模組：提供標準樹與 SOP 列表、啟動 SOP 測試、取得 SOP 執行紀錄等功能
 
+import asyncio
 import json
 import datetime
-from fastapi import APIRouter, HTTPException, Body, Request
+import os
+import shutil
+from fastapi import APIRouter, HTTPException, Body, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord
+from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, FixtureLoan
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _save_device_state
+from .line import push_message, push_to_user, push_sop_notification
+
+PHOTO_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "photos")
+os.makedirs(PHOTO_UPLOAD_DIR, exist_ok=True)
 
 # 導出 API 路由器
 router = APIRouter()
 execution_router = APIRouter(prefix="/api/sop-executions", tags=["sop-executions"])
 
 # 定義設備 ID 清單（目前支援的五個設備）
-DEVICE_IDS = ["KSON_CH01", "KSON_CH02", "KSON_CH03", "KSON_CH04", "KSON_CH05"]
+DEVICE_IDS = ["CH-01", "CH-02", "CH-03", "CH-04", "CH-05"]
+
+import logging
+logger = logging.getLogger("sop")
 
 
-# 呈現 SOP 列表用的資料類型
-class SopResponse(BaseModel):
-    sop_id: str
-    name: str
-    test_type: str
-    version: str
-    steps: List[dict]
-    description: Optional[str] = ""
+def _validate_start_sop_input(payload: dict, cache: dict) -> tuple:
+    """sop_id / device_id / 設備存在性驗證，回傳 (sop_id, device_id, device)"""
+    sop_id: str = payload.get("sop_id", "")
+    device_id: str = payload.get("device_id", "CH-01")
+
+    if not sop_id:
+        raise HTTPException(status_code=400, detail="sop_id 不能為空")
+    if device_id not in DEVICE_IDS:
+        raise HTTPException(status_code=400, detail=f"無效的 device_id: {device_id}")
+
+    device = cache.get(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail=f"設備 {device_id} 不存在")
+
+    return sop_id, device_id, device
 
 
 # 標準樹與 SOP 列表路由
@@ -67,62 +84,32 @@ def get_standards_tree():
     return result
 
 
-@router.get("/", response_model=List[SopResponse])
-def list_sops():
-    """SOP 列表（從 STANDARD_TREE 自動展開 + 資料庫客製 SOP）"""
-    sops: List[SopResponse] = [
-        SopResponse(
-            sop_id=std_data.get("sop_id", sop_id),
-            name=std_data.get("name", ""),
-            test_type=std_data.get("test_type", "chamber"),
-            version=std_data.get("version", ""),
-            description=std_data.get("description", ""),
-            steps=std_data.get("steps", [])
-            if isinstance(std_data.get("steps"), list)
-            else [],
-        )
-        for sop_id, std_data in STANDARDS_AND_SOPS.items()
-    ]
-
-    with SessionLocal() as db:
-        existing_ids = {s.sop_id for s in sops}
-        for s in db.query(SopTemplate).all():
-            if s.sop_id not in existing_ids:
-                sops.append(
-                    SopResponse(
-                        sop_id=s.sop_id,
-                        name=s.name,
-                        test_type=s.test_type,
-                        version=s.version,
-                        steps=json.loads(s.steps_json) if s.steps_json else [],
-                    )
-                )
-
-    return sops
+# B5 fix: 移除 list_sops 廢棄端點，前端完全不呼叫
 
 
 # 啟動 SOP 路由
 @router.post("/start")
 async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
-    """啟動指定設備的 SOP 測試"""
-    sop_id: str = payload.get("sop_id", "")
-    device_id: str = payload.get("device_id", "KSON_CH01")
-    operator: str = payload.get("operator", "")  # 操作人員姓名
+    """啟動指定設備的 SOP 測試（engineer / keeper / admin 才可操作）"""
+    role = getattr(request.state, "user_role", None)
+    if role not in ("engineer", "keeper", "admin"):
+        raise HTTPException(status_code=403, detail="無操作權限")
 
-    if not sop_id:
-        raise HTTPException(status_code=400, detail="sop_id 不能為空")
-    if device_id not in DEVICE_IDS:
-        raise HTTPException(status_code=400, detail=f"無效的 device_id: {device_id}")
+    operator: str = payload.get("operator", "")
+    operator_user_id: Optional[int] = getattr(request.state, "user_id", None)
 
     cache = request.app.state.AICM_CACHE
-    device = cache.get(device_id)
+    sop_id, device_id, device = _validate_start_sop_input(payload, cache)
 
-    if not device:
-        raise HTTPException(status_code=404, detail=f"設備 {device_id} 不存在")
-    if device.get("status") == "RUNNING":
-        raise HTTPException(
-            status_code=400, detail=f"{device_id} 正在執行中，請先停止。"
-        )
+    # 若前端未填 operator，從登入帳號自動帶入顯示名稱
+    if not operator and operator_user_id:
+        try:
+            with SessionLocal() as db:
+                u = db.query(User).filter(User.id == operator_user_id).first()
+                if u:
+                    operator = u.display_name or ""
+        except Exception:
+            pass
 
     std_data = STANDARDS_AND_SOPS.get(sop_id, {})
     sop_name = std_data.get("name", sop_id)
@@ -137,27 +124,57 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
     active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
     active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
 
-    device.update(
-        {
-            "status": "RUNNING",
-            "running_sop_id": sop_id,
-            "running_sop_name": sop_name,
-            "standard_id": sop_id,
-            "active_sop_json": active_sop_json,
-            "completed_steps": 0,
-            "started_at": now,
-            "total_steps": len(std_data.get("steps", [])),
-            "operator": operator.strip() if operator else "",  # 存入 cache
-            "sim_phase": "idle",
-            "sim_cycle": 0,
-        }
-    )
+    async with request.app.state.DEVICE_LOCKS[device_id]:
+        if device.get("status") != "IDLE":
+            raise HTTPException(
+                status_code=400, detail=f"{device_id} 非待機狀態（目前：{device.get('status')}），請先停止現有測試。"
+            )
+        device.update(
+            {
+                "status": "RUNNING",
+                "running_sop_id": sop_id,
+                "running_sop_name": sop_name,
+                "standard_id": sop_id,
+                "active_sop_json": active_sop_json,
+                "completed_steps": 0,
+                "started_at": now,
+                "total_steps": len(std_data.get("steps", [])),
+                "operator": operator.strip() if operator else "",
+                "operator_user_id": operator_user_id,
+                "sim_phase": "idle",
+                "sim_cycle": 0,
+            }
+        )
+        _save_device_state(device_id, device)
 
-    _save_device_state(device_id, device)
+    # 將此設備「進行中」排程的預約治具轉為借出
+    try:
+        with SessionLocal() as db:
+            active_schedule = (
+                db.query(Schedule)
+                .filter(Schedule.device_id == device_id, Schedule.status == "進行中")
+                .first()
+            )
+            if active_schedule:
+                db.query(FixtureLoan).filter(
+                    FixtureLoan.schedule_id == active_schedule.id,
+                    FixtureLoan.status == "reserved",
+                ).update({"status": "loaned", "loan_date": now}, synchronize_session=False)
+                db.commit()
+    except Exception as e:
+        logger.warning(f"[{device_id}] 治具預約轉借出失敗：{e}")
 
-    print(
-        f"🔥 [{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}"
+    logger.info(f"[{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}")
+
+    # Phase 9-4：啟動通知
+    op_display = operator.strip() if operator else "未填寫"
+    notif_text = (
+        f"🔬 [{device_id}] 已啟動測試：{sop_name}\n"
+        f"操作人員：{op_display}\n"
+        f"請記得拍上架時照片 📷"
     )
+    asyncio.create_task(push_sop_notification(operator_user_id, notif_text))
+
     return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
 
 
@@ -188,12 +205,17 @@ class ExecutionResponse(BaseModel):
 
 
 @execution_router.post("/", response_model=ExecutionResponse)
-def create_execution(data: ExecutionCreate):
+def create_execution(data: ExecutionCreate, request: Request):
+    role = getattr(request.state, "user_role", None)
+    if role not in ("engineer", "keeper", "admin"):
+        raise HTTPException(status_code=403, detail="無操作權限")
+    operator_user_id = getattr(request.state, "user_id", None)
     with SessionLocal() as db:
         execution = SopExecution(
             sop_id=data.sop_id,
             device_id=data.device_id,
             operator=data.operator,
+            operator_user_id=operator_user_id,
             test_started_at=data.test_started_at,
             test_ended_at=data.test_ended_at,
         )
@@ -268,3 +290,40 @@ def get_execution(execution_id: int):
             created_at=execution.created_at,
             steps=steps,
         )
+
+
+@execution_router.post("/{execution_id}/photos")
+async def upload_execution_photo(
+    execution_id: int,
+    request: Request,
+    photo_type: str = Form(...),  # "before" | "after"
+    file: UploadFile = File(...),
+):
+    """補充照片：上架時照片（before）或測試結束照（after）"""
+    role = getattr(request.state, "user_role", None)
+    if role not in ("engineer", "keeper", "admin"):
+        raise HTTPException(status_code=403, detail="無操作權限")
+    if photo_type not in ("before", "after"):
+        raise HTTPException(status_code=400, detail="photo_type 必須為 before 或 after")
+
+    ext = os.path.splitext(file.filename or "photo.jpg")[1] or ".jpg"
+    filename = f"{execution_id}_{photo_type}{ext}"
+    dest = os.path.join(PHOTO_UPLOAD_DIR, filename)
+
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    with SessionLocal() as db:
+        execution = (
+            db.query(SopExecution).filter(SopExecution.id == execution_id).first()
+        )
+        if not execution:
+            os.remove(dest)
+            raise HTTPException(status_code=404, detail="Execution not found")
+        if photo_type == "before":
+            execution.photo_before_path = filename
+        else:
+            execution.photo_after_path = filename
+        db.commit()
+
+    return {"status": "ok", "filename": filename}

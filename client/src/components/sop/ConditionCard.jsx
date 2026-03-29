@@ -11,9 +11,11 @@ const ConditionCard = ({ test }) => {
       "低溫下限",
       test.low_temperature != null ? `${test.low_temperature} °C` : "—",
     ],
-    ["升降溫速率", `${test.ramp_rate} °C/min`],
-    ["停留時間", `${test.dwell_time_hours} h`],
-    ["循環次數", test.cycles ?? "—"],
+    ["升降溫速率", test.ramp_rate != null ? `${test.ramp_rate} °C/min` : "—"],
+    [
+      "停留時間",
+      test.dwell_time_hours != null ? `${test.dwell_time_hours} h` : "—",
+    ],
     [
       "濕度設定",
       test.humidity_rh_percent != null

@@ -1,13 +1,5 @@
 import React from "react";
-
-const STATUS_CONFIG = {
-  OFFLINE: { color: "#484f58", bg: "#21262d" },
-  IDLE: { color: "#8b949e", bg: "#21262d" },
-  RUNNING: { color: "#3fb950", bg: "#0f2318" },
-  PAUSED: { color: "#f0a500", bg: "#2d1f00" },
-  FINISHING: { color: "#58a6ff", bg: "#0d1f33" },
-  EMERGENCY: { color: "#f85149", bg: "#2d0f0f" },
-};
+import { STATUS_CONFIG } from "../../constants";
 
 const ControlPanel = ({
   selectedDevice,

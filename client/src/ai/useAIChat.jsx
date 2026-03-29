@@ -11,6 +11,10 @@ import { API_BASE } from "../api";
 const MAX_HISTORY = 4;
 
 function getAuthHeaders() {
+  const userToken = localStorage.getItem("user_token");
+  if (userToken) {
+    return { "Content-Type": "application/json", "X-User-Token": userToken };
+  }
   const pwd = localStorage.getItem("demo_password") || "";
   return {
     "Content-Type": "application/json",
@@ -30,20 +34,35 @@ export default function useAIChat() {
   const textareaRef = useRef(null);
   const abortControllerRef = useRef(null);
   const streamTextRef = useRef("");
+  const streamRafRef = useRef(null);
   const startTimeRef = useRef(null);
   const userScrolledUpRef = useRef(false);
   const activeIdRef = useRef(null);
+  // A8: debounce timer ref
+  const saveDebounceRef = useRef(null);
 
   const activeId = store.activeConversationId;
   const conversations = store.conversations;
   const projectGroups = store.projectGroups;
   const messages = conversations[activeId]?.messages ?? [];
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
+
+  // A8 fix: saveChats 加 debounce 500ms，避免每次 store 更新都寫 localStorage
   useEffect(() => {
-    saveChats(store);
+    if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+    saveDebounceRef.current = setTimeout(() => {
+      saveChats(store);
+    }, 500);
+    return () => {
+      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+    };
   }, [store]);
 
   useEffect(() => {
@@ -172,7 +191,12 @@ export default function useAIChat() {
       Math.min(Math.max(el.scrollHeight, lh * 3), lh * 8) + "px";
   }, []);
 
+  // A5 fix: stopStream 移除 focus()，統一由 finally 處理
   const stopStream = useCallback(() => {
+    if (streamRafRef.current) {
+      cancelAnimationFrame(streamRafRef.current);
+      streamRafRef.current = null;
+    }
     abortControllerRef.current?.abort();
     const text = streamTextRef.current;
     const elapsed = startTimeRef.current
@@ -202,18 +226,22 @@ export default function useAIChat() {
     streamTextRef.current = "";
     setLoading(false);
     abortControllerRef.current = null;
-    inputRef.current?.focus();
+    // 移除 inputRef.current?.focus()，統一由 finally 處理
   }, []);
 
   const sendMessage = useCallback(
     async (text) => {
+      const currentMessages = messagesRef.current;
       const rawMsg = (text !== undefined ? text : input).trim();
       if (!rawMsg || loading) return;
 
       setInput("");
       if (textareaRef.current) textareaRef.current.style.height = "auto";
 
-      const newMessages = [...messages, { role: "user", content: rawMsg }];
+      const newMessages = [
+        ...currentMessages,
+        { role: "user", content: rawMsg },
+      ];
       updateMessages(newMessages);
       scrollToBottomForce();
       setLoading(true);
@@ -246,7 +274,15 @@ export default function useAIChat() {
           if (done) break;
           fullText += decoder.decode(value, { stream: true });
           streamTextRef.current = fullText;
-          setStreamText(fullText);
+          // 用 rAF 節流：每個 animation frame 最多更新一次，避免高頻 chunk 卡住 UI
+          if (streamRafRef.current) cancelAnimationFrame(streamRafRef.current);
+          streamRafRef.current = requestAnimationFrame(() => {
+            setStreamText(streamTextRef.current);
+          });
+        }
+        if (streamRafRef.current) {
+          cancelAnimationFrame(streamRafRef.current);
+          streamRafRef.current = null;
         }
 
         if (!controller.signal.aborted && fullText.trim()) {
@@ -272,16 +308,17 @@ export default function useAIChat() {
           );
         }
       } finally {
+        // loading / streamText 一律清除，防止意外 abort 時 loading 卡在 true
+        setLoading(false);
+        setStreamText("");
+        streamTextRef.current = "";
+        abortControllerRef.current = null;
         if (!controller.signal.aborted) {
-          setLoading(false);
-          setStreamText("");
-          streamTextRef.current = "";
-          abortControllerRef.current = null;
           inputRef.current?.focus();
         }
       }
     },
-    [messages, input, loading, updateMessages, scrollToBottomForce],
+    [input, loading, updateMessages, scrollToBottomForce],
   );
 
   const retryInTraditional = useCallback(
@@ -294,7 +331,10 @@ export default function useAIChat() {
         }
       }
       if (!userMsg) return;
-      updateMessages(messages.slice(0, msgIndex));
+      const slicedMessages = messages.slice(0, msgIndex);
+      // 必須先同步更新 ref，sendMessage 讀 messagesRef.current 時才能拿到正確的截斷版本
+      messagesRef.current = slicedMessages;
+      updateMessages(slicedMessages);
       sendMessage(userMsg);
     },
     [messages, sendMessage, updateMessages],
@@ -302,6 +342,7 @@ export default function useAIChat() {
 
   const clearConversation = useCallback(() => {
     abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
     updateMessages([]);
     setInput("");
     setLoading(false);

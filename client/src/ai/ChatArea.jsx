@@ -39,10 +39,11 @@ export default function ChatArea({
   onRetry,
   onInputChange,
   onKeyDown,
+  compact = false,
 }) {
   return (
     <div style={S.main}>
-      <div ref={chatAreaRef} style={S.chatArea}>
+      <div ref={chatAreaRef} style={{ ...S.chatArea, ...(compact ? S.chatAreaCompact : {}) }}>
         {messages.length === 0 && !loading && (
           <div style={S.emptyHint}>
             <div style={S.emptyIcon}>🔬</div>
@@ -50,6 +51,38 @@ export default function ChatArea({
             <div style={S.emptyDesc}>
               描述你的產品或測試需求，AI 將從 5 大法規、78
               個測試條件中推薦最適合的方案。
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+              {[
+                "工業乙太網設備要選哪個測試標準？",
+                "IEC 60068-2-14 有哪些溫度循環條件？",
+              ].map((q) => (
+                <button
+                  key={q}
+                  onClick={() => onSend(q)}
+                  style={{
+                    background: "#0d1117",
+                    border: "1px solid #30363d",
+                    borderRadius: 8,
+                    color: "#8b949e",
+                    fontSize: 13,
+                    padding: "10px 14px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "border-color .15s, color .15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#58a6ff";
+                    e.currentTarget.style.color = "#cdd9e5";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "#30363d";
+                    e.currentTarget.style.color = "#8b949e";
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
             </div>
             <div style={S.emptyDisclaimer}>{DISCLAIMER}</div>
           </div>
@@ -117,7 +150,11 @@ export default function ChatArea({
               opacity: !input.trim() ? 0.4 : 1,
               cursor: !input.trim() ? "not-allowed" : "pointer",
             }}
-            onClick={() => onSend()}
+            onClick={() => {
+              onSend();
+              if (textareaRef.current)
+                textareaRef.current.style.height = "auto";
+            }}
             disabled={!input.trim()}
           >
             送出
@@ -214,6 +251,10 @@ const S = {
     display: "inline-block",
     animation: "dotBounce 1.2s infinite",
   },
+  chatAreaCompact: {
+    padding: "12px 14px",
+    gap: 10,
+  },
   inputArea: {
     borderTop: "1px solid #30363d",
     padding: "16px 24px",
@@ -249,6 +290,7 @@ const S = {
     whiteSpace: "nowrap",
     transition: "opacity .15s",
     height: 42,
+    cursor: "pointer",
   },
   stopBtn: {
     background: "transparent",

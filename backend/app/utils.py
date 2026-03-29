@@ -8,6 +8,14 @@ def _now_utc() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def today_utc_window() -> tuple:
+    """回傳 (now, today_start, today_end) — 三者皆為 UTC-aware datetime"""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return now, today_start, today_end
+
+
 def _save_device_state(device_id: str, item: dict):
     with SessionLocal() as db:
         state = db.get(DeviceState, device_id)
@@ -36,5 +44,17 @@ def _save_device_state(device_id: str, item: dict):
             state.started_at = started_at.replace(tzinfo=None)
         else:
             state.started_at = None
+
+        state.sim_phase = item.get("sim_phase", "idle")
+        state.sim_cycle = item.get("sim_cycle", 0)
+
+        for field in ("dwell_high_start", "dwell_low_start"):
+            val = item.get(field)
+            if val is not None:
+                if isinstance(val, str):
+                    val = datetime.datetime.fromisoformat(val.replace("Z", "+00:00"))
+                setattr(state, field, val.replace(tzinfo=None))
+            else:
+                setattr(state, field, None)
 
         db.commit()

@@ -220,7 +220,7 @@ export default function MessageBubble({ m, onRetry, isFirstAssistant = true }) {
       >
         <div style={m.role === "user" ? S.userBubble : S.aiBubble}>
           {m.role === "assistant" ? (
-            <CollapsibleBubble contentKey={m.content.length}>
+            <CollapsibleBubble contentKey={m.content}>
               {renderMarkdown(m.content)}
             </CollapsibleBubble>
           ) : (

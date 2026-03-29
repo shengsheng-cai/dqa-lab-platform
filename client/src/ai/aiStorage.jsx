@@ -61,7 +61,7 @@ const migrate = (store) => {
       return store;
     }
     const conv = createConversation({
-      title: titleFrom(msgs), // fix: titleFrom 已定義在上方
+      title: titleFrom(msgs),
       projectGroup: "未分組",
     });
     conv.messages = msgs;
@@ -109,15 +109,9 @@ export const loadChats = () => {
     }
   });
 
-  const usedGroups = new Set(
-    Object.values(store.conversations ?? {}).map((c) => c.projectGroup),
-  );
-  store.projectGroups = [
-    ...new Set([
-      ...store.projectGroups.filter((g) => g !== "未分組" && usedGroups.has(g)),
-      "未分組",
-    ]),
-  ];
+  if (!store.projectGroups.includes("未分組")) {
+    store.projectGroups.push("未分組");
+  }
 
   if (Object.keys(store.conversations).length === 0) {
     const conv = createConversation();
@@ -196,5 +190,6 @@ export const exportChat = (messages, title = "對話紀錄") => {
   a.href = url;
   a.download = `dqa_chat_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.txt`;
   a.click();
-  URL.revokeObjectURL(url);
+  // A6 fix: 延遲 1 秒再 revoke，避免部分瀏覽器下載來不及觸發
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
