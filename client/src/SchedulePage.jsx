@@ -351,12 +351,18 @@ function NewScheduleModal({ standardsTree, onClose, onCreated }) {
     sample_name: "",
     standard: Object.keys(standardsTree)[0] || "",
     conditions: [],
+    fixtures: [],  // [{ fixture_id, quantity }]
     note: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
+  const [allFixtures, setAllFixtures] = useState([]);
+
+  useEffect(() => {
+    api.get("/api/fixtures").then((r) => setAllFixtures(r.data)).catch(() => {});
+  }, []);
 
   const totalHours = form.conditions.reduce((acc, sop_id) => {
     const std = findStd(standardsTree, sop_id);
@@ -401,6 +407,7 @@ function NewScheduleModal({ standardsTree, onClose, onCreated }) {
         sample_name: form.sample_name.trim(),
         standard: form.standard,
         conditions: form.conditions,
+        fixtures: form.fixtures,
         note: form.note.trim() || null,
       });
       showToast("排程申請已送出，待管理者審核", "success");
@@ -486,6 +493,71 @@ function NewScheduleModal({ standardsTree, onClose, onCreated }) {
               </div>
             ) : null}
             </>
+          )}
+
+          {allFixtures.length > 0 && (
+            <div>
+              <div style={labelStyle}>治具需求（選填）</div>
+              <div style={{
+                background: "#161b22", borderRadius: 6, border: "1px solid #30363d",
+                maxHeight: 180, overflowY: "auto",
+              }}>
+                {allFixtures.map((f) => {
+                  const sel = form.fixtures.find((x) => x.fixture_id === f.id);
+                  const checked = !!sel;
+                  const qty = sel?.quantity ?? 1;
+                  return (
+                    <div key={f.id} style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      padding: "6px 12px", borderBottom: "1px solid #21262d",
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setForm((prev) => ({ ...prev, fixtures: [...prev.fixtures, { fixture_id: f.id, quantity: 1 }] }));
+                          } else {
+                            setForm((prev) => ({ ...prev, fixtures: prev.fixtures.filter((x) => x.fixture_id !== f.id) }));
+                          }
+                        }}
+                        style={{ cursor: "pointer", accentColor: "#388bfd" }}
+                      />
+                      <span style={{ fontSize: 12, color: "#cdd9e5", flex: 1 }}>
+                        {f.interface_type} {f.form_factor}{f.size ? ` ${f.size}` : ""}
+                      </span>
+                      <span style={{ fontSize: 11, color: f.available_quantity > 0 ? "#3fb950" : "#f85149" }}>
+                        可借 {f.available_quantity}
+                      </span>
+                      {checked && (
+                        <input
+                          type="number"
+                          min={1}
+                          max={f.available_quantity || 1}
+                          value={qty}
+                          onChange={(e) => {
+                            const q = Math.max(1, Math.min(f.available_quantity || 1, parseInt(e.target.value) || 1));
+                            setForm((prev) => ({
+                              ...prev,
+                              fixtures: prev.fixtures.map((x) => x.fixture_id === f.id ? { ...x, quantity: q } : x),
+                            }));
+                          }}
+                          style={{
+                            width: 48, padding: "2px 6px", borderRadius: 4, fontSize: 12,
+                            background: "#0d1117", border: "1px solid #30363d", color: "#cdd9e5",
+                          }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {form.fixtures.length > 0 && (
+                <div style={{ fontSize: 11, color: "#76e3ea", marginTop: 4 }}>
+                  已選 {form.fixtures.length} 種治具，確認後自動預約
+                </div>
+              )}
+            </div>
           )}
 
           <LabelInput label="備註" value={form.note}
@@ -657,6 +729,13 @@ function ScheduleDetailModal({ schedule, role, userId, onClose, onUpdated, onDel
           <InfoRow label="測試條件" value={
             schedule.condition_names?.join(" → ") || schedule.conditions?.join(" → ") || "—"
           } />
+          {schedule.fixtures?.length > 0 && (
+            <InfoRow label="預約治具" value={
+              schedule.fixtures.map((fx) =>
+                `${fx.interface_type || ""} ${fx.form_factor || ""}`.trim() + ` ×${fx.quantity}`
+              ).join("、")
+            } />
+          )}
           <InfoRow label="預估時長" value={fmtHours(schedule.total_hours)} />
           <InfoRow
             label="指定設備"

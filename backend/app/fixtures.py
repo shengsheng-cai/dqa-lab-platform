@@ -107,21 +107,11 @@ class ExtensionRequest(BaseModel):
 # ---------- Helper ----------
 
 
-def _calc_loaned(db, fixture_id: int) -> int:
+def _calc_loan_qty(db, fixture_id: int, status: str) -> int:
     from sqlalchemy import func
     result = (
         db.query(func.sum(FixtureLoan.quantity))
-        .filter(FixtureLoan.fixture_id == fixture_id, FixtureLoan.status.in_(["loaned", "reserved"]))
-        .scalar()
-    )
-    return result or 0
-
-
-def _calc_damaged(db, fixture_id: int) -> int:
-    from sqlalchemy import func
-    result = (
-        db.query(func.sum(FixtureLoan.quantity))
-        .filter(FixtureLoan.fixture_id == fixture_id, FixtureLoan.status == "damaged")
+        .filter(FixtureLoan.fixture_id == fixture_id, FixtureLoan.status == status)
         .scalar()
     )
     return result or 0
@@ -144,9 +134,10 @@ def _calc_replacement_date(f: Fixture) -> Optional[str]:
 
 
 def _fixture_to_out(db, f: Fixture) -> dict:
-    loaned = _calc_loaned(db, f.id)
-    damaged = _calc_damaged(db, f.id)
-    available = max(0, f.total_quantity - loaned - damaged)
+    loaned = _calc_loan_qty(db, f.id, "loaned")
+    reserved = _calc_loan_qty(db, f.id, "reserved")
+    damaged = _calc_loan_qty(db, f.id, "damaged")
+    available = max(0, f.total_quantity - loaned - reserved - damaged)
     return {
         "id": f.id,
         "priority": f.priority,
@@ -158,6 +149,7 @@ def _fixture_to_out(db, f: Fixture) -> dict:
         "shortage": f.shortage,
         "available_quantity": available,
         "loaned_quantity": loaned,
+        "reserved_quantity": reserved,
         "damaged_quantity": damaged,
         "usage_frequency": f.usage_frequency,
         "replacement_years": f.replacement_years,
@@ -446,9 +438,10 @@ async def create_loan(body: LoanCreate, request: Request):
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
 
-        loaned = _calc_loaned(db, f.id)
-        damaged = _calc_damaged(db, f.id)
-        available = max(0, f.total_quantity - loaned - damaged)
+        loaned = _calc_loan_qty(db, f.id, "loaned")
+        reserved = _calc_loan_qty(db, f.id, "reserved")
+        damaged = _calc_loan_qty(db, f.id, "damaged")
+        available = max(0, f.total_quantity - loaned - reserved - damaged)
         if available < body.quantity:
             raise HTTPException(
                 status_code=400, detail=f"庫存不足，目前可借：{available} 件"

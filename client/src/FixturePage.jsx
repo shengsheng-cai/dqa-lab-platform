@@ -7,6 +7,7 @@ const STATUS_COLORS = {
   shortage: { bg: "#2d2200", color: "#f0a500", label: "即將不足" },
   out_of_stock: { bg: "#2d1a1a", color: "#f85149", label: "缺貨" },
   loaned: { bg: "#1a1f2d", color: "#58a6ff", label: "借出中" },
+  reserved: { bg: "#1a252d", color: "#76e3ea", label: "預約中" },
 };
 
 function getStatus(f) {
@@ -14,6 +15,7 @@ function getStatus(f) {
     return "out_of_stock";
   if (f.shortage > 0) return "shortage";
   if (f.loaned_quantity > 0) return "loaned";
+  if (f.reserved_quantity > 0) return "reserved";
   return "ok";
 }
 
@@ -1359,6 +1361,7 @@ export default function FixturePage({ active, role }) {
                     { label: "尺寸", key: "size" },
                     { label: "現有", key: "total_quantity" },
                     { label: "借出", key: "loaned_quantity" },
+                    { label: "預約", key: "reserved_quantity" },
                     { label: "可借", key: "available_quantity" },
                     { label: "缺貨", key: "shortage" },
                     { label: "狀態", key: null },
@@ -1437,6 +1440,14 @@ export default function FixturePage({ active, role }) {
                         }}
                       >
                         {f.loaned_quantity}
+                      </td>
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: f.reserved_quantity > 0 ? "#76e3ea" : "#8b949e",
+                        }}
+                      >
+                        {f.reserved_quantity}
                       </td>
                       <td
                         style={{
