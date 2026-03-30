@@ -10,6 +10,8 @@
 
 device_data | device_states | sop_executions | step_records | error_logs | fixtures | fixture_loans | users | demo_tokens | sop_templates | purchase_orders | schedules | device_blocked_periods | line_bind_requests | notification_failures
 
+> ⚠️ `line_bind_requests` 和 `notification_failures` 表目前仍在 schema，但對應的業務邏輯已移除（v40 LINE 簡化），未來可刪除。
+
 ### 狀態機與模擬
 
 @.claude/rules/state-machine.md
@@ -55,14 +57,14 @@ alembic upgrade head
 |------|------|
 | 物理模擬引擎 | sim_phase 狀態機、多 cycle、重啟自動恢復 |
 | 環境測試標準 | 5 法規 78 條件，三層 STANDARD_TREE |
-| SOP 執行 | 自動確認步驟、自動存報告、LINE 五時機推播 |
+| SOP 執行 | 自動確認步驟、自動存報告 |
 | ISO 17025 報告 | PDF 報告生成（含 GUM 量測不確定度 Type A/B/uc/U）、CSV 報告 |
 | 治具管理 | 借出/歸還/逾期/盤點/採購/汰換，Excel upsert；與排程聯動（預約→借出→歸還） |
 | 排程系統 | 甘特圖、自動排程、即時預覽、不可用時段、自動推進；與 AI 聯動（申請此測試預填） |
 | AI 諮詢 | Gemini 2.5 Flash-Lite、RAG 檢索、多輪對話；推薦條件→直接申請排程 |
 | 三模組連動 | ✅ AI→排程、排程→治具預約、SOP→治具借出、完成→治具歸還 |
 | 存取控制 | 4 層（admin/keeper/engineer/guest）、IP Rate Limiting |
-| LINE Bot | 推播、綁定申請審核、取消申請、失敗記錄 |
+| LINE Bot | 緊急停止通知（push_message）；群組 query 模式（Bot 加入工作群組，OP 問 → Bot reply，不耗額度） |
 
 ---
 

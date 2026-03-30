@@ -253,293 +253,6 @@ function ConfirmModal({ message, onConfirm, onClose }) {
   );
 }
 
-// ── LINE 綁定申請管理 ───────────────────────────────────────────
-
-function ApproveBindingModal({ request, users, onConfirm, onClose }) {
-  const { showToast } = useToast();
-  const [selectedUserId, setSelectedUserId] = useState("");
-  const [approving, setApproving] = useState(false);
-
-  const handleConfirm = async () => {
-    if (!selectedUserId) return;
-    setApproving(true);
-    try {
-      await api.post(`/api/line/bind-requests/${request.id}/approve`, {
-        user_id: parseInt(selectedUserId)
-      });
-      showToast("LINE 綁定已核准", "success");
-      onConfirm();
-    } catch (e) {
-      const msg = e.response?.data?.detail || "核准失敗";
-      showToast(msg, "error");
-    } finally {
-      setApproving(false);
-    }
-  };
-
-  const selectStyle = {
-    padding: "8px 10px",
-    borderRadius: 6,
-    border: "1px solid #30363d",
-    background: "#0d1117",
-    color: "#cdd9e5",
-    fontSize: 13,
-    width: "100%",
-    boxSizing: "border-box",
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2100 }}>
-      <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 24, width: 380, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
-          核准綁定申請
-        </div>
-        <div style={{ fontSize: 12, color: "#8b949e" }}>
-          申請人：<span style={{ color: "#cdd9e5" }}>{request.requested_name}</span>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 4 }}>
-            綁定員工 *
-          </div>
-          <select
-            value={selectedUserId}
-            onChange={(e) => setSelectedUserId(e.target.value)}
-            style={selectStyle}
-            autoFocus
-          >
-            <option value="">請選擇員工</option>
-            {users.map(u => (
-              <option key={u.id} value={u.id}>
-                {u.display_name} ({ROLE_LABELS[u.role] || u.role})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={onClose}
-            style={{ flex: 1, padding: "8px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 13 }}
-          >
-            取消
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!selectedUserId || approving}
-            style={{ flex: 1, padding: "8px", borderRadius: 6, background: "#238636", color: "#fff", border: "none", cursor: selectedUserId && !approving ? "pointer" : "not-allowed", fontSize: 13, fontWeight: 600, opacity: (!selectedUserId || approving) ? 0.6 : 1 }}
-          >
-            {approving ? "核准中..." : "確認"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LineBindRequestsSection({ active, role }) {
-  const { showToast } = useToast();
-  const [requests, setRequests] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [processing, setProcessing] = useState(null);
-  const [selectedRequest, setSelectedRequest] = useState(null);
-
-  const fetchRequests = useCallback(async () => {
-    if (!active || role !== "admin") return;
-    try {
-      const res = await api.get("/api/line/bind-requests");
-      setRequests(res.data);
-    } catch (_) {}
-  }, [active, role]);
-
-  const fetchUsers = useCallback(async () => {
-    if (!active || role !== "admin") return;
-    try {
-      const res = await api.get("/api/auth/users");
-      setUsers(res.data);
-    } catch (_) {}
-  }, [active, role]);
-
-  useEffect(() => {
-    fetchRequests();
-    fetchUsers();
-  }, [fetchRequests, fetchUsers]);
-
-  const handleApprove = (request) => {
-    setSelectedRequest(request);
-  };
-
-  const handleApproveConfirm = () => {
-    setSelectedRequest(null);
-    fetchRequests();
-    fetchUsers();  // 刷新員工列表，顯示最新的 LINE ID
-  };
-
-  const handleReject = async (id) => {
-    if (!window.confirm("確定拒絕此申請？")) return;
-    setProcessing(id);
-    try {
-      await api.post(`/api/line/bind-requests/${id}/reject`);
-      showToast("申請已拒絕", "success");
-      fetchRequests();
-    } catch (e) {
-      const msg = e.response?.data?.detail || "拒絕失敗";
-      showToast(msg, "error");
-    } finally {
-      setProcessing(null);
-    }
-  };
-
-  if (role !== "admin") return null;
-
-  return (
-    <div style={{ marginTop: 36 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>LINE 綁定申請</div>
-        {requests.length > 0 && (
-          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 10, background: "#f0a50022", color: "#f0a500", fontWeight: 700, border: "1px solid #f0a50044" }}>
-            {requests.length} 待審核
-          </span>
-        )}
-      </div>
-
-      {requests.length === 0 ? (
-        <div style={{ color: "#484f58", textAlign: "center", padding: "24px 0", fontSize: 13, background: "#161b22", border: "1px solid #30363d", borderRadius: 8 }}>
-          目前無待審核的綁定申請
-        </div>
-      ) : (
-        <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "#21262d" }}>
-                {["申請姓名", "LINE User ID", "申請時間", "操作"].map((h) => (
-                  <th key={h} style={{ padding: "8px 12px", fontSize: 11, color: "#8b949e", fontWeight: 600, textAlign: "left" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((r) => (
-                <tr key={r.id} style={{ borderBottom: "1px solid #21262d" }}>
-                  <td style={{ padding: "10px 12px", fontSize: 13, color: "#cdd9e5", fontWeight: 600 }}>{r.requested_name}</td>
-                  <td style={{ padding: "10px 12px", fontSize: 11, color: "#8b949e", fontFamily: "monospace" }}>{r.line_user_id}</td>
-                  <td style={{ padding: "10px 12px", fontSize: 12, color: "#8b949e" }}>{r.created_at?.slice(0, 16).replace("T", " ")}</td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        onClick={() => handleApprove(r)}
-                        disabled={processing === r.id}
-                        style={{ padding: "3px 12px", borderRadius: 4, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, opacity: processing === r.id ? 0.6 : 1 }}
-                      >
-                        核准
-                      </button>
-                      <button
-                        onClick={() => handleReject(r.id)}
-                        disabled={processing === r.id}
-                        style={{ padding: "3px 10px", borderRadius: 4, background: "transparent", color: "#f85149", border: "1px solid #da363344", cursor: "pointer", fontSize: 11, opacity: processing === r.id ? 0.6 : 1 }}
-                      >
-                        拒絕
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {selectedRequest && (
-        <ApproveBindingModal
-          request={selectedRequest}
-          users={users}
-          onConfirm={handleApproveConfirm}
-          onClose={() => setSelectedRequest(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── LINE 推播失敗紀錄 ────────────────────────────────────────────
-
-function NotifFailuresSection({ active, role }) {
-  const { showToast } = useToast();
-  const [failures, setFailures] = useState([]);
-  const [clearing, setClearing] = useState(false);
-
-  const fetchFailures = useCallback(() => {
-    if (!active || role !== "admin") return;
-    api.get("/api/notification-failures/").then((res) => setFailures(res.data)).catch(() => {});
-  }, [active, role]);
-
-  useEffect(() => { fetchFailures(); }, [fetchFailures]);
-
-  const handleClear = async () => {
-    setClearing(true);
-    try {
-      await api.post("/api/notification-failures/clear");
-      setFailures([]);
-      showToast("失敗記錄已清除", "success");
-    } catch (e) {
-      const msg = e.response?.data?.detail || "清除失敗";
-      showToast(msg, "error");
-    } finally {
-      setClearing(false);
-    }
-  };
-
-  if (role !== "admin") return null;
-
-  return (
-    <div style={{ marginTop: 36 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>LINE 推播失敗紀錄</div>
-        {failures.length > 0 && (
-          <span style={{ background: "#da3633", color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 8, padding: "2px 7px" }}>
-            {failures.length} 筆未讀
-          </span>
-        )}
-        {failures.length > 0 && (
-          <button
-            onClick={handleClear}
-            disabled={clearing}
-            style={{ marginLeft: "auto", padding: "4px 14px", borderRadius: 6, border: "1px solid #30363d", background: "transparent", color: "#8b949e", fontSize: 12, cursor: "pointer" }}
-          >
-            {clearing ? "清除中…" : "全部標為已讀"}
-          </button>
-        )}
-      </div>
-      {failures.length === 0 ? (
-        <div style={{ color: "#484f58", textAlign: "center", padding: "24px 0", fontSize: 13, background: "#161b22", border: "1px solid #30363d", borderRadius: 8 }}>
-          目前沒有推播失敗紀錄
-        </div>
-      ) : (
-        <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: "#21262d" }}>
-                {["時間", "目標", "訊息摘要", "錯誤原因"].map((h) => (
-                  <th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "#8b949e", fontWeight: 600 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {failures.map((f) => (
-                <tr key={f.id} style={{ borderTop: "1px solid #30363d" }}>
-                  <td style={{ padding: "8px 12px", color: "#8b949e", whiteSpace: "nowrap" }}>
-                    {f.created_at ? parseUtcDate(f.created_at).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-"}
-                  </td>
-                  <td style={{ padding: "8px 12px", color: "#cdd9e5" }}>{f.target || "-"}</td>
-                  <td style={{ padding: "8px 12px", color: "#8b949e", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.message_preview || "-"}</td>
-                  <td style={{ padding: "8px 12px", color: "#f85149", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.error_msg || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
 // ── 訪客 Token 管理 ────────────────────────────────────────────
 
 function DemoTokenSection({ active }) {
@@ -886,7 +599,6 @@ export default function UsersPage({ active, role }) {
             <tr style={{ background: "#21262d" }}>
               <th style={thStyle}>姓名</th>
               <th style={thStyle}>角色</th>
-              <th style={thStyle}>LINE User ID</th>
               <th style={thStyle}>狀態</th>
               <th style={thStyle}>操作</th>
             </tr>
@@ -895,7 +607,7 @@ export default function UsersPage({ active, role }) {
             {loading ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={4}
                   style={{ ...tdStyle, textAlign: "center", color: "#8b949e" }}
                 >
                   載入中...
@@ -904,7 +616,7 @@ export default function UsersPage({ active, role }) {
             ) : users.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={4}
                   style={{ ...tdStyle, textAlign: "center", color: "#8b949e" }}
                 >
                   尚無人員資料
@@ -930,17 +642,6 @@ export default function UsersPage({ active, role }) {
                   </td>
                   <td style={tdStyle}>
                     <RoleBadge role={u.role} />
-                  </td>
-                  <td style={tdStyle}>
-                    {u.line_user_id ? (
-                      <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#0d1f14", color: "#3fb950", border: "1px solid #23863644", fontWeight: 600 }}>
-                        已綁定
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#21262d", color: "#8b949e", border: "1px solid #30363d" }}>
-                        未綁定
-                      </span>
-                    )}
                   </td>
                   <td style={tdStyle}>
                     <span
@@ -1008,12 +709,6 @@ export default function UsersPage({ active, role }) {
           </tbody>
         </table>
       </div>
-
-      {/* LINE 綁定申請 */}
-      <LineBindRequestsSection active={active} role={role} />
-
-      {/* LINE 推播失敗紀錄 */}
-      <NotifFailuresSection active={active} role={role} />
 
       {/* 訪客 Token 管理 */}
       <DemoTokenSection active={active} />

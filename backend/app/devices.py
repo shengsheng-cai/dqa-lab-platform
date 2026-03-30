@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from .models import SessionLocal, DeviceData, ErrorLog, SopExecution
-from .line import push_sop_notification
+from .line import push_message
 from .utils import _now_utc, _save_device_state
 
 logger = logging.getLogger("app")
@@ -275,8 +275,7 @@ async def emergency_stop(device_id: str, request: Request):
 
     logger.warning(f"[{device_id}] EMERGENCY STOP by {operator}")
     asyncio.create_task(
-        push_sop_notification(
-            operator_user_id,
+        push_message(
             f"🚨 [{device_id}] 緊急停止已觸發\n"
             f"測試：{sop_name}\n"
             f"操作人員：{operator}\n"

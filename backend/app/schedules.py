@@ -12,7 +12,6 @@ from pydantic import BaseModel, ConfigDict
 from .models import SessionLocal, Schedule, DeviceBlockedPeriod, User, ScheduleFixture, Fixture, FixtureLoan
 from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
-from .line import push_sop_notification
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
@@ -600,9 +599,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             raise HTTPException(status_code=403, detail="僅管理者可審核排程")
         # 後續在讀取 schedule 後再驗證擁有權，這裡先通過
 
-    notif_user_id = None
-    notif_text = None
-
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
@@ -668,14 +664,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                     dt = dt.astimezone(datetime.timezone(datetime.timedelta(hours=8)))
                 return dt.strftime("%m/%d %H:%M")
 
-            notif_user_id = applicant_user_id
-            notif_text = (
-                f"[排程確認] {project_label}\n"
-                f"設備：{device_id}\n"
-                f"開始：{_fmt(start)}\n"
-                f"結束：{_fmt(end)}"
-            )
-
         elif body.status in ("已取消", "進行中", "已完成"):
             s.status = body.status
             if body.device_id:
@@ -692,14 +680,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                     FixtureLoan.status == "reserved",
                 ).delete(synchronize_session=False)
 
-                # 只有 admin 取消別人的排程才通知申請人
-                if role == "admin" and applicant_user_id and applicant_user_id != user_id:
-                    notif_user_id = applicant_user_id
-                    notif_text = (
-                        f"[排程取消] {project_label}\n"
-                        f"您的排程申請已被取消"
-                        + (f"\n備註：{body.note}" if body.note else "")
-                    )
         else:
             # 純欄位更新（不改狀態）
             if body.device_id is not None:
@@ -713,10 +693,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
         db.commit()
         db.refresh(s)
         result = _enrich(s, db)
-
-    # DB session 關閉後再推播，避免阻塞
-    if notif_text:
-        asyncio.create_task(push_sop_notification(notif_user_id, notif_text))
 
     return result
 

@@ -20,8 +20,8 @@
 | 🗄️ **治具借還管理** | 借出 / 歸還 / 逾期追蹤、損壞遺失清單、月盤點、採購閉環、Excel 批次匯入；排程聯動（預約→自動借出→自動歸還） |
 | 🤖 **AI 法規諮詢** | 自然語言查詢、RAG 法規檢索、多輪對話；推薦測試後可直接「📅 申請此測試」預填排程；右下角 FAB 浮動按鈕，點擊從右側滑入 |
 | 🗓️ **排程系統** | 甘特圖永遠可見（固定區塊）、自動排程（排除超時卡機設備）、審核前即時預覽時段、不可用時段管理；engineer/keeper 可自助取消待審核排程；排程狀態自動推進；確認後治具自動預約 |
-| 🚨 **LINE Bot 通知** | SOP 五時機推播、治具逾期 / 汰換 / 月盤點提醒、推播失敗記錄（admin 可查）；支援「取消申請」解除綁定流程卡死 |
-| 👥 **人員管理** | 工程師名冊、LINE 綁定申請審核（Admin 選擇員工，自動綁定 real User ID）、訪客 Token 管理 |
+| 🚨 **LINE Bot 通知** | 緊急停止主動推播（push_message）；Bot 加入工作群組後支援 query 模式（OP 在群組問設備狀態 → Bot reply，不耗免費額度） |
+| 👥 **人員管理** | 工程師名冊、訪客 Token 管理 |
 | 🔐 **四層存取控制** | admin / keeper / engineer / guest，bcrypt 密碼雜湊，IP Rate Limiting；訪客模式角色隔離 |
 
 ---
@@ -77,7 +77,7 @@ cp backend/.env.example backend/.env
 | **後端** | FastAPI、SQLAlchemy 2.0、SQLite、Alembic、APScheduler |
 | **前端** | React 18、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Embedding + Flash-Lite）、in-memory RAG |
-| **通知** | LINE Messaging API + APScheduler |
+| **通知** | LINE Messaging API（群組 query 模式 + 緊急推播）|
 
 ---
 

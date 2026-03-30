@@ -18,10 +18,8 @@ from .rag import warmup_rag
 from .line import router as line_router
 from .auth import router as auth_router
 from .fixtures import router as fixtures_router
-from .fixture_notifications import scan_overdue_loans, notify_monthly_inventory, scan_replacement_reminders
 from .purchase_orders import router as purchase_orders_router
 from .schedules import router as schedules_router, blocked_router as device_blocked_router, auto_advance_schedules
-from .notification_failures import router as notif_failures_router
 from .models import SessionLocal, DeviceState
 from .simulator import data_simulator
 from .devices import router as devices_router
@@ -98,12 +96,9 @@ async def lifespan(app: FastAPI):
 
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
     scheduler = AsyncIOScheduler(timezone="Asia/Taipei")
-    scheduler.add_job(scan_overdue_loans, "cron", hour=8, minute=0)
-    scheduler.add_job(notify_monthly_inventory, "cron", day=1, hour=8, minute=0)
-    scheduler.add_job(scan_replacement_reminders, "cron", day_of_week="mon", hour=8, minute=0)
     scheduler.add_job(auto_advance_schedules, "interval", minutes=5)
     scheduler.start()
-    logger.info("APScheduler 已啟動（每日 08:00 掃描逾期治具，每月 1 日月盤點提醒，每週一 08:00 汰換提醒，每 5 分鐘推進排程狀態）")
+    logger.info("APScheduler 已啟動（每 5 分鐘推進排程狀態）")
 
     yield
     scheduler.shutdown()
@@ -123,7 +118,6 @@ app.include_router(fixtures_router)
 app.include_router(purchase_orders_router)
 app.include_router(schedules_router)
 app.include_router(device_blocked_router)
-app.include_router(notif_failures_router)
 app.include_router(devices_router)
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")

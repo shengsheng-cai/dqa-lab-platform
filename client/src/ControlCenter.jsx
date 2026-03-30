@@ -732,7 +732,6 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
-  const [failureCount, setFailureCount] = useState(0);
   const [pendingScheduleCount, setPendingScheduleCount] = useState(0);
 
   // 切換 tab 時重置滾動位置
@@ -740,17 +739,6 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
     window.scrollTo(0, 0);
   }, [activeTab]);
 
-  useEffect(() => {
-    if (role !== "admin") return;
-    const fetchCount = () => {
-      api.get("/api/notification-failures/").then((res) => {
-        setFailureCount(res.data.length);
-      }).catch(() => {});
-    };
-    fetchCount();
-    const timer = setInterval(fetchCount, POLL_GENERAL_MS);
-    return () => clearInterval(timer);
-  }, [role]);
 
   useEffect(() => {
     if (role === "guest") return;
@@ -806,7 +794,6 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
           >
             {t.label}
             {t.key === "schedule" && <TabBadge count={pendingScheduleCount} bg="#e3b341" />}
-            {t.key === "users" && <TabBadge count={failureCount} bg="#da3633" color="#fff" />}
           </button>
         ))}
       </div>

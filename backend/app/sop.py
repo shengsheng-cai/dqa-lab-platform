@@ -11,7 +11,6 @@ from typing import List, Optional, Dict, Any
 from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, FixtureLoan
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _save_device_state
-from .line import push_message, push_to_user, push_sop_notification
 
 PHOTO_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "photos")
 os.makedirs(PHOTO_UPLOAD_DIR, exist_ok=True)
@@ -165,15 +164,6 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
         logger.warning(f"[{device_id}] 治具預約轉借出失敗：{e}")
 
     logger.info(f"[{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}")
-
-    # Phase 9-4：啟動通知
-    op_display = operator.strip() if operator else "未填寫"
-    notif_text = (
-        f"🔬 [{device_id}] 已啟動測試：{sop_name}\n"
-        f"操作人員：{op_display}\n"
-        f"請記得拍上架時照片 📷"
-    )
-    asyncio.create_task(push_sop_notification(operator_user_id, notif_text))
 
     return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
 

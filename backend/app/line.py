@@ -11,9 +11,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from .models import SessionLocal, User, LineBindRequest, NotificationFailure
 
+
 # --- Payloads ---
 class ApproveBindRequestPayload(BaseModel):
     user_id: int
+
 
 # --- 設定 ---
 logger = logging.getLogger("line_bot")
@@ -42,12 +44,14 @@ def _log_notif_failure(target: str, text: str, error_msg: str):
     """將推播失敗寫入 notification_failures 表"""
     try:
         with SessionLocal() as db:
-            db.add(NotificationFailure(
-                notif_type="general",
-                target=target,
-                message_preview=text[:80] if text else None,
-                error_msg=error_msg[:200] if error_msg else None,
-            ))
+            db.add(
+                NotificationFailure(
+                    notif_type="general",
+                    target=target,
+                    message_preview=text[:80] if text else None,
+                    error_msg=error_msg[:200] if error_msg else None,
+                )
+            )
             db.commit()
     except Exception as e:
         logger.error(f"[LINE] 寫入失敗紀錄時例外：{e}")
@@ -79,7 +83,9 @@ async def push_message(text: str):
             )
             if res.status_code != 200:
                 logger.error(f"[LINE] 推播失敗: {res.status_code} {res.text}")
-                _log_notif_failure("(broadcast)", text, f"HTTP {res.status_code}: {res.text[:100]}")
+                _log_notif_failure(
+                    "(broadcast)", text, f"HTTP {res.status_code}: {res.text[:100]}"
+                )
         except Exception as e:
             logger.error(f"[LINE] 推播例外：{e}")
             _log_notif_failure("(broadcast)", text, str(e))
@@ -91,7 +97,9 @@ async def push_to_user(line_user_id: str, text: str):
 
     if not token:
         logger.warning("[LINE] 未設定 CHANNEL_ACCESS_TOKEN，跳過推播")
-        _log_notif_failure(line_user_id or "(unknown)", text, "未設定 CHANNEL_ACCESS_TOKEN")
+        _log_notif_failure(
+            line_user_id or "(unknown)", text, "未設定 CHANNEL_ACCESS_TOKEN"
+        )
         return
     if not line_user_id:
         logger.warning("[LINE] push_to_user: line_user_id 為空，跳過")
@@ -116,7 +124,9 @@ async def push_to_user(line_user_id: str, text: str):
                     f"[LINE] push_to_user 失敗 ({line_user_id}): "
                     f"{res.status_code} {res.text}"
                 )
-                _log_notif_failure(line_user_id, text, f"HTTP {res.status_code}: {res.text[:100]}")
+                _log_notif_failure(
+                    line_user_id, text, f"HTTP {res.status_code}: {res.text[:100]}"
+                )
         except Exception as e:
             logger.error(f"[LINE] push_to_user 例外：{e}")
             _log_notif_failure(line_user_id, text, str(e))
@@ -294,63 +304,67 @@ def _create_flex_detail_card(device_id: str, data: Dict[str, Any]) -> Dict:
     }
 
 
-async def push_sop_notification(operator_user_id: Optional[int], text: str):
-    """推播 SOP 通知給操作人員（以 user_id 精確查找），找不到個人 LINE ID 時 fallback 推給環境變數設定的預設帳號。"""
-    if operator_user_id:
-        try:
-            with SessionLocal() as db:
-                user = (
-                    db.query(User)
-                    .filter(User.id == operator_user_id, User.is_active == True)
-                    .first()
-                )
-                if user and user.line_user_id:
-                    await push_to_user(user.line_user_id, text)
-                    return
-        except Exception as e:
-            logger.warning(f"[LINE] push_sop_notification 查詢失敗，fallback 廣播：{e}")
-    await push_message(text)
-
-
 # ── 綁定狀態查詢 ────────────────────────────────────────────────
+
 
 def _get_bound_user(sender_id: str) -> Optional[User]:
     """回傳已綁定此 LINE ID 的 User，否則 None"""
     with SessionLocal() as db:
-        return db.query(User).filter(
-            User.line_user_id == sender_id, User.is_active == True
-        ).first()
+        return (
+            db.query(User)
+            .filter(User.line_user_id == sender_id, User.is_active == True)
+            .first()
+        )
 
 
 def _has_pending_request(sender_id: str) -> bool:
     with SessionLocal() as db:
-        return db.query(LineBindRequest).filter(
-            LineBindRequest.line_user_id == sender_id,
-            LineBindRequest.status.in_(["pending", "awaiting_name"]),
-        ).first() is not None
+        return (
+            db.query(LineBindRequest)
+            .filter(
+                LineBindRequest.line_user_id == sender_id,
+                LineBindRequest.status.in_(["pending", "awaiting_name"]),
+            )
+            .first()
+            is not None
+        )
 
 
 def _has_pending_awaiting_name(sender_id: str) -> bool:
     with SessionLocal() as db:
-        return db.query(LineBindRequest).filter(
-            LineBindRequest.line_user_id == sender_id,
-            LineBindRequest.status == "awaiting_name",
-        ).first() is not None
+        return (
+            db.query(LineBindRequest)
+            .filter(
+                LineBindRequest.line_user_id == sender_id,
+                LineBindRequest.status == "awaiting_name",
+            )
+            .first()
+            is not None
+        )
 
 
 # ── 申請綁定流程 ─────────────────────────────────────────────────
+
 
 def _start_bind_request(sender_id: str) -> str:
     """使用者點「申請綁定」，建立 awaiting_name 記錄並提示輸入姓名"""
     with SessionLocal() as db:
         # 已綁定
-        if db.query(User).filter(User.line_user_id == sender_id, User.is_active == True).first():
+        if (
+            db.query(User)
+            .filter(User.line_user_id == sender_id, User.is_active == True)
+            .first()
+        ):
             return "✅ 您的帳號已完成綁定，無需重複操作。\n傳「解除綁定」可解除連結。"
         # 已有待審核申請
-        existing = db.query(LineBindRequest).filter(
-            LineBindRequest.line_user_id == sender_id,
-            LineBindRequest.status.in_(["pending", "awaiting_name"]),
-        ).first()
+        existing = (
+            db.query(LineBindRequest)
+            .filter(
+                LineBindRequest.line_user_id == sender_id,
+                LineBindRequest.status.in_(["pending", "awaiting_name"]),
+            )
+            .first()
+        )
         if existing:
             return "⏳ 您已有一筆待審核的申請，請等待管理者確認。"
         # 建立 awaiting_name 記錄
@@ -370,22 +384,32 @@ def _submit_bind_name(sender_id: str, name: str) -> str:
     if not name:
         return "❌ 姓名不可空白，請重新輸入。"
     with SessionLocal() as db:
-        req = db.query(LineBindRequest).filter(
-            LineBindRequest.line_user_id == sender_id,
-            LineBindRequest.status == "awaiting_name",
-        ).first()
+        req = (
+            db.query(LineBindRequest)
+            .filter(
+                LineBindRequest.line_user_id == sender_id,
+                LineBindRequest.status == "awaiting_name",
+            )
+            .first()
+        )
         if not req:
             return "❓ 請先點擊「申請綁定」按鈕開始流程。"
         # 檢查此 LINE ID 是否已被其他帳號使用
-        conflict = db.query(User).filter(
-            User.line_user_id == sender_id, User.is_active == True
-        ).first()
+        conflict = (
+            db.query(User)
+            .filter(User.line_user_id == sender_id, User.is_active == True)
+            .first()
+        )
         if conflict:
             db.delete(req)
             db.commit()
             return f"⚠️ 此 LINE 帳號已綁定至「{conflict.display_name}」，請先解除綁定。"
         # 檢查姓名是否存在（提示但不阻擋，讓管理者確認）
-        matches = db.query(User).filter(User.display_name == name, User.is_active == True).all()
+        matches = (
+            db.query(User)
+            .filter(User.display_name == name, User.is_active == True)
+            .all()
+        )
         req.requested_name = name
         req.status = "pending"
         db.commit()
@@ -406,9 +430,11 @@ def _submit_bind_name(sender_id: str, name: str) -> str:
 def _handle_unbind(sender_id: str) -> str:
     """處理解除綁定"""
     with SessionLocal() as db:
-        user = db.query(User).filter(
-            User.line_user_id == sender_id, User.is_active == True
-        ).first()
+        user = (
+            db.query(User)
+            .filter(User.line_user_id == sender_id, User.is_active == True)
+            .first()
+        )
         if not user:
             return "⚠️ 您目前尚未綁定任何帳號。"
         name = user.display_name
@@ -418,6 +444,7 @@ def _handle_unbind(sender_id: str) -> str:
 
 
 # ── 指令分派（已綁定使用者）────────────────────────────────────
+
 
 def _dispatch_command(text: str, cache: Dict[str, Any]) -> List[Dict]:
     """解析指令並決定回傳格式（已綁定使用者可用）"""
@@ -430,9 +457,17 @@ def _dispatch_command(text: str, cache: Dict[str, Any]) -> List[Dict]:
             lines.append("❌ 目前無連線設備")
         else:
             for d_id, item in cache.items():
-                emoji = STATUS_CONFIG.get(item.get("status"), STATUS_CONFIG["OFFLINE"])["emoji"]
+                emoji = STATUS_CONFIG.get(item.get("status"), STATUS_CONFIG["OFFLINE"])[
+                    "emoji"
+                ]
                 lines.append(f"{emoji} {d_id}: {item.get('status')}")
-        return [{"type": "text", "text": "\n".join(lines), "quickReply": {"items": _get_quick_reply_items(cache)}}]
+        return [
+            {
+                "type": "text",
+                "text": "\n".join(lines),
+                "quickReply": {"items": _get_quick_reply_items(cache)},
+            }
+        ]
 
     for device_id, item in cache.items():
         if cmd in (device_id.lower(),):
@@ -441,28 +476,43 @@ def _dispatch_command(text: str, cache: Dict[str, Any]) -> List[Dict]:
             return [card]
 
     if cmd in ("help", "?", "幫助", "h"):
-        return [{
-            "type": "text",
-            "text": (
-                "📋 指令說明：\n"
-                "• 狀態 — 所有設備概覽\n"
-                "• CH01 / CH02… — 單台設備詳情\n"
-                "• 解除綁定 — 解除 LINE 帳號連結\n"
-                "• 幫助 — 顯示此說明"
-            ),
-            "quickReply": {"items": _get_quick_reply_items(cache)},
-        }]
+        return [
+            {
+                "type": "text",
+                "text": (
+                    "📋 指令說明：\n"
+                    "• 狀態 — 所有設備概覽\n"
+                    "• CH01 — 單台設備詳情\n"
+                    "• CH02 — 單台設備詳情\n"
+                    "• CH03 — 單台設備詳情\n"
+                    "• CH04 — 單台設備詳情\n"
+                    "• CH05 — 單台設備詳情\n"
+                    "• 幫助 — 顯示此說明"
+                ),
+                "quickReply": {"items": _get_quick_reply_items(cache)},
+            }
+        ]
 
-    return [{"type": "text", "text": "❓ 未知指令，點擊下方「總覽」開始查詢。", "quickReply": {"items": _get_quick_reply_items(cache)}}]
+    return [
+        {
+            "type": "text",
+            "text": "❓ 未知指令，點擊下方「總覽」開始查詢。",
+            "quickReply": {"items": _get_quick_reply_items(cache)},
+        }
+    ]
 
 
 def _cancel_bind_request(sender_id: str) -> str:
     """使用者取消尚未審核的申請（pending / awaiting_name 均可取消）"""
     with SessionLocal() as db:
-        req = db.query(LineBindRequest).filter(
-            LineBindRequest.line_user_id == sender_id,
-            LineBindRequest.status.in_(["pending", "awaiting_name"]),
-        ).first()
+        req = (
+            db.query(LineBindRequest)
+            .filter(
+                LineBindRequest.line_user_id == sender_id,
+                LineBindRequest.status.in_(["pending", "awaiting_name"]),
+            )
+            .first()
+        )
         if not req:
             return "ℹ️ 您目前沒有待審核的申請。"
         db.delete(req)
@@ -471,10 +521,16 @@ def _cancel_bind_request(sender_id: str) -> str:
 
 
 def _unbound_quick_reply() -> List[Dict]:
-    return [{"type": "action", "action": {"type": "message", "label": "申請綁定", "text": "申請綁定"}}]
+    return [
+        {
+            "type": "action",
+            "action": {"type": "message", "label": "申請綁定", "text": "申請綁定"},
+        }
+    ]
 
 
 # ── Webhook ─────────────────────────────────────────────────────
+
 
 @router.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
@@ -507,7 +563,13 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
             background_tasks.add_task(
                 _send_to_line,
                 reply_token,
-                [{"type": "text", "text": welcome, "quickReply": {"items": _unbound_quick_reply()}}],
+                [
+                    {
+                        "type": "text",
+                        "text": welcome,
+                        "quickReply": {"items": _unbound_quick_reply()},
+                    }
+                ],
                 client,
             )
             continue
@@ -523,8 +585,15 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         if user_text == "解除綁定":
             reply_text = _handle_unbind(sender_id)
             background_tasks.add_task(
-                _send_to_line, reply_token,
-                [{"type": "text", "text": reply_text, "quickReply": {"items": _unbound_quick_reply()}}],
+                _send_to_line,
+                reply_token,
+                [
+                    {
+                        "type": "text",
+                        "text": reply_text,
+                        "quickReply": {"items": _unbound_quick_reply()},
+                    }
+                ],
                 client,
             )
             continue
@@ -533,7 +602,10 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         if user_text == "申請綁定":
             reply_text = _start_bind_request(sender_id)
             background_tasks.add_task(
-                _send_to_line, reply_token, [{"type": "text", "text": reply_text}], client
+                _send_to_line,
+                reply_token,
+                [{"type": "text", "text": reply_text}],
+                client,
             )
             continue
 
@@ -541,8 +613,15 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         if user_text == "取消申請":
             reply_text = _cancel_bind_request(sender_id)
             background_tasks.add_task(
-                _send_to_line, reply_token,
-                [{"type": "text", "text": reply_text, "quickReply": {"items": _unbound_quick_reply()}}],
+                _send_to_line,
+                reply_token,
+                [
+                    {
+                        "type": "text",
+                        "text": reply_text,
+                        "quickReply": {"items": _unbound_quick_reply()},
+                    }
+                ],
                 client,
             )
             continue
@@ -551,7 +630,10 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         if not bound_user and _has_pending_awaiting_name(sender_id):
             reply_text = _submit_bind_name(sender_id, user_text)
             background_tasks.add_task(
-                _send_to_line, reply_token, [{"type": "text", "text": reply_text}], client
+                _send_to_line,
+                reply_token,
+                [{"type": "text", "text": reply_text}],
+                client,
             )
             continue
 
@@ -559,8 +641,15 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         if not bound_user:
             reply_text = "⚠️ 請先完成帳號綁定才能使用查詢功能。"
             background_tasks.add_task(
-                _send_to_line, reply_token,
-                [{"type": "text", "text": reply_text, "quickReply": {"items": _unbound_quick_reply()}}],
+                _send_to_line,
+                reply_token,
+                [
+                    {
+                        "type": "text",
+                        "text": reply_text,
+                        "quickReply": {"items": _unbound_quick_reply()},
+                    }
+                ],
                 client,
             )
             continue
@@ -573,6 +662,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
 
 # ── 管理者審核 API ───────────────────────────────────────────────
+
 
 @router.get("/bind-requests")
 async def list_bind_requests(request: Request):
@@ -598,7 +688,9 @@ async def list_bind_requests(request: Request):
 
 
 @router.post("/bind-requests/{req_id}/approve")
-async def approve_bind_request(req_id: int, payload: ApproveBindRequestPayload, request: Request):
+async def approve_bind_request(
+    req_id: int, payload: ApproveBindRequestPayload, request: Request
+):
     """核准綁定申請（admin only）
 
     body: { "user_id": <int> }
@@ -616,9 +708,11 @@ async def approve_bind_request(req_id: int, payload: ApproveBindRequestPayload, 
             raise HTTPException(status_code=404, detail="申請不存在或已處理")
 
         # 檢查此 LINE ID 是否已被其他帳號使用
-        conflict = db.query(User).filter(
-            User.line_user_id == req.line_user_id, User.is_active == True
-        ).first()
+        conflict = (
+            db.query(User)
+            .filter(User.line_user_id == req.line_user_id, User.is_active == True)
+            .first()
+        )
         if conflict:
             raise HTTPException(
                 status_code=409,
@@ -626,7 +720,9 @@ async def approve_bind_request(req_id: int, payload: ApproveBindRequestPayload, 
             )
 
         # 查找目標使用者
-        target = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+        target = (
+            db.query(User).filter(User.id == user_id, User.is_active == True).first()
+        )
         if not target:
             raise HTTPException(status_code=404, detail=f"找不到指定的使用者")
 
@@ -643,11 +739,6 @@ async def approve_bind_request(req_id: int, payload: ApproveBindRequestPayload, 
         line_id = req.line_user_id
         name = target.display_name
 
-    # 通知使用者
-    import asyncio
-    asyncio.create_task(
-        push_to_user(line_id, f"✅ 綁定成功！{name} 已連結此 LINE 帳號，往後測試通知將推送至此。")
-    )
     return {"status": "approved", "user": name}
 
 
@@ -671,8 +762,4 @@ async def reject_bind_request(req_id: int, request: Request):
         line_id = req.line_user_id
         name = req.requested_name
 
-    import asyncio
-    asyncio.create_task(
-        push_to_user(line_id, f"❌ 您的綁定申請（姓名：{name}）已被拒絕，請聯絡管理者確認。")
-    )
     return {"status": "rejected"}
