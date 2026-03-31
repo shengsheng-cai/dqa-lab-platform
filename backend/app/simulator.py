@@ -15,7 +15,6 @@ logger = logging.getLogger("app")
 
 
 def _move_toward(current: float, target: float, max_change: float) -> float:
-    """以 max_change 步進向 target 移動，抵達後固定在 target。"""
     diff = target - current
     if abs(diff) <= 0.1:
         return target
@@ -52,10 +51,10 @@ def _advance_sim_phase(
     dwell_seconds: float,
     cycles: int,
     max_ramp_rate: float,
+    elapsed_seconds: float = 1.0,
 ) -> float:
-    """推進模擬相位狀態機，回傳新溫度。"""
     ambient = 25.0
-    max_change = max_ramp_rate / 60.0
+    max_change = max_ramp_rate / 60.0 * elapsed_seconds
     sim_phase = item.get("sim_phase", "")
     sim_cycle = item.get("sim_cycle", 0)
 
@@ -147,9 +146,8 @@ def _advance_sim_phase(
 
 
 async def _sim_handle_running(
-    device_id: str, item: dict, now, dwell_start_times: dict
+    device_id: str, item: dict, now, dwell_start_times: dict, elapsed_seconds: float
 ) -> None:
-    """處理 RUNNING 狀態：推進相位、更新溫濕度。"""
     standard_id = item.get("standard_id")
     standard = get_standard(standard_id) if standard_id else None
     max_ramp_rate = get_ramp_rate(standard_id) if standard_id else 1.0
@@ -167,30 +165,25 @@ async def _sim_handle_running(
         cycles = standard.get("cycles") or 1
         target_humi = standard.get("humidity_rh_percent")
 
-    sim_phase_before = item.get("sim_phase", "")
     new_temp = _advance_sim_phase(
         device_id, item, now, dwell_start_times,
         high_temp, low_temp, dwell_seconds, cycles, max_ramp_rate,
+        elapsed_seconds,
     )
 
-    item["temperature"] = round(new_temp + random.uniform(-0.1, 0.1), 2)
+    item["temperature"] = round(new_temp, 2)
     _update_humidity(item, target_humi, new_temp, item.get("humidity", 55.0))
 
 
 async def _sim_handle_finishing(
-    device_id: str, item: dict, current_temp: float, current_humi: float, locks: dict
+    device_id: str, item: dict, current_temp: float, current_humi: float, locks: dict, elapsed_seconds: float = 1.0
 ) -> None:
-    """處理 FINISHING 狀態：降溫回 25°C，完成後轉 IDLE 並推播。"""
-    finishing_sop_json = item.get("active_sop_json")
-    if finishing_sop_json:
-        try:
-            finishing_sop = json.loads(finishing_sop_json)
-            finishing_ramp = (finishing_sop.get("ramp_rate") or 1.0) / 60.0
-        except Exception as e:
-            logger.warning(f"[{device_id}] finishing_sop_json 解析失敗，使用預設 ramp：{e}")
-            finishing_ramp = 1.0 / 60.0
-    else:
-        finishing_ramp = 1.0 / 60.0
+    try:
+        finishing_sop = json.loads(item.get("active_sop_json") or "{}")
+        ramp_rate = finishing_sop.get("ramp_rate") or 1.0
+    except Exception:
+        ramp_rate = 1.0
+    finishing_ramp = ramp_rate / 60.0 * elapsed_seconds
 
     diff = 25.0 - current_temp
     if abs(diff) > 0.5:
@@ -199,7 +192,6 @@ async def _sim_handle_finishing(
         )
     else:
         item["temperature"] = 25.0
-        finishing_op_user_id = item.get("operator_user_id")
         async with locks[device_id]:
             item.update({
                 "status": "IDLE",
@@ -233,6 +225,7 @@ def _sim_handle_emergency(item: dict, current_temp: float, current_humi: float) 
 async def data_simulator(cache: dict, locks: dict):
     write_counters: dict = {}
     dwell_start_times: dict = {}
+    last_tick: dict = {}
 
     while True:
         now = _now_utc()
@@ -244,6 +237,7 @@ async def data_simulator(cache: dict, locks: dict):
             if status == "IDLE":
                 if write_counters.get(device_id, 0) != 0:
                     write_counters[device_id] = 0
+                last_tick.pop(device_id, None)
                 continue
 
             current_temp = item.get("temperature", 25.0)
@@ -252,11 +246,16 @@ async def data_simulator(cache: dict, locks: dict):
             if device_id not in write_counters:
                 write_counters[device_id] = 0
 
+            # 計算真實 elapsed 時間，避免 asyncio.sleep 不精確導致升溫速率偏慢
+            prev = last_tick.get(device_id)
+            elapsed_seconds = (now - prev).total_seconds() if prev else 1.0
+            elapsed_seconds = min(elapsed_seconds, 10.0)  # 防止重啟後一次跳太多
+            last_tick[device_id] = now
+
             if status == "RUNNING":
-                await _sim_handle_running(device_id, item, now, dwell_start_times)
+                await _sim_handle_running(device_id, item, now, dwell_start_times, elapsed_seconds)
                 # 測試自然完成（ramp_to_ambient 降溫到 25°C）
                 if item.get("sim_phase") == "done":
-                    finishing_op_user_id = item.get("operator_user_id")
                     async with locks[device_id]:
                         item.update({
                             "status": "IDLE",
@@ -277,7 +276,7 @@ async def data_simulator(cache: dict, locks: dict):
                     logger.info(f"[{device_id}] 測試自然完成，回待機。")
                     continue
             elif status == "FINISHING":
-                await _sim_handle_finishing(device_id, item, current_temp, current_humi, locks)
+                await _sim_handle_finishing(device_id, item, current_temp, current_humi, locks, elapsed_seconds)
             elif status == "EMERGENCY":
                 _sim_handle_emergency(item, current_temp, current_humi)
 
