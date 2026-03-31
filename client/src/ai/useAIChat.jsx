@@ -15,12 +15,15 @@ const META_REGEX = /\n\[META:(\{[^}]*\})\]/g;
 // Extract metadata from streaming response, stripping ALL META blocks from display
 function parseStreamingResponse(fullText) {
   let metadata = null;
-  const displayText = fullText.replace(META_REGEX, (_, jsonStr) => {
+  let displayText = fullText.replace(META_REGEX, (_, jsonStr) => {
     try {
       metadata = JSON.parse(jsonStr);
     } catch {}
     return "";
   });
+  // Strip [APPLY:...] and [S:...] markers that AI outputs for tracking
+  displayText = displayText.replace(/\n?\[APPLY:[^\]]*\]/g, "");
+  displayText = displayText.replace(/\[S:[^\]]*\]\s*/g, "");
   return { displayText, metadata };
 }
 
@@ -267,7 +270,13 @@ export default function useAIChat() {
       const history = newMessages
         .slice(0, -1)
         .slice(-MAX_HISTORY)
-        .map((m) => ({ role: m.role, content: m.content }));
+        .map((m) => ({
+          role: m.role,
+          // 附加已推薦條件 ID，讓 AI 在「加上/再加」時能累積前一輪推薦
+          content: m.role === "assistant" && m.sop_ids?.length
+            ? m.content + `\n[已推薦條件ID:${m.sop_ids.join(",")}]`
+            : m.content,
+        }));
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
@@ -367,10 +376,10 @@ export default function useAIChat() {
     inputRef.current?.focus();
   }, [updateMessages]);
 
-  // Enter 送出，Shift+Enter 換行
+  // Enter 送出，Shift+Enter 換行；IME 組字中（isComposing）不送出
   const handleKeyDown = useCallback(
     (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         sendMessage();
       }

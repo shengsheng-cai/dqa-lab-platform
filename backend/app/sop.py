@@ -146,7 +146,14 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
         )
         _save_device_state(device_id, device)
 
-    # 將此設備「已確認」或「進行中」排程的預約治具轉為借出
+    _transfer_reserved_fixtures(device_id, now)
+    logger.info(f"[{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}")
+
+    return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
+
+
+def _transfer_reserved_fixtures(device_id: str, now: datetime.datetime):
+    """將此設備「已確認」或「進行中」排程的預約治具轉為借出"""
     try:
         with SessionLocal() as db:
             active_schedule = (
@@ -163,9 +170,54 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
     except Exception as e:
         logger.warning(f"[{device_id}] 治具預約轉借出失敗：{e}")
 
-    logger.info(f"[{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}")
 
-    return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
+async def auto_start_sop(device_id: str, sop_id: str, cache: dict, locks: dict, operator: str = "排程系統", skip_fixture_transfer: bool = False):
+    """排程到達開始時間時自動啟動 SOP（供 auto_advance_schedules 呼叫）"""
+    device = cache.get(device_id)
+    if not device:
+        logger.warning(f"[auto_start] 設備 {device_id} 不在 cache，跳過")
+        return
+    if device.get("status") != "IDLE":
+        logger.info(f"[auto_start] {device_id} 狀態為 {device.get('status')}，非 IDLE，跳過自動啟動")
+        return
+
+    std_data = STANDARDS_AND_SOPS.get(sop_id, {})
+    if not std_data:
+        logger.warning(f"[auto_start] sop_id={sop_id} 查無法規資料，跳過")
+        return
+
+    sop_name = std_data.get("name", sop_id)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
+    active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
+
+    lock = locks.get(device_id)
+    if not lock:
+        logger.warning(f"[auto_start] {device_id} 無對應 lock，跳過")
+        return
+
+    async with lock:
+        if device.get("status") != "IDLE":
+            return
+        device.update({
+            "status": "RUNNING",
+            "running_sop_id": sop_id,
+            "running_sop_name": sop_name,
+            "standard_id": sop_id,
+            "active_sop_json": active_sop_json,
+            "completed_steps": 0,
+            "started_at": now,
+            "total_steps": len(std_data.get("steps", [])),
+            "operator": operator,
+            "operator_user_id": None,
+            "sim_phase": "idle",
+            "sim_cycle": 0,
+        })
+        _save_device_state(device_id, device)
+
+    if not skip_fixture_transfer:
+        _transfer_reserved_fixtures(device_id, now)
+    logger.info(f"[auto_start] {device_id} 自動啟動 SOP: {sop_id} ({sop_name})")
 
 
 # SOP 執行紀錄路由

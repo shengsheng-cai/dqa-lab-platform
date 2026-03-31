@@ -252,9 +252,9 @@ function GanttChart({ schedules, blockedPeriods, rangeStart, rangeEnd, onClickSc
 
 // ── 條件選擇器 ──────────────────────────────────────────────────────────────
 
-function ConditionPicker({ standardsTree, selected, onChange }) {
-  const [activeStd, setActiveStd] = useState(Object.keys(standardsTree)[0] || "");
-  const [activeVer, setActiveVer] = useState("");
+function ConditionPicker({ standardsTree, selected, onChange, initialStd, initialVer }) {
+  const [activeStd, setActiveStd] = useState(initialStd || Object.keys(standardsTree)[0] || "");
+  const [activeVer, setActiveVer] = useState(initialVer || "");
 
   useEffect(() => {
     if (activeStd && standardsTree[activeStd]) {
@@ -359,6 +359,12 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
     }
     return fallback;
   }, [initialConditions, sopIdMap, standardsTree]);
+  const initVer = useMemo(() => {
+    if (initialConditions?.length > 0 && sopIdMap) {
+      return sopIdMap[initialConditions[0]]?.verName || "";
+    }
+    return "";
+  }, [initialConditions, sopIdMap]);
   const [form, setForm] = useState({
     project_number: "",
     sample_name: "",
@@ -449,6 +455,8 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
               standardsTree={standardsTree}
               selected={form.conditions}
               onChange={(c) => setForm((f) => ({ ...f, conditions: c }))}
+              initialStd={form.standard}
+              initialVer={initVer}
             />
           </div>
 
@@ -585,7 +593,7 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
 
 // ── 排程詳情 / 審核 Modal ───────────────────────────────────────────────────
 
-function ScheduleDetailModal({ schedule, role, userId, onClose, onUpdated, onDeleted }) {
+function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onClose, onUpdated, onDeleted }) {
   const { showToast } = useToast();
   const [status, setStatus] = useState(schedule.status);
   const [deviceId, setDeviceId] = useState(schedule.device_id || "");
@@ -816,9 +824,15 @@ function ScheduleDetailModal({ schedule, role, userId, onClose, onUpdated, onDel
                     style={inputStyle}
                   >
                     <option value="">自動選擇最早可用設備</option>
-                    {DEVICE_IDS.map((id) => (
-                      <option key={id} value={id}>{id}</option>
-                    ))}
+                    {DEVICE_IDS.map((id) => {
+                      const st = deviceStatuses[id];
+                      const blocked = st === "EMERGENCY";
+                      return (
+                        <option key={id} value={id} disabled={blocked}>
+                          {id}{st ? ` (${st})` : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}
@@ -1138,6 +1152,7 @@ const cancelBtn = {
 export default function SchedulePage({ active, role, userId, initConditions, onInitCondsConsumed }) {
   const [schedules, setSchedules] = useState([]);
   const [blockedPeriods, setBlockedPeriods] = useState([]);
+  const [deviceStatuses, setDeviceStatuses] = useState({});
   const [standardsTree, setStandardsTree] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1154,9 +1169,9 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
     if (!standardsTree) return {};
     const map = {};
     for (const [stdName, std] of Object.entries(standardsTree)) {
-      for (const ver of Object.values(std.versions)) {
+      for (const [verName, ver] of Object.entries(std.versions)) {
         for (const t of Object.values(ver.tests)) {
-          map[t.sop_id] = { stdName, test: t };
+          map[t.sop_id] = { stdName, verName, test: t };
         }
       }
     }
@@ -1194,6 +1209,7 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
       ]);
       setSchedules(ganttRes.data.schedules);
       setBlockedPeriods(ganttRes.data.blocked_periods);
+      if (ganttRes.data.device_statuses) setDeviceStatuses(ganttRes.data.device_statuses);
       if (treeRes) setStandardsTree(treeRes.data);
       setLastRefreshed(new Date());
     } catch (e) {
@@ -1491,6 +1507,7 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
           schedule={selectedSchedule}
           role={role}
           userId={userId}
+          deviceStatuses={deviceStatuses}
           onClose={() => setSelectedSchedule(null)}
           onUpdated={(updated) => {
             setSchedules((prev) => prev.map((s) => s.id === updated.id ? updated : s));

@@ -14,7 +14,8 @@ App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, UsersPage
   - schedule → DeviceAvailRow × 5（設備可用性 + 剩餘時間）
   - fixture → FixtureSummaryPanel（借出中 / 今日到期 / 逾期未還）
   - 其他 → DeviceCards（預設）
-- CenterPanel（flex:1）：Tab bar + 各頁面
+- CenterPanel（flex:1）：Tab bar（設備 / 治具 / 排程 / 紀錄 / 人員管理）+ 各頁面
+  - 「紀錄」tab 內嵌子 tab bar（異常紀錄 / 執行紀錄），`recordsSubTab` state 在 CenterPanel 內部
 - AI FAB：右下角浮動按鈕，點擊從右側 translateX 滑入 RightPanel（500px）
 
 ## SchedulePage 佈局

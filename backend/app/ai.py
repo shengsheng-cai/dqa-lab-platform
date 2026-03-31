@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -71,7 +72,16 @@ _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速
 - 多項測試：逐項列小計，最後給總計
 - 若無升降溫速率資料，只加總停留時間並註明「升降溫時間依設備另計」
 
-回答不要自行加任何免責聲明，UI 會自動附加。"""
+回答不要自行加任何免責聲明，UI 會自動附加。
+
+【申請測試標記】
+- 回答時絕對不要把 [S:xxx] 標記輸出給使用者，那是系統內部 ID
+- 每次你的回答包含具體推薦的測試條件時，必須在回答最後一行加上：[APPLY:id1,id2]
+- id 就是資料中 [S:xxxx] 的值，原樣複製，逗號分隔，不要加空白
+- 只要推薦了測試，就必須加這行，這是系統功能不能省略
+- 純資訊查詢（「什麼是」「介紹」「說明」「了解」「有哪些條件」「某標準包含哪些測試」且未提到具體產品需求）不加此行
+- 歷史訊息中若含有 [已推薦條件ID:xxx] 標記，那是前一輪已推薦的條件 ID；若使用者說「加上」「再加」「增加」「補充」「額外」等，APPLY 必須包含 [已推薦條件ID:] 的所有 ID 加上本次新推薦的 ID
+- 絕對不要在回答中輸出 [已推薦條件ID:xxx] 標記，它是系統內部標記"""
 
 _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
 
@@ -210,7 +220,11 @@ async def _build_context(msg: str, history: list = []) -> tuple[str, list[str]]:
 
     parts = []
     if hits:
-        parts.append("\n".join(f"- {h['text']}" for h in hits))
+        def _hit_line(h):
+            sid = h.get("raw", {}).get("sop_id", "")
+            prefix = f"[S:{sid}] " if sid else ""
+            return f"- {prefix}{h['text']}"
+        parts.append("\n".join(_hit_line(h) for h in hits))
 
     # 偵測到治具相關關鍵字時，從 DB 注入即時庫存資料
     if any(kw in msg for kw in _FIXTURE_KEYWORDS):
@@ -288,7 +302,7 @@ async def standards_query_stream(req: QueryRequest):
     api_key = _get_api_key()
 
     async def generate():
-        meta_emitted = False
+        collected = []
         try:
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(connect=10.0, read=None, write=60.0, pool=10.0)
@@ -312,6 +326,7 @@ async def standards_query_stream(req: QueryRequest):
                                     .get("text", "")
                                 )
                                 if token:
+                                    collected.append(token)
                                     yield token
                             except Exception:
                                 pass
@@ -321,8 +336,12 @@ async def standards_query_stream(req: QueryRequest):
         except Exception as e:
             yield f"\n\n[AI 服務不可用：{e}]"
             return
-        if sop_ids and not meta_emitted:
-            yield f"{META_PREFIX}{json.dumps({'sop_ids': sop_ids})}{META_SUFFIX}"
-            meta_emitted = True
+        # 從 AI 回答中解析 [APPLY:id1,id2]，只預選 AI 真正推薦的條件
+        full_text = "".join(collected)
+        apply_match = re.search(r'\[APPLY:([^\]]*)\]', full_text)
+        if apply_match:
+            ids = [i.strip() for i in apply_match.group(1).split(',') if i.strip()]
+            if ids:
+                yield f"{META_PREFIX}{json.dumps({'sop_ids': ids})}{META_SUFFIX}"
 
     return StreamingResponse(generate(), media_type="text/plain")
