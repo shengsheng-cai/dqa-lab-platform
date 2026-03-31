@@ -4,7 +4,7 @@ import useAIChat from "./ai/useAIChat";
 import ChatSidebar from "./ai/ChatSidebar";
 import ChatArea from "./ai/ChatArea";
 
-export default function AIPage() {
+export default function AIPage({ onApplySchedule }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const {
@@ -64,6 +64,7 @@ export default function AIPage() {
         onRetry={retryInTraditional}
         onInputChange={handleInputChange}
         onKeyDown={handleKeyDown}
+        onApplySchedule={onApplySchedule}
       />
     </div>
   );

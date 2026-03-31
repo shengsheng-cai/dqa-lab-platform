@@ -495,7 +495,7 @@ const SOPPage = ({ active = true, externalDevice }) => {
                 🔒 訪客模式
               </div>
               <div style={{ color: "#8b949e", fontSize: 12, lineHeight: 1.6 }}>
-                此模式僅供查看設備狀態和測試歷史，<br />
+                訪客可查看設備狀態、測試歷史、排程及治具，並可使用 AI 諮詢。<br />
                 無法進行啟動、暫停或停止等操作。
               </div>
             </section>

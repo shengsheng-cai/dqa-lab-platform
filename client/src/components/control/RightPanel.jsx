@@ -28,7 +28,7 @@ function pickRandom(n, pool, exclude = []) {
   return shuffled.slice(0, n);
 }
 
-export default function RightPanel({ onClose }) {
+export default function RightPanel({ onClose, onApplySchedule }) {
   const {
     activeId,
     conversations,
@@ -361,6 +361,7 @@ export default function RightPanel({ onClose }) {
           onRetry={retryInTraditional}
           onInputChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          onApplySchedule={onApplySchedule}
           compact
         />
       </div>

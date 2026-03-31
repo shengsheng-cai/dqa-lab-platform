@@ -12,7 +12,6 @@ from pydantic import BaseModel, ConfigDict
 from .models import SessionLocal, Schedule, DeviceBlockedPeriod, User, ScheduleFixture, Fixture, FixtureLoan
 from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
-from .line import push_sop_notification
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
@@ -73,6 +72,13 @@ class BlockedPeriodCreate(BaseModel):
     device_id: str
     start_time: datetime.datetime
     end_time: datetime.datetime
+    reason: Optional[str] = None
+
+
+class BlockedPeriodPatch(BaseModel):
+    device_id: Optional[str] = None
+    start_time: Optional[datetime.datetime] = None
+    end_time: Optional[datetime.datetime] = None
     reason: Optional[str] = None
 
 
@@ -150,6 +156,21 @@ def _est_end_from_device(device: dict) -> Optional[datetime.datetime]:
     """從 AICM_CACHE 設備 dict 估算測試結束時間（UTC）；設備不在執行中則回傳 None"""
     if device.get("status") not in ("RUNNING", "PAUSED", "FINISHING"):
         return None
+
+    # 優先使用 devices.py 已算好的 estimated_end_at（含常溫穩定時間）
+    cached_end = device.get("estimated_end_at")
+    if cached_end:
+        try:
+            if isinstance(cached_end, str):
+                dt = datetime.datetime.fromisoformat(cached_end.replace("Z", "+00:00"))
+            else:
+                dt = cached_end
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            return dt
+        except Exception:
+            pass
+
     started_at = device.get("started_at")
     active_sop_json = device.get("active_sop_json")
     if not started_at or not active_sop_json:
@@ -578,9 +599,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             raise HTTPException(status_code=403, detail="僅管理者可審核排程")
         # 後續在讀取 schedule 後再驗證擁有權，這裡先通過
 
-    notif_user_id = None
-    notif_text = None
-
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
@@ -646,14 +664,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                     dt = dt.astimezone(datetime.timezone(datetime.timedelta(hours=8)))
                 return dt.strftime("%m/%d %H:%M")
 
-            notif_user_id = applicant_user_id
-            notif_text = (
-                f"[排程確認] {project_label}\n"
-                f"設備：{device_id}\n"
-                f"開始：{_fmt(start)}\n"
-                f"結束：{_fmt(end)}"
-            )
-
         elif body.status in ("已取消", "進行中", "已完成"):
             s.status = body.status
             if body.device_id:
@@ -670,14 +680,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                     FixtureLoan.status == "reserved",
                 ).delete(synchronize_session=False)
 
-                # 只有 admin 取消別人的排程才通知申請人
-                if role == "admin" and applicant_user_id and applicant_user_id != user_id:
-                    notif_user_id = applicant_user_id
-                    notif_text = (
-                        f"[排程取消] {project_label}\n"
-                        f"您的排程申請已被取消"
-                        + (f"\n備註：{body.note}" if body.note else "")
-                    )
         else:
             # 純欄位更新（不改狀態）
             if body.device_id is not None:
@@ -691,10 +693,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
         db.commit()
         db.refresh(s)
         result = _enrich(s, db)
-
-    # DB session 關閉後再推播，避免阻塞
-    if notif_text:
-        asyncio.create_task(push_sop_notification(notif_user_id, notif_text))
 
     return result
 
@@ -766,6 +764,33 @@ def create_blocked_period(body: BlockedPeriodCreate, request: Request):
             "end_time": b.end_time,
             "reason": b.reason,
         }
+
+
+@blocked_router.patch("/{period_id}")
+def update_blocked_period(period_id: int, body: BlockedPeriodPatch, request: Request):
+    role = getattr(request.state, "user_role", None)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="僅管理者可操作")
+
+    with SessionLocal() as db:
+        b = db.query(DeviceBlockedPeriod).filter(DeviceBlockedPeriod.id == period_id).first()
+        if not b:
+            raise HTTPException(status_code=404, detail="找不到紀錄")
+        if body.device_id is not None:
+            if body.device_id not in DEVICE_IDS:
+                raise HTTPException(status_code=400, detail=f"無效的設備 ID：{body.device_id}")
+            b.device_id = body.device_id
+        if body.start_time is not None:
+            b.start_time = body.start_time
+        if body.end_time is not None:
+            b.end_time = body.end_time
+        if body.reason is not None:
+            b.reason = body.reason
+        if b.end_time <= b.start_time:
+            raise HTTPException(status_code=400, detail="結束時間必須晚於開始時間")
+        db.commit()
+        db.refresh(b)
+        return {"id": b.id, "device_id": b.device_id, "start_time": b.start_time, "end_time": b.end_time, "reason": b.reason}
 
 
 @blocked_router.delete("/{period_id}")

@@ -9,6 +9,20 @@ import {
 import { API_BASE } from "../api";
 
 const MAX_HISTORY = 4;
+// Matches \n[META:{...}] — sop_ids values never contain }, so [^}]* is safe
+const META_REGEX = /\n\[META:(\{[^}]*\})\]/g;
+
+// Extract metadata from streaming response, stripping ALL META blocks from display
+function parseStreamingResponse(fullText) {
+  let metadata = null;
+  const displayText = fullText.replace(META_REGEX, (_, jsonStr) => {
+    try {
+      metadata = JSON.parse(jsonStr);
+    } catch {}
+    return "";
+  });
+  return { displayText, metadata };
+}
 
 function getAuthHeaders() {
   const userToken = localStorage.getItem("user_token");
@@ -277,7 +291,9 @@ export default function useAIChat() {
           // 用 rAF 節流：每個 animation frame 最多更新一次，避免高頻 chunk 卡住 UI
           if (streamRafRef.current) cancelAnimationFrame(streamRafRef.current);
           streamRafRef.current = requestAnimationFrame(() => {
-            setStreamText(streamTextRef.current);
+            const t = streamTextRef.current;
+            const { displayText } = parseStreamingResponse(t);
+            setStreamText(displayText);
           });
         }
         if (streamRafRef.current) {
@@ -286,11 +302,11 @@ export default function useAIChat() {
         }
 
         if (!controller.signal.aborted && fullText.trim()) {
-          const elapsed = ((Date.now() - startTimeRef.current) / 1000).toFixed(
-            1,
-          );
+          const elapsed = ((Date.now() - startTimeRef.current) / 1000).toFixed(1);
+          const { displayText, metadata } = parseStreamingResponse(fullText);
+          const sop_ids = metadata?.sop_ids || [];
           updateMessages(
-            [...newMessages, { role: "assistant", content: fullText, elapsed }],
+            [...newMessages, { role: "assistant", content: displayText, elapsed, sop_ids }],
             sendingConvId,
           );
         }

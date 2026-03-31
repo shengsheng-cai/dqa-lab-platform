@@ -19,6 +19,8 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}"
+META_PREFIX = "\n[META:"
+META_SUFFIX = "]"
 
 _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速找到適合的溫箱測試條件。只能用繁體中文回答，禁止簡體中文。
 
@@ -160,7 +162,7 @@ def _extract_std_from_history(history: list) -> list[str]:
     return match_std_keys(all_text)
 
 
-async def _build_context(msg: str, history: list = []) -> str:
+async def _build_context(msg: str, history: list = []) -> tuple[str, list[str]]:
     matched_stds = match_std_keys(msg)
     if not matched_stds and history:
         matched_stds = _extract_std_from_history(history)
@@ -216,7 +218,8 @@ async def _build_context(msg: str, history: list = []) -> str:
         if fixture_ctx:
             parts.append(fixture_ctx)
 
-    return "\n\n".join(parts) if parts else ""
+    sop_ids = [h["raw"]["sop_id"] for h in hits if h.get("raw", {}).get("sop_id")][:10]
+    return "\n\n".join(parts) if parts else "", sop_ids
 
 
 def _build_gemini_payload(messages: list, system_prompt: str) -> dict:
@@ -236,7 +239,7 @@ def _build_gemini_payload(messages: list, system_prompt: str) -> dict:
 
 @router.post("/standards-query", response_model=QueryResponse)
 async def standards_query(req: QueryRequest):
-    ref_block = await _build_context(req.message, req.history)
+    ref_block, _ = await _build_context(req.message, req.history)
     if ref_block:
         system_content = f"{_SYSTEM_PROMPT}\n\n【參考資料】\n{ref_block}"
     else:
@@ -270,7 +273,7 @@ async def standards_query(req: QueryRequest):
 
 @router.post("/standards-query-stream")
 async def standards_query_stream(req: QueryRequest):
-    ref_block = await _build_context(req.message, req.history)
+    ref_block, sop_ids = await _build_context(req.message, req.history)
     if ref_block:
         system_content = f"{_SYSTEM_PROMPT}\n\n【參考資料】\n{ref_block}"
     else:
@@ -285,6 +288,7 @@ async def standards_query_stream(req: QueryRequest):
     api_key = _get_api_key()
 
     async def generate():
+        meta_emitted = False
         try:
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(connect=10.0, read=None, write=60.0, pool=10.0)
@@ -313,7 +317,12 @@ async def standards_query_stream(req: QueryRequest):
                                 pass
         except httpx.TimeoutException:
             yield "\n\n[AI 服務逾時，請稍後再試]"
+            return
         except Exception as e:
             yield f"\n\n[AI 服務不可用：{e}]"
+            return
+        if sop_ids and not meta_emitted:
+            yield f"{META_PREFIX}{json.dumps({'sop_ids': sop_ids})}{META_SUFFIX}"
+            meta_emitted = True
 
     return StreamingResponse(generate(), media_type="text/plain")

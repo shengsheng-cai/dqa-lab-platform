@@ -39,6 +39,7 @@ export default function ChatArea({
   onRetry,
   onInputChange,
   onKeyDown,
+  onApplySchedule,
   compact = false,
 }) {
   return (
@@ -97,6 +98,7 @@ export default function ChatArea({
               key={`${m.role}-${i}-${m.content.slice(0, 8)}`}
               m={m}
               onRetry={() => onRetry(i)}
+              onApplySchedule={onApplySchedule}
               isFirstAssistant={isFirstAssistant}
             />
           );

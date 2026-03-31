@@ -180,7 +180,7 @@ function CollapsibleBubble({ children, contentKey }) {
 }
 
 // ── 單則訊息 ─────────────────────────────────────────────────
-export default function MessageBubble({ m, onRetry, isFirstAssistant = true }) {
+export default function MessageBubble({ m, onRetry, onApplySchedule, isFirstAssistant = true }) {
   const [copied, setCopied] = useState(false);
   const simplified = m.role === "assistant" && hasSimplified(m.content);
 
@@ -260,6 +260,17 @@ export default function MessageBubble({ m, onRetry, isFirstAssistant = true }) {
                 {copied ? "✓ 已複製" : "複製"}
               </button>
             </div>
+
+            {m.sop_ids?.length > 0 && onApplySchedule && (
+              <button
+                onClick={() => onApplySchedule(m.sop_ids)}
+                style={S.applyBtn}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#1c3a5e")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                📅 申請此測試
+              </button>
+            )}
           </>
         )}
       </div>
@@ -349,5 +360,20 @@ const S = {
     fontSize: 12,
     fontFamily: "monospace",
     color: "#ff7b72",
+  },
+  applyBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: "transparent",
+    border: "1px solid #388bfd",
+    color: "#79c0ff",
+    fontSize: 12,
+    fontWeight: 600,
+    padding: "5px 12px",
+    borderRadius: 6,
+    cursor: "pointer",
+    transition: "background .15s",
+    marginTop: 8,
   },
 };

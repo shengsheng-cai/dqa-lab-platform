@@ -193,7 +193,6 @@ def get_me(request: Request):
             "id": user.id,
             "display_name": user.display_name,
             "role": user.role,
-            "line_user_id": user.line_user_id,
         }
     finally:
         db.close()
@@ -210,13 +209,11 @@ def _require_admin(request: Request):
 class UserCreateBody(BaseModel):
     display_name: str
     role: str = "engineer"
-    line_user_id: Optional[str] = None
 
 
 class UserUpdateBody(BaseModel):
     display_name: Optional[str] = None
     role: Optional[str] = None
-    line_user_id: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -231,7 +228,6 @@ def list_users(request: Request):
                 "id": u.id,
                 "display_name": u.display_name,
                 "role": u.role,
-                "line_user_id": u.line_user_id,
                 "is_active": u.is_active,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
             }
@@ -257,7 +253,6 @@ def create_user(body: UserCreateBody, request: Request):
             display_name=body.display_name,
             hashed_password=dummy_pwd,
             role=body.role,
-            line_user_id=body.line_user_id or None,
         )
         db.add(user)
         db.commit()
@@ -282,8 +277,6 @@ def update_user(user_id: int, body: UserUpdateBody, request: Request):
                 raise HTTPException(status_code=400, detail="role 必須是 admin / keeper / engineer")
             user.role = body.role
         # 使用 __fields_set__ 檢測是否被顯式傳入（包括 null）
-        if "line_user_id" in body.__fields_set__:
-            user.line_user_id = body.line_user_id
         if body.is_active is not None:
             user.is_active = body.is_active
         db.commit()

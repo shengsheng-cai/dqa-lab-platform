@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "./api";
 import { useToast } from "./components/Toast";
@@ -8,12 +8,16 @@ import SchedulePage from "./SchedulePage";
 import UsersPage from "./UsersPage";
 import ErrorLog from "./ErrorLog";
 import RightPanel from "./components/control/RightPanel";
+import Dashboard from "./Dashboard";
+import AIPage from "./AIPage";
 import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL } from "./constants";
 
 const TAB_TO_PATH = {
   device: "/",
   fixture: "/fixtures",
   schedule: "/schedule",
+  dashboard: "/dashboard",
+  ai: "/ai",
   users: "/users",
   errors: "/errors",
   executions: "/executions",
@@ -172,6 +176,7 @@ function DeviceCard({ device, isSelected, onClick }) {
   const remaining = useCountdown(device.estimated_end_at);
   const isActive = device.status === "RUNNING" || device.status === "PAUSED";
   const isEmergency = device.status === "EMERGENCY";
+  const isFinishing = device.status === "FINISHING";
 
   const totalMs = useMemo(
     () => parseUtcDate(device.estimated_end_at) - parseUtcDate(device.started_at),
@@ -266,6 +271,15 @@ function DeviceCard({ device, isSelected, onClick }) {
       {isEmergency && (
         <div style={{ fontSize: 9, color: "#f85149", marginTop: 2 }}>
           ⚠ 緊急停止
+        </div>
+      )}
+
+      {isFinishing && (
+        <div style={{ fontSize: 9, color: "#79c0ff", marginTop: 2 }}>
+          {device.temperature != null && (
+            <div>目前溫度: {device.temperature}°C</div>
+          )}
+          <div>⏳ 正在自動降溫到 25°C，請稍候...</div>
         </div>
       )}
     </div>
@@ -707,16 +721,17 @@ const TABS = [
   { key: "device", label: "設備" },
   { key: "fixture", label: "治具" },
   { key: "schedule", label: "排程" },
+  { key: "dashboard", label: "趨勢圖" },
+  { key: "ai", label: "AI 諮詢" },
   { key: "errors", label: "異常紀錄", guestHidden: true },
   { key: "executions", label: "執行紀錄" },
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) {
+function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onApplySchedule }) {
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
-  const [failureCount, setFailureCount] = useState(0);
   const [pendingScheduleCount, setPendingScheduleCount] = useState(0);
 
   // 切換 tab 時重置滾動位置
@@ -724,17 +739,6 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) 
     window.scrollTo(0, 0);
   }, [activeTab]);
 
-  useEffect(() => {
-    if (role !== "admin") return;
-    const fetchCount = () => {
-      api.get("/api/notification-failures/").then((res) => {
-        setFailureCount(res.data.length);
-      }).catch(() => {});
-    };
-    fetchCount();
-    const timer = setInterval(fetchCount, POLL_GENERAL_MS);
-    return () => clearInterval(timer);
-  }, [role]);
 
   useEffect(() => {
     if (role === "guest") return;
@@ -790,7 +794,6 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) 
           >
             {t.label}
             {t.key === "schedule" && <TabBadge count={pendingScheduleCount} bg="#e3b341" />}
-            {t.key === "users" && <TabBadge count={failureCount} bg="#da3633" color="#fff" />}
           </button>
         ))}
       </div>
@@ -822,7 +825,7 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) 
             height: "100%",
           }}
         >
-          <SchedulePage active={activeTab === "schedule"} role={role} userId={userId} />
+          <SchedulePage active={activeTab === "schedule"} role={role} userId={userId} initConditions={scheduleInitConds} onInitCondsConsumed={handleInitCondsConsumed} />
         </div>
         {role === "admin" && (
           <div
@@ -850,6 +853,23 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice }) 
         >
           <ExecutionList active={activeTab === "executions"} role={role} />
         </div>
+        <div
+          style={{
+            display: activeTab === "dashboard" ? "block" : "none",
+            height: "100%",
+            overflowY: "auto",
+          }}
+        >
+          <Dashboard active={activeTab === "dashboard"} />
+        </div>
+        <div
+          style={{
+            display: activeTab === "ai" ? "flex" : "none",
+            height: "100%",
+          }}
+        >
+          <AIPage onApplySchedule={onApplySchedule} />
+        </div>
       </div>
     </div>
   );
@@ -873,6 +893,8 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   const [fixtureSummary, setFixtureSummary] = useState({});
   const [selectedDevice, setSelectedDevice] = useState("CH-01");
   const [aiOpen, setAiOpen] = useState(false);
+  const [scheduleInitConds, setScheduleInitConds] = useState(null);
+  const handleInitCondsConsumed = useCallback(() => setScheduleInitConds(null), []);
 
   // 輪詢設備狀態（3s）
   useEffect(() => {
@@ -927,6 +949,12 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           selectedDevice={selectedDevice}
+          scheduleInitConds={scheduleInitConds}
+          handleInitCondsConsumed={handleInitCondsConsumed}
+          onApplySchedule={(sop_ids) => {
+            setActiveTab("schedule");
+            setScheduleInitConds(sop_ids);
+          }}
         />
       </div>
 
@@ -982,7 +1010,13 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           overflow: "hidden",
         }}
       >
-        <RightPanel onClose={() => setAiOpen(false)} />
+        <RightPanel
+          onClose={() => setAiOpen(false)}
+          onApplySchedule={(sop_ids) => {
+            setActiveTab("schedule");
+            setScheduleInitConds(sop_ids);
+          }}
+        />
       </div>
 
       {role === "guest" && (
@@ -993,7 +1027,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
             right: 80,
             fontSize: 24,
             fontWeight: 700,
-            color: "rgba(139, 148, 158, 0.25)",
+            color: "rgba(139, 148, 158, 0.45)",
             pointerEvents: "none",
             letterSpacing: 2,
             textShadow: "0 0 4px rgba(0,0,0,0.3)",

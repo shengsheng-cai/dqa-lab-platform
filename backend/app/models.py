@@ -18,9 +18,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _db_url = os.getenv("DATABASE_URL")
 SQLALCHEMY_DATABASE_URL = _db_url if _db_url else f"sqlite:///{BASE_DIR}/test.db"
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+_connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=_connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -411,5 +410,46 @@ class NotificationFailure(Base):
 
 
 # ---------- 資料庫初始化 ----------
+def ensure_admin_user():
+    """Ensure the admin user exists and has the password from ADMIN_PASSWORD env var.
+
+    - If the admin user already exists: update their password and set is_active=True.
+    - If the admin user does not exist: create them with role='admin'.
+    Does nothing when ADMIN_PASSWORD is not set.
+    """
+    import os
+    import bcrypt as _bcrypt
+
+    admin_password = os.getenv("ADMIN_PASSWORD", "")
+    if not admin_password:
+        return
+
+    hashed = _bcrypt.hashpw(admin_password.encode(), _bcrypt.gensalt()).decode()
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.username == "admin").first()
+        if user:
+            user.hashed_password = hashed
+            user.is_active = True
+            db.commit()
+            print("✅ Admin 帳號密碼已更新！")
+        else:
+            db.add(
+                User(
+                    username="admin",
+                    display_name="Admin",
+                    hashed_password=hashed,
+                    role="admin",
+                    is_active=True,
+                )
+            )
+            db.commit()
+            print("✅ Admin 帳號建立完成！")
+    finally:
+        db.close()
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    ensure_admin_user()

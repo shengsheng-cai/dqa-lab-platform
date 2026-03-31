@@ -427,8 +427,6 @@ def list_damaged_lost_loans():
 
 @router.post("/loans")
 async def create_loan(body: LoanCreate, request: Request):
-    from .fixture_notifications import notify_loan_created
-
     if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
         raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
 
@@ -477,7 +475,6 @@ async def create_loan(body: LoanCreate, request: Request):
         db.commit()
         db.refresh(loan)
         loan_id = loan.id
-        asyncio.create_task(notify_loan_created(loan_id))
         return {"status": "success", "loan_id": loan_id}
     finally:
         db.close()

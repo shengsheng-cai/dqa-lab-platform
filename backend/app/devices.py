@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from .models import SessionLocal, DeviceData, ErrorLog, SopExecution
-from .line import push_sop_notification
+from .line import push_message
 from .utils import _now_utc, _save_device_state
 
 logger = logging.getLogger("app")
@@ -80,7 +80,9 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
         ramp_up = abs(high_temp - ambient) / ramp_rate
         total_min = ramp_up + dwell_min + ramp_up
 
-    total_seconds = total_min * 60.0
+    # ISO 17025 常溫穩定時間（測試後需要 30 分鐘常溫環境穩定）
+    STABILIZATION_HOURS = 0.5
+    total_seconds = (total_min + STABILIZATION_HOURS * 60) * 60.0
 
     if isinstance(started_at, str):
         started_dt = datetime.datetime.fromisoformat(started_at.replace("Z", "+00:00"))
@@ -273,8 +275,7 @@ async def emergency_stop(device_id: str, request: Request):
 
     logger.warning(f"[{device_id}] EMERGENCY STOP by {operator}")
     asyncio.create_task(
-        push_sop_notification(
-            operator_user_id,
+        push_message(
             f"🚨 [{device_id}] 緊急停止已觸發\n"
             f"測試：{sop_name}\n"
             f"操作人員：{operator}\n"
