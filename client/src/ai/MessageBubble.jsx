@@ -147,7 +147,7 @@ export function renderMarkdown(rawText) {
 
 // ── 可折疊泡泡 ───────────────────────────────────────────────
 function CollapsibleBubble({ children, contentKey }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [overflow, setOverflow] = useState(false);
   const innerRef = useRef(null);
 

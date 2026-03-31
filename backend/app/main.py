@@ -96,7 +96,10 @@ async def lifespan(app: FastAPI):
 
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
     scheduler = AsyncIOScheduler(timezone="Asia/Taipei")
-    scheduler.add_job(auto_advance_schedules, "interval", minutes=5)
+    scheduler.add_job(
+        auto_advance_schedules, "interval", minutes=5,
+        kwargs={"cache": app.state.AICM_CACHE, "locks": app.state.DEVICE_LOCKS},
+    )
     scheduler.start()
     logger.info("APScheduler 已啟動（每 5 分鐘推進排程狀態）")
 

@@ -235,6 +235,11 @@ def _get_stuck_devices(cache: dict) -> set:
     }
 
 
+def _get_emergency_devices(cache: dict) -> set:
+    """回傳狀態為 EMERGENCY 的設備 ID（不可排程）"""
+    return {did for did, dev in cache.items() if dev.get("status") == "EMERGENCY"}
+
+
 def _get_condition_names(conditions: List[str]) -> List[str]:
     """取得每個 sop_id 的顯示名稱"""
     names = []
@@ -359,16 +364,19 @@ def _auto_assign(
     db,
     running_until: Optional[dict] = None,
     stuck_devices: Optional[set] = None,
+    emergency_devices: Optional[set] = None,
 ) -> tuple[str, datetime.datetime, datetime.datetime]:
     """自動選最早可用設備，回傳 (device_id, start_time, end_time)。
-    stuck_devices 內的設備跳過；若所有設備皆卡住則退回全選。"""
+    emergency_devices / stuck_devices 內的設備跳過；若所有設備皆排除則退回全選。"""
     total_hours = _calc_total_hours(conditions)
     best_device = None
     best_start = None
 
-    candidates = [d for d in DEVICE_IDS if not stuck_devices or d not in stuck_devices]
+    candidates = [d for d in DEVICE_IDS
+                  if (not stuck_devices or d not in stuck_devices)
+                  and (not emergency_devices or d not in emergency_devices)]
     if not candidates:
-        candidates = DEVICE_IDS  # 所有設備都卡住時退回全選
+        candidates = DEVICE_IDS  # 所有設備都被排除時退回全選
 
     for device_id in candidates:
         start = _find_earliest_slot(device_id, total_hours, db, running_until)
@@ -383,12 +391,13 @@ def _auto_assign(
 # ── 排程狀態自動推進 ──────────────────────────────────────────────────────────
 
 
-def auto_advance_schedules():
+async def auto_advance_schedules(cache: dict = None, locks: dict = None):
     """
     每 5 分鐘執行：
-    - 已確認 + start_time ≤ now → 進行中
+    - 已確認 + start_time ≤ now → 進行中，並自動啟動第一個 SOP
     - 進行中 + end_time   ≤ now → 已完成
     """
+    from .sop import auto_start_sop
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)  # naive UTC for SQLite filter
     with SessionLocal() as db:
         # 已確認 → 進行中
@@ -426,6 +435,16 @@ def auto_advance_schedules():
                 f"{len(to_running)} 筆→進行中，{len(to_done)} 筆→已完成"
             )
 
+    # 自動啟動：已確認→進行中的排程，對應設備 IDLE 時啟動第一個 SOP
+    if cache is not None and locks is not None and to_running:
+        tasks = []
+        for s in to_running:
+            conditions = json.loads(s.conditions) if s.conditions else []
+            if conditions and s.device_id:
+                tasks.append(auto_start_sop(s.device_id, conditions[0], cache, locks))
+        if tasks:
+            await asyncio.gather(*tasks)
+
 
 # ── Schedules 端點 ─────────────────────────────────────────────────────────
 
@@ -441,13 +460,14 @@ def preview_schedule(request: Request, conditions: str, device_id: Optional[str]
     cache = getattr(request.app.state, "AICM_CACHE", {})
     running_until = _build_running_until(cache)
     stuck_devices = _get_stuck_devices(cache)
+    emergency_devices = _get_emergency_devices(cache)
 
     with SessionLocal() as db:
         if device_id and device_id in DEVICE_IDS:
             start = _find_earliest_slot(device_id, total_hours, db, running_until)
             assigned_device = device_id
         else:
-            assigned_device, start, _ = _auto_assign(cond_list, db, running_until, stuck_devices)
+            assigned_device, start, _ = _auto_assign(cond_list, db, running_until, stuck_devices, emergency_devices)
 
     end = start + datetime.timedelta(hours=total_hours)
     return {
@@ -488,7 +508,8 @@ def get_standards_tree():
 
 @router.get("/gantt")
 def get_gantt(request: Request):
-    """甘特圖資料：排程 + 不可用時段"""
+    """甘特圖資料：排程 + 不可用時段 + 設備即時狀態"""
+    cache = getattr(request.app.state, "AICM_CACHE", {})
     with SessionLocal() as db:
         schedules = (
             db.query(Schedule)
@@ -511,6 +532,7 @@ def get_gantt(request: Request):
                 for b in blocked
             ],
             "devices": DEVICE_IDS,
+            "device_statuses": {did: cache[did].get("status", "OFFLINE") for did in DEVICE_IDS if did in cache},
         }
 
 
@@ -624,6 +646,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             cache = getattr(request.app.state, "AICM_CACHE", {})
             running_until = _build_running_until(cache)
             stuck_devices = _get_stuck_devices(cache)
+            emergency_devices = _get_emergency_devices(cache)
             # 若管理人指定設備 + 手動時間 → 直接套用；只指定設備 → 自動算時間；否則全自動
             if body.device_id and body.start_time and body.end_time:
                 device_id = body.device_id
@@ -635,7 +658,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                 start = _find_earliest_slot(device_id, total_hours, db, running_until)
                 end = start + datetime.timedelta(hours=total_hours)
             else:
-                device_id, start, end = _auto_assign(conditions, db, running_until, stuck_devices)
+                device_id, start, end = _auto_assign(conditions, db, running_until, stuck_devices, emergency_devices)
 
             s.device_id = device_id
             s.start_time = start
@@ -643,7 +666,12 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             s.status = "已確認"
             s.confirmed_by = user_id
 
-            # 自動建立治具預約（reserved）
+            # 若 start_time ≤ now 代表立即啟動，治具直接 loaned；否則 reserved
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            start_aware = start if start.tzinfo else start.replace(tzinfo=datetime.timezone.utc)
+            immediate_start = start_aware <= now_utc
+            fixture_status = "loaned" if immediate_start else "reserved"
+            fixture_loan_date = now_utc if immediate_start else None
             for sf in db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == s.id).all():
                 db.add(FixtureLoan(
                     fixture_id=sf.fixture_id,
@@ -653,7 +681,8 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                     project_name=f"{s.project_number} / {s.sample_name}",
                     quantity=sf.quantity,
                     due_date=end,
-                    status="reserved",
+                    status=fixture_status,
+                    loan_date=fixture_loan_date,
                     schedule_id=s.id,
                 ))
 
@@ -693,6 +722,14 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
         db.commit()
         db.refresh(s)
         result = _enrich(s, db)
+
+    # 確認排程時，若 start_time ≤ now，立即啟動（不等 APScheduler）
+    # 治具已在 commit 時直接寫入 loaned，auto_start_sop 不需再轉換
+    if body.status == "已確認" and immediate_start and conditions and device_id:
+        from .sop import auto_start_sop
+        cache = getattr(request.app.state, "AICM_CACHE", {})
+        locks = getattr(request.app.state, "DEVICE_LOCKS", {})
+        await auto_start_sop(device_id, conditions[0], cache, locks, skip_fixture_transfer=True)
 
     return result
 

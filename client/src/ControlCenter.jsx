@@ -8,19 +8,14 @@ import SchedulePage from "./SchedulePage";
 import UsersPage from "./UsersPage";
 import ErrorLog from "./ErrorLog";
 import RightPanel from "./components/control/RightPanel";
-import Dashboard from "./Dashboard";
-import AIPage from "./AIPage";
 import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL } from "./constants";
 
 const TAB_TO_PATH = {
   device: "/",
   fixture: "/fixtures",
   schedule: "/schedule",
-  dashboard: "/dashboard",
-  ai: "/ai",
+  records: "/records",
   users: "/users",
-  errors: "/errors",
-  executions: "/executions",
 };
 const PATH_TO_TAB = Object.fromEntries(
   Object.entries(TAB_TO_PATH).map(([k, v]) => [v, k])
@@ -721,10 +716,7 @@ const TABS = [
   { key: "device", label: "設備" },
   { key: "fixture", label: "治具" },
   { key: "schedule", label: "排程" },
-  { key: "dashboard", label: "趨勢圖" },
-  { key: "ai", label: "AI 諮詢" },
-  { key: "errors", label: "異常紀錄", guestHidden: true },
-  { key: "executions", label: "執行紀錄" },
+  { key: "records", label: "紀錄", guestHidden: true },
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
@@ -733,6 +725,7 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
   const [pendingScheduleCount, setPendingScheduleCount] = useState(0);
+  const [recordsSubTab, setRecordsSubTab] = useState("errors");
 
   // 切換 tab 時重置滾動位置
   useEffect(() => {
@@ -839,36 +832,40 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
         )}
         <div
           style={{
-            display: activeTab === "errors" ? "block" : "none",
+            display: activeTab === "records" ? "flex" : "none",
+            flexDirection: "column",
             height: "100%",
           }}
         >
-          <ErrorLog active={activeTab === "errors"} />
-        </div>
-        <div
-          style={{
-            display: activeTab === "executions" ? "block" : "none",
-            height: "100%",
-          }}
-        >
-          <ExecutionList active={activeTab === "executions"} role={role} />
-        </div>
-        <div
-          style={{
-            display: activeTab === "dashboard" ? "block" : "none",
-            height: "100%",
-            overflowY: "auto",
-          }}
-        >
-          <Dashboard active={activeTab === "dashboard"} />
-        </div>
-        <div
-          style={{
-            display: activeTab === "ai" ? "flex" : "none",
-            height: "100%",
-          }}
-        >
-          <AIPage onApplySchedule={onApplySchedule} />
+          {/* 子 Tab bar */}
+          <div style={{ display: "flex", gap: 0, padding: "0 12px", borderBottom: "1px solid #30363d", flexShrink: 0, background: "#0d1117" }}>
+            {[{ key: "errors", label: "異常紀錄" }, { key: "executions", label: "執行紀錄" }].map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setRecordsSubTab(t.key)}
+                style={{
+                  padding: "7px 14px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: recordsSubTab === t.key ? "2px solid #58a6ff" : "2px solid transparent",
+                  color: recordsSubTab === t.key ? "#cdd9e5" : "#8b949e",
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <div style={{ display: recordsSubTab === "errors" ? "block" : "none", height: "100%" }}>
+              <ErrorLog active={activeTab === "records" && recordsSubTab === "errors"} />
+            </div>
+            <div style={{ display: recordsSubTab === "executions" ? "block" : "none", height: "100%" }}>
+              <ExecutionList active={activeTab === "records" && recordsSubTab === "executions"} role={role} />
+            </div>
+          </div>
         </div>
       </div>
     </div>
