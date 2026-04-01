@@ -10,7 +10,6 @@ export default function AIPage({ onApplySchedule }) {
   const {
     activeId,
     conversations,
-    projectGroups,
     messages,
     input,
     loading,
@@ -23,8 +22,6 @@ export default function AIPage({ onApplySchedule }) {
     addConversation,
     deleteConversation,
     renameConversation,
-    setConversationGroup,
-    addProjectGroup,
     clearConversation,
     sendMessage,
     stopStream,
@@ -40,14 +37,11 @@ export default function AIPage({ onApplySchedule }) {
         onToggle={() => setSidebarOpen((v) => !v)}
         conversations={conversations}
         activeId={activeId}
-        projectGroups={projectGroups}
         loading={loading}
         onSwitch={switchConversation}
         onAdd={addConversation}
         onDelete={deleteConversation}
         onRename={renameConversation}
-        onSetGroup={setConversationGroup}
-        onAddGroup={addProjectGroup}
         onClear={clearConversation}
       />
       <ChatArea
