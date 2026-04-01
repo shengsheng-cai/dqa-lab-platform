@@ -276,12 +276,15 @@ def _fetch_execution_data(execution_id: int, db):
 # ─────────────────────────────────────────────────────────────────────────────
 
 _CJK_FONT_NAME = "CJK"
+# 優先 PingFang（macOS 新版），fallback STHeiti / NotoSansCJK
 _CJK_FONT_PATHS = [
-    "/System/Library/Fonts/STHeiti Medium.ttc",
-    "/System/Library/Fonts/STHeiti Light.ttc",
     "/System/Library/Fonts/PingFang.ttc",
+    "/Library/Fonts/PingFang.ttc",
+    "/System/Library/Fonts/STHeiti Light.ttc",
+    "/System/Library/Fonts/STHeiti.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf",
 ]
 _cjk_font_resolved = "unset"  # sentinel; None = not available
 
@@ -295,9 +298,18 @@ def _get_cjk_font():
         from reportlab.pdfbase.ttfonts import TTFont
         for path in _CJK_FONT_PATHS:
             if os.path.exists(path):
-                pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, path, subfontIndex=0))
-                _cjk_font_resolved = _CJK_FONT_NAME
-                return _CJK_FONT_NAME
+                try:
+                    pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, path, subfontIndex=0))
+                    _cjk_font_resolved = _CJK_FONT_NAME
+                    return _CJK_FONT_NAME
+                except Exception:
+                    # 某些字型檔可能無法用 subfontIndex=0，試試不指定
+                    try:
+                        pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, path))
+                        _cjk_font_resolved = _CJK_FONT_NAME
+                        return _CJK_FONT_NAME
+                    except Exception:
+                        continue
     except Exception:
         pass
     _cjk_font_resolved = None
@@ -305,20 +317,23 @@ def _get_cjk_font():
 
 
 def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated) -> bytes:
-    font_name = _get_cjk_font() or "Helvetica"
+    font_name = _get_cjk_font()
+    if not font_name:
+        # fallback: 用英文版本，避免中文變方塊
+        font_name = "Helvetica"
     bold_font = font_name if font_name == _CJK_FONT_NAME else "Helvetica-Bold"
 
     base = ParagraphStyle("base", fontName=font_name, fontSize=9, leading=14,
-                          spaceAfter=2)
+                          spaceAfter=2, textColor=colors.HexColor("#1a1a1a"))
     h1 = ParagraphStyle("h1", fontName=bold_font, fontSize=13, leading=18,
-                        spaceAfter=4, textColor=colors.HexColor("#1f6feb"))
+                        spaceAfter=4, textColor=colors.HexColor("#1a5276"))
     h2 = ParagraphStyle("h2", fontName=bold_font, fontSize=10, leading=14,
                         spaceBefore=10, spaceAfter=4,
-                        textColor=colors.HexColor("#58a6ff"))
+                        textColor=colors.HexColor("#1a5276"))
     small = ParagraphStyle("small", fontName=font_name, fontSize=8, leading=12,
-                           textColor=colors.HexColor("#8b949e"))
+                           textColor=colors.HexColor("#444444"))
     warn = ParagraphStyle("warn", fontName=font_name, fontSize=8, leading=12,
-                          textColor=colors.HexColor("#d29922"))
+                          textColor=colors.HexColor("#b7770d"))
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -327,8 +342,8 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     story = []
 
     _kv_style = TableStyle([
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#161b22")),
-        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#30363d")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#dde8f0")),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#aaaaaa")),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 3),
@@ -356,9 +371,9 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
         "環境測試報告 Environmental Test Report" if font_name == _CJK_FONT_NAME
         else "Environmental Test Report",
         ParagraphStyle("sub", fontName=bold_font, fontSize=11, leading=16,
-                       textColor=colors.HexColor("#c9d1d9"))))
+                       textColor=colors.HexColor("#444444"))))
     story.append(HRFlowable(width="100%", thickness=1,
-                            color=colors.HexColor("#30363d"), spaceAfter=10))
+                            color=colors.HexColor("#aaaaaa"), spaceAfter=10))
 
     # ── 1. 報告識別 ───────────────────────────────────────────────────────────
     story.append(Paragraph("1. 報告識別  Report Identification", h2))
@@ -410,8 +425,8 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
             ])
         ts = Table(step_data, colWidths=[3*cm, None])
         ts.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#21262d")),
-            ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#30363d")),
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#dde8f0")),
+            ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#aaaaaa")),
             ("LEFTPADDING", (0,0), (-1,-1), 6),
             ("TOPPADDING", (0,0), (-1,-1), 3),
             ("BOTTOMPADDING", (0,0), (-1,-1), 3),
@@ -434,7 +449,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     def _unc_table(u: unc.UncertaintyResult, qty_label: str):
         header = [Paragraph(h, ParagraphStyle("th", fontName=bold_font,
                                               fontSize=8, leading=12,
-                                              textColor=colors.white))
+                                              textColor=colors.HexColor("#1a1a1a")))
                   for h in ["不確定度來源 Source", "類型\nType", "分佈\nDist.",
                              "標準不確定度\nu(xi)"]]
         data = [header]
@@ -465,13 +480,13 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
         ])
         tw = Table(data, colWidths=[6.5*cm, 1.5*cm, 2.5*cm, None])
         tw.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#1f6feb")),
-            ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#30363d")),
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#dde8f0")),
+            ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#aaaaaa")),
             ("LEFTPADDING", (0,0), (-1,-1), 6),
             ("TOPPADDING", (0,0), (-1,-1), 3),
             ("BOTTOMPADDING", (0,0), (-1,-1), 3),
             ("ROWBACKGROUNDS", (0,1), (-1,-1),
-             [colors.HexColor("#0d1117"), colors.HexColor("#161b22")]),
+             [colors.white, colors.HexColor("#f5f8fb")]),
         ]))
         result_text = (
             f"<b>量測結果：{qty_label} = {u.mean:.2f} ± {u.U:.4f} {u.unit}</b>"
@@ -481,7 +496,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
                 Paragraph(result_text,
                           ParagraphStyle("result", fontName=bold_font, fontSize=9,
                                          leading=13,
-                                         textColor=colors.HexColor("#3fb950")))]
+                                         textColor=colors.HexColor("#1a5276")))]
 
     if u_temp:
         story.append(Paragraph("5.1 溫度不確定度 Temperature Uncertainty", h2))
@@ -538,7 +553,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     story.append(Paragraph(
         f"報告結束  End of Report  [{report_no}]",
         ParagraphStyle("footer", fontName=font_name, fontSize=8, leading=12,
-                       textColor=colors.HexColor("#484f58"), alignment=1)))
+                       textColor=colors.HexColor("#888888"), alignment=1)))
 
     doc.build(story)
     return buf.getvalue()

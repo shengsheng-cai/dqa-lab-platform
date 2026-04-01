@@ -9,6 +9,7 @@ import UsersPage from "./UsersPage";
 import ErrorLog from "./ErrorLog";
 import RightPanel from "./components/control/RightPanel";
 import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL } from "./constants";
+import { downloadBlob, buildReportFilename } from "./utils/download";
 
 const TAB_TO_PATH = {
   device: "/",
@@ -410,7 +411,7 @@ function fmtDatetime(str) {
 function ExecutionList({ active, role }) {
   const { showToast } = useToast();
   const [executions, setExecutions] = useState([]);
-  const [downloading, setDownloading] = useState(null);
+  const [downloading, setDownloading] = useState({});
   const [uploading, setUploading] = useState(null); // { id, type }
   const [expandedId, setExpandedId] = useState(null);
 
@@ -427,25 +428,15 @@ function ExecutionList({ active, role }) {
     return () => clearInterval(t);
   }, [active]);
 
-  const downloadReport = async (ex) => {
-    if (downloading) return;
-    setDownloading(ex.id);
+  const downloadReport = async (ex, format = "csv") => {
+    if (downloading[format]) return;
+    setDownloading((prev) => ({ ...prev, [format]: ex.id }));
     try {
-      const res = await api.get(`/api/reports/csv/${ex.id}`, {
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const a = document.createElement("a");
-      a.href = url;
-      const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      a.download = `${ex.device_id}_${ex.sop_id || "report"}_${date}_${ex.id}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      const prefix = `${ex.device_id}_${ex.sop_id || "report"}`;
+      await downloadBlob(`/api/reports/${format}/${ex.id}`, buildReportFilename(prefix, ex.id, format));
     } catch (_) {
     } finally {
-      setDownloading(null);
+      setDownloading((prev) => ({ ...prev, [format]: null }));
     }
   };
 
@@ -613,22 +604,30 @@ function ExecutionList({ active, role }) {
                   )}
                   {role !== "guest" && (
                   <td style={tdStyle}>
-                    <button
-                      onClick={() => downloadReport(ex)}
-                      disabled={downloading === ex.id}
-                      style={{
-                        padding: "3px 10px",
-                        fontSize: 11,
-                        borderRadius: 4,
-                        cursor: "pointer",
-                        background: "transparent",
-                        border: "1px solid #30363d",
-                        color: "#58a6ff",
-                        opacity: downloading === ex.id ? 0.5 : 1,
-                      }}
-                    >
-                      {downloading === ex.id ? "⏳" : "📥 CSV"}
-                    </button>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {[
+                        { format: "csv", label: "📥 CSV", color: "#58a6ff" },
+                        { format: "pdf", label: "📄 PDF", color: "#3fb950" },
+                      ].map(({ format, label, color }) => (
+                        <button
+                          key={format}
+                          onClick={() => downloadReport(ex, format)}
+                          disabled={downloading[format] === ex.id}
+                          style={{
+                            padding: "3px 10px",
+                            fontSize: 11,
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            background: "transparent",
+                            border: "1px solid #30363d",
+                            color,
+                            opacity: downloading[format] === ex.id ? 0.5 : 1,
+                          }}
+                        >
+                          {downloading[format] === ex.id ? "⏳" : label}
+                        </button>
+                      ))}
+                    </div>
                   </td>
                   )}
                 </tr>
