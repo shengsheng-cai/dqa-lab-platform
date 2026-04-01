@@ -68,6 +68,10 @@ cp .env.example backend/.env
 - `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com) 免費申請（Embedding + Flash-Lite）
 - `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN` — LINE Developers 後台取得（推播功能）
 
+**可選（RAG 對比測試）：**
+- `RAG_EMBED_PROVIDER=gemini`（預設）或 `sentence_transformers`
+- `RAG_ST_MODEL=intfloat/multilingual-e5-small`（僅 sentence-transformers 模式）
+
 ---
 
 ## 技術堆棧
@@ -76,7 +80,7 @@ cp .env.example backend/.env
 |------|------|
 | **後端** | FastAPI、SQLAlchemy 2.0、SQLite、Alembic、APScheduler |
 | **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
-| **AI** | Gemini API（Embedding + Flash-Lite）、in-memory RAG |
+| **AI** | Gemini API（Flash-Lite）+ 可切換 RAG Embedding（Gemini / sentence-transformers） |
 | **通知** | LINE Messaging API（群組 query 模式 + 緊急推播）|
 
 ---
