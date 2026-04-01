@@ -275,43 +275,71 @@ def _fetch_execution_data(execution_id: int, db):
 # PDF 報告（ISO/IEC 17025:2017）
 # ─────────────────────────────────────────────────────────────────────────────
 
-_CJK_FONT_NAME = "CJK"
-# 優先 PingFang（macOS 新版），fallback STHeiti / NotoSansCJK
+_CJK_TTF_FONT_NAME = "CJK-TTF"
+# Railway/Linux + 本地 macOS 常見路徑；可用 REPORT_CJK_FONT_PATH 覆蓋
 _CJK_FONT_PATHS = [
-    "/System/Library/Fonts/PingFang.ttc",
-    "/Library/Fonts/PingFang.ttc",
     "/System/Library/Fonts/STHeiti Light.ttc",
-    "/System/Library/Fonts/STHeiti.ttc",
+    "/System/Library/Fonts/STHeiti Medium.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansTC-Regular.ttf",
+]
+_CJK_CID_FONT_CANDIDATES = [
+    "MSung-Light",   # 繁中
+    "STSong-Light",  # 簡中
 ]
 _cjk_font_resolved = "unset"  # sentinel; None = not available
+
+
+def _try_register_ttf(path: str):
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    try:
+        pdfmetrics.registerFont(TTFont(_CJK_TTF_FONT_NAME, path, subfontIndex=0))
+        return _CJK_TTF_FONT_NAME
+    except Exception:
+        # 某些字型檔不支援 subfontIndex
+        try:
+            pdfmetrics.registerFont(TTFont(_CJK_TTF_FONT_NAME, path))
+            return _CJK_TTF_FONT_NAME
+        except Exception:
+            return None
+
 
 def _get_cjk_font():
     """初次呼叫時偵測並註冊 CJK 字型，結果快取於模組變數。"""
     global _cjk_font_resolved
     if _cjk_font_resolved != "unset":
         return _cjk_font_resolved
+
     try:
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.ttfonts import TTFont
+        env_font = os.getenv("REPORT_CJK_FONT_PATH", "").strip()
+        if env_font and os.path.exists(env_font):
+            font_name = _try_register_ttf(env_font)
+            if font_name:
+                _cjk_font_resolved = font_name
+                return font_name
+
         for path in _CJK_FONT_PATHS:
-            if os.path.exists(path):
-                try:
-                    pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, path, subfontIndex=0))
-                    _cjk_font_resolved = _CJK_FONT_NAME
-                    return _CJK_FONT_NAME
-                except Exception:
-                    # 某些字型檔可能無法用 subfontIndex=0，試試不指定
-                    try:
-                        pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, path))
-                        _cjk_font_resolved = _CJK_FONT_NAME
-                        return _CJK_FONT_NAME
-                    except Exception:
-                        continue
+            if not os.path.exists(path):
+                continue
+            font_name = _try_register_ttf(path)
+            if font_name:
+                _cjk_font_resolved = font_name
+                return font_name
+
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        for cid_name in _CJK_CID_FONT_CANDIDATES:
+            try:
+                pdfmetrics.registerFont(UnicodeCIDFont(cid_name))
+                _cjk_font_resolved = cid_name
+                return cid_name
+            except Exception:
+                continue
     except Exception:
         pass
+
     _cjk_font_resolved = None
     return None
 
@@ -319,9 +347,11 @@ def _get_cjk_font():
 def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated) -> bytes:
     font_name = _get_cjk_font()
     if not font_name:
-        # fallback: 用英文版本，避免中文變方塊
+        # 極端情況才 fallback 英文字型
         font_name = "Helvetica"
-    bold_font = font_name if font_name == _CJK_FONT_NAME else "Helvetica-Bold"
+    has_cjk_font = font_name != "Helvetica"
+    # CJK 字型通常沒有獨立 Bold 名稱，直接沿用同一個 family
+    bold_font = font_name if has_cjk_font else "Helvetica-Bold"
 
     base = ParagraphStyle("base", fontName=font_name, fontSize=9, leading=14,
                           spaceAfter=2, textColor=colors.HexColor("#1a1a1a"))
@@ -368,7 +398,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     # ── 封面 ──────────────────────────────────────────────────────────────────
     story.append(Paragraph("DQA Lab Digital Twin", h1))
     story.append(Paragraph(
-        "環境測試報告 Environmental Test Report" if font_name == _CJK_FONT_NAME
+        "環境測試報告 Environmental Test Report" if has_cjk_font
         else "Environmental Test Report",
         ParagraphStyle("sub", fontName=bold_font, fontSize=11, leading=16,
                        textColor=colors.HexColor("#444444"))))

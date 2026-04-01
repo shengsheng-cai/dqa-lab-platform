@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-blue)
 
@@ -58,10 +58,10 @@ make dev                      # 啟動全部服務
 | 後端 API | http://localhost:8000 |
 | API 文件 | http://localhost:8000/docs |
 
-複製 `backend/.env.example` 為 `backend/.env` 並填入環境變數：
+複製專案根目錄的 `.env.example` 為 `backend/.env`（後端啟動時讀取）：
 
 ```bash
-cp backend/.env.example backend/.env
+cp .env.example backend/.env
 ```
 
 **必須設置（可選功能會自動跳過）：**
@@ -75,7 +75,7 @@ cp backend/.env.example backend/.env
 | 層級 | 技術 |
 |------|------|
 | **後端** | FastAPI、SQLAlchemy 2.0、SQLite、Alembic、APScheduler |
-| **前端** | React 18、Vite、Recharts、Axios、react-router-dom |
+| **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Embedding + Flash-Lite）、in-memory RAG |
 | **通知** | LINE Messaging API（群組 query 模式 + 緊急推播）|
 

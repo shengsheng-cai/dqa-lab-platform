@@ -13,17 +13,11 @@
 
 新增 API 端點時，依照以上表格在 `auth.py` 加上對應的 role 檢查。
 
-## LINE 推播（5 時機）
+## LINE（Query + Emergency Push）
 
-| 時機 | 觸發位置 | 收件人 |
-|------|---------|--------|
-| 啟動測試 | sop.py → push_sop_notification | operator（個人優先，fallback 群組） |
-| 進入 dwell_high | data_simulator() phase 轉換 | operator |
-| 進入 ramp_to_ambient | data_simulator() phase 轉換 | operator |
-| 緊急停止 | main.py emergency_stop | operator |
-| 降溫完成（回 IDLE） | data_simulator() FINISHING→IDLE | operator |
-
-新增通知邏輯時，推播失敗要寫入 notification_failures 表，不可直接 raise。
+- Webhook 採 **query 模式**：使用者在群組或私訊傳 `狀態`、`CH01~CH05`、`幫助`，Bot 即時 reply。
+- 主動 push 目前只保留 **緊急停止**（`devices.py` 呼叫 `push_message`）。
+- 其他 SOP/phase 自動推播已停用（v40 簡化），若未來重啟，需同步更新此文件與 `CLAUDE.local.md`。
 
 ## 自動排程邏輯
 
