@@ -26,11 +26,12 @@ App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, UsersPage
 - 甘特圖：`flexShrink:0` 固定區塊（308px），永遠可見，不可改為可捲動
 - 捲動區：待審核警示條 + 待審核隊列 + 圖例 + 排程表格
 
-## DateTimePicker
+## DateTimePicker / DatePicker
 
-- 純 `<select>` 實作（不用 `type="datetime-local"`），跨瀏覽器/裝置完全一致
-- 兩行：上行年月日，下行時分；不使用 `flexWrap`，永不換行破版
-- value 格式：`YYYY-MM-DDThh:mm`；月份變更時自動 clamp 日期不超過當月最大值
+- 不使用 `type="datetime-local"` 或 `type="date"`，跨瀏覽器/裝置行為不一致
+- `DateTimePicker`（SchedulePage）：兩行，上行年月日，下行時分；value 格式 `YYYY-MM-DDThh:mm`
+- `DatePicker`（FixturePage）：單行年月日；value 格式 `YYYY-MM-DD`
+- 月份變更時兩者皆自動 clamp 日期不超過當月最大值
 
 ## 注意事項
 
