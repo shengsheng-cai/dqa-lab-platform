@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import useAIChat from "../../ai/useAIChat";
 import ChatArea from "../../ai/ChatArea";
 import { exportChat } from "../../ai/aiStorage";
@@ -32,7 +32,6 @@ export default function RightPanel({ onClose, onApplySchedule }) {
   const {
     activeId,
     conversations,
-    projectGroups,
     messages,
     input,
     loading,
@@ -51,18 +50,13 @@ export default function RightPanel({ onClose, onApplySchedule }) {
     deleteConversation,
     clearConversation,
     renameConversation,
-    setConversationGroup,
-    addProjectGroup,
   } = useAIChat();
 
   const [quickQuestions, setQuickQuestions] = useState(() =>
     pickRandom(4, QUESTION_POOL)
   );
-  const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
-  const [newGroupInput, setNewGroupInput] = useState("");
-  const menuRef = useRef(null);
   const renameRef = useRef(null);
 
   const convIds = Object.keys(conversations).sort(
@@ -74,7 +68,6 @@ export default function RightPanel({ onClose, onApplySchedule }) {
   const currentIdx = convIds.indexOf(activeId);
   const activeConv = conversations[activeId];
   const activeTitle = activeConv?.title || "新對話";
-  const currentGroup = activeConv?.projectGroup || "未分組";
 
   const goPrev = () => {
     if (loading || total <= 1) return;
@@ -87,20 +80,9 @@ export default function RightPanel({ onClose, onApplySchedule }) {
     switchConversation(convIds[(currentIdx + 1) % total]);
   };
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target))
-        setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [menuOpen]);
-
   const startRename = () => {
     setRenameValue(activeTitle === "新對話" ? "" : activeTitle);
     setRenaming(true);
-    setMenuOpen(false);
     setTimeout(() => renameRef.current?.focus(), 50);
   };
 
@@ -114,21 +96,6 @@ export default function RightPanel({ onClose, onApplySchedule }) {
     if (window.confirm(`確定刪除「${activeTitle}」？`)) {
       deleteConversation(activeId);
     }
-    setMenuOpen(false);
-  };
-
-  const handleGroupChange = (group) => {
-    setConversationGroup(activeId, group);
-    setMenuOpen(false);
-  };
-
-  const handleAddGroup = () => {
-    const g = newGroupInput.trim();
-    if (!g) return;
-    addProjectGroup(g);
-    setConversationGroup(activeId, g);
-    setNewGroupInput("");
-    setMenuOpen(false);
   };
 
   return (
@@ -220,65 +187,22 @@ export default function RightPanel({ onClose, onApplySchedule }) {
           ↓
         </button>
 
-        {/* ··· 分組 / 清除 / 刪除 */}
-        <div ref={menuRef} style={{ position: "relative" }}>
-          <button onClick={() => setMenuOpen((v) => !v)} title="更多" style={iconBtnS(false)}>
-            ···
-          </button>
-          {menuOpen && (
-            <div
-              style={{
-                position: "absolute",
-                top: "calc(100% + 4px)",
-                right: 0,
-                width: 168,
-                background: "#161b22",
-                border: "1px solid #30363d",
-                borderRadius: 6,
-                boxShadow: "0 8px 24px rgba(0,0,0,.4)",
-                zIndex: 999,
-                overflow: "hidden",
-              }}
-            >
-              <div style={{ padding: "6px 12px 4px", fontSize: 10, color: "#484f58", letterSpacing: 0.5 }}>
-                分組
-              </div>
-              {projectGroups.map((g) => (
-                <MenuItem key={g} onClick={() => handleGroupChange(g)} active={g === currentGroup}>
-                  {g === currentGroup ? "● " : "○ "}{g}
-                </MenuItem>
-              ))}
-              <div style={{ padding: "4px 8px", display: "flex", gap: 4, borderTop: "1px solid #21262d" }}>
-                <input
-                  value={newGroupInput}
-                  onChange={(e) => setNewGroupInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddGroup()}
-                  placeholder="新分組名稱"
-                  style={{
-                    flex: 1, fontSize: 10, background: "#0d1117",
-                    border: "1px solid #30363d", borderRadius: 3,
-                    color: "#cdd9e5", padding: "2px 6px", outline: "none",
-                  }}
-                />
-                <button
-                  onClick={handleAddGroup}
-                  style={{
-                    fontSize: 10, background: "transparent", border: "1px solid #30363d",
-                    borderRadius: 3, color: "#8b949e", padding: "2px 6px", cursor: "pointer",
-                  }}
-                >+</button>
-              </div>
-              <div style={{ borderTop: "1px solid #21262d" }} />
-              <MenuItem
-                onClick={() => { clearConversation(); setMenuOpen(false); }}
-                disabled={messages.length === 0}
-              >
-                ✕ 清除內容
-              </MenuItem>
-              <MenuItem onClick={handleDelete} danger>🗑 刪除對話</MenuItem>
-            </div>
-          )}
-        </div>
+        {/* 清除 / 刪除 */}
+        <button
+          onClick={clearConversation}
+          disabled={messages.length === 0}
+          title="清除對話內容"
+          style={iconBtnS(messages.length === 0)}
+        >
+          ✕
+        </button>
+        <button
+          onClick={handleDelete}
+          title="刪除此對話"
+          style={{ ...iconBtnS(false), color: "#f85149", borderColor: "#3d1c1c" }}
+        >
+          🗑
+        </button>
 
         {/* + 新增對話 */}
         <button onClick={() => addConversation()} disabled={loading} title="新增對話" style={iconBtnS(loading)}>
@@ -369,35 +293,6 @@ export default function RightPanel({ onClose, onApplySchedule }) {
   );
 }
 
-// ── 小元件 ────────────────────────────────────────────────────
-
-function MenuItem({ children, onClick, disabled, danger, active }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <div
-      onClick={disabled ? undefined : onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        padding: "7px 12px",
-        fontSize: 11,
-        cursor: disabled ? "default" : "pointer",
-        color: disabled
-          ? "#484f58"
-          : danger
-            ? hover ? "#ff7b72" : "#f85149"
-            : active
-              ? "#58a6ff"
-              : hover ? "#cdd9e5" : "#8b949e",
-        background: hover && !disabled ? "#21262d" : "transparent",
-        transition: "color .1s, background .1s",
-        userSelect: "none",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 const navBtnS = (disabled) => ({
   background: "transparent",

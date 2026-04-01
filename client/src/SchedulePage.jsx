@@ -880,6 +880,66 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
   );
 }
 
+// ── DateTimePicker ─────────────────────────────────────────────────────────
+// 純 select 實作，跨瀏覽器/裝置完全一致，不依賴 native picker
+function DateTimePicker({ value, onChange, style }) {
+  const now = new Date();
+  const curYear = now.getFullYear();
+
+  const year  = value ? parseInt(value.slice(0, 4))  : curYear;
+  const month = value ? parseInt(value.slice(5, 7))  : now.getMonth() + 1;
+  const day   = value ? parseInt(value.slice(8, 10)) : now.getDate();
+  const h     = value && value.length >= 16 ? value.slice(11, 13) : "09";
+  const m     = value && value.length >= 16 ? value.slice(14, 16) : "00";
+
+  const emit = (y, mo, d, hh, mm) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    const maxDay = new Date(y, mo, 0).getDate();
+    const safeDay = Math.min(Number(d), maxDay);
+    onChange(`${y}-${pad(mo)}-${pad(safeDay)}T${pad(hh)}:${pad(mm)}`);
+  };
+
+  const years   = [curYear - 1, curYear, curYear + 1, curYear + 2];
+  const months  = Array.from({ length: 12 }, (_, i) => i + 1);
+  const days    = Array.from({ length: new Date(year, month, 0).getDate() }, (_, i) => i + 1);
+  const hours   = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+  const sel = { ...style, padding: "4px 4px" };
+  const lbl = { color: "#6e7681", fontSize: 11 };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {/* 日期行 */}
+      <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+        <select value={year}  onChange={(e) => emit(e.target.value, month, day, h, m)} style={{ ...sel, width: 64 }}>
+          {years.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <span style={lbl}>年</span>
+        <select value={month} onChange={(e) => emit(year, e.target.value, day, h, m)} style={{ ...sel, width: 44 }}>
+          {months.map((mo) => <option key={mo} value={mo}>{String(mo).padStart(2, "0")}</option>)}
+        </select>
+        <span style={lbl}>月</span>
+        <select value={day}   onChange={(e) => emit(year, month, e.target.value, h, m)} style={{ ...sel, width: 44 }}>
+          {days.map((d) => <option key={d} value={d}>{String(d).padStart(2, "0")}</option>)}
+        </select>
+        <span style={lbl}>日</span>
+      </div>
+      {/* 時間行 */}
+      <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+        <select value={h} onChange={(e) => emit(year, month, day, e.target.value, m)} style={{ ...sel, width: 50 }}>
+          {hours.map((n) => <option key={n} value={String(n).padStart(2, "0")}>{String(n).padStart(2, "0")}</option>)}
+        </select>
+        <span style={lbl}>時</span>
+        <select value={m} onChange={(e) => emit(year, month, day, h, e.target.value)} style={{ ...sel, width: 50 }}>
+          {minutes.map((n) => <option key={n} value={String(n).padStart(2, "0")}>{String(n).padStart(2, "0")}</option>)}
+        </select>
+        <span style={lbl}>分</span>
+      </div>
+    </div>
+  );
+}
+
 // ── 管理不可用時段 Modal ────────────────────────────────────────────────────
 
 const EMPTY_FORM = { device_id: DEVICE_IDS[0], start_time: "", end_time: "", reason: "" };
@@ -1044,8 +1104,9 @@ function ManageBlockedPeriodsModal({ onClose, onChanged }) {
             <div style={{ fontSize: 13, fontWeight: 600, color: "#cdd9e5", marginBottom: 2 }}>
               {editingId !== null ? "編輯時段" : "新增時段"}
             </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-              <div style={{ flex: "0 0 90px" }}>
+            {/* 第一行：設備 + 原因 */}
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: "0 0 100px" }}>
                 <div style={labelStyle}>設備</div>
                 <select value={form.device_id} onChange={(e) => setForm((f) => ({ ...f, device_id: e.target.value }))}
                   style={inputStyle}>
@@ -1053,21 +1114,28 @@ function ManageBlockedPeriodsModal({ onClose, onChanged }) {
                 </select>
               </div>
               <div style={{ flex: 1 }}>
-                <div style={labelStyle}>開始時間</div>
-                <input type="datetime-local" value={form.start_time}
-                  onChange={(e) => setForm((f) => ({ ...f, start_time: e.target.value }))}
-                  style={inputStyle} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={labelStyle}>結束時間</div>
-                <input type="datetime-local" value={form.end_time}
-                  onChange={(e) => setForm((f) => ({ ...f, end_time: e.target.value }))}
-                  style={inputStyle} />
-              </div>
-              <div style={{ flex: 1 }}>
                 <div style={labelStyle}>原因</div>
                 <input value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
                   placeholder="e.g. 年度校正" style={inputStyle} />
+              </div>
+            </div>
+            {/* 第二行：開始時間 + 結束時間 */}
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={labelStyle}>開始時間</div>
+                <DateTimePicker
+                  value={form.start_time}
+                  onChange={(v) => setForm((f) => ({ ...f, start_time: v }))}
+                  style={inputStyle}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={labelStyle}>結束時間</div>
+                <DateTimePicker
+                  value={form.end_time}
+                  onChange={(v) => setForm((f) => ({ ...f, end_time: v }))}
+                  style={inputStyle}
+                />
               </div>
             </div>
             {error && <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>}
@@ -1141,6 +1209,10 @@ const labelStyle = { fontSize: 12, color: "#8b949e", marginBottom: 4, fontWeight
 const primaryBtn = {
   background: "#238636", border: "1px solid #2ea043", color: "#fff",
   padding: "7px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600,
+};
+const scheduleIconBtn = {
+  background: "transparent", border: "1px solid #30363d", color: "#8b949e",
+  padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontSize: 14, lineHeight: 1,
 };
 const cancelBtn = {
   background: "transparent", border: "1px solid #30363d", color: "#8b949e",
@@ -1258,41 +1330,6 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
       height: "100%", display: "flex", flexDirection: "column",
       background: "#0d1117", overflow: "hidden",
     }}>
-      {/* 單行緊湊 header */}
-      <div style={{
-        padding: "6px 14px", borderBottom: "1px solid #30363d",
-        display: "flex", alignItems: "center", gap: 6,
-        flexShrink: 0, flexWrap: "wrap",
-      }}>
-        {SUMMARY_BADGES.map(({ label, value, color, bg, border }) => (
-          <span key={label} style={{
-            fontSize: 12, background: bg, border: `1px solid ${border}`,
-            borderRadius: 6, padding: "3px 10px", whiteSpace: "nowrap",
-            color: "#8b949e",
-          }}>
-            {label} <span style={{ fontWeight: 700, color }}>{value}</span>
-          </span>
-        ))}
-        <div style={{ flex: 1 }} />
-        {lastRefreshed && (
-          <span style={{ fontSize: 11, color: "#484f58", whiteSpace: "nowrap" }}>
-            {lastRefreshed.getHours().toString().padStart(2,"0")}:{lastRefreshed.getMinutes().toString().padStart(2,"0")}:{lastRefreshed.getSeconds().toString().padStart(2,"0")}
-          </span>
-        )}
-        <button onClick={handleRefresh} disabled={refreshing} style={{ ...cancelBtn, fontSize: 12 }}>
-          {refreshing ? "刷新中..." : "↻ 刷新"}
-        </button>
-        {isAdmin && (
-          <button onClick={() => setShowBlockModal(true)} style={{ ...cancelBtn, fontSize: 12 }}>
-            標記不可用時段
-          </button>
-        )}
-        {canOperate && (
-          <button onClick={() => { setPendingInitConds(null); setShowNewModal(true); }} style={primaryBtn}>
-            + 申請排程
-          </button>
-        )}
-      </div>
 
       {/* 甘特圖（固定區塊，永遠可見） */}
       <div style={{ flexShrink: 0, padding: "10px 16px", borderBottom: "1px solid #30363d" }}>
@@ -1408,7 +1445,7 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
         {/* 排程清單 */}
         <div>
           {/* 篩選列 */}
-          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
             {["all", ...STATUS_LIST].map((s) => (
               <button
                 key={s}
@@ -1424,6 +1461,25 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
                 {s === "all" ? "全部" : s}
               </button>
             ))}
+            <div style={{ flex: 1 }} />
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              title="刷新"
+              style={{ ...scheduleIconBtn, opacity: refreshing ? 0.5 : 1 }}
+            >↺</button>
+            {isAdmin && (
+              <button
+                onClick={() => setShowBlockModal(true)}
+                title="標記不可用時段"
+                style={scheduleIconBtn}
+              >🔒</button>
+            )}
+            {canOperate && (
+              <button onClick={() => { setPendingInitConds(null); setShowNewModal(true); }} style={primaryBtn}>
+                + 申請排程
+              </button>
+            )}
           </div>
 
           {/* 表格 */}

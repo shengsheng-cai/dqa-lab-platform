@@ -243,6 +243,7 @@ function ConfirmModal({ message, onConfirm, onClose }) {
 function DemoTokenSection({ active }) {
   const { showToast } = useToast();
   const [tokens, setTokens] = useState([]);
+  const [hideInactive, setHideInactive] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [label, setLabel] = useState("");
   const [expiresDays, setExpiresDays] = useState("");
@@ -306,20 +307,26 @@ function DemoTokenSection({ active }) {
   };
 
   return (
-    <div style={{ marginTop: 36 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>訪客 Token 管理</div>
-          <div style={{ fontSize: 12, color: "#8b949e", marginTop: 2 }}>
-            管理者生成一次性訪客 Token，取代固定密碼。Token 可設定到期日與使用次數上限。
-          </div>
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#cdd9e5" }}>訪客 Token</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#8b949e", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={hideInactive}
+              onChange={(e) => setHideInactive(e.target.checked)}
+              style={{ cursor: "pointer" }}
+            />
+            隱藏已失效
+          </label>
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            style={{ padding: "5px 12px", borderRadius: 6, background: "#1f6feb", color: "#fff", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+          >
+            + 生成
+          </button>
         </div>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          style={{ padding: "8px 16px", borderRadius: 6, background: "#1f6feb", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
-        >
-          + 生成 Token
-        </button>
       </div>
 
       {/* 建立表單 */}
@@ -394,59 +401,61 @@ function DemoTokenSection({ active }) {
       )}
 
       {/* Token 列表 */}
-      {tokens.length === 0 ? (
-        <div style={{ color: "#484f58", textAlign: "center", padding: "28px 0", fontSize: 13 }}>尚無訪客 Token，點擊「生成 Token」建立第一個</div>
-      ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #30363d" }}>
-              {["Token", "用途", "到期日", "使用次數", "狀態", "操作"].map((h) => (
-                <th key={h} style={{ padding: "8px 12px", fontSize: 11, color: "#8b949e", fontWeight: 600, textAlign: "left" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {tokens.map((t) => {
-              const invalid = !t.is_active || t.expired || t.used_up;
-              return (
-                <tr key={t.id} style={{ borderBottom: "1px solid #21262d", opacity: invalid ? 0.5 : 1 }}>
-                  <td style={{ padding: "10px 12px" }}>
-                    <span style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: invalid ? "#8b949e" : "#58a6ff", letterSpacing: 1 }}>{t.token}</span>
-                  </td>
-                  <td style={{ padding: "10px 12px", fontSize: 13, color: "#cdd9e5" }}>{t.label || <span style={{ color: "#484f58" }}>—</span>}</td>
-                  <td style={{ padding: "10px 12px", fontSize: 12, color: t.expired ? "#f85149" : "#8b949e" }}>
-                    {t.expires_at ? fmtDate(t.expires_at) + (t.expired ? " (已過期)" : "") : "永不到期"}
-                  </td>
-                  <td style={{ padding: "10px 12px", fontSize: 12, color: t.used_up ? "#f85149" : "#8b949e" }}>
-                    {t.use_count} / {t.max_uses ?? "∞"}{t.used_up ? " (已用盡)" : ""}
-                  </td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: invalid ? "#21262d" : "#1f3a1f", color: invalid ? "#8b949e" : "#3fb950", fontWeight: 600 }}>
-                      {t.is_active && !t.expired && !t.used_up ? "有效" : "無效"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        onClick={() => handleToggle(t.id)}
-                        style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid #30363d", background: "transparent", color: "#8b949e", fontSize: 11, cursor: "pointer" }}
-                      >
-                        {t.is_active ? "停用" : "啟用"}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(t.id)}
-                        style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid #da363344", background: "transparent", color: "#f85149", fontSize: 11, cursor: "pointer" }}
-                      >
-                        刪除
-                      </button>
-                    </div>
-                  </td>
+      {(() => {
+        const visible = hideInactive
+          ? tokens.filter((t) => t.is_active && !t.expired && !t.used_up)
+          : tokens;
+        const hiddenCount = tokens.length - visible.length;
+        return visible.length === 0 ? (
+          <div style={{ color: "#484f58", textAlign: "center", padding: "28px 0", fontSize: 13 }}>
+            {tokens.length === 0 ? "尚無訪客 Token，點擊「+ 生成」建立第一個" : `所有 Token 已失效（共 ${tokens.length} 筆）`}
+          </div>
+        ) : (
+          <>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #30363d" }}>
+                  {["Token", "用途", "到期日", "次數", "操作"].map((h) => (
+                    <th key={h} style={{ padding: "6px 10px", fontSize: 11, color: "#8b949e", fontWeight: 600, textAlign: "left" }}>{h}</th>
+                  ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+              </thead>
+              <tbody>
+                {visible.map((t) => {
+                  const invalid = !t.is_active || t.expired || t.used_up;
+                  return (
+                    <tr key={t.id} style={{ borderBottom: "1px solid #21262d", opacity: invalid ? 0.5 : 1 }}>
+                      <td style={{ padding: "8px 10px" }}>
+                        <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: invalid ? "#8b949e" : "#58a6ff", letterSpacing: 1 }}>{t.token}</span>
+                      </td>
+                      <td style={{ padding: "8px 10px", fontSize: 12, color: "#cdd9e5" }}>{t.label || <span style={{ color: "#484f58" }}>—</span>}</td>
+                      <td style={{ padding: "8px 10px", fontSize: 12, color: t.expired ? "#f85149" : "#8b949e", whiteSpace: "nowrap" }}>
+                        {t.expires_at ? fmtDate(t.expires_at) + (t.expired ? " 過期" : "") : "永不到期"}
+                      </td>
+                      <td style={{ padding: "8px 10px", fontSize: 12, color: t.used_up ? "#f85149" : "#8b949e", whiteSpace: "nowrap" }}>
+                        {t.use_count} / {t.max_uses ?? "∞"}
+                      </td>
+                      <td style={{ padding: "8px 10px" }}>
+                        <div style={{ display: "flex", gap: 5 }}>
+                          <button onClick={() => handleToggle(t.id)} title={t.is_active ? "停用" : "啟用"} style={{ ...iconActionBtn, color: t.is_active ? "#8b949e" : "#3fb950", borderColor: t.is_active ? "#30363d" : "#238636" }}>
+                            {t.is_active ? "⏸" : "▶"}
+                          </button>
+                          <button onClick={() => handleDelete(t.id)} title="刪除" style={{ ...iconActionBtn, color: "#f85149", borderColor: "#da363344" }}>🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {hiddenCount > 0 && (
+              <div style={{ fontSize: 11, color: "#484f58", textAlign: "center", padding: "8px 0" }}>
+                已隱藏 {hiddenCount} 筆失效 Token
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }
@@ -460,6 +469,17 @@ const inputS = {
   fontSize: 13,
   outline: "none",
   width: 180,
+};
+
+const iconActionBtn = {
+  padding: "4px 8px",
+  borderRadius: 4,
+  border: "1px solid #30363d",
+  background: "transparent",
+  color: "#8b949e",
+  fontSize: 13,
+  cursor: "pointer",
+  lineHeight: 1,
 };
 
 export default function UsersPage({ active, role }) {
@@ -511,7 +531,7 @@ export default function UsersPage({ active, role }) {
   };
 
   const thStyle = {
-    padding: "8px 12px",
+    padding: "6px 10px",
     fontSize: 11,
     color: "#8b949e",
     fontWeight: 600,
@@ -520,7 +540,7 @@ export default function UsersPage({ active, role }) {
     whiteSpace: "nowrap",
   };
   const tdStyle = {
-    padding: "10px 12px",
+    padding: "8px 10px",
     fontSize: 13,
     color: "#cdd9e5",
     borderBottom: "1px solid #21262d",
@@ -529,174 +549,78 @@ export default function UsersPage({ active, role }) {
   return (
     <div
       style={{
-        padding: "20px 24px",
+        padding: "16px 20px",
         height: "100%",
         overflowY: "auto",
         backgroundColor: "#0d1117",
         fontFamily: "system-ui, -apple-system, sans-serif",
+        boxSizing: "border-box",
       }}
     >
-      {/* 標題列 */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 20,
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#cdd9e5" }}>
-            人員管理
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        {/* ── 左側：人員管理 ── */}
+        <div style={{ flex: "0 0 38%", minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#cdd9e5" }}>人員</span>
+            <button
+              onClick={() => setModalUser(null)}
+              style={{ padding: "5px 12px", borderRadius: 6, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+            >
+              + 新增
+            </button>
           </div>
-          <div style={{ fontSize: 12, color: "#8b949e", marginTop: 2 }}>
-            管理借用人名冊（工程師）與 LINE 推播 ID，保管人／管理者帳號請洽系統管理員
+          <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#21262d" }}>
+                  <th style={thStyle}>姓名</th>
+                  <th style={thStyle}>角色</th>
+                  <th style={thStyle}>狀態</th>
+                  <th style={thStyle}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: "#8b949e" }}>載入中...</td></tr>
+                ) : users.length === 0 ? (
+                  <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: "#8b949e" }}>尚無人員資料</td></tr>
+                ) : (
+                  users.map((u) => (
+                    <tr
+                      key={u.id}
+                      style={{ transition: "background .1s", opacity: u.is_active ? 1 : 0.45 }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#1c2128")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <td style={{ ...tdStyle, fontWeight: 600 }}>{u.display_name}</td>
+                      <td style={tdStyle}><RoleBadge role={u.role} /></td>
+                      <td style={tdStyle}>
+                        <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: u.is_active ? "#0d1f14" : "#21262d", color: u.is_active ? "#3fb950" : "#8b949e", border: `1px solid ${u.is_active ? "#238636" : "#30363d"}` }}>
+                          {u.is_active ? "啟用" : "停用"}
+                        </span>
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ display: "flex", gap: 5 }}>
+                          <button onClick={() => setModalUser(u)} title="編輯" style={iconActionBtn}>✏</button>
+                          <button onClick={() => handleToggleActive(u)} title={u.is_active ? "停用" : "啟用"} style={{ ...iconActionBtn, color: u.is_active ? "#8b949e" : "#3fb950", borderColor: u.is_active ? "#30363d" : "#238636" }}>
+                            {u.is_active ? "⏸" : "▶"}
+                          </button>
+                          <button onClick={() => setDeleteTarget(u)} title="刪除" style={{ ...iconActionBtn, color: "#f85149", borderColor: "#da363344" }}>🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-        <button
-          onClick={() => setModalUser(null)}
-          style={{
-            padding: "8px 16px",
-            borderRadius: 6,
-            background: "#238636",
-            color: "#fff",
-            border: "none",
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-        >
-          + 新增人員
-        </button>
-      </div>
 
-      {/* 人員表格 */}
-      <div
-        style={{
-          background: "#161b22",
-          border: "1px solid #30363d",
-          borderRadius: 8,
-          overflow: "hidden",
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#21262d" }}>
-              <th style={thStyle}>姓名</th>
-              <th style={thStyle}>角色</th>
-              <th style={thStyle}>狀態</th>
-              <th style={thStyle}>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td
-                  colSpan={4}
-                  style={{ ...tdStyle, textAlign: "center", color: "#8b949e" }}
-                >
-                  載入中...
-                </td>
-              </tr>
-            ) : users.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={4}
-                  style={{ ...tdStyle, textAlign: "center", color: "#8b949e" }}
-                >
-                  尚無人員資料
-                </td>
-              </tr>
-            ) : (
-              users.map((u) => (
-                <tr
-                  key={u.id}
-                  style={{
-                    transition: "background .1s",
-                    opacity: u.is_active ? 1 : 0.45,
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#1c2128")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "transparent")
-                  }
-                >
-                  <td style={{ ...tdStyle, fontWeight: 600 }}>
-                    {u.display_name}
-                  </td>
-                  <td style={tdStyle}>
-                    <RoleBadge role={u.role} />
-                  </td>
-                  <td style={tdStyle}>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        padding: "2px 8px",
-                        borderRadius: 4,
-                        background: u.is_active ? "#0d1f14" : "#21262d",
-                        color: u.is_active ? "#3fb950" : "#8b949e",
-                        border: `1px solid ${u.is_active ? "#238636" : "#30363d"}`,
-                      }}
-                    >
-                      {u.is_active ? "啟用" : "停用"}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        onClick={() => setModalUser(u)}
-                        style={{
-                          padding: "3px 10px",
-                          borderRadius: 4,
-                          border: "1px solid #30363d",
-                          background: "transparent",
-                          color: "#8b949e",
-                          fontSize: 11,
-                          cursor: "pointer",
-                        }}
-                      >
-                        編輯
-                      </button>
-                      <button
-                        onClick={() => handleToggleActive(u)}
-                        style={{
-                          padding: "3px 10px",
-                          borderRadius: 4,
-                          border: `1px solid ${u.is_active ? "#444" : "#238636"}`,
-                          background: "transparent",
-                          color: u.is_active ? "#8b949e" : "#3fb950",
-                          fontSize: 11,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {u.is_active ? "停用" : "啟用"}
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(u)}
-                        style={{
-                          padding: "3px 10px",
-                          borderRadius: 4,
-                          border: "1px solid #da363344",
-                          background: "transparent",
-                          color: "#f85149",
-                          fontSize: 11,
-                          cursor: "pointer",
-                        }}
-                      >
-                        刪除
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        {/* ── 右側：訪客 Token ── */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <DemoTokenSection active={active} />
+        </div>
       </div>
-
-      {/* 訪客 Token 管理 */}
-      <DemoTokenSection active={active} />
 
       {/* 新增/編輯 Modal */}
       {modalUser !== undefined && (

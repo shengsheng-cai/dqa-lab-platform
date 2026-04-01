@@ -1137,49 +1137,12 @@ export default function FixturePage({ active, role }) {
         fontFamily: "system-ui, -apple-system, sans-serif",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 16,
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#cdd9e5" }}>
-            治具管理
-          </div>
-          <div style={{ fontSize: 12, color: "#8b949e", marginTop: 2 }}>
-            共 {fixtures.length} 種治具
-          </div>
-        </div>
-        {canOperate && (
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => setShowImportModal(true)}
-              style={{ padding: "6px 14px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 13 }}
-            >
-              匯入 Excel
-            </button>
-            <button
-              onClick={() => setEditTarget(false)}
-              style={{ padding: "6px 14px", borderRadius: 6, background: "transparent", color: "#58a6ff", border: "1px solid #58a6ff44", cursor: "pointer", fontSize: 13 }}
-            >
-              + 新增治具
-            </button>
-            <button
-              onClick={() => setShowLoanModal(true)}
-              style={{ padding: "6px 14px", borderRadius: 6, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
-            >
-              + 借出登記
-            </button>
-          </div>
-        )}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#cdd9e5" }}>治具管理</div>
+        <div style={{ fontSize: 12, color: "#8b949e", marginTop: 2 }}>共 {fixtures.length} 種治具</div>
       </div>
 
-      <SummaryCards summary={summary} />
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center" }}>
         <button
           style={tabStyle("inventory")}
           onClick={() => setActiveTab("inventory")}
@@ -1254,6 +1217,29 @@ export default function FixturePage({ active, role }) {
           >
             損壞／遺失
           </button>
+        )}
+        <div style={{ flex: 1 }} />
+        {canOperate && (
+          <>
+            <button
+              onClick={() => setShowImportModal(true)}
+              style={{ padding: "5px 12px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 12 }}
+            >
+              匯入 Excel
+            </button>
+            <button
+              onClick={() => setEditTarget(false)}
+              style={{ padding: "5px 12px", borderRadius: 6, background: "transparent", color: "#58a6ff", border: "1px solid #58a6ff44", cursor: "pointer", fontSize: 12 }}
+            >
+              + 新增治具
+            </button>
+            <button
+              onClick={() => setShowLoanModal(true)}
+              style={{ padding: "5px 12px", borderRadius: 6, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+            >
+              + 借出登記
+            </button>
+          </>
         )}
       </div>
 

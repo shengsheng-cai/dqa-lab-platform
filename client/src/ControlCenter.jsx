@@ -15,7 +15,6 @@ const TAB_TO_PATH = {
   device: "/",
   fixture: "/fixtures",
   schedule: "/schedule",
-  records: "/records",
   users: "/users",
 };
 const PATH_TO_TAB = Object.fromEntries(
@@ -322,6 +321,7 @@ function FixtureSummaryPanel({ fixtureSummary }) {
     { label: "借出中", value: fixtureSummary.total_loaned ?? "—", color: "#f0a500" },
     { label: "今日到期", value: fixtureSummary.due_today ?? "—", color: (fixtureSummary.due_today ?? 0) > 0 ? "#f0a500" : "#8b949e" },
     { label: "逾期未還", value: fixtureSummary.overdue ?? "—", color: (fixtureSummary.overdue ?? 0) > 0 ? "#f85149" : "#8b949e" },
+    { label: "庫存不足", value: fixtureSummary.shortage_count ?? "—", color: (fixtureSummary.shortage_count ?? 0) > 0 ? "#f85149" : "#8b949e" },
   ];
   return (
     <div style={{ padding: "8px", display: "flex", flexDirection: "column", gap: 6 }}>
@@ -335,11 +335,105 @@ function FixtureSummaryPanel({ fixtureSummary }) {
   );
 }
 
+// ── ScheduleSummaryPanel ──────────────────────────────────────────────────────
+
+function ScheduleSummaryPanel({ devices }) {
+  const [counts, setCounts] = useState({ pending: 0, confirmed: 0, running: 0 });
+
+  useEffect(() => {
+    const fetch = () => {
+      api.get("/api/schedules").then(r => {
+        const all = r.data;
+        setCounts({
+          pending: all.filter(s => s.status === "待審核").length,
+          confirmed: all.filter(s => s.status === "已確認").length,
+          running: all.filter(s => s.status === "進行中").length,
+          done: all.filter(s => s.status === "已完成").length,
+        });
+      }).catch(() => {});
+    };
+    fetch();
+    const t = setInterval(fetch, POLL_GENERAL_MS);
+    return () => clearInterval(t);
+  }, []);
+
+  const summaryItems = [
+    { label: "待審核", value: counts.pending, color: counts.pending > 0 ? "#e3b341" : "#8b949e" },
+    { label: "進行中", value: counts.running, color: counts.running > 0 ? "#3fb950" : "#8b949e" },
+    { label: "已確認", value: counts.confirmed, color: counts.confirmed > 0 ? "#58a6ff" : "#8b949e" },
+    { label: "已完成", value: counts.done, color: counts.done > 0 ? "#57ab5a" : "#8b949e" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0, height: "100%", overflowY: "auto" }}>
+      <div style={{ padding: "0 8px 6px", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+        {summaryItems.map(({ label, value, color }) => (
+          <div key={label} style={{ padding: "5px 8px", borderRadius: 5, background: "#161b22", border: "1px solid #30363d", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 10, color: "#484f58" }}>{label}</span>
+            <span style={{ fontSize: 18, fontWeight: 700, color }}>{value}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 9, color: "#484f58", padding: "4px 16px 4px", letterSpacing: 1, flexShrink: 0 }}>設備可用性</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 8px", overflowY: "auto" }}>
+        {devices.map(d => <DeviceAvailRow key={d.device_id} device={d} />)}
+      </div>
+    </div>
+  );
+}
+
+// ── UsersSummaryPanel ─────────────────────────────────────────────────────────
+
+function UsersSummaryPanel() {
+  const [summary, setSummary] = useState({ admin: 0, keeper: 0, engineer: 0, validTokens: 0 });
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        const [usersRes, tokensRes] = await Promise.all([
+          api.get("/api/auth/users"),
+          api.get("/api/auth/demo-tokens"),
+        ]);
+        const users = usersRes.data;
+        const tokens = tokensRes.data;
+        setSummary({
+          admin: users.filter(u => u.role === "admin" && u.is_active).length,
+          keeper: users.filter(u => u.role === "keeper" && u.is_active).length,
+          engineer: users.filter(u => u.role === "engineer" && u.is_active).length,
+          validTokens: tokens.filter(t => t.is_active && !t.expired && !t.used_up).length,
+        });
+      } catch (_) {}
+    };
+    fetch();
+    const t = setInterval(fetch, POLL_GENERAL_MS);
+    return () => clearInterval(t);
+  }, []);
+
+  const items = [
+    { label: "管理者", value: summary.admin, color: "#f85149" },
+    { label: "保管人", value: summary.keeper, color: "#f0a500" },
+    { label: "工程師", value: summary.engineer, color: "#58a6ff" },
+    { label: "有效 Token", value: summary.validTokens, color: summary.validTokens > 0 ? "#3fb950" : "#8b949e" },
+  ];
+
+  return (
+    <div style={{ padding: "0 8px", display: "flex", flexDirection: "column", gap: 4 }}>
+      {items.map(({ label, value, color }) => (
+        <div key={label} style={{ padding: "5px 8px", borderRadius: 5, background: "#161b22", border: "1px solid #30363d", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 10, color: "#484f58" }}>{label}</span>
+          <span style={{ fontSize: 18, fontWeight: 700, color }}>{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── LeftPanel ─────────────────────────────────────────────────────────────────
 
-function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary }) {
-  const title = activeTab === "schedule" ? "設備可用性"
+function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary, onOpenRecords }) {
+  const title = activeTab === "schedule" ? "排程概況"
     : activeTab === "fixture" ? "治具概況"
+    : activeTab === "users" ? "人員概況"
     : "設備狀態";
 
   return (
@@ -369,17 +463,19 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixture
       <div
         style={{
           flex: 1,
-          padding: activeTab === "fixture" ? 0 : "0 8px",
+          padding: (activeTab === "fixture" || activeTab === "schedule" || activeTab === "users") ? 0 : "0 8px",
           display: "flex",
           flexDirection: "column",
-          gap: activeTab === "fixture" ? 0 : 4,
-          overflowY: "auto",
+          gap: (activeTab === "fixture" || activeTab === "schedule" || activeTab === "users") ? 0 : 4,
+          overflowY: activeTab === "schedule" ? "hidden" : "auto",
         }}
       >
         {activeTab === "fixture" ? (
           <FixtureSummaryPanel fixtureSummary={fixtureSummary} />
         ) : activeTab === "schedule" ? (
-          devices.map((d) => <DeviceAvailRow key={d.device_id} device={d} />)
+          <ScheduleSummaryPanel devices={devices} />
+        ) : activeTab === "users" ? (
+          <UsersSummaryPanel />
         ) : (
           devices.map((d) => (
             <DeviceCard
@@ -391,6 +487,33 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixture
           ))
         )}
       </div>
+
+      {activeTab === "device" && selectedDevice && (
+        <button
+          onClick={onOpenRecords}
+          style={{
+            margin: "8px",
+            padding: "6px 0",
+            fontSize: 11,
+            background: "transparent",
+            border: "1px solid #30363d",
+            borderRadius: 6,
+            color: "#8b949e",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = "#58a6ff";
+            e.currentTarget.style.color = "#58a6ff";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = "#30363d";
+            e.currentTarget.style.color = "#8b949e";
+          }}
+        >
+          📋 紀錄
+        </button>
+      )}
     </div>
   );
 }
@@ -715,16 +838,14 @@ const TABS = [
   { key: "device", label: "設備" },
   { key: "fixture", label: "治具" },
   { key: "schedule", label: "排程" },
-  { key: "records", label: "紀錄", guestHidden: true },
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onApplySchedule }) {
+function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed }) {
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
   const [pendingScheduleCount, setPendingScheduleCount] = useState(0);
-  const [recordsSubTab, setRecordsSubTab] = useState("errors");
 
   // 切換 tab 時重置滾動位置
   useEffect(() => {
@@ -829,43 +950,6 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
             <UsersPage active={activeTab === "users"} role={role} />
           </div>
         )}
-        <div
-          style={{
-            display: activeTab === "records" ? "flex" : "none",
-            flexDirection: "column",
-            height: "100%",
-          }}
-        >
-          {/* 子 Tab bar */}
-          <div style={{ display: "flex", gap: 0, padding: "0 12px", borderBottom: "1px solid #30363d", flexShrink: 0, background: "#0d1117" }}>
-            {[{ key: "errors", label: "異常紀錄" }, { key: "executions", label: "執行紀錄" }].map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setRecordsSubTab(t.key)}
-                style={{
-                  padding: "7px 14px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  background: "transparent",
-                  border: "none",
-                  borderBottom: recordsSubTab === t.key ? "2px solid #58a6ff" : "2px solid transparent",
-                  color: recordsSubTab === t.key ? "#cdd9e5" : "#8b949e",
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <div style={{ display: recordsSubTab === "errors" ? "block" : "none", height: "100%" }}>
-              <ErrorLog active={activeTab === "records" && recordsSubTab === "errors"} />
-            </div>
-            <div style={{ display: recordsSubTab === "executions" ? "block" : "none", height: "100%" }}>
-              <ExecutionList active={activeTab === "records" && recordsSubTab === "executions"} role={role} />
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -890,6 +974,8 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   const [selectedDevice, setSelectedDevice] = useState("CH-01");
   const [aiOpen, setAiOpen] = useState(false);
   const [scheduleInitConds, setScheduleInitConds] = useState(null);
+  const [recordsOpen, setRecordsOpen] = useState(false);
+  const [recordsSubTab, setRecordsSubTab] = useState("errors");
   const handleInitCondsConsumed = useCallback(() => setScheduleInitConds(null), []);
 
   // 輪詢設備狀態（3s）
@@ -938,6 +1024,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           onSelectDevice={setSelectedDevice}
           activeTab={activeTab}
           fixtureSummary={fixtureSummary}
+          onOpenRecords={() => setRecordsOpen(true)}
         />
         <CenterPanel
           role={role}
@@ -953,6 +1040,66 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           }}
         />
       </div>
+
+      {/* 紀錄 Modal */}
+      {recordsOpen && (
+        <div
+          onClick={() => setRecordsOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "min(900px, 92vw)",
+              height: "min(620px, 85vh)",
+              background: "#0d1117",
+              border: "1px solid #30363d",
+              borderRadius: 10,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            {/* Modal header */}
+            <div style={{ display: "flex", alignItems: "center", padding: "10px 16px", borderBottom: "1px solid #30363d", flexShrink: 0 }}>
+              <span style={{ flex: 1, fontWeight: 700, fontSize: 13, color: "#cdd9e5" }}>紀錄</span>
+              <button
+                onClick={() => setRecordsOpen(false)}
+                style={{ background: "none", border: "none", color: "#8b949e", fontSize: 16, cursor: "pointer", padding: "0 4px" }}
+              >✕</button>
+            </div>
+            {/* 子 Tab bar */}
+            <div style={{ display: "flex", padding: "0 12px", borderBottom: "1px solid #30363d", flexShrink: 0, background: "#0d1117" }}>
+              {[{ key: "errors", label: "異常紀錄" }, { key: "executions", label: "執行紀錄" }].map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setRecordsSubTab(t.key)}
+                  style={{
+                    padding: "7px 14px", fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", background: "transparent", border: "none",
+                    borderBottom: recordsSubTab === t.key ? "2px solid #58a6ff" : "2px solid transparent",
+                    color: recordsSubTab === t.key ? "#cdd9e5" : "#8b949e",
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {/* 內容 */}
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <div style={{ display: recordsSubTab === "errors" ? "block" : "none", height: "100%" }}>
+                <ErrorLog active={recordsOpen && recordsSubTab === "errors"} />
+              </div>
+              <div style={{ display: recordsSubTab === "executions" ? "block" : "none", height: "100%" }}>
+                <ExecutionList active={recordsOpen && recordsSubTab === "executions"} role={role} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI FAB — 面板開啟時隱藏 */}
       {!aiOpen && <button
