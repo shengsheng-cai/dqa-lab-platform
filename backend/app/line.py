@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/line", tags=["line"])
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 LINE_USER_ID = os.getenv("LINE_USER_ID", "")
+LINE_GROUP_ID = os.getenv("LINE_GROUP_ID", "")  # 指定通知群組（Status 群組）
 
 # LINE API 端點
 REPLY_URL = "https://api.line.me/v2/bot/message/reply"
@@ -34,32 +35,33 @@ STATUS_CONFIG = {
 
 
 async def push_message(text: str):
-    """主動推播訊息給 env 設定的預設 User ID（供 main.py 緊急通知使用）"""
+    """主動推播訊息給管理者個人 + 指定通知群組（供緊急停止使用）"""
     token = LINE_CHANNEL_ACCESS_TOKEN
-    user_id = LINE_USER_ID
+    targets = [t for t in [LINE_USER_ID, LINE_GROUP_ID] if t]
 
-    if not token or not user_id:
-        logger.warning("[LINE] 未設定 TOKEN 或 USER_ID，跳過推播")
+    if not token or not targets:
+        logger.warning("[LINE] 未設定 TOKEN 或推播目標，跳過推播")
         return
 
     async with httpx.AsyncClient() as client:
-        try:
-            res = await client.post(
-                PUSH_URL,
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "to": user_id,
-                    "messages": [{"type": "text", "text": text}],
-                },
-                timeout=10.0,
-            )
-            if res.status_code != 200:
-                logger.error(f"[LINE] 推播失敗: {res.status_code} {res.text}")
-        except Exception as e:
-            logger.error(f"[LINE] 推播例外：{e}")
+        for target_id in targets:
+            try:
+                res = await client.post(
+                    PUSH_URL,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "to": target_id,
+                        "messages": [{"type": "text", "text": text}],
+                    },
+                    timeout=10.0,
+                )
+                if res.status_code != 200:
+                    logger.error(f"[LINE] 推播失敗({target_id[:8]}...): {res.status_code} {res.text}")
+            except Exception as e:
+                logger.error(f"[LINE] 推播例外({target_id[:8]}...)：{e}")
 
 
 def _verify_signature(body: bytes, signature: str) -> bool:
@@ -329,6 +331,10 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         # 只處理文字訊息
         if event_type != "message" or event.get("message", {}).get("type") != "text":
             continue
+
+        source = event.get("source", {})
+        if source.get("type") == "group":
+            logger.info(f"[LINE] Group ID: {source.get('groupId')}")
 
         user_text = event["message"]["text"].strip()
         messages = _dispatch_command(user_text, cache)
