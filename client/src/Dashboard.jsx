@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api, { API_BASE } from "./api";
 import { downloadBlob, buildReportFilename } from "./utils/download";
 import {
@@ -376,6 +376,7 @@ const Dashboard = ({ active = true }) => {
     ["IDLE", "OFFLINE"].includes(d.status),
   ).length;
   const history = historyMap[selectedDevice] || [];
+  const hasHumidity = useMemo(() => history.some((p) => p.humidity !== null), [history]);
 
   return (
     <div
@@ -460,7 +461,7 @@ const Dashboard = ({ active = true }) => {
               letterSpacing: 1,
             }}
           >
-            {selectedDevice} — TEMP / HUMI TREND（完整測試時長）
+            {selectedDevice} — {hasHumidity ? "TEMP / HUMI TREND" : "TEMP TREND"}（完整測試時長）
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             {DEVICE_IDS.map((id) => {
@@ -538,15 +539,17 @@ const Dashboard = ({ active = true }) => {
                 tickFormatter={(v) => `${v}°`}
                 width={42}
               />
-              <YAxis
-                yAxisId="humi"
-                orientation="right"
-                domain={[0, 100]}
-                stroke="#30363d"
-                tick={{ fontSize: 10, fill: "#a5d6ff" }}
-                tickFormatter={(v) => `${v}%`}
-                width={32}
-              />
+              {hasHumidity && (
+                <YAxis
+                  yAxisId="humi"
+                  orientation="right"
+                  domain={[0, 100]}
+                  stroke="#30363d"
+                  tick={{ fontSize: 10, fill: "#a5d6ff" }}
+                  tickFormatter={(v) => `${v}%`}
+                  width={32}
+                />
+              )}
               <Tooltip
                 contentStyle={{
                   background: "#161b22",
@@ -573,17 +576,19 @@ const Dashboard = ({ active = true }) => {
                 dot={false}
                 isAnimationActive={false}
               />
-              <Line
-                yAxisId="humi"
-                type="monotone"
-                dataKey="humidity"
-                name="humidity"
-                stroke="#a5d6ff"
-                strokeWidth={1.5}
-                dot={false}
-                isAnimationActive={false}
-                connectNulls={false}
-              />
+              {hasHumidity && (
+                <Line
+                  yAxisId="humi"
+                  type="monotone"
+                  dataKey="humidity"
+                  name="humidity"
+                  stroke="#a5d6ff"
+                  strokeWidth={1.5}
+                  dot={false}
+                  isAnimationActive={false}
+                  connectNulls={false}
+                />
+              )}
               <Brush
                 dataKey="time"
                 height={24}

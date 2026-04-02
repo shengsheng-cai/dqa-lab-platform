@@ -97,14 +97,16 @@ const TempChart = ({ sop, pvData, startedAt }) => {
           width={32}
           tickFormatter={(v) => `${v}°`}
         />
-        <YAxis
-          yAxisId="humi"
-          orientation="right"
-          domain={[0, 100]}
-          tick={{ fontSize: 9, fill: "#a5d6ff" }}
-          width={28}
-          tickFormatter={(v) => `${v}%`}
-        />
+        {sop?.humidity_control && (
+          <YAxis
+            yAxisId="humi"
+            orientation="right"
+            domain={[0, 100]}
+            tick={{ fontSize: 9, fill: "#a5d6ff" }}
+            width={28}
+            tickFormatter={(v) => `${v}%`}
+          />
+        )}
         <Tooltip
           contentStyle={{
             background: "#1c2128",
@@ -168,17 +170,19 @@ const TempChart = ({ sop, pvData, startedAt }) => {
             connectNulls
           />
         )}
-        <Line
-          yAxisId="humi"
-          type="monotone"
-          dataKey="pv_humi"
-          name="pv_humi"
-          stroke="#a5d6ff"
-          strokeWidth={1.5}
-          dot={false}
-          isAnimationActive={false}
-          connectNulls
-        />
+        {sop?.humidity_control && (
+          <Line
+            yAxisId="humi"
+            type="monotone"
+            dataKey="pv_humi"
+            name="pv_humi"
+            stroke="#a5d6ff"
+            strokeWidth={1.5}
+            dot={false}
+            isAnimationActive={false}
+            connectNulls
+          />
+        )}
       </ComposedChart>
     </ResponsiveContainer>
   );

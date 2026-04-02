@@ -138,12 +138,14 @@ const MonitorSide = ({
           }}
         >
           <label style={{ fontSize: 11, color: "#484f58", letterSpacing: 1 }}>
-            TEMP / HUMI TREND
+            {ds.activeSop?.humidity_control ? "TEMP / HUMI TREND" : "TEMP TREND"}
           </label>
           <div style={{ display: "flex", gap: 10, fontSize: 10 }}>
             <span style={{ color: "#8b949e" }}>── SP</span>
             <span style={{ color: "#ff7b72" }}>── PV Temp</span>
-            <span style={{ color: "#a5d6ff" }}>── PV Humi</span>
+            {ds.activeSop?.humidity_control && (
+              <span style={{ color: "#a5d6ff" }}>── PV Humi</span>
+            )}
           </div>
         </div>
         <TempChart
