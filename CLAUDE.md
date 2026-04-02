@@ -8,9 +8,23 @@
 
 ### 資料庫（15 張）
 
-device_data | device_states | sop_executions | step_records | error_logs | fixtures | fixture_loans | users | demo_tokens | sop_templates | purchase_orders | schedules | device_blocked_periods | line_bind_requests | notification_failures
-
-> ⚠️ `line_bind_requests` 和 `notification_failures` 表目前仍在 schema，但對應的業務邏輯已移除（v40 LINE 簡化），未來可刪除。
+| 表名 | 說明 |
+|------|------|
+| `device_data` | 設備感測器時序資料（溫度、濕度） |
+| `device_states` | 設備狀態機（IDLE/RUNNING/PAUSED/FINISHING）+ sim_phase |
+| `sop_executions` | SOP 執行記錄（設備、條件、開始/結束時間） |
+| `step_records` | SOP 執行步驟確認紀錄 |
+| `error_logs` | 設備異常/錯誤日誌 |
+| `fixtures` | 治具主檔（庫存、狀態） |
+| `fixture_loans` | 治具借還記錄（含排程外鍵 `schedule_id`） |
+| `users` | 工程師帳號（含角色 admin/keeper/engineer） |
+| `demo_tokens` | 訪客唯讀 Token |
+| `sop_templates` | SOP 步驟模板 |
+| `purchase_orders` | 治具採購單 |
+| `schedules` | 測試排程（甘特圖資料來源） |
+| `device_blocked_periods` | 設備不可用時段 |
+| `line_bind_requests` | LINE 綁定請求（⚠️ v40 後已無業務邏輯，待刪除） |
+| `notification_failures` | LINE 推播失敗記錄（⚠️ v40 後已無業務邏輯，待刪除） |
 
 ### 狀態機與模擬
 
@@ -47,6 +61,9 @@ make clean                     # 清理殘留程序
 # 資料庫遷移（backend/ 目錄下）
 alembic revision --autogenerate -m "描述"
 alembic upgrade head
+
+# 後端單元測試
+cd backend && python -m pytest  # 執行全套測試（45 tests）
 ```
 
 ---
@@ -65,6 +82,25 @@ alembic upgrade head
 | 三模組連動 | ✅ AI→排程、排程→治具預約、SOP→治具借出、完成→治具歸還 |
 | 存取控制 | 4 層（admin/keeper/engineer/guest）、IP Rate Limiting |
 | LINE Bot | 緊急停止推播給管理者個人 + 指定群組（LINE_GROUP_ID）；群組 query 模式（Bot 加入工作群組，OP 問 → Bot reply，不耗額度） |
+
+### 三模組連動流程
+
+```
+① AI 推薦測試條件
+    ↓ [📅 申請此測試] 按鈕（streaming 末尾 META [APPLY:id1,id2] marker）
+② 申請排程（條件預填 + 選設備 + 選治具）
+    ↓
+③ 排程確認 → 治具自動預約（reserved）+ 設備立即啟動 SOP
+    ↓
+④ 測試開始 → 設備 RUNNING + 治具自動借出（loaned）
+    ↓
+⑤ 測試完成 → 治具自動歸還 + 產生 ISO 17025 報告
+```
+
+連動實作關鍵：
+- `schedule_fixtures` 中間表 + `fixture_loans.schedule_id` 外鍵
+- 排程確認時呼叫 `_transfer_reserved_fixtures`
+- 設備 RUNNING 時預約治具自動轉借出；測試完成時自動歸還
 
 ---
 
