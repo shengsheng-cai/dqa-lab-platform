@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "./api";
+import { downloadBlob } from "./utils/download";
 import { useToast } from "./components/Toast";
 
 const STATUS_COLORS = {
@@ -212,12 +213,18 @@ function ImportModal({ onClose, onSuccess }) {
             lineHeight: 1.8,
           }}
         >
-          <div style={{ color: "#cdd9e5", fontWeight: 600, marginBottom: 4 }}>
-            欄位順序（A → V）
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <span style={{ color: "#cdd9e5", fontWeight: 600 }}>以欄標題對應欄位，欄位順序不限</span>
+            <button
+              onClick={() => downloadBlob("/api/fixtures/template", "fixture_template.xlsx")}
+              style={{ background: "transparent", border: "none", color: "#58a6ff", fontSize: 11, cursor: "pointer", padding: 0 }}
+            >
+              下載標準範本
+            </button>
           </div>
-          Priority、項次、介面、型態、尺寸、用途、預估用量、現有數量、缺貨數、使用率、汰換時間、備註、保管人、代理人、(略)、(略)、廠商、(略)、型號、規格、交期、單價
+          支援的標題：介面、型態、現有數量、缺貨數、優先度、尺寸、用途、使用頻率、汰換年限、備註、保管人、代理人、廠商、型號、單價
           <div style={{ marginTop: 6, color: "#f0a500" }}>
-            ⚠ 第一行為標題行（自動跳過），介面 + 型態為必填
+            ⚠ 第一行須為標題行，介面 + 型態為必填，其餘欄位缺少時使用預設值
           </div>
         </div>
 
@@ -871,6 +878,7 @@ function ReturnModal({ loan, onClose, onSubmit }) {
 function AddEditModal({ fixture, onClose, onSuccess }) {
   const { showToast } = useToast();
   const isEdit = !!fixture;
+  const [showAdvanced, setShowAdvanced] = useState(isEdit);
   const [form, setForm] = useState({
     interface_type: fixture?.interface_type || "",
     form_factor: fixture?.form_factor || "",
@@ -958,66 +966,78 @@ function AddEditModal({ fixture, onClose, onSuccess }) {
             {label("型態 *")}
             <input value={form.form_factor} onChange={(e) => set("form_factor", e.target.value)} style={inputStyle} placeholder="e.g. 轉接頭" />
           </div>
-          <div>
-            {label("優先度")}
-            <input type="number" value={form.priority} onChange={(e) => set("priority", e.target.value)} style={inputStyle} placeholder="數字越小越前" />
-          </div>
-          <div>
-            {label("尺寸")}
-            <input value={form.size} onChange={(e) => set("size", e.target.value)} style={inputStyle} />
-          </div>
-          <div>
+          <div style={{ gridColumn: "1 / -1" }}>
             {label("現有數量")}
-            <input type="number" min={0} value={form.total_quantity} onChange={(e) => set("total_quantity", e.target.value)} style={inputStyle} />
-          </div>
-          <div>
-            {label("缺貨數")}
-            <input type="number" min={0} value={form.shortage} onChange={(e) => set("shortage", e.target.value)} style={inputStyle} />
-          </div>
-          <div>
-            {label("使用頻率")}
-            <select value={form.usage_frequency} onChange={(e) => set("usage_frequency", e.target.value)} style={inputStyle}>
-              <option value="">—</option>
-              <option value="1">每天</option>
-              <option value="2">週</option>
-              <option value="3">月</option>
-              <option value="4">季</option>
-              <option value="5">年</option>
-            </select>
-          </div>
-          <div>
-            {label("汰換年限")}
-            <input value={form.replacement_years} onChange={(e) => set("replacement_years", e.target.value)} style={inputStyle} placeholder="e.g. 3年" />
-          </div>
-          <div>
-            {label("保管人")}
-            <input value={form.keeper_name} onChange={(e) => set("keeper_name", e.target.value)} style={inputStyle} />
-          </div>
-          <div>
-            {label("代理人")}
-            <input value={form.deputy_name} onChange={(e) => set("deputy_name", e.target.value)} style={inputStyle} />
-          </div>
-          <div>
-            {label("廠商")}
-            <input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} style={inputStyle} />
-          </div>
-          <div>
-            {label("型號")}
-            <input value={form.model_number} onChange={(e) => set("model_number", e.target.value)} style={inputStyle} />
-          </div>
-          <div>
-            {label("單價")}
-            <input type="number" min={0} value={form.unit_price} onChange={(e) => set("unit_price", e.target.value)} style={inputStyle} />
-          </div>
-          <div>
-            {label("用途")}
-            <input value={form.purpose} onChange={(e) => set("purpose", e.target.value)} style={inputStyle} />
+            <input type="number" min={0} value={form.total_quantity} onChange={(e) => set("total_quantity", e.target.value)} style={{ ...inputStyle, width: "calc(50% - 5px)", boxSizing: "border-box" }} />
           </div>
         </div>
-        <div>
-          {label("備註")}
-          <input value={form.note} onChange={(e) => set("note", e.target.value)} style={inputStyle} />
-        </div>
+        <button
+          onClick={() => setShowAdvanced((v) => !v)}
+          style={{ background: "transparent", border: "none", color: "#58a6ff", cursor: "pointer", fontSize: 12, padding: "2px 0", textAlign: "left", display: "flex", alignItems: "center", gap: 4 }}
+        >
+          {showAdvanced ? "▲ 隱藏進階選項" : "▼ 進階選項"}
+        </button>
+        {showAdvanced && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                {label("優先度")}
+                <input type="number" value={form.priority} onChange={(e) => set("priority", e.target.value)} style={inputStyle} placeholder="數字越小越前" />
+              </div>
+              <div>
+                {label("尺寸")}
+                <input value={form.size} onChange={(e) => set("size", e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                {label("缺貨數")}
+                <input type="number" min={0} value={form.shortage} onChange={(e) => set("shortage", e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                {label("使用頻率")}
+                <select value={form.usage_frequency} onChange={(e) => set("usage_frequency", e.target.value)} style={inputStyle}>
+                  <option value="">—</option>
+                  <option value="1">每天</option>
+                  <option value="2">週</option>
+                  <option value="3">月</option>
+                  <option value="4">季</option>
+                  <option value="5">年</option>
+                </select>
+              </div>
+              <div>
+                {label("汰換年限")}
+                <input value={form.replacement_years} onChange={(e) => set("replacement_years", e.target.value)} style={inputStyle} placeholder="e.g. 3年" />
+              </div>
+              <div>
+                {label("單價")}
+                <input type="number" min={0} value={form.unit_price} onChange={(e) => set("unit_price", e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                {label("保管人")}
+                <input value={form.keeper_name} onChange={(e) => set("keeper_name", e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                {label("代理人")}
+                <input value={form.deputy_name} onChange={(e) => set("deputy_name", e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                {label("廠商")}
+                <input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                {label("型號")}
+                <input value={form.model_number} onChange={(e) => set("model_number", e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                {label("用途")}
+                <input value={form.purpose} onChange={(e) => set("purpose", e.target.value)} style={inputStyle} />
+              </div>
+            </div>
+            <div>
+              {label("備註")}
+              <input value={form.note} onChange={(e) => set("note", e.target.value)} style={inputStyle} />
+            </div>
+          </>
+        )}
         {error && <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "8px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 13 }}>
@@ -1820,17 +1840,17 @@ function StocktakeModal({ fixtures, onClose, onComplete }) {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const results = { normal: 0, diff: 0 };
-      for (const f of active) {
-        const actual = parseInt(actuals[f.id] || f.total_quantity);
-        if (actual !== f.total_quantity) {
-          await api.put(`/api/fixtures/${f.id}/inventory`, { actual_quantity: actual });
-          results.diff++;
-        } else {
-          results.normal++;
-        }
-      }
-      showToast(`盤點完成：正常 ${results.normal} 、差異 ${results.diff}`, "success");
+      const diffs = active.filter((f) => {
+        const actual = parseInt(actuals[f.id] !== undefined ? actuals[f.id] : f.total_quantity);
+        return actual !== f.total_quantity;
+      });
+      await Promise.all(
+        diffs.map((f) => {
+          const actual = parseInt(actuals[f.id]);
+          return api.post(`/api/fixtures/${f.id}/inventory?actual_quantity=${actual}`);
+        })
+      );
+      showToast(`盤點完成：正常 ${active.length - diffs.length} 、差異 ${diffs.length}`, "success");
       onComplete();
     } catch (e) {
       showToast(e.response?.data?.detail || "盤點失敗", "error");
@@ -1864,34 +1884,45 @@ function StocktakeModal({ fixtures, onClose, onComplete }) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5", marginBottom: 16 }}>
-          🔍 月盤點
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>月盤點</div>
+          <div style={{ fontSize: 12, color: "#8b949e", marginTop: 4 }}>
+            對照系統庫存，輸入實際清點數量。數量不符的項目會標示差異。
+          </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 60px", gap: "4px 8px", alignItems: "center", padding: "0 10px 8px", borderBottom: "1px solid #30363d", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: "#8b949e" }}>治具</div>
+          <div style={{ fontSize: 11, color: "#8b949e", textAlign: "center" }}>系統庫存</div>
+          <div style={{ fontSize: 11, color: "#8b949e", textAlign: "center" }}>實際清點</div>
+          <div style={{ fontSize: 11, color: "#8b949e", textAlign: "center" }}>差異</div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {active.map((f) => {
             const actual = actuals[f.id];
-            const isDiff = actual !== undefined && parseInt(actual) !== f.total_quantity;
+            const actualNum = actual !== undefined ? parseInt(actual) : f.total_quantity;
+            const isDiff = actual !== undefined && actualNum !== f.total_quantity;
+            const diff = actualNum - f.total_quantity;
             return (
               <div
                 key={f.id}
                 style={{
-                  display: "flex",
-                  gap: 12,
+                  display: "grid",
+                  gridTemplateColumns: "1fr 90px 90px 60px",
+                  gap: "4px 8px",
                   alignItems: "center",
-                  padding: "10px",
+                  padding: "8px 10px",
                   background: isDiff ? "#3d1f1a" : "#0d1117",
                   borderRadius: 6,
                   border: `1px solid ${isDiff ? "#da3633" : "#30363d"}`,
                 }}
               >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, color: "#cdd9e5" }}>
-                    {f.interface_type} / {f.form_factor}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#8b949e" }}>
-                    系統庫存：{f.total_quantity}
-                  </div>
+                <div style={{ fontSize: 12, color: "#cdd9e5" }}>
+                  {f.interface_type} / {f.form_factor}
+                </div>
+                <div style={{ fontSize: 13, color: "#8b949e", textAlign: "center" }}>
+                  {f.total_quantity}
                 </div>
                 <input
                   type="number"
@@ -1899,15 +1930,20 @@ function StocktakeModal({ fixtures, onClose, onComplete }) {
                   value={actual !== undefined ? actual : f.total_quantity}
                   onChange={(e) => setActuals((p) => ({ ...p, [f.id]: e.target.value }))}
                   style={{
-                    width: 80,
-                    padding: "6px 8px",
+                    width: "100%",
+                    padding: "5px 8px",
                     borderRadius: 4,
                     border: `1px solid ${isDiff ? "#f85149" : "#30363d"}`,
                     background: "#0d1117",
                     color: isDiff ? "#f85149" : "#cdd9e5",
-                    fontSize: 12,
+                    fontSize: 13,
+                    textAlign: "center",
+                    boxSizing: "border-box",
                   }}
                 />
+                <div style={{ fontSize: 12, fontWeight: 600, textAlign: "center", color: isDiff ? (diff > 0 ? "#3fb950" : "#f85149") : "#444d56" }}>
+                  {isDiff ? (diff > 0 ? `▲ +${diff}` : `▼ ${diff}`) : "—"}
+                </div>
               </div>
             );
           })}
