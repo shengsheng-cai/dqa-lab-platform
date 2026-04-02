@@ -12,7 +12,7 @@
 
 ## Demo
 
-<video src="docs/demo.mp4" controls width="100%"></video>
+https://github.com/user-attachments/assets/f9d30698-6526-4770-a678-4bf9373e334c
 
 ---
 
