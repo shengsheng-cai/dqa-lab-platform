@@ -6,7 +6,7 @@
 
 ## 技術規格
 
-### 資料庫（15 張）
+### 資料庫（13 張）
 
 | 表名 | 說明 |
 |------|------|
@@ -23,8 +23,6 @@
 | `purchase_orders` | 治具採購單 |
 | `schedules` | 測試排程（甘特圖資料來源） |
 | `device_blocked_periods` | 設備不可用時段 |
-| `line_bind_requests` | LINE 綁定請求（⚠️ v40 後已無業務邏輯，待刪除） |
-| `notification_failures` | LINE 推播失敗記錄（⚠️ v40 後已無業務邏輯，待刪除） |
 
 ### 狀態機與模擬
 

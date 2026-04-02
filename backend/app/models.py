@@ -369,45 +369,6 @@ class DeviceBlockedPeriod(Base):
     )
 
 
-# ---------- LINE 綁定申請 ----------
-class LineBindRequest(Base):
-    __tablename__ = "line_bind_requests"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    line_user_id: Mapped[str] = mapped_column(String, index=True)
-    requested_name: Mapped[str] = mapped_column(String)  # 使用者填寫的姓名
-    # pending / awaiting_name / approved / rejected
-    status: Mapped[str] = mapped_column(String, default="pending", index=True)
-    matched_user_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
-    reviewed_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
-    reviewed_at: Mapped[Optional[datetime.datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
-
-
-# ---------- LINE 推播失敗紀錄 ----------
-class NotificationFailure(Base):
-    __tablename__ = "notification_failures"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    # sop / fixture / general
-    notif_type: Mapped[str] = mapped_column(String, default="general")
-    # 方便辨識：device_id 或 user display_name
-    target: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    message_preview: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    error_msg: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
-
 
 # ---------- 資料庫初始化 ----------
 def ensure_admin_user():
