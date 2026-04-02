@@ -54,13 +54,14 @@
 make install                   # 安裝所有依賴
 python backend/init_db.py      # 初始化資料庫（首次）
 make dev                       # 啟動全部服務
+make test                      # 執行後端測試
 make clean                     # 清理殘留程序
 
 # 資料庫遷移（backend/ 目錄下）
 alembic revision --autogenerate -m "描述"
 alembic upgrade head
 
-# 後端單元測試
+# 後端單元測試（或用 make test）
 cd backend && python -m pytest  # 執行全套測試（45 tests）
 ```
 

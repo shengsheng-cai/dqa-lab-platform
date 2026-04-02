@@ -58,6 +58,7 @@ https://github.com/user-attachments/assets/f9d30698-6526-4770-a678-4bf9373e334c
 make install                  # 安裝所有依賴
 python backend/init_db.py     # 初始化資料庫（首次執行）
 make dev                      # 啟動全部服務
+make test                     # 執行後端測試
 ```
 
 | 服務 | 網址 |
