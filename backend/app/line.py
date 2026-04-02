@@ -332,17 +332,6 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         if event_type != "message" or event.get("message", {}).get("type") != "text":
             continue
 
-        source = event.get("source", {})
-        if source.get("type") == "group" and source.get("groupId"):
-            group_id = source.get("groupId")
-            logger.warning(f"[LINE] Group ID: {group_id}")
-            background_tasks.add_task(
-                _send_to_line, reply_token,
-                [{"type": "text", "text": f"Group ID: {group_id}"}],
-                client,
-            )
-            continue
-
         user_text = event["message"]["text"].strip()
         messages = _dispatch_command(user_text, cache)
         background_tasks.add_task(_send_to_line, reply_token, messages, client)
