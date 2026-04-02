@@ -10,6 +10,12 @@
 
 ---
 
+## Demo
+
+<video src="docs/demo.mp4" controls width="100%"></video>
+
+---
+
 ## 核心功能
 
 | 模組 | 功能摘要 |
