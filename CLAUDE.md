@@ -64,7 +64,7 @@ alembic upgrade head
 | AI 諮詢 | Gemini 2.5 Flash-Lite、RAG 檢索、多輪對話；推薦條件→直接申請排程 |
 | 三模組連動 | ✅ AI→排程、排程→治具預約、SOP→治具借出、完成→治具歸還 |
 | 存取控制 | 4 層（admin/keeper/engineer/guest）、IP Rate Limiting |
-| LINE Bot | 緊急停止通知（push_message）；群組 query 模式（Bot 加入工作群組，OP 問 → Bot reply，不耗額度） |
+| LINE Bot | 緊急停止推播給管理者個人 + 指定群組（LINE_GROUP_ID）；群組 query 模式（Bot 加入工作群組，OP 問 → Bot reply，不耗額度） |
 
 ---
 

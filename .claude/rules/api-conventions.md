@@ -17,6 +17,7 @@
 
 - Webhook 採 **query 模式**：使用者在群組或私訊傳 `狀態`、`CH01~CH05`、`幫助`，Bot 即時 reply。
 - 主動 push 目前只保留 **緊急停止**（`devices.py` 呼叫 `push_message`）。
+- `push_message` 同時推播給 `LINE_USER_ID`（管理者個人）+ `LINE_GROUP_ID`（指定通知群組，選填）。
 - 其他 SOP/phase 自動推播已停用（v40 簡化），若未來重啟，需同步更新此文件與 `CLAUDE.local.md`。
 
 ## 自動排程邏輯
