@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
     await app.state.http_client.aclose()
 
 
-app = FastAPI(title="DQA Lab Digital Twin", lifespan=lifespan)
+app = FastAPI(title="DQA Lab Digital Twin", lifespan=lifespan, redirect_slashes=False)
 
 app.include_router(sop_router, prefix="/api/sop", tags=["sop"])
 app.include_router(execution_router)
