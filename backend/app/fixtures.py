@@ -355,6 +355,49 @@ def download_template():
     )
 
 
+@router.get("/export")
+def export_fixtures():
+    """匯出所有治具為 Excel"""
+    if pd is None:
+        raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
+
+    db = SessionLocal()
+    try:
+        fixtures = db.query(Fixture).filter(Fixture.is_active == True).order_by(Fixture.interface_type).all()
+        rows = []
+        for f in fixtures:
+            rows.append({
+                "介面": f.interface_type,
+                "型態": f.form_factor,
+                "現有數量": f.total_quantity,
+                "缺貨數": f.shortage,
+                "優先度": f.priority or "",
+                "尺寸": f.size or "",
+                "用途": f.purpose or "",
+                "預估用量": f.estimated_usage or "",
+                "使用頻率": f.usage_frequency or "",
+                "汰換年限": f.replacement_years or "",
+                "備註": f.note or "",
+                "保管人": f.keeper_name or "",
+                "代理人": f.deputy_name or "",
+                "廠商": f.vendor or "",
+                "型號": f.model_number or "",
+                "單價": f.unit_price or "",
+            })
+        df = pd.DataFrame(rows)
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="治具資料")
+        buf.seek(0)
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=fixtures_export.xlsx"},
+        )
+    finally:
+        db.close()
+
+
 @router.get("/{fixture_id}")
 def get_fixture(fixture_id: int):
     db = SessionLocal()

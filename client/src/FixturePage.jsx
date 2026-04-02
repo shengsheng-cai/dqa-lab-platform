@@ -1280,6 +1280,16 @@ export default function FixturePage({ active, role }) {
         {canOperate && (
           <>
             <button
+              onClick={() => {
+                api.get("/api/fixtures/export", { responseType: "blob" }).then((r) => {
+                  downloadBlob(r.data, "fixtures_export.xlsx");
+                });
+              }}
+              style={{ padding: "5px 12px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 12 }}
+            >
+              匯出 Excel
+            </button>
+            <button
               onClick={() => setShowImportModal(true)}
               style={{ padding: "5px 12px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 12 }}
             >
