@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-startCommand = "python init_db.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+startCommand = "alembic upgrade head && python init_db.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/api/latest"
 healthcheckTimeout = 180
 restartPolicyType = "on_failure"
