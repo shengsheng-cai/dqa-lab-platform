@@ -22,7 +22,7 @@
 | 🗓️ **排程系統** | 甘特圖永遠可見（固定區塊）、自動排程（排除超時卡機 / EMERGENCY 設備）、審核前即時預覽時段、不可用時段管理；engineer/keeper 可自助取消待審核排程；排程確認後設備立即自動啟動（不等 APScheduler）；APScheduler 每 5 分鐘補位推進；確認後治具自動預約 |
 | 🚨 **LINE Bot 通知** | 緊急停止主動推播（push_message）；Bot 加入工作群組後支援 query 模式（OP 在群組問設備狀態 → Bot reply，不耗免費額度） |
 | 👥 **人員管理** | 工程師名冊（左）+ 訪客 Token 管理（右）；Token 表支援「隱藏已失效」一鍵過濾 |
-| 🔐 **四層存取控制** | admin / keeper / engineer / guest，bcrypt 密碼雜湊，IP Rate Limiting；訪客模式角色隔離 |
+| 🔐 **存取控制** | 管理員登入 + 訪客唯讀模式，bcrypt 密碼雜湊，IP Rate Limiting |
 
 ---
 

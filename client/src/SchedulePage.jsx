@@ -740,9 +740,16 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
 
           <InfoRow label="申請人" value={schedule.applicant_name || "—"} />
           <InfoRow label="法規標準" value={schedule.standard} />
-          <InfoRow label="測試條件" value={
-            schedule.condition_names?.join(" → ") || schedule.conditions?.join(" → ") || "—"
-          } />
+          <div style={{ display: "flex", gap: 8, fontSize: 13 }}>
+            <span style={{ color: "#8b949e", minWidth: 80, flexShrink: 0 }}>測試條件</span>
+            <span style={{ color: "#cdd9e5", wordBreak: "break-word" }}>
+              {(schedule.condition_names || schedule.conditions || []).length > 0
+                ? (schedule.condition_names || schedule.conditions).map((c, i) => (
+                    <div key={i}>{i + 1}. {c}</div>
+                  ))
+                : "—"}
+            </span>
+          </div>
           {schedule.fixtures?.length > 0 && (
             <InfoRow label="預約治具" value={
               schedule.fixtures.map((fx) =>
