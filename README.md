@@ -93,10 +93,42 @@ cp .env.example backend/.env
 
 ---
 
+## 系統架構
+
+```
+瀏覽器（React 19）
+    │  HTTP / Axios
+    ▼
+FastAPI（後端）
+    ├── SQLite（SQLAlchemy 2.0 + Alembic）
+    ├── 物理模擬引擎（sim_phase 狀態機，APScheduler 每 5 分鐘推進）
+    ├── AI 諮詢（Gemini Flash-Lite + RAG Embedding）
+    └── LINE Messaging API（Webhook 接收 + push_message 推播）
+```
+
+資料流向：
+```
+AI 推薦條件 → [申請此測試] → 排程確認 → 治具預約
+                                    ↓
+                              SOP 自動啟動
+                                    ↓
+                     治具借出 → 測試完成 → 治具歸還 + PDF 報告
+```
+
+---
+
 ## 後續規劃
 
 - [x] ISO 17025 PDF 報告生成（含 GUM 量測不確定度分析）
 - [ ] RS-485 真實設備通訊（Phase 3）
+
+---
+
+## Contributing
+
+本專案目前為個人作品集專案，暫不接受外部 PR。
+
+若有問題或功能建議，歡迎開 Issue 討論。商業合作或授權需求請透過 GitHub 聯絡作者。
 
 ---
 
