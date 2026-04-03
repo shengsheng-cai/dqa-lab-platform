@@ -744,6 +744,8 @@ def delete_schedule(schedule_id: int, request: Request):
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
             raise HTTPException(status_code=404, detail="找不到排程")
+        db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == schedule_id).delete(synchronize_session=False)
+        db.query(FixtureLoan).filter(FixtureLoan.schedule_id == schedule_id).delete(synchronize_session=False)
         db.delete(s)
         db.commit()
     return {"ok": True}

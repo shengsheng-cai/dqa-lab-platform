@@ -858,7 +858,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
               {error && <div style={{ color: "#f85149", fontSize: 13 }}>{error}</div>}
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                {role === "admin" && (
+                {role === "admin" && (schedule.status === "已取消" || schedule.status === "已完成") && (
                   <button onClick={del} style={{ ...cancelBtn, color: "#f85149", borderColor: "#f85149" }}>
                     刪除
                   </button>
