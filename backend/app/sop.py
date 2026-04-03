@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, FixtureLoan
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _save_device_state
+from .auth import _require_admin
 
 PHOTO_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "photos")
 os.makedirs(PHOTO_UPLOAD_DIR, exist_ok=True)
@@ -89,10 +90,8 @@ def get_standards_tree():
 # 啟動 SOP 路由
 @router.post("/start")
 async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
-    """啟動指定設備的 SOP 測試（engineer / keeper / admin 才可操作）"""
-    role = getattr(request.state, "user_role", None)
-    if role not in ("engineer", "keeper", "admin"):
-        raise HTTPException(status_code=403, detail="無操作權限")
+    """啟動指定設備的 SOP 測試（admin 才可操作）"""
+    _require_admin(request)
 
     operator: str = payload.get("operator", "")
     operator_user_id: Optional[int] = getattr(request.state, "user_id", None)
@@ -248,9 +247,7 @@ class ExecutionResponse(BaseModel):
 
 @execution_router.post("/", response_model=ExecutionResponse)
 def create_execution(data: ExecutionCreate, request: Request):
-    role = getattr(request.state, "user_role", None)
-    if role not in ("engineer", "keeper", "admin"):
-        raise HTTPException(status_code=403, detail="無操作權限")
+    _require_admin(request)
     operator_user_id = getattr(request.state, "user_id", None)
     with SessionLocal() as db:
         execution = SopExecution(
@@ -342,9 +339,7 @@ async def upload_execution_photo(
     file: UploadFile = File(...),
 ):
     """補充照片：上架時照片（before）或測試結束照（after）"""
-    role = getattr(request.state, "user_role", None)
-    if role not in ("engineer", "keeper", "admin"):
-        raise HTTPException(status_code=403, detail="無操作權限")
+    _require_admin(request)
     if photo_type not in ("before", "after"):
         raise HTTPException(status_code=400, detail="photo_type 必須為 before 或 after")
 

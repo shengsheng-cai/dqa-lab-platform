@@ -35,8 +35,8 @@ class User(Base):
     username: Mapped[str] = mapped_column(String, unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String)
     hashed_password: Mapped[str] = mapped_column(String)
-    role: Mapped[str] = mapped_column(String, default="engineer")
-    # role: admin / keeper / engineer
+    role: Mapped[str] = mapped_column(String, default="admin")
+    # role: admin / guest
     line_user_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     loan_limit: Mapped[int] = mapped_column(Integer, default=10)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

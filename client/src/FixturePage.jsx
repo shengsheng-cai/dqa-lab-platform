@@ -163,8 +163,8 @@ function ImportModal({ onClose, onSuccess }) {
         },
       });
       setResult(res.data);
-      const { created, updated, skipped } = res.data;
-      showToast(`匯入完成：新增 ${created}、更新 ${updated}、跳過 ${skipped}`, "success");
+      const { imported, updated, skipped } = res.data;
+      showToast(`匯入完成：新增 ${imported}、更新 ${updated}、跳過 ${skipped}`, "success");
     } catch (e) {
       setError(e.response?.data?.detail || "匯入失敗");
       showToast(e.response?.data?.detail || "匯入失敗", "error");
@@ -1462,8 +1462,9 @@ export default function FixturePage({ active, role }) {
                 ) : (
                   sorted.map((f) => {
                     const editVal = inventoryEdits[f.id];
+                    const parsedVal = parseInt(editVal);
                     const isDiff = editVal !== undefined && editVal !== "" &&
-                      !isNaN(parseInt(editVal)) && parseInt(editVal) < f.total_quantity;
+                      !isNaN(parsedVal) && parsedVal !== f.total_quantity;
                     return (
                     <tr
                       key={f.id}

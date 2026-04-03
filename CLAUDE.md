@@ -17,7 +17,7 @@
 | `error_logs` | 設備異常/錯誤日誌 |
 | `fixtures` | 治具主檔（庫存、狀態） |
 | `fixture_loans` | 治具借還記錄（含排程外鍵 `schedule_id`） |
-| `users` | 工程師帳號（含角色 admin/keeper/engineer） |
+| `users` | 管理員帳號（角色 admin） |
 | `demo_tokens` | 訪客唯讀 Token |
 | `sop_templates` | SOP 步驟模板 |
 | `purchase_orders` | 治具採購單 |
@@ -79,7 +79,7 @@ cd backend && python -m pytest  # 執行全套測試（45 tests）
 | 排程系統 | 甘特圖、自動排程、即時預覽、不可用時段、自動推進；與 AI 聯動（申請此測試預填） |
 | AI 諮詢 | Gemini 2.5 Flash-Lite、RAG 檢索、多輪對話；推薦條件→直接申請排程 |
 | 三模組連動 | ✅ AI→排程、排程→治具預約、SOP→治具借出、完成→治具歸還 |
-| 存取控制 | 4 層（admin/keeper/engineer/guest）、IP Rate Limiting |
+| 存取控制 | 2 層（admin/guest）、IP Rate Limiting |
 | LINE Bot | 緊急停止推播給管理者個人 + 指定群組（LINE_GROUP_ID）；群組 query 模式（Bot 加入工作群組，OP 問 → Bot reply，不耗額度） |
 
 ### 三模組連動流程

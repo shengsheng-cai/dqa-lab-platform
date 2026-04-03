@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 from .models import SessionLocal, PurchaseOrder, Fixture
+from .auth import _require_admin
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
 
@@ -13,8 +14,8 @@ def _fmt_dt(dt) -> Optional[str]:
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _order_to_dict(o: PurchaseOrder, db) -> dict:
-    fixture = db.query(Fixture).filter(Fixture.id == o.fixture_id).first()
+def _order_to_dict(o: PurchaseOrder, fixtures: dict) -> dict:
+    fixture = fixtures.get(o.fixture_id)
     fixture_label = (
         f"{fixture.interface_type} / {fixture.form_factor}" if fixture else f"ID:{o.fixture_id}"
     )
@@ -42,7 +43,9 @@ def list_purchase_orders(status: Optional[str] = None):
         if status:
             q = q.filter(PurchaseOrder.status == status)
         orders = q.order_by(PurchaseOrder.created_at.desc()).all()
-        return [_order_to_dict(o, db) for o in orders]
+        fixture_ids = {o.fixture_id for o in orders}
+        fixtures = {f.id: f for f in db.query(Fixture).filter(Fixture.id.in_(fixture_ids)).all()}
+        return [_order_to_dict(o, fixtures) for o in orders]
 
 
 class PurchaseOrderCreate(BaseModel):
@@ -55,10 +58,8 @@ class PurchaseOrderCreate(BaseModel):
 
 @router.post("/")
 def create_purchase_order(body: PurchaseOrderCreate, request: Request):
-    """新增採購單（keeper/admin only）"""
-    role = getattr(request.state, "user_role", None)
-    if role not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="無操作權限")
+    """新增採購單（admin only）"""
+    _require_admin(request)
 
     if body.quantity <= 0:
         raise HTTPException(status_code=400, detail="數量必須大於 0")
@@ -98,10 +99,8 @@ class PurchaseOrderUpdate(BaseModel):
 
 @router.patch("/{order_id}")
 def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Request):
-    """更新採購單；status=arrived 時自動將 arrived_quantity 加入治具庫存（keeper/admin only）"""
-    role = getattr(request.state, "user_role", None)
-    if role not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="無操作權限")
+    """更新採購單；status=arrived 時自動將 arrived_quantity 加入治具庫存（admin only）"""
+    _require_admin(request)
 
     with SessionLocal() as db:
         order = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()
@@ -124,6 +123,7 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Req
             fixture = db.query(Fixture).filter(Fixture.id == order.fixture_id).first()
             if fixture:
                 fixture.total_quantity = (fixture.total_quantity or 0) + arrived_qty
+                fixture.shortage = max(0, (fixture.shortage or 0) - arrived_qty)
         elif body.status in ("pending", "cancelled") and body.status is not None:
             order.status = body.status
 
@@ -135,9 +135,7 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Req
 @router.delete("/{order_id}")
 def delete_purchase_order(order_id: int, request: Request):
     """刪除採購單（admin only，僅限 pending 狀態）"""
-    role = getattr(request.state, "role", "guest")
-    if role != "admin":
-        raise HTTPException(status_code=403, detail="僅管理者可刪除採購單")
+    _require_admin(request)
 
     with SessionLocal() as db:
         order = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()

@@ -5,7 +5,7 @@
 
 BASE="${BASE_URL:-http://localhost:8000}"
 USER="${ADMIN_USER:-admin}"
-PASS_="${ADMIN_PASS:-admin123}"
+PASS_="${ADMIN_PASS:-admin2024}"
 PASS=0; FAIL=0
 
 check_status() {

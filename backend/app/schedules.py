@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from .models import SessionLocal, Schedule, DeviceBlockedPeriod, User, ScheduleFixture, Fixture, FixtureLoan
 from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
+from .auth import _require_admin
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
@@ -558,10 +559,8 @@ def get_schedule(schedule_id: int):
 
 @router.post("")
 def create_schedule(body: ScheduleCreate, request: Request):
-    """提交新排程申請（engineer / keeper / admin）"""
-    role = getattr(request.state, "user_role", None)
-    if role not in ("engineer", "keeper", "admin"):
-        raise HTTPException(status_code=403, detail="訪客無法申請排程")
+    """提交新排程申請（admin）"""
+    _require_admin(request)
 
     if not body.conditions:
         raise HTTPException(status_code=400, detail="至少選擇一個測試條件")
@@ -736,9 +735,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
 
 @router.delete("/{schedule_id}")
 def delete_schedule(schedule_id: int, request: Request):
-    role = getattr(request.state, "user_role", None)
-    if role != "admin":
-        raise HTTPException(status_code=403, detail="僅管理者可刪除")
+    _require_admin(request)
 
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
@@ -774,9 +771,7 @@ def list_blocked_periods():
 
 @blocked_router.post("")
 def create_blocked_period(body: BlockedPeriodCreate, request: Request):
-    role = getattr(request.state, "user_role", None)
-    if role != "admin":
-        raise HTTPException(status_code=403, detail="僅管理者可操作")
+    _require_admin(request)
 
     if body.end_time <= body.start_time:
         raise HTTPException(status_code=400, detail="結束時間必須晚於開始時間")
@@ -807,9 +802,7 @@ def create_blocked_period(body: BlockedPeriodCreate, request: Request):
 
 @blocked_router.patch("/{period_id}")
 def update_blocked_period(period_id: int, body: BlockedPeriodPatch, request: Request):
-    role = getattr(request.state, "user_role", None)
-    if role != "admin":
-        raise HTTPException(status_code=403, detail="僅管理者可操作")
+    _require_admin(request)
 
     with SessionLocal() as db:
         b = db.query(DeviceBlockedPeriod).filter(DeviceBlockedPeriod.id == period_id).first()
@@ -834,9 +827,7 @@ def update_blocked_period(period_id: int, body: BlockedPeriodPatch, request: Req
 
 @blocked_router.delete("/{period_id}")
 def delete_blocked_period(period_id: int, request: Request):
-    role = getattr(request.state, "user_role", None)
-    if role != "admin":
-        raise HTTPException(status_code=403, detail="僅管理者可操作")
+    _require_admin(request)
 
     with SessionLocal() as db:
         b = db.query(DeviceBlockedPeriod).filter(DeviceBlockedPeriod.id == period_id).first()

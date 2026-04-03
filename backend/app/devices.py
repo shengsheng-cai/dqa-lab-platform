@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from .models import SessionLocal, DeviceData, ErrorLog, SopExecution
 from .line import push_message
 from .utils import _now_utc, _save_device_state
+from .auth import _require_admin
 
 logger = logging.getLogger("app")
 
@@ -213,6 +214,7 @@ async def get_latest(request: Request):
 
 @router.post("/api/stop/{device_id}/emergency")
 async def emergency_stop(device_id: str, request: Request):
+    _require_admin(request)
     cache = request.app.state.AICM_CACHE
     locks = request.app.state.DEVICE_LOCKS
     device = _get_device(cache, device_id)
@@ -302,6 +304,7 @@ _VALID_PHASES = {
 @router.post("/api/devices/{device_id}/set-phase")
 async def set_phase(device_id: str, payload: SetPhasePayload, request: Request):
     """管理員手動跳相位（用於 demo / 手動接管）"""
+    _require_admin(request)
     cache = request.app.state.AICM_CACHE
     locks = request.app.state.DEVICE_LOCKS
     device = _get_device(cache, device_id)
@@ -317,6 +320,7 @@ async def set_phase(device_id: str, payload: SetPhasePayload, request: Request):
 
 @router.post("/api/devices/{device_id}/progress")
 async def update_progress(device_id: str, payload: ProgressPayload, request: Request):
+    _require_admin(request)
     cache = request.app.state.AICM_CACHE
     locks = request.app.state.DEVICE_LOCKS
     device = _get_device(cache, device_id)
@@ -328,6 +332,7 @@ async def update_progress(device_id: str, payload: ProgressPayload, request: Req
 
 @router.post("/api/stop/{device_id}/pause")
 async def pause_test(device_id: str, request: Request):
+    _require_admin(request)
     cache = request.app.state.AICM_CACHE
     locks = request.app.state.DEVICE_LOCKS
     device = _get_device(cache, device_id)
@@ -344,6 +349,7 @@ async def pause_test(device_id: str, request: Request):
 
 @router.post("/api/stop/{device_id}/normal")
 async def normal_stop(device_id: str, request: Request):
+    _require_admin(request)
     cache = request.app.state.AICM_CACHE
     locks = request.app.state.DEVICE_LOCKS
     device = _get_device(cache, device_id)

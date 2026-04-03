@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from .models import SessionLocal, Fixture, FixtureLoan, PurchaseOrder, User
 from .utils import today_utc_window
+from .auth import _require_admin
 
 try:
     import pandas as pd
@@ -311,10 +312,8 @@ def get_interface_types():
 
 @router.get("/users")
 def list_users(request: Request):
-    """回傳使用者清單（供借出登記下拉選單用，任何已登入使用者皆可呼叫）"""
-    role = getattr(request.state, "user_role", None)
-    if role is None:
-        raise HTTPException(status_code=401, detail="請先登入")
+    """回傳使用者清單（供借出登記下拉選單用，admin only）"""
+    _require_admin(request)
     db = SessionLocal()
     try:
         users = (
@@ -520,8 +519,7 @@ def list_damaged_lost_loans():
 
 @router.post("/loans")
 async def create_loan(body: LoanCreate, request: Request):
-    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    _require_admin(request)
 
     db = SessionLocal()
     try:
@@ -575,8 +573,7 @@ async def create_loan(body: LoanCreate, request: Request):
 
 @router.post("/loans/{loan_id}/return")
 def return_loan(loan_id: int, body: ReturnUpdate, request: Request):
-    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    _require_admin(request)
 
     db = SessionLocal()
     try:
@@ -615,8 +612,7 @@ def return_loan(loan_id: int, body: ReturnUpdate, request: Request):
 
 @router.post("/loans/{loan_id}/extend")
 def extend_loan(loan_id: int, body: ExtensionRequest, request: Request):
-    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    _require_admin(request)
 
     db = SessionLocal()
     try:
@@ -639,9 +635,8 @@ def extend_loan(loan_id: int, body: ExtensionRequest, request: Request):
 
 @router.post("/import")
 async def import_fixtures(request: Request, file: UploadFile = File(...)):
-    """從 Excel 匯入治具資料（保管人/管理者操作）"""
-    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    """從 Excel 匯入治具資料（admin only）"""
+    _require_admin(request)
     if pd is None:
         raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
 
@@ -755,10 +750,8 @@ async def import_fixtures(request: Request, file: UploadFile = File(...)):
 
 @router.patch("/{fixture_id}/keeper")
 def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request):
-    """設定治具的系統保管人（keeper/admin only）"""
-    role = getattr(request.state, "user_role", None)
-    if role not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    """設定治具的系統保管人（admin only）"""
+    _require_admin(request)
     db = SessionLocal()
     try:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
@@ -786,8 +779,7 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request):
 
 @router.post("/{fixture_id}/inventory")
 def update_inventory(fixture_id: int, actual_quantity: int, request: Request):
-    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    _require_admin(request)
 
     db = SessionLocal()
     try:
@@ -813,8 +805,7 @@ def update_inventory(fixture_id: int, actual_quantity: int, request: Request):
 
 @router.post("/")
 def create_fixture(body: FixtureUpsert, request: Request):
-    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    _require_admin(request)
     db = SessionLocal()
     try:
         f = Fixture(
@@ -847,8 +838,7 @@ def create_fixture(body: FixtureUpsert, request: Request):
 
 @router.patch("/{fixture_id}")
 def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request):
-    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    _require_admin(request)
     db = SessionLocal()
     try:
         f = db.query(Fixture).filter(Fixture.id == fixture_id, Fixture.is_active == True).first()
@@ -880,8 +870,7 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request):
 
 @router.delete("/{fixture_id}")
 def delete_fixture(fixture_id: int, request: Request):
-    if getattr(request.state, "user_role", None) not in ("admin", "keeper"):
-        raise HTTPException(status_code=403, detail="需要保管人或管理者權限")
+    _require_admin(request)
     db = SessionLocal()
     try:
         f = db.query(Fixture).filter(Fixture.id == fixture_id, Fixture.is_active == True).first()
