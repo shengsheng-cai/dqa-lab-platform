@@ -16,6 +16,11 @@ export function parseUtcDate(s) {
   return new Date(s.includes("Z") || s.includes("+") ? s : s + "Z");
 }
 
+export const ACTIVE_STATUSES = ["RUNNING", "PAUSED"];
+export const FINISHING_STATUS = "FINISHING";
+export const OFFLINE_STATUS = "OFFLINE";
+export const EMERGENCY_STATUS = "EMERGENCY";
+
 export const SIM_PHASE_LABEL = {
   ramp_to_low: "降至低溫",
   ramp_to_high: "升至高溫",

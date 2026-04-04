@@ -8,7 +8,7 @@ import SchedulePage from "./SchedulePage";
 import UsersPage from "./UsersPage";
 import ErrorLog from "./ErrorLog";
 import RightPanel from "./components/control/RightPanel";
-import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL } from "./constants";
+import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL, ACTIVE_STATUSES, FINISHING_STATUS, EMERGENCY_STATUS } from "./constants";
 import { downloadBlob, buildReportFilename } from "./utils/download";
 
 const TAB_TO_PATH = {
@@ -160,9 +160,9 @@ function fmtRemaining(secs) {
 function DeviceCard({ device, isSelected, onClick }) {
   const cfg = STATUS_CONFIG[device.status] || STATUS_CONFIG.OFFLINE;
   const remaining = useCountdown(device.estimated_end_at);
-  const isActive = device.status === "RUNNING" || device.status === "PAUSED";
-  const isEmergency = device.status === "EMERGENCY";
-  const isFinishing = device.status === "FINISHING";
+  const isActive = ACTIVE_STATUSES.includes(device.status);
+  const isEmergency = device.status === EMERGENCY_STATUS;
+  const isFinishing = device.status === FINISHING_STATUS;
 
   const totalMs = useMemo(
     () => parseUtcDate(device.estimated_end_at) - parseUtcDate(device.started_at),
@@ -204,7 +204,7 @@ function DeviceCard({ device, isSelected, onClick }) {
         </span>
       </div>
 
-      {isActive && (
+      {(isActive || isFinishing) && (
         <div style={{ marginTop: 3 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 10, color: "#8b949e" }}>
@@ -214,7 +214,7 @@ function DeviceCard({ device, isSelected, onClick }) {
               )}
             </span>
             {SIM_PHASE_LABEL[device.sim_phase] && (
-              <span style={{ fontSize: 8, color: "#484f58" }}>
+              <span style={{ fontSize: 8, color: isFinishing ? "#6e7681" : "#484f58" }}>
                 {SIM_PHASE_LABEL[device.sim_phase]}
               </span>
             )}

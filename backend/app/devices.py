@@ -360,11 +360,8 @@ async def normal_stop(device_id: str, request: Request):
             {
                 "status": "FINISHING",
                 "running_sop_name": "系統自動降溫收尾中...",
-                "active_sop_json": None,
                 "completed_steps": 0,
-                "started_at": None,
                 "standard_id": None,
-                "operator": "",
                 "sim_phase": "ramp_to_ambient",
                 "sim_cycle": 0,
             }

@@ -177,6 +177,21 @@ async def _sim_handle_running(
     _update_humidity(item, target_humi, new_temp, item.get("humidity", 55.0))
 
 
+def _idle_state_patch() -> dict:
+    return {
+        "status": "IDLE",
+        "running_sop_name": "STANDBY",
+        "running_sop_id": None,
+        "active_sop_json": None,
+        "started_at": None,
+        "standard_id": None,
+        "operator": "",
+        "operator_user_id": None,
+        "sim_phase": "idle",
+        "sim_cycle": 0,
+    }
+
+
 async def _sim_handle_finishing(
     device_id: str, item: dict, current_temp: float, current_humi: float, locks: dict, elapsed_seconds: float = 1.0
 ) -> None:
@@ -195,16 +210,7 @@ async def _sim_handle_finishing(
     else:
         item["temperature"] = 25.0
         async with locks[device_id]:
-            item.update({
-                "status": "IDLE",
-                "running_sop_name": "STANDBY",
-                "running_sop_id": None,
-                "standard_id": None,
-                "operator": "",
-                "operator_user_id": None,
-                "sim_phase": "idle",
-                "sim_cycle": 0,
-            })
+            item.update(_idle_state_patch())
             _save_device_state(device_id, item)
         logger.info(f"[{device_id}] 降溫完成，回待機。")
 

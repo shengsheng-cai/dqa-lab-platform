@@ -9,9 +9,8 @@ import StepList from "./components/sop/StepList";
 import ExecutionPanel from "./components/sop/ExecutionPanel";
 import SafetyChecklist from "./components/sop/SafetyChecklist";
 import "./SOPPage.css";
-import { DEVICE_IDS } from "./constants";
+import { DEVICE_IDS, ACTIVE_STATUSES, FINISHING_STATUS, OFFLINE_STATUS, EMERGENCY_STATUS } from "./constants";
 import ConfirmModal from "./components/ConfirmModal";
-const ACTIVE_STATUSES = ["RUNNING", "PAUSED"];
 
 const initDeviceState = () => ({
   activeSop: null,
@@ -88,8 +87,9 @@ const SOPPage = ({ active = true, externalDevice }) => {
   };
   const ds = deviceStates[selectedDevice];
   const isActive = ACTIVE_STATUSES.includes(data.status);
-  const isOffline = data.status === "OFFLINE";
-  const isEmergency = data.status === "EMERGENCY";
+  const isFinishing = data.status === FINISHING_STATUS;
+  const isOffline = data.status === OFFLINE_STATUS;
+  const isEmergency = data.status === EMERGENCY_STATUS;
   const canStop = isActive || isEmergency;
   const effectiveStatus = pauseOptimistic ?? data.status;
   const effectiveIsActive = ACTIVE_STATUSES.includes(effectiveStatus);
@@ -179,7 +179,8 @@ const SOPPage = ({ active = true, externalDevice }) => {
               if (
                 !cur.active_sop_json &&
                 p.activeSop &&
-                !ACTIVE_STATUSES.includes(cur.status)
+                !ACTIVE_STATUSES.includes(cur.status) &&
+                cur.status !== FINISHING_STATUS
               )
                 restoredSop = null;
               const selPatch =
@@ -234,13 +235,15 @@ const SOPPage = ({ active = true, externalDevice }) => {
   }, [selectedDevice]); // eslint-disable-line
 
   const startedAt = allDevices[selectedDevice]?.started_at;
+  const currentStatus = allDevices[selectedDevice]?.status;
   useEffect(() => {
     if (!startedAt) {
-      updateDS(selectedDevice, { chartHistory: [], chartStartedAt: null });
+      if (currentStatus !== FINISHING_STATUS)
+        updateDS(selectedDevice, { chartHistory: [], chartStartedAt: null });
       return;
     }
     fetchHistory(selectedDevice, startedAt);
-  }, [startedAt]); // eslint-disable-line
+  }, [startedAt, currentStatus]); // eslint-disable-line
 
   // Phase 9-2: 根據 sim_phase 自動確認步驟
   const simPhase = allDevices[selectedDevice]?.sim_phase || "";
@@ -397,13 +400,9 @@ const SOPPage = ({ active = true, externalDevice }) => {
     try {
       await api.post(`/api/stop/${selectedDevice}/${type}`);
       if (type === "normal" || type === "emergency") {
-        updateDS(selectedDevice, {
-          activeSop: null,
-          completedSteps: {},
-          savedExecutionId: null,
-          autoSave: false,
-          safetyChecked: [false, false, false, false],
-        });
+        const patch = { completedSteps: {}, savedExecutionId: null, autoSave: false, safetyChecked: [false, false, false, false] };
+        if (type === "emergency") patch.activeSop = null;
+        updateDS(selectedDevice, patch);
         setStartError("");
         const msg = type === "emergency" ? "緊急停止已執行" : "測試已停止";
         showToast(msg, "success");
@@ -473,9 +472,6 @@ const SOPPage = ({ active = true, externalDevice }) => {
         data={data}
         ds={ds}
         doneCnt={doneCnt}
-        isActive={isActive}
-        isOffline={isOffline}
-        isEmergency={isEmergency}
         onSelectDevice={setSelectedDevice}
         embedded={!!externalDevice}
       />
@@ -506,9 +502,6 @@ const SOPPage = ({ active = true, externalDevice }) => {
               emergencyFlash={emergencyFlash}
               effectiveStatus={effectiveStatus}
               effectiveIsActive={effectiveIsActive}
-              canStop={canStop}
-              isOffline={isOffline}
-              isEmergency={isEmergency}
               onAction={handleAction}
             />
           )}
@@ -589,7 +582,7 @@ const SOPPage = ({ active = true, externalDevice }) => {
             </section>
           )}
 
-          {!isActive && (
+          {!isActive && !isFinishing && (
             <>
               <section
                 className="operation-box"

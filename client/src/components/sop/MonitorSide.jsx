@@ -1,7 +1,7 @@
 import React from "react";
 import TempChart from "./TempChart";
 import ExecutionInfoPanel from "./ExecutionInfoPanel";
-import { STATUS_CONFIG, DEVICE_IDS } from "../../constants";
+import { STATUS_CONFIG, DEVICE_IDS, ACTIVE_STATUSES, FINISHING_STATUS, OFFLINE_STATUS, EMERGENCY_STATUS } from "../../constants";
 
 const MonitorSide = ({
   selectedDevice,
@@ -9,13 +9,14 @@ const MonitorSide = ({
   data,
   ds,
   doneCnt,
-  isActive,
-  isOffline,
-  isEmergency,
   onSelectDevice,
   embedded = false,
 }) => {
   const sc = STATUS_CONFIG[data.status] || STATUS_CONFIG.OFFLINE;
+  const isActive = ACTIVE_STATUSES.includes(data.status);
+  const isFinishing = data.status === FINISHING_STATUS;
+  const isOffline = data.status === OFFLINE_STATUS;
+  const isEmergency = data.status === EMERGENCY_STATUS;
 
   return (
     <aside className={`monitor-side${embedded ? " embedded" : ""}`}>
@@ -109,11 +110,13 @@ const MonitorSide = ({
         <div className="value-large" style={{ fontSize: 13 }}>
           {isActive
             ? data.running_sop_name || "執行中"
-            : isEmergency
-              ? "⚠️ 緊急停止已觸發"
-              : isOffline
-                ? "等待後端連線"
-                : "STANDBY (IDLE)"}
+            : isFinishing
+              ? data.running_sop_name || "系統自動降溫收尾中..."
+              : isEmergency
+                ? "⚠️ 緊急停止已觸發"
+                : isOffline
+                  ? "等待後端連線"
+                  : "STANDBY (IDLE)"}
         </div>
       </div>
 

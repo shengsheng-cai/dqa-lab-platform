@@ -1,5 +1,5 @@
 import React from "react";
-import { STATUS_CONFIG } from "../../constants";
+import { STATUS_CONFIG, ACTIVE_STATUSES, FINISHING_STATUS, OFFLINE_STATUS, EMERGENCY_STATUS } from "../../constants";
 
 const ControlPanel = ({
   selectedDevice,
@@ -7,12 +7,13 @@ const ControlPanel = ({
   emergencyFlash,
   effectiveStatus,
   effectiveIsActive,
-  canStop,
-  isOffline,
-  isEmergency,
   onAction,
 }) => {
   const sc = STATUS_CONFIG[data.status] || STATUS_CONFIG.OFFLINE;
+  const isOffline = data.status === OFFLINE_STATUS;
+  const isEmergency = data.status === EMERGENCY_STATUS;
+  const isFinishing = data.status === FINISHING_STATUS;
+  const canStop = ACTIVE_STATUSES.includes(data.status) || isEmergency;
 
   return (
     <section
@@ -55,51 +56,55 @@ const ControlPanel = ({
       </p>
 
       <div className="btn-group-row">
-        <button
-          className="ctrl-btn amber"
-          onClick={() => onAction("pause")}
-          disabled={!effectiveIsActive}
-          style={{
-            opacity: effectiveIsActive ? 1 : 0.35,
-            cursor: effectiveIsActive ? "pointer" : "not-allowed",
-          }}
-        >
-          {effectiveStatus === "PAUSED" ? "▶ 繼續執行" : "⏸ 暫停切換"}
-        </button>
-
-        <div
-          style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}
-        >
+        {!isFinishing && (
           <button
-            className="ctrl-btn grey"
-            onClick={() => onAction("normal")}
-            disabled={!canStop}
+            className="ctrl-btn amber"
+            onClick={() => onAction("pause")}
+            disabled={!effectiveIsActive}
             style={{
-              opacity: canStop ? 1 : 0.35,
-              cursor: canStop ? "pointer" : "not-allowed",
-              ...(isEmergency && {
-                background: "#1f4f8f",
-                border: "1px solid #58a6ff",
-                color: "#a5d6ff",
-                fontWeight: 700,
-              }),
+              opacity: effectiveIsActive ? 1 : 0.35,
+              cursor: effectiveIsActive ? "pointer" : "not-allowed",
             }}
           >
-            {isEmergency ? "🌡 確認安全，開始降溫" : "⏹ 正常停止"}
+            {effectiveStatus === "PAUSED" ? "▶ 繼續執行" : "⏸ 暫停切換"}
           </button>
-          {isEmergency && (
-            <div
+        )}
+
+        {!isFinishing && (
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}
+          >
+            <button
+              className="ctrl-btn grey"
+              onClick={() => onAction("normal")}
+              disabled={!canStop}
               style={{
-                fontSize: 10,
-                color: "#58a6ff",
-                textAlign: "center",
-                lineHeight: 1.4,
+                opacity: canStop ? 1 : 0.35,
+                cursor: canStop ? "pointer" : "not-allowed",
+                ...(isEmergency && {
+                  background: "#1f4f8f",
+                  border: "1px solid #58a6ff",
+                  color: "#a5d6ff",
+                  fontWeight: 700,
+                }),
               }}
             >
-              設備將緩慢回到 25°C 後自動待機
-            </div>
-          )}
-        </div>
+              {isEmergency ? "🌡 確認安全，開始降溫" : "⏹ 正常停止"}
+            </button>
+            {isEmergency && (
+              <div
+                style={{
+                  fontSize: 10,
+                  color: "#58a6ff",
+                  textAlign: "center",
+                  lineHeight: 1.4,
+                }}
+              >
+                設備將緩慢回到 25°C 後自動待機
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           className="ctrl-btn red"
