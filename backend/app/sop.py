@@ -214,6 +214,25 @@ async def auto_start_sop(device_id: str, sop_id: str, cache: dict, locks: dict, 
         })
         _save_device_state(device_id, device)
 
+    # 建立 SopExecution 記錄，並將 id 存入 device cache 供完成時寫入 test_ended_at
+    try:
+        with SessionLocal() as db:
+            execution = SopExecution(
+                sop_id=sop_id,
+                device_id=device_id,
+                operator=operator,
+                test_started_at=now,
+            )
+            db.add(execution)
+            db.flush()
+            execution_id = execution.id
+            db.commit()
+        async with lock:
+            device["active_execution_id"] = execution_id
+            _save_device_state(device_id, device)
+    except Exception as e:
+        logger.error(f"[auto_start] {device_id} 建立 SopExecution 失敗：{e}")
+
     if not skip_fixture_transfer:
         _transfer_reserved_fixtures(device_id, now)
     logger.info(f"[auto_start] {device_id} 自動啟動 SOP: {sop_id} ({sop_name})")
