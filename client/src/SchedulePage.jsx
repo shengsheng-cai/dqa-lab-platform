@@ -606,7 +606,6 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
   const [confirmedResult, setConfirmedResult] = useState(null); // 確認成功後的實際分配結果
   const canEdit = role === "admin";
   const isPending = schedule.status === "待審核";
-  const canSelfCancel = false;
 
   const fetchPreview = useCallback(() => {
     if (!isPending) return;
@@ -799,19 +798,6 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
           )}
 
           <InfoRow label="申請時間" value={fmtDt(schedule.created_at)} />
-
-          {/* 工程師/保管員可取消自己的待審核排程 */}
-          {canSelfCancel && (
-            <>
-              <hr style={{ border: "none", borderTop: "1px solid #21262d", margin: "4px 0" }} />
-              {error && <div style={{ color: "#f85149", fontSize: 13 }}>{error}</div>}
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button onClick={cancel} disabled={saving} style={{ ...cancelBtn, color: "#f85149", borderColor: "#f85149" }}>
-                  {saving ? "處理中..." : "取消排程"}
-                </button>
-              </div>
-            </>
-          )}
 
           {canEdit && (
             <>

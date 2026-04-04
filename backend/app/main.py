@@ -114,6 +114,7 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url=None if _is_prod else "/docs",
     redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 app.include_router(sop_router, prefix="/api/sop", tags=["sop"])
