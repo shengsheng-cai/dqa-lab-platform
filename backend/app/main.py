@@ -145,3 +145,9 @@ app.add_middleware(
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt():
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse("User-agent: *\nDisallow: /\n")
