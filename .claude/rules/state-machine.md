@@ -8,7 +8,7 @@ IDLE → RUNNING ↔ PAUSED → FINISHING → IDLE
 
 - 只有 IDLE 狀態的設備才能啟動新的 SOP
 - FINISHING 完成後自動回到 IDLE
-- 緊急停止（emergency_stop）可從任何狀態強制回 IDLE，觸發 LINE 推播（唯一的主動推播時機）
+- 緊急停止（emergency_stop）可從任何狀態強制回 IDLE，觸發 LINE 推播
 
 ## 模擬相位（sim_phase）
 
