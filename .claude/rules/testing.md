@@ -14,5 +14,5 @@
 
 ## 資料庫
 
-- 不使用 mock，測試直接對 in-memory DB 操作
-- 避免 mock/prod 行為不一致的問題
+- 測試直接對 in-memory SQLite 操作，避免 mock/prod 行為不一致
+- 例外：`SessionLocal` 可用 `patch` 注入 in-memory session（`test_linkage.py` 的做法），DB 本身仍用真實資料
