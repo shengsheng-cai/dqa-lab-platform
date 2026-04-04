@@ -10,6 +10,7 @@ import random
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from .sop import router as sop_router, execution_router, DEVICE_IDS
 from .reports import router as reports_router
 from .errors import router as errors_router
@@ -156,5 +157,4 @@ async def health():
 
 @app.get("/robots.txt", include_in_schema=False)
 async def robots_txt():
-    from fastapi.responses import PlainTextResponse
     return PlainTextResponse("User-agent: *\nDisallow: /\n")
