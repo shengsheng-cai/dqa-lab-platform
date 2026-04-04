@@ -184,7 +184,7 @@ def _try_complete_schedule_for_device(device_id: str) -> None:
         with SessionLocal() as db:
             schedule = db.query(Schedule).filter(
                 Schedule.device_id == device_id,
-                Schedule.status == ScheduleStatus.RUNNING,
+                Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
             ).first()
             if schedule:
                 _complete_schedule(db, schedule, now)
@@ -318,7 +318,7 @@ async def data_simulator(cache: dict, locks: dict):
                             with SessionLocal() as db:
                                 schedule = db.query(Schedule).filter(
                                     Schedule.device_id == device_id,
-                                    Schedule.status == ScheduleStatus.RUNNING,
+                                    Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
                                 ).first()
                                 if schedule:
                                     conditions = json.loads(schedule.conditions) if schedule.conditions else []

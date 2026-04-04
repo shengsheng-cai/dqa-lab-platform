@@ -283,6 +283,9 @@ class DeviceState(Base):
         DateTime, nullable=True
     )
 
+    # --- 執行紀錄 ID（重啟後可恢復，避免 test_ended_at 寫入失敗）---
+    active_execution_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # --- 模擬器狀態（物理模擬引擎專用，未來可獨立為 SimulatorState 表）---
     sim_phase: Mapped[Optional[str]] = mapped_column(String, nullable=True, default="idle")
     sim_cycle: Mapped[int] = mapped_column(Integer, default=0)

@@ -45,6 +45,7 @@ def _save_device_state(device_id: str, item: dict):
         else:
             state.started_at = None
 
+        state.active_execution_id = item.get("active_execution_id")
         state.sim_phase = item.get("sim_phase", "idle")
         state.sim_cycle = item.get("sim_cycle", 0)
 
