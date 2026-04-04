@@ -26,6 +26,7 @@ SKIP_PATHS = {
     "/health",
     "/api/auth/login",
     "/api/auth/demo-login",
+    "/sentry-debug",
 }
 MAX_ATTEMPTS = 5
 BLOCK_SECONDS = 600
