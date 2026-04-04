@@ -11,6 +11,9 @@ import { API_BASE } from "../api";
 const MAX_HISTORY = 4;
 // Matches \n[META:{...}] — sop_ids values never contain }, so [^}]* is safe
 const META_REGEX = /\n\[META:(\{[^}]*\})\]/g;
+const APPLY_REGEX = /\n?\[APPLY\]/g;
+const S_ID_REGEX = /\[S:[^\]]*\]\s*/g;
+const RECOMMENDED_ID_REGEX = /\n?\[已推薦條件ID:[^\]]*\]/g;
 
 // Extract metadata from streaming response, stripping ALL META blocks from display
 function parseStreamingResponse(fullText) {
@@ -21,9 +24,9 @@ function parseStreamingResponse(fullText) {
     } catch {}
     return "";
   });
-  // Strip [APPLY:...] and [S:...] markers that AI outputs for tracking
-  displayText = displayText.replace(/\n?\[APPLY:[^\]]*\]/g, "");
-  displayText = displayText.replace(/\[S:[^\]]*\]\s*/g, "");
+  displayText = displayText.replace(APPLY_REGEX, "");
+  displayText = displayText.replace(S_ID_REGEX, "");
+  displayText = displayText.replace(RECOMMENDED_ID_REGEX, "");
   return { displayText, metadata };
 }
 

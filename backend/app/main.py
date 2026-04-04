@@ -65,6 +65,7 @@ async def lifespan(app: FastAPI):
                 "started_at": started_at,
                 "operator": "",
                 "operator_user_id": None,
+                "active_execution_id": s.active_execution_id,
                 "sim_phase": s.sim_phase or "idle",
                 "sim_cycle": s.sim_cycle or 0,
                 "dwell_high_start": s.dwell_high_start.isoformat() if s.dwell_high_start else None,

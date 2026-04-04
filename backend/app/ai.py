@@ -76,13 +76,10 @@ _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速
 
 【申請測試標記】
 - 回答時絕對不要把 [S:xxx] 標記輸出給使用者，那是系統內部 ID
-- 每次你的回答包含具體推薦的測試條件時，必須在回答最後一行加上：[APPLY:id1,id2]
-- id 就是資料中 [S:xxxx] 的值，原樣複製，逗號分隔，不要加空白
-- APPLY 必須包含回答中列出的「所有」具體條件 ID，不只是最推薦的那一個
-- 只要回答中列出了具體測試條件（有對應 ID），就必須加這行，這是系統功能不能省略
+- 只要回答中列出了具體測試條件，就必須在回答最後一行加上：[APPLY]
 - 只有純定義解釋或完全沒有列出任何具體條件時才不加（例如「什麼是溫箱測試」、「說明 IEC 60068 的目的」）
-- 歷史訊息中若含有 [已推薦條件ID:xxx] 標記，那是前一輪已推薦的條件 ID；若使用者說「加上」「再加」「增加」「補充」「額外」等，APPLY 必須包含 [已推薦條件ID:] 的所有 ID 加上本次新推薦的 ID
-- 絕對不要在回答中輸出 [已推薦條件ID:xxx] 標記，它是系統內部標記"""
+- 絕對不要在回答中輸出 [已推薦條件ID:xxx] 標記，它是系統內部標記
+- 絕對不要自行創造或列舉任何條件 ID"""
 
 _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
 
@@ -337,12 +334,9 @@ async def standards_query_stream(req: QueryRequest):
         except Exception as e:
             yield f"\n\n[AI 服務不可用：{e}]"
             return
-        # 從 AI 回答中解析 [APPLY:id1,id2]，只預選 AI 真正推薦的條件
+        # AI 輸出 [APPLY] 時，使用 RAG 已檢索的 sop_ids（不依賴 AI 列舉 ID）
         full_text = "".join(collected)
-        apply_match = re.search(r'\[APPLY:([^\]]*)\]', full_text)
-        if apply_match:
-            ids = [i.strip() for i in apply_match.group(1).split(',') if i.strip()]
-            if ids:
-                yield f"{META_PREFIX}{json.dumps({'sop_ids': ids})}{META_SUFFIX}"
+        if re.search(r'\[APPLY\]', full_text) and sop_ids:
+            yield f"{META_PREFIX}{json.dumps({'sop_ids': sop_ids})}{META_SUFFIX}"
 
     return StreamingResponse(generate(), media_type="text/plain")
