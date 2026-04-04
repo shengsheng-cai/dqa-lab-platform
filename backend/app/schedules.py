@@ -13,6 +13,7 @@ from .models import SessionLocal, Schedule, DeviceBlockedPeriod, User, ScheduleF
 from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
 from .auth import _require_admin
+from .line import push_message
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
@@ -436,6 +437,9 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
                 f"{len(to_running)} 筆→進行中，{len(to_done)} 筆→已完成"
             )
 
+        running_info = [(s.project_number, s.sample_name, s.device_id) for s in to_running]
+        done_info = [(s.project_number, s.sample_name, s.device_id) for s in to_done]
+
     # 自動啟動：已確認→進行中的排程，對應設備 IDLE 時啟動第一個 SOP
     if cache is not None and locks is not None and to_running:
         tasks = []
@@ -445,6 +449,16 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
                 tasks.append(auto_start_sop(s.device_id, conditions[0], cache, locks))
         if tasks:
             await asyncio.gather(*tasks)
+
+    for proj, sample, dev in running_info:
+        asyncio.create_task(push_message(
+            f"▶️ 測試開始\n專案：{proj} / {sample}\n設備：{dev}"
+        ))
+
+    for proj, sample, dev in done_info:
+        asyncio.create_task(push_message(
+            f"✅ 測試完成\n專案：{proj} / {sample}\n設備：{dev}"
+        ))
 
 
 # ── Schedules 端點 ─────────────────────────────────────────────────────────
@@ -729,6 +743,14 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
         cache = getattr(request.app.state, "AICM_CACHE", {})
         locks = getattr(request.app.state, "DEVICE_LOCKS", {})
         await auto_start_sop(device_id, conditions[0], cache, locks, skip_fixture_transfer=True)
+
+    if body.status == "已確認":
+        asyncio.create_task(push_message(
+            f"📋 排程已確認\n"
+            f"專案：{s.project_number} / {s.sample_name}\n"
+            f"設備：{s.device_id}\n"
+            f"開始：{_fmt(s.start_time)}"
+        ))
 
     return result
 
