@@ -3,9 +3,15 @@ from pathlib import Path
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+import os
+import sentry_sdk
+
+_sentry_dsn = os.getenv("SENTRY_DSN", "")
+if _sentry_dsn:
+    sentry_sdk.init(dsn=_sentry_dsn, send_default_pii=False)
+
 import asyncio
 import datetime
-import os
 import random
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -130,6 +136,12 @@ app.include_router(purchase_orders_router)
 app.include_router(schedules_router)
 app.include_router(device_blocked_router)
 app.include_router(devices_router)
+
+
+@app.get("/sentry-debug")
+async def sentry_debug():
+    raise Exception("Sentry 測試錯誤，確認後請刪除此端點")
+
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
 allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
