@@ -6,7 +6,7 @@ import datetime
 import pytest
 from unittest.mock import patch
 
-from app.models import Schedule, DeviceBlockedPeriod
+from app.models import Schedule, ScheduleStatus, DeviceBlockedPeriod
 from app.schedules import _find_earliest_slot, _auto_assign
 
 UTC = datetime.timezone.utc
@@ -38,7 +38,7 @@ def test_after_confirmed_schedule(db):
     s = Schedule(
         project_number="P001", sample_name="S1",
         standard="IEC", conditions='["sop1"]',
-        status="已確認",
+        status=ScheduleStatus.CONFIRMED,
         device_id="CH-01",
         start_time=_naive(_future(2)),
         end_time=_naive(future_end),
@@ -55,7 +55,7 @@ def test_ignores_cancelled_schedule(db):
     s = Schedule(
         project_number="P002", sample_name="S2",
         standard="IEC", conditions='["sop1"]',
-        status="已取消",
+        status=ScheduleStatus.CANCELLED,
         device_id="CH-01",
         start_time=_naive(_future(1)),
         end_time=_naive(_future(10)),
@@ -98,12 +98,12 @@ def test_chained_schedules(db):
     """兩個串接排程 → 第三個從最後結束後插入"""
     db.add(Schedule(
         project_number="P1", sample_name="S1", standard="IEC", conditions='["s"]',
-        status="已確認", device_id="CH-01",
+        status=ScheduleStatus.CONFIRMED, device_id="CH-01",
         start_time=_naive(_future(2)), end_time=_naive(_future(5)),
     ))
     db.add(Schedule(
         project_number="P2", sample_name="S2", standard="IEC", conditions='["s"]',
-        status="已確認", device_id="CH-01",
+        status=ScheduleStatus.CONFIRMED, device_id="CH-01",
         start_time=_naive(_future(5)), end_time=_naive(_future(9)),
     ))
     db.commit()
@@ -133,7 +133,7 @@ def test_auto_assign_avoids_busy_device(db):
     """CH-01 有一個很長的排程 → auto_assign 選其他設備"""
     db.add(Schedule(
         project_number="P1", sample_name="S1", standard="IEC", conditions='["s"]',
-        status="已確認", device_id="CH-01",
+        status=ScheduleStatus.CONFIRMED, device_id="CH-01",
         start_time=_naive(_future(0.5)),
         end_time=_naive(_future(200)),  # 200h 排程
     ))

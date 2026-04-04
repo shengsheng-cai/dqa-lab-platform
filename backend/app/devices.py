@@ -102,7 +102,7 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
 @router.get("/api/devices")
 async def get_all_devices(request: Request):
     cache = request.app.state.AICM_CACHE
-    now = _now_utc().strftime("%H:%M:%S")
+    now = _now_utc().strftime("%Y-%m-%dT%H:%M:%S")
     return [
         {
             "device_id": device_id,
@@ -198,7 +198,7 @@ async def get_latest(request: Request):
             "humidity": 0.0,
             "running_sop_name": "未連線",
             "description": "等待模擬器啟動...",
-            "timestamp": _now_utc().strftime("%H:%M:%S"),
+            "timestamp": _now_utc().strftime("%Y-%m-%dT%H:%M:%S"),
         }
     data = cache["CH-01"]
     status = data.get("status", "OFFLINE")
