@@ -126,17 +126,20 @@ app.include_router(devices_router)
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
 allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
+from .auth import auth_middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+
+# 注意：FastAPI middleware 後加先執行（LIFO）
+# auth_middleware 先加 → 後執行；CORSMiddleware 後加 → 先執行
+# 確保 auth 回傳 401 時，CORS headers 已經由 CORSMiddleware 附加
+app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-from .auth import auth_middleware
-from starlette.middleware.base import BaseHTTPMiddleware
-
-app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
 
 
 @app.get("/health")
