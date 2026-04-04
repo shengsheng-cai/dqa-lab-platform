@@ -606,12 +606,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
   const [confirmedResult, setConfirmedResult] = useState(null); // 確認成功後的實際分配結果
   const canEdit = role === "admin";
   const isPending = schedule.status === "待審核";
-  // engineer/keeper 可取消自己的待審核排程
-  const canSelfCancel =
-    (role === "engineer" || role === "keeper") &&
-    userId != null &&
-    schedule.applicant_user_id === userId &&
-    isPending;
+  const canSelfCancel = false;
 
   const fetchPreview = useCallback(() => {
     if (!isPending) return;
@@ -1308,7 +1303,7 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
     if (active) fetchAll();
   }, [active]);
 
-  const canOperate = role === "admin" || role === "keeper" || role === "engineer";
+  const canOperate = role === "admin";
   const isAdmin = role === "admin";
 
   // 摘要計算
