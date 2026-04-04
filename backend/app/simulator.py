@@ -7,6 +7,7 @@ import random
 from .models import SessionLocal, DeviceData, SopExecution, Schedule
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc, _save_device_state
+from .sop import auto_start_sop
 
 logger = logging.getLogger("app")
 
@@ -287,10 +288,8 @@ async def data_simulator(cache: dict, locks: dict):
                         except Exception as e:
                             logger.error(f"[{device_id}] 寫入 test_ended_at 失敗：{e}")
                     logger.info(f"[{device_id}] 測試自然完成，回待機。")
-                    # 嘗試啟動排程的下一個條件
                     if prev_sop_id:
                         try:
-                            from .sop import auto_start_sop
                             with SessionLocal() as db:
                                 schedule = db.query(Schedule).filter(
                                     Schedule.device_id == device_id,
