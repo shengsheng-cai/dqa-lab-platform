@@ -1078,7 +1078,7 @@ export default function FixturePage({ active, role }) {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [purchasePreFill, setPurchasePreFill] = useState(null);
   const [showStocktakeModal, setShowStocktakeModal] = useState(false);
-  const canOperate = role === "admin" || role === "keeper";
+  const canOperate = role === "admin";
   const [sortKey, setSortKey] = useState("interface_type");
   const [sortDir, setSortDir] = useState("asc");
   const handleSort = (key) => {

@@ -3,8 +3,8 @@ import api from "./api";
 import { useToast } from "./components/Toast";
 import { parseUtcDate } from "./constants";
 
-const ROLE_LABELS = { admin: "管理者", keeper: "保管人", engineer: "工程師" };
-const ROLE_COLORS = { admin: "#f85149", keeper: "#f0a500", engineer: "#58a6ff" };
+const ROLE_LABELS = { admin: "管理者" };
+const ROLE_COLORS = { admin: "#f85149" };
 
 function RoleBadge({ role }) {
   return (
@@ -28,7 +28,7 @@ function UserModal({ user, onClose, onSaved }) {
   const isEdit = !!user;
   const { showToast } = useToast();
   const [displayName, setDisplayName] = useState(user?.display_name || "");
-  const [role, setRole] = useState(user?.role || "engineer");
+  const [role, setRole] = useState(user?.role || "admin");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -124,8 +124,6 @@ function UserModal({ user, onClose, onSaved }) {
             onChange={(e) => setRole(e.target.value)}
             style={inputStyle}
           >
-            <option value="engineer">工程師</option>
-            <option value="keeper">保管人</option>
             <option value="admin">管理者</option>
           </select>
         </div>
@@ -482,7 +480,7 @@ const iconActionBtn = {
   lineHeight: 1,
 };
 
-export default function UsersPage({ active, role }) {
+export default function UsersPage({ active }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalUser, setModalUser] = useState(undefined); // undefined=隱藏, null=新增, obj=編輯

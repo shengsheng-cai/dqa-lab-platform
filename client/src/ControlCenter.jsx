@@ -38,18 +38,9 @@ function TopBar({ devices, fixtureSummary, displayName, role, onLogout }) {
     </span>
   );
 
-  const roleName =
-    role === "admin"
-      ? "管理者"
-      : role === "keeper"
-        ? "保管人"
-        : role === "engineer"
-          ? "工程師"
-          : "🔒 訪客模式";
-  const roleColor =
-    role === "admin" ? "#3fb950" : role === "keeper" ? "#58a6ff" : role === "engineer" ? "#8b949e" : "#ff9f5c";
-  const roleBg =
-    role === "admin" ? "#1f3a1f" : role === "keeper" ? "#1f2f3a" : role === "engineer" ? "#21262d" : "#2d1f00";
+  const roleName = role === "admin" ? "管理者" : "🔒 訪客模式";
+  const roleColor = role === "admin" ? "#3fb950" : "#ff9f5c";
+  const roleBg = role === "admin" ? "#1f3a1f" : "#2d1f00";
 
   return (
     <div
@@ -385,7 +376,7 @@ function ScheduleSummaryPanel({ devices }) {
 // ── UsersSummaryPanel ─────────────────────────────────────────────────────────
 
 function UsersSummaryPanel() {
-  const [summary, setSummary] = useState({ admin: 0, keeper: 0, engineer: 0, validTokens: 0 });
+  const [summary, setSummary] = useState({ admin: 0, validTokens: 0 });
 
   useEffect(() => {
     const fetch = async () => {
@@ -398,8 +389,6 @@ function UsersSummaryPanel() {
         const tokens = tokensRes.data;
         setSummary({
           admin: users.filter(u => u.role === "admin" && u.is_active).length,
-          keeper: users.filter(u => u.role === "keeper" && u.is_active).length,
-          engineer: users.filter(u => u.role === "engineer" && u.is_active).length,
           validTokens: tokens.filter(t => t.is_active && !t.expired && !t.used_up).length,
         });
       } catch (_) {}
@@ -411,8 +400,6 @@ function UsersSummaryPanel() {
 
   const items = [
     { label: "管理者", value: summary.admin, color: "#f85149" },
-    { label: "保管人", value: summary.keeper, color: "#f0a500" },
-    { label: "工程師", value: summary.engineer, color: "#58a6ff" },
     { label: "有效 Token", value: summary.validTokens, color: summary.validTokens > 0 ? "#3fb950" : "#8b949e" },
   ];
 
