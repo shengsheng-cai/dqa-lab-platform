@@ -138,11 +138,6 @@ app.include_router(device_blocked_router)
 app.include_router(devices_router)
 
 
-@app.get("/sentry-debug")
-async def sentry_debug():
-    raise Exception("Sentry 測試錯誤，確認後請刪除此端點")
-
-
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
 allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
