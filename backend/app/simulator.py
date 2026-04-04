@@ -4,7 +4,7 @@ import json
 import logging
 import random
 
-from .models import SessionLocal, DeviceData, SopExecution, Schedule
+from .models import SessionLocal, DeviceData, SopExecution, Schedule, FixtureLoan
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc, _save_device_state
 from .sop import auto_start_sop
@@ -305,6 +305,19 @@ async def data_simulator(cache: dict, locks: dict):
                                     if next_sop_id:
                                         asyncio.create_task(auto_start_sop(device_id, next_sop_id, cache, locks, skip_fixture_transfer=True))
                                         logger.info(f"[{device_id}] 自動啟動下一個條件: {next_sop_id}")
+                                    else:
+                                        # 最後一條條件完成 → 排程立即標為已完成，歸還治具
+                                        schedule.status = "已完成"
+                                        schedule.updated_at = now
+                                        db.query(FixtureLoan).filter(
+                                            FixtureLoan.schedule_id == schedule.id,
+                                            FixtureLoan.status == "loaned",
+                                        ).update(
+                                            {"status": "returned", "return_date": now},
+                                            synchronize_session=False,
+                                        )
+                                        db.commit()
+                                        logger.info(f"[{device_id}] 排程 {schedule.id} 全條件完成，標為已完成")
                         except Exception as e:
                             logger.error(f"[{device_id}] 啟動下一個條件失敗：{e}")
                     continue
