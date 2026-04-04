@@ -4,7 +4,7 @@ import json
 import logging
 import random
 
-from .models import SessionLocal, DeviceData, SopExecution
+from .models import SessionLocal, DeviceData, SopExecution, Schedule
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc, _save_device_state
 
@@ -257,6 +257,7 @@ async def data_simulator(cache: dict, locks: dict):
                 # 測試自然完成（ramp_to_ambient 降溫到 25°C）
                 if item.get("sim_phase") == "done":
                     execution_id = item.get("active_execution_id")
+                    prev_sop_id = item.get("running_sop_id")
                     async with locks[device_id]:
                         item.update({
                             "status": "IDLE",
@@ -286,6 +287,27 @@ async def data_simulator(cache: dict, locks: dict):
                         except Exception as e:
                             logger.error(f"[{device_id}] 寫入 test_ended_at 失敗：{e}")
                     logger.info(f"[{device_id}] 測試自然完成，回待機。")
+                    # 嘗試啟動排程的下一個條件
+                    if prev_sop_id:
+                        try:
+                            from .sop import auto_start_sop
+                            with SessionLocal() as db:
+                                schedule = db.query(Schedule).filter(
+                                    Schedule.device_id == device_id,
+                                    Schedule.status == "進行中",
+                                ).first()
+                                if schedule:
+                                    conditions = json.loads(schedule.conditions) if schedule.conditions else []
+                                    try:
+                                        idx = conditions.index(prev_sop_id)
+                                        next_sop_id = conditions[idx + 1] if idx + 1 < len(conditions) else None
+                                    except ValueError:
+                                        next_sop_id = None
+                                    if next_sop_id:
+                                        asyncio.create_task(auto_start_sop(device_id, next_sop_id, cache, locks, skip_fixture_transfer=True))
+                                        logger.info(f"[{device_id}] 自動啟動下一個條件: {next_sop_id}")
+                        except Exception as e:
+                            logger.error(f"[{device_id}] 啟動下一個條件失敗：{e}")
                     continue
             elif status == "FINISHING":
                 await _sim_handle_finishing(device_id, item, current_temp, current_humi, locks, elapsed_seconds)
