@@ -8,7 +8,7 @@ import shutil
 from fastapi import APIRouter, HTTPException, Body, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, FixtureLoan
+from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, FixtureLoan, DeviceBlockedPeriod
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _save_device_state
 from .auth import _require_admin
@@ -119,6 +119,20 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
                 sop_name = sop.name
 
     now = datetime.datetime.now(datetime.timezone.utc)
+
+    # 檢查不可用時段
+    with SessionLocal() as db:
+        blocked = db.query(DeviceBlockedPeriod).filter(
+            DeviceBlockedPeriod.device_id == device_id,
+            DeviceBlockedPeriod.start_time <= now,
+            DeviceBlockedPeriod.end_time > now,
+        ).first()
+        if blocked:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{device_id} 目前在不可用時段（{blocked.reason or '已設定封鎖'}），無法啟動測試。"
+            )
+
     active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
     active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
 
