@@ -2,6 +2,7 @@ import React from "react";
 import TempChart from "./TempChart";
 import ExecutionInfoPanel from "./ExecutionInfoPanel";
 import { STATUS_CONFIG, DEVICE_IDS, ACTIVE_STATUSES, FINISHING_STATUS, OFFLINE_STATUS, EMERGENCY_STATUS } from "../../constants";
+import { formatLocal } from "../../utils/timezone";
 
 const MonitorSide = ({
   selectedDevice,
@@ -40,7 +41,7 @@ const MonitorSide = ({
             >
               {data.status}
             </span>
-            <span className="update-time">{data.timestamp}</span>
+            <span className="update-time">{formatLocal(data.timestamp, "time")}</span>
           </div>
         </div>
       )}
@@ -48,7 +49,7 @@ const MonitorSide = ({
       {/* 嵌入模式：僅顯示更新時間 */}
       {embedded && (
         <div style={{ paddingBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 10, color: "#484f58" }}>updated {data.timestamp}</span>
+          <span style={{ fontSize: 10, color: "#484f58" }}>updated {formatLocal(data.timestamp, "time")}</span>
         </div>
       )}
 

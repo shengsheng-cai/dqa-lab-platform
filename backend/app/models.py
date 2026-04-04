@@ -10,6 +10,7 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Mapped, mapped_column
+from enum import StrEnum
 import datetime
 import os
 from typing import Optional
@@ -308,6 +309,14 @@ class ErrorLog(Base):
     )
 
 
+class ScheduleStatus(StrEnum):
+    PENDING   = "待審核"
+    CONFIRMED = "已確認"
+    RUNNING   = "進行中"
+    DONE      = "已完成"
+    CANCELLED = "已取消"
+
+
 # ---------- 排程申請單 ----------
 class Schedule(Base):
     __tablename__ = "schedules"
@@ -329,7 +338,7 @@ class Schedule(Base):
         DateTime, nullable=True
     )
     # 待審核 / 已確認 / 進行中 / 已完成 / 已取消
-    status: Mapped[str] = mapped_column(String, default="待審核")
+    status: Mapped[str] = mapped_column(String, default=ScheduleStatus.PENDING)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True

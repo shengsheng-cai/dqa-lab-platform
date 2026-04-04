@@ -8,7 +8,7 @@ import shutil
 from fastapi import APIRouter, HTTPException, Body, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, FixtureLoan, DeviceBlockedPeriod
+from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, ScheduleStatus, FixtureLoan, DeviceBlockedPeriod
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _save_device_state
 from .auth import _require_admin
@@ -171,7 +171,7 @@ def _transfer_reserved_fixtures(device_id: str, now: datetime.datetime):
         with SessionLocal() as db:
             active_schedule = (
                 db.query(Schedule)
-                .filter(Schedule.device_id == device_id, Schedule.status.in_(["已確認", "進行中"]))
+                .filter(Schedule.device_id == device_id, Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]))
                 .first()
             )
             if active_schedule:

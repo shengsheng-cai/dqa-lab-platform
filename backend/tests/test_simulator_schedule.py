@@ -6,7 +6,7 @@ T-05: 模擬器與排程連動邏輯測試
 """
 import datetime
 
-from app.models import DeviceBlockedPeriod, Schedule, Fixture, FixtureLoan
+from app.models import DeviceBlockedPeriod, Schedule, ScheduleStatus, Fixture, FixtureLoan
 
 
 def _now_naive() -> datetime.datetime:
@@ -131,7 +131,7 @@ def _seed_running_schedule(db, device_id: str) -> tuple:
     s = Schedule(
         project_number="P001", sample_name="Sample",
         standard="IEC", conditions='["sop_a"]',
-        status="進行中", device_id=device_id,
+        status=ScheduleStatus.RUNNING, device_id=device_id,
         start_time=_now_naive() - datetime.timedelta(hours=2),
         end_time=_now_naive() + datetime.timedelta(hours=1),
     )
@@ -154,7 +154,7 @@ def test_schedule_marked_done_and_fixture_returned(db):
     s, loan = _seed_running_schedule(db, "CH-01")
 
     # 模擬 simulator done block 的 DB 操作
-    s.status = "已完成"
+    s.status = ScheduleStatus.DONE
     s.updated_at = now
     db.query(FixtureLoan).filter(
         FixtureLoan.schedule_id == s.id,
@@ -167,7 +167,7 @@ def test_schedule_marked_done_and_fixture_returned(db):
 
     db.refresh(s)
     db.refresh(loan)
-    assert s.status == "已完成"
+    assert s.status == ScheduleStatus.DONE
     assert loan.status == "returned"
     assert loan.return_date == now
 
@@ -182,7 +182,7 @@ def test_reserved_fixture_not_affected_on_done(db):
     s = Schedule(
         project_number="P002", sample_name="Sample",
         standard="IEC", conditions='["sop_b"]',
-        status="進行中", device_id="CH-02",
+        status=ScheduleStatus.RUNNING, device_id="CH-02",
         start_time=_now_naive() - datetime.timedelta(hours=1),
         end_time=_now_naive() + datetime.timedelta(hours=2),
     )

@@ -4,7 +4,7 @@ import json
 import logging
 import random
 
-from .models import SessionLocal, DeviceData, SopExecution, Schedule
+from .models import SessionLocal, DeviceData, SopExecution, Schedule, ScheduleStatus
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc, _save_device_state
 from .sop import auto_start_sop
@@ -177,6 +177,23 @@ async def _sim_handle_running(
     _update_humidity(item, target_humi, new_temp, item.get("humidity", 55.0))
 
 
+def _try_complete_schedule_for_device(device_id: str) -> None:
+    """查找設備的進行中排程並立即標為已完成（含治具歸還）。"""
+    try:
+        now = _now_utc()
+        with SessionLocal() as db:
+            schedule = db.query(Schedule).filter(
+                Schedule.device_id == device_id,
+                Schedule.status == ScheduleStatus.RUNNING,
+            ).first()
+            if schedule:
+                _complete_schedule(db, schedule, now)
+                db.commit()
+                logger.info(f"[{device_id}] 排程 {schedule.id} 標為已完成")
+    except Exception as e:
+        logger.error(f"[{device_id}] 更新排程失敗：{e}", exc_info=True)
+
+
 def _idle_state_patch() -> dict:
     return {
         "status": "IDLE",
@@ -212,7 +229,8 @@ async def _sim_handle_finishing(
         async with locks[device_id]:
             item.update(_idle_state_patch())
             _save_device_state(device_id, item)
-        logger.info(f"[{device_id}] 降溫完成，回待機。")
+        logger.info(f"[{device_id}] 手動停止降溫完成，回待機。")
+        _try_complete_schedule_for_device(device_id)
 
     item["humidity"] = round(
         max(0.0, min(100.0, current_humi + random.uniform(-0.2, 0.2))), 1
@@ -300,7 +318,7 @@ async def data_simulator(cache: dict, locks: dict):
                             with SessionLocal() as db:
                                 schedule = db.query(Schedule).filter(
                                     Schedule.device_id == device_id,
-                                    Schedule.status == "進行中",
+                                    Schedule.status == ScheduleStatus.RUNNING,
                                 ).first()
                                 if schedule:
                                     conditions = json.loads(schedule.conditions) if schedule.conditions else []
@@ -317,7 +335,7 @@ async def data_simulator(cache: dict, locks: dict):
                                         db.commit()
                                         logger.info(f"[{device_id}] 排程 {schedule.id} 全條件完成，標為已完成")
                         except Exception as e:
-                            logger.error(f"[{device_id}] 啟動下一個條件失敗：{e}")
+                            logger.error(f"[{device_id}] 啟動下一個條件失敗：{e}", exc_info=True)
                     continue
             elif status == "FINISHING":
                 await _sim_handle_finishing(device_id, item, current_temp, current_humi, locks, elapsed_seconds)

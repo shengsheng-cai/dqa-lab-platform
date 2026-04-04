@@ -9,7 +9,7 @@ import datetime
 import pytest
 from unittest.mock import patch, MagicMock
 
-from app.models import Schedule, Fixture, FixtureLoan
+from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan
 from app.schedules import _get_emergency_devices, _get_stuck_devices
 from app.sop import _transfer_reserved_fixtures, auto_start_sop
 
@@ -98,7 +98,7 @@ def _seed_loan(db, device_id: str, status: str = "reserved") -> FixtureLoan:
     s = Schedule(
         project_number="P001", sample_name="Sample",
         standard="IEC", conditions='["sop1"]',
-        status="已確認", device_id=device_id,
+        status=ScheduleStatus.CONFIRMED, device_id=device_id,
         start_time=datetime.datetime.now(),
         end_time=datetime.datetime.now() + datetime.timedelta(hours=5),
     )

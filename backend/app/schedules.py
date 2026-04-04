@@ -9,7 +9,7 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
-from .models import SessionLocal, Schedule, DeviceBlockedPeriod, User, ScheduleFixture, Fixture, FixtureLoan
+from .models import SessionLocal, Schedule, ScheduleStatus, DeviceBlockedPeriod, User, ScheduleFixture, Fixture, FixtureLoan
 from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
 from .auth import _require_admin
@@ -21,7 +21,7 @@ blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedule
 
 def _complete_schedule(db, schedule, now: datetime.datetime) -> None:
     """排程標為已完成，並將借出治具改為已歸還（不 commit，由呼叫方負責）"""
-    schedule.status = "已完成"
+    schedule.status = ScheduleStatus.DONE
     schedule.updated_at = now
     db.query(FixtureLoan).filter(
         FixtureLoan.schedule_id == schedule.id,
@@ -338,7 +338,7 @@ def _find_earliest_slot(
         db.query(Schedule)
         .filter(
             Schedule.device_id == device_id,
-            Schedule.status.in_(["已確認", "進行中"]),
+            Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
             Schedule.end_time.isnot(None),
         )
         .all()
@@ -418,17 +418,17 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
         # 已確認 → 進行中
         to_running = (
             db.query(Schedule)
-            .filter(Schedule.status == "已確認", Schedule.start_time <= now)
+            .filter(Schedule.status == ScheduleStatus.CONFIRMED, Schedule.start_time <= now)
             .all()
         )
         for s in to_running:
-            s.status = "進行中"
+            s.status = ScheduleStatus.RUNNING
             s.updated_at = now
 
         # 進行中 → 已完成
         to_done = (
             db.query(Schedule)
-            .filter(Schedule.status == "進行中", Schedule.end_time <= now)
+            .filter(Schedule.status == ScheduleStatus.RUNNING, Schedule.end_time <= now)
             .all()
         )
         for s in to_done:
@@ -532,7 +532,7 @@ def get_gantt(request: Request):
     with SessionLocal() as db:
         schedules = (
             db.query(Schedule)
-            .filter(Schedule.status.notin_(["已取消"]))
+            .filter(Schedule.status.notin_([ScheduleStatus.CANCELLED]))
             .order_by(Schedule.start_time)
             .all()
         )
@@ -606,7 +606,7 @@ def create_schedule(body: ScheduleCreate, request: Request):
             applicant_user_id=user_id,
             standard=body.standard,
             conditions=json.dumps(body.conditions, ensure_ascii=False),
-            status="待審核",
+            status=ScheduleStatus.PENDING,
             note=body.note,
             created_by=user_id,
         )
@@ -634,7 +634,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
 
     # 非 admin 只允許取消自己的待審核排程
     if role != "admin":
-        if body.status != "已取消":
+        if body.status != ScheduleStatus.CANCELLED:
             raise HTTPException(status_code=403, detail="僅管理者可審核排程")
         # 後續在讀取 schedule 後再驗證擁有權，這裡先通過
 
@@ -647,7 +647,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
         if role != "admin":
             if s.applicant_user_id != user_id:
                 raise HTTPException(status_code=403, detail="只能取消自己的排程")
-            if s.status != "待審核":
+            if s.status != ScheduleStatus.PENDING:
                 raise HTTPException(status_code=400, detail="只能取消待審核的排程")
 
         applicant_user_id = s.applicant_user_id
@@ -656,8 +656,8 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
         if body.note is not None:
             s.note = body.note
 
-        if body.status == "已確認":
-            if s.status != "待審核":
+        if body.status == ScheduleStatus.CONFIRMED:
+            if s.status != ScheduleStatus.PENDING:
                 raise HTTPException(status_code=409, detail=f"排程已是「{s.status}」，無法重複確認")
             conditions = _parse_conditions(s.conditions)
             cache = getattr(request.app.state, "AICM_CACHE", {})
@@ -680,7 +680,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             s.device_id = device_id
             s.start_time = start
             s.end_time = end
-            s.status = "已確認"
+            s.status = ScheduleStatus.CONFIRMED
             s.confirmed_by = user_id
 
             # 若 start_time ≤ now 代表立即啟動，治具直接 loaned；否則 reserved
@@ -710,7 +710,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                     dt = dt.astimezone(datetime.timezone(datetime.timedelta(hours=8)))
                 return dt.strftime("%m/%d %H:%M")
 
-        elif body.status in ("已取消", "進行中", "已完成"):
+        elif body.status in (ScheduleStatus.CANCELLED, ScheduleStatus.RUNNING, ScheduleStatus.DONE):
             s.status = body.status
             if body.device_id:
                 s.device_id = body.device_id
@@ -719,7 +719,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             if body.end_time:
                 s.end_time = body.end_time
 
-            if body.status == "已取消":
+            if body.status == ScheduleStatus.CANCELLED:
                 # 清除此排程的 reserved 治具預約
                 db.query(FixtureLoan).filter(
                     FixtureLoan.schedule_id == schedule_id,
@@ -742,13 +742,13 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
 
     # 確認排程時，若 start_time ≤ now，立即啟動（不等 APScheduler）
     # 治具已在 commit 時直接寫入 loaned，auto_start_sop 不需再轉換
-    if body.status == "已確認" and immediate_start and conditions and device_id:
+    if body.status == ScheduleStatus.CONFIRMED and immediate_start and conditions and device_id:
         from .sop import auto_start_sop
         cache = getattr(request.app.state, "AICM_CACHE", {})
         locks = getattr(request.app.state, "DEVICE_LOCKS", {})
         await auto_start_sop(device_id, conditions[0], cache, locks, skip_fixture_transfer=True)
 
-    if body.status == "已確認":
+    if body.status == ScheduleStatus.CONFIRMED:
         asyncio.create_task(push_message(
             f"📋 排程已確認\n"
             f"專案：{s.project_number} / {s.sample_name}\n"
