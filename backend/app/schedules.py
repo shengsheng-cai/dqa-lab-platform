@@ -18,6 +18,19 @@ from .line import push_message
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
 
+
+def _complete_schedule(db, schedule, now: datetime.datetime) -> None:
+    """排程標為已完成，並將借出治具改為已歸還（不 commit，由呼叫方負責）"""
+    schedule.status = "已完成"
+    schedule.updated_at = now
+    db.query(FixtureLoan).filter(
+        FixtureLoan.schedule_id == schedule.id,
+        FixtureLoan.status == "loaned",
+    ).update(
+        {"status": "returned", "return_date": now},
+        synchronize_session=False,
+    )
+
 INTER_CONDITION_BUFFER_HOURS = 0.5  # 條件間設備穩定緩衝（30 分鐘）
 
 
@@ -419,16 +432,7 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
             .all()
         )
         for s in to_done:
-            s.status = "已完成"
-            s.updated_at = now
-            # 自動歸還此排程的借出治具
-            db.query(FixtureLoan).filter(
-                FixtureLoan.schedule_id == s.id,
-                FixtureLoan.status == "loaned",
-            ).update(
-                {"status": "returned", "return_date": now},
-                synchronize_session=False,
-            )
+            _complete_schedule(db, s, now)
 
         if to_running or to_done:
             db.commit()
