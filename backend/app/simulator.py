@@ -4,7 +4,7 @@ import json
 import logging
 import random
 
-from .models import SessionLocal, DeviceData
+from .models import SessionLocal, DeviceData, SopExecution
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc, _save_device_state
 
@@ -256,6 +256,7 @@ async def data_simulator(cache: dict, locks: dict):
                 await _sim_handle_running(device_id, item, now, dwell_start_times, elapsed_seconds)
                 # 測試自然完成（ramp_to_ambient 降溫到 25°C）
                 if item.get("sim_phase") == "done":
+                    execution_id = item.get("active_execution_id")
                     async with locks[device_id]:
                         item.update({
                             "status": "IDLE",
@@ -271,8 +272,19 @@ async def data_simulator(cache: dict, locks: dict):
                             "sim_cycle": 0,
                             "dwell_high_start": None,
                             "dwell_low_start": None,
+                            "active_execution_id": None,
                         })
                         _save_device_state(device_id, item)
+                    if execution_id:
+                        try:
+                            with SessionLocal() as db:
+                                db.query(SopExecution).filter(
+                                    SopExecution.id == execution_id,
+                                    SopExecution.test_ended_at == None,
+                                ).update({"test_ended_at": now}, synchronize_session=False)
+                                db.commit()
+                        except Exception as e:
+                            logger.error(f"[{device_id}] 寫入 test_ended_at 失敗：{e}")
                     logger.info(f"[{device_id}] 測試自然完成，回待機。")
                     continue
             elif status == "FINISHING":

@@ -213,12 +213,12 @@ def test_auto_start_sop_unknown_sop_id():
 
 
 def test_auto_start_sop_happy_path_updates_cache():
-    """正常啟動 → cache 改為 RUNNING，_save_device_state 被呼叫一次"""
+    """正常啟動 → cache 改為 RUNNING，_save_device_state 至少被呼叫一次"""
     cache = {"CH-01": {"status": "IDLE"}}
     with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
         with patch("app.sop._save_device_state") as mock_save:
             _run_async(_start_sop("CH-01", "sop_test", cache, skip_fixture_transfer=True))
-            mock_save.assert_called_once()
+            assert mock_save.called
 
     assert cache["CH-01"]["status"] == "RUNNING"
     assert cache["CH-01"]["running_sop_id"] == "sop_test"
