@@ -11,7 +11,7 @@ import { API_BASE } from "../api";
 const MAX_HISTORY = 4;
 // Matches \n[META:{...}] — sop_ids values never contain }, so [^}]* is safe
 const META_REGEX = /\n\[META:(\{[^}]*\})\]/g;
-const APPLY_REGEX = /\n?\[APPLY\]/g;
+const APPLY_REGEX = /\n?\[APPLY[^\]]*\]/g;
 const S_ID_REGEX = /\[S:[^\]]*\]\s*/g;
 const RECOMMENDED_ID_REGEX = /\n?\[已推薦條件ID:[^\]]*\]/g;
 

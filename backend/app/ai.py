@@ -14,6 +14,7 @@ from .rag import (
     retrieve_by_std,
     filter_chunks_by_hints,
     retrieve_filtered,
+    get_all_sop_ids,
 )
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -76,10 +77,11 @@ _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速
 
 【申請測試標記】
 - 回答時絕對不要把 [S:xxx] 標記輸出給使用者，那是系統內部 ID
-- 只要回答中列出了具體測試條件，就必須在回答最後一行加上：[APPLY]
+- 只要回答中列出了具體測試條件，就必須在回答最後一行加上：[APPLY:id1,id2,...]
+- id 只能取自本次【參考資料】中 [S:xxx] 的 xxx，逗號分隔，不要加空白，不要自行創造
+- APPLY 包含回答中列出的「所有」具體條件 ID
 - 只有純定義解釋或完全沒有列出任何具體條件時才不加（例如「什麼是溫箱測試」、「說明 IEC 60068 的目的」）
-- 絕對不要在回答中輸出 [已推薦條件ID:xxx] 標記，它是系統內部標記
-- 絕對不要自行創造或列舉任何條件 ID"""
+- 絕對不要在回答中輸出 [已推薦條件ID:xxx] 標記，它是系統內部標記"""
 
 _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
 
@@ -334,9 +336,17 @@ async def standards_query_stream(req: QueryRequest):
         except Exception as e:
             yield f"\n\n[AI 服務不可用：{e}]"
             return
-        # AI 輸出 [APPLY] 時，使用 RAG 已檢索的 sop_ids（不依賴 AI 列舉 ID）
+        # AI 從 [S:xxx] 清單選 ID 輸出 [APPLY:id1,id2]，後端白名單驗證防幻覺
+        # Fallback：AI 未輸出 APPLY 但 RAG 精確命中少量條件（≤5）時直接用
         full_text = "".join(collected)
-        if re.search(r'\[APPLY\]', full_text) and sop_ids:
+        apply_match = re.search(r'\[APPLY:([^\]]+)\]', full_text)
+        if apply_match:
+            all_ids = get_all_sop_ids()
+            valid_ids = [i.strip() for i in apply_match.group(1).split(',')
+                         if i.strip() in all_ids]
+            if valid_ids:
+                yield f"{META_PREFIX}{json.dumps({'sop_ids': valid_ids})}{META_SUFFIX}"
+        elif sop_ids and len(sop_ids) <= 5:
             yield f"{META_PREFIX}{json.dumps({'sop_ids': sop_ids})}{META_SUFFIX}"
 
     return StreamingResponse(generate(), media_type="text/plain")

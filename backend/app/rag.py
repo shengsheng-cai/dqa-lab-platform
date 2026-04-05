@@ -235,6 +235,11 @@ def match_std_keys(msg: str) -> list[str]:
     return list(found)
 
 
+def get_all_sop_ids() -> set[str]:
+    """回傳系統中所有存在的 sop_id（用於白名單驗證）。"""
+    return {c["raw"]["sop_id"] for c in _CHUNKS if c.get("raw", {}).get("sop_id")}
+
+
 def retrieve_by_std(std_keys: list[str]) -> list[dict]:
     """直接用 std_key 精確比對，不經過向量搜尋。"""
     if not _CHUNKS:
