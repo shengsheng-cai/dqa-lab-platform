@@ -10,13 +10,12 @@
 
 新增 API 端點時，寫入操作一律加 `role != "admin"` 檢查。
 
-## LINE（Query + Push）
+## LINE（Push）
 
-- Webhook 採 **query 模式**：使用者在群組或私訊傳 `狀態`、`CH01~CH05`、`幫助`，Bot 即時 reply。
 - 主動 push 時機（四個）：排程已確認、測試開始（排程進行中）、測試完成、緊急停止。
   - 排程推播：`schedules.py` `patch_schedule` + `auto_advance_schedules`
   - 緊急停止推播：`devices.py`
-- `push_message` 同時推播給 `LINE_USER_ID`（管理者個人）+ `LINE_GROUP_ID`（指定通知群組，選填）。
+- `push_message` 推播給 `LINE_USER_ID`（管理者個人）。
 
 ## 自動排程邏輯
 

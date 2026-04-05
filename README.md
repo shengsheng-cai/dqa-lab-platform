@@ -12,7 +12,7 @@
 > - 78 built-in test conditions across 5 international standards (IEC 60068 / EN 50155 / IEC 61850-3 / IEC 60945 / DNV)
 > - GUM-compliant measurement uncertainty analysis (Type A/B → U, k=2)
 > - AI advisor (Gemini + RAG) — recommend conditions → one-click scheduling
-> - LINE Bot integration for emergency alerts & group queries
+> - LINE Bot integration for emergency alerts
 >
 > [Demo Video](#demo) · [中文說明如下](#核心功能)
 
@@ -36,7 +36,7 @@ https://github.com/user-attachments/assets/f9d30698-6526-4770-a678-4bf9373e334c
 | 🗄️ **治具借還管理** | 借出 / 歸還 / 逾期追蹤、損壞遺失清單、月盤點、採購閉環、Excel 批次匯入；排程聯動（預約→自動借出→自動歸還） |
 | 🤖 **AI 法規諮詢** | 自然語言查詢、RAG 法規檢索、多輪對話（支援「加上/再加」累積推薦條件）；推薦測試後可直接「📅 申請此測試」預填排程；右下角 FAB 浮動按鈕，點擊從右側滑入 |
 | 🗓️ **排程系統** | 甘特圖永遠可見（固定區塊）、自動排程（排除超時卡機 / EMERGENCY 設備）、審核前即時預覽時段、不可用時段管理；排程確認後設備立即自動啟動（不等 APScheduler）；APScheduler 每 5 分鐘補位推進；確認後治具自動預約 |
-| 🚨 **LINE Bot 通知** | 緊急停止主動推播（push_message）；Bot 加入工作群組後支援 query 模式（OP 在群組問設備狀態 → Bot reply，不耗免費額度） |
+| 🚨 **LINE Bot 通知** | 緊急停止主動推播（push_message）給管理者個人 |
 | 👥 **人員管理** | 工程師名冊（左）+ 訪客 Token 管理（右）；Token 表支援「隱藏已失效」一鍵過濾 |
 | 🔐 **存取控制** | 管理員登入 + 訪客唯讀模式，bcrypt 密碼雜湊，IP Rate Limiting |
 
@@ -100,7 +100,7 @@ cp .env.example backend/.env
 | **後端** | FastAPI、SQLAlchemy 2.0、SQLite、Alembic、APScheduler |
 | **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Flash-Lite）+ 可切換 RAG Embedding（Gemini / sentence-transformers） |
-| **通知** | LINE Messaging API（群組 query 模式 + 緊急推播）|
+| **通知** | LINE Messaging API（緊急推播）|
 
 ---
 

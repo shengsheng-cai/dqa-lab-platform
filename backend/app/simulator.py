@@ -178,8 +178,9 @@ async def _sim_handle_running(
     _update_humidity(item, target_humi, new_temp, item.get("humidity", 55.0))
 
 
-def _try_complete_schedule_for_device(device_id: str) -> None:
-    """查找設備的進行中排程並立即標為已完成（含治具歸還）。"""
+def _try_complete_schedule_for_device(device_id: str) -> str | None:
+    """查找設備的進行中排程並立即標為已完成（含治具歸還）。
+    回傳推播訊息字串（有排程時），或 None（無排程時）。"""
     try:
         now = _now_utc()
         with SessionLocal() as db:
@@ -192,11 +193,10 @@ def _try_complete_schedule_for_device(device_id: str) -> None:
                 _complete_schedule(db, schedule, now)
                 db.commit()
                 logger.info(f"[{device_id}] 排程 {schedule.id} 標為已完成")
-                asyncio.create_task(push_message(
-                    f"✅ 測試完成\n專案：{proj} / {sample}\n設備：{dev}"
-                ))
+                return f"✅ 測試完成\n專案：{proj} / {sample}\n設備：{dev}"
     except Exception as e:
         logger.error(f"[{device_id}] 更新排程失敗：{e}", exc_info=True)
+    return None
 
 
 def _idle_state_patch() -> dict:
@@ -231,11 +231,15 @@ async def _sim_handle_finishing(
         )
     else:
         item["temperature"] = 25.0
+        sop_name = item.get("running_sop_name") or "未知測試"
         async with locks[device_id]:
             item.update(_idle_state_patch())
             _save_device_state(device_id, item)
         logger.info(f"[{device_id}] 手動停止降溫完成，回待機。")
-        _try_complete_schedule_for_device(device_id)
+        push_text = _try_complete_schedule_for_device(device_id)
+        if push_text is None:
+            push_text = f"✅ 測試完成\n設備：{device_id}\n測試：{sop_name}"
+        asyncio.create_task(push_message(push_text))
 
     item["humidity"] = round(
         max(0.0, min(100.0, current_humi + random.uniform(-0.2, 0.2))), 1
