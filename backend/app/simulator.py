@@ -322,33 +322,24 @@ async def data_simulator(cache: dict, locks: dict):
                         except Exception as e:
                             logger.error(f"[{device_id}] 寫入 test_ended_at 失敗：{e}")
                     logger.info(f"[{device_id}] 測試自然完成，回待機。")
-                    if prev_sop_id:
-                        try:
-                            with SessionLocal() as db:
-                                schedule = db.query(Schedule).filter(
-                                    Schedule.device_id == device_id,
-                                    Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
-                                ).first()
-                                if schedule:
-                                    conditions = json.loads(schedule.conditions) if schedule.conditions else []
-                                    try:
-                                        idx = conditions.index(prev_sop_id)
-                                        next_sop_id = conditions[idx + 1] if idx + 1 < len(conditions) else None
-                                    except ValueError:
-                                        next_sop_id = None
-                                    if next_sop_id:
-                                        asyncio.create_task(auto_start_sop(device_id, next_sop_id, cache, locks, skip_fixture_transfer=True))
-                                        logger.info(f"[{device_id}] 自動啟動下一個條件: {next_sop_id}")
-                                    else:
-                                        proj, sample, dev = schedule.project_number, schedule.sample_name, schedule.device_id
-                                        _complete_schedule(db, schedule, now)
-                                        db.commit()
-                                        logger.info(f"[{device_id}] 排程 {schedule.id} 全條件完成，標為已完成")
-                                        asyncio.create_task(push_message(
-                                            f"✅ 測試完成\n專案：{proj} / {sample}\n設備：{dev}"
-                                        ))
-                        except Exception as e:
-                            logger.error(f"[{device_id}] 啟動下一個條件失敗：{e}", exc_info=True)
+                    try:
+                        with SessionLocal() as db:
+                            schedule = db.query(Schedule).filter(
+                                Schedule.device_id == device_id,
+                                Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
+                            ).first()
+                            if schedule:
+                                new_idx = schedule.current_condition_index + 1
+                                total = len(json.loads(schedule.conditions)) if schedule.conditions else 0
+                                schedule.current_condition_index = new_idx
+                                db.commit()
+                                proj, sample = schedule.project_number, schedule.sample_name
+                                asyncio.create_task(push_message(
+                                    f"✅ 條件 {new_idx}/{total} 完成\n專案：{proj} / {sample}\n設備：{device_id}\n請至排程頁面確認下一步"
+                                ))
+                                logger.info(f"[{device_id}] 排程 {schedule.id} 條件 {new_idx}/{total} 完成，等待人員確認")
+                    except Exception as e:
+                        logger.error(f"[{device_id}] 更新排程條件進度失敗：{e}", exc_info=True)
                     continue
             elif status == "FINISHING":
                 await _sim_handle_finishing(device_id, item, current_temp, current_humi, locks, elapsed_seconds)

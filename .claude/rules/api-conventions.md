@@ -12,8 +12,10 @@
 
 ## LINE（Push）
 
-- 主動 push 時機（四個）：排程已確認、測試開始（排程進行中）、測試完成、緊急停止。
-  - 排程推播：`schedules.py` `patch_schedule` + `auto_advance_schedules`
+- 主動 push 時機（五個）：排程已確認、測試開始（排程進行中）、條件完成（等待人員確認）、測試完成、緊急停止。
+  - 排程推播：`schedules.py` `patch_schedule` + `auto_advance_schedules` + `confirm_condition`
+  - 條件完成推播：`simulator.py`（sim_phase → done 時）
+  - 手動 SOP 無排程完成推播：`sop.py` `create_execution`（BackgroundTasks）
   - 緊急停止推播：`devices.py`
 - `push_message` 推播給 `LINE_USER_ID`（管理者個人）。
 
@@ -23,4 +25,5 @@
 - 設備選擇：遍歷 CH-01~CH-05，取最早可用
 - 排除超時卡機設備：`est_end` 超過 1h 仍未回 IDLE
 - Fallback：若所有設備都超時，改取全部中最早可用（避免無法申請）
-- APScheduler 每 5 分鐘自動推進排程狀態（已確認→進行中→已完成）
+- APScheduler 每 5 分鐘：已確認 → 進行中（自動啟動第一條件）；進行中不再自動完成
+- 條件銜接由人員在排程頁面手動確認（`POST /api/schedules/{id}/confirm-condition`）

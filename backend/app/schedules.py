@@ -14,6 +14,7 @@ from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
 from .auth import _require_admin
 from .line import push_message
+from .utils import _now_utc
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
@@ -74,6 +75,7 @@ class ScheduleOut(BaseModel):
     start_time: Optional[datetime.datetime]
     end_time: Optional[datetime.datetime]
     status: str
+    current_condition_index: int = 0
     note: Optional[str]
     created_by: Optional[int]
     confirmed_by: Optional[int]
@@ -425,24 +427,11 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
             s.status = ScheduleStatus.RUNNING
             s.updated_at = now
 
-        # 進行中 → 已完成
-        to_done = (
-            db.query(Schedule)
-            .filter(Schedule.status == ScheduleStatus.RUNNING, Schedule.end_time <= now)
-            .all()
-        )
-        for s in to_done:
-            _complete_schedule(db, s, now)
-
-        if to_running or to_done:
+        if to_running:
             db.commit()
-            print(
-                f"[scheduler] 排程狀態推進："
-                f"{len(to_running)} 筆→進行中，{len(to_done)} 筆→已完成"
-            )
+            print(f"[scheduler] 排程狀態推進：{len(to_running)} 筆→進行中")
 
         running_info = [(s.project_number, s.sample_name, s.device_id) for s in to_running]
-        done_info = [(s.project_number, s.sample_name, s.device_id) for s in to_done]
 
     # 自動啟動：已確認→進行中的排程，對應設備 IDLE 時啟動第一個 SOP
     if cache is not None and locks is not None and to_running:
@@ -457,11 +446,6 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
     for proj, sample, dev in running_info:
         asyncio.create_task(push_message(
             f"▶️ 測試開始\n專案：{proj} / {sample}\n設備：{dev}"
-        ))
-
-    for proj, sample, dev in done_info:
-        asyncio.create_task(push_message(
-            f"✅ 測試完成\n專案：{proj} / {sample}\n設備：{dev}"
         ))
 
 
@@ -772,6 +756,45 @@ def delete_schedule(schedule_id: int, request: Request):
         db.delete(s)
         db.commit()
     return {"ok": True}
+
+
+# ── 條件確認端點 ──────────────────────────────────────────────────────────────
+
+
+@router.post("/{schedule_id}/confirm-condition")
+async def confirm_condition(schedule_id: int, request: Request):
+    from .sop import auto_start_sop
+    _require_admin(request)
+    cache = getattr(request.app.state, "AICM_CACHE", {})
+    locks = getattr(request.app.state, "LOCKS", {})
+    now = _now_utc()
+
+    with SessionLocal() as db:
+        schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+        if not schedule:
+            raise HTTPException(status_code=404, detail="找不到排程")
+        if schedule.status not in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING):
+            raise HTTPException(status_code=400, detail="排程不在進行中狀態")
+
+        conditions = json.loads(schedule.conditions) if schedule.conditions else []
+        idx = schedule.current_condition_index
+
+        if idx < len(conditions):
+            next_sop_id = conditions[idx]
+            proj, sample, dev = schedule.project_number, schedule.sample_name, schedule.device_id
+        else:
+            _complete_schedule(db, schedule, now)
+            db.commit()
+            asyncio.create_task(push_message(
+                f"✅ 測試完成\n專案：{schedule.project_number} / {schedule.sample_name}\n設備：{schedule.device_id}"
+            ))
+            return {"status": "completed"}
+
+    asyncio.create_task(auto_start_sop(dev, next_sop_id, cache, locks, skip_fixture_transfer=True))
+    asyncio.create_task(push_message(
+        f"▶️ 測試開始\n專案：{proj} / {sample}\n設備：{dev}"
+    ))
+    return {"status": "started", "sop_id": next_sop_id}
 
 
 # ── Device Blocked Periods 端點 ────────────────────────────────────────────

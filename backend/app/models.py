@@ -342,6 +342,7 @@ class Schedule(Base):
     )
     # 待審核 / 已確認 / 進行中 / 已完成 / 已取消
     status: Mapped[str] = mapped_column(String, default=ScheduleStatus.PENDING)
+    current_condition_index: Mapped[int] = mapped_column(Integer, default=0)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True

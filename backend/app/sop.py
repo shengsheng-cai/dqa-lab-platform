@@ -5,13 +5,14 @@ import json
 import datetime
 import os
 import shutil
-from fastapi import APIRouter, HTTPException, Body, Request, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Body, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, ScheduleStatus, FixtureLoan, DeviceBlockedPeriod
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _save_device_state
 from .auth import _require_admin
+from .line import push_message
 
 PHOTO_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "photos")
 os.makedirs(PHOTO_UPLOAD_DIR, exist_ok=True)
@@ -279,7 +280,7 @@ class ExecutionResponse(BaseModel):
 
 
 @execution_router.post("/", response_model=ExecutionResponse)
-def create_execution(data: ExecutionCreate, request: Request):
+def create_execution(data: ExecutionCreate, request: Request, background_tasks: BackgroundTasks):
     _require_admin(request)
     operator_user_id = getattr(request.state, "user_id", None)
     with SessionLocal() as db:
@@ -312,6 +313,19 @@ def create_execution(data: ExecutionCreate, request: Request):
 
         db.commit()
         db.refresh(execution)
+
+        sop_template = db.query(SopTemplate).filter(SopTemplate.sop_id == data.sop_id).first()
+        sop_display_name = sop_template.name if sop_template else data.sop_id
+        # 有進行中排程時，simulator 完成後會 push；手動啟動無排程才從這裡 push
+        has_schedule = db.query(Schedule).filter(
+            Schedule.device_id == data.device_id,
+            Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
+        ).first() is not None
+        if not has_schedule:
+            background_tasks.add_task(
+                push_message,
+                f"✅ 測試完成\n設備：{data.device_id}\n測試：{sop_display_name}",
+            )
 
         steps_response = [
             StepRecordSchema(

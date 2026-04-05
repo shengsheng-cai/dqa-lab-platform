@@ -671,6 +671,27 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
     }
   }
 
+  async function confirmCondition() {
+    setSaving(true);
+    setError("");
+    try {
+      const res = await api.post(`/api/schedules/${schedule.id}/confirm-condition`);
+      if (res.data.status === "completed") {
+        showToast("排程全部條件完成！", "success");
+        onUpdated({ ...schedule, status: "已完成" });
+        onClose();
+      } else {
+        showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
+        onUpdated({ ...schedule });
+      }
+    } catch (e) {
+      setError(e.response?.data?.detail || "操作失敗");
+      showToast(e.response?.data?.detail || "操作失敗", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function del() {
     if (!window.confirm("確定刪除此排程？此動作無法復原。")) return;
     try {
@@ -854,6 +875,17 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
                     {saving ? "處理中..." : "確認排程"}
                   </button>
                 )}
+                {schedule.status === "進行中" && deviceStatuses[schedule.device_id] === "IDLE" && (() => {
+                  const conds = schedule.conditions || [];
+                  const idx = schedule.current_condition_index ?? 0;
+                  const isLast = idx >= conds.length;
+                  const label = isLast ? "✅ 確認完成" : `▶ 開始第 ${idx + 1} 條件（共 ${conds.length}）`;
+                  return (
+                    <button onClick={confirmCondition} disabled={saving} style={{ ...primaryBtn, background: isLast ? "#238636" : "#1f6feb" }}>
+                      {saving ? "處理中..." : label}
+                    </button>
+                  );
+                })()}
                 {schedule.status !== "待審核" && (
                   <button onClick={saveNote} disabled={saving} style={primaryBtn}>
                     {saving ? "儲存中..." : "儲存備註"}
