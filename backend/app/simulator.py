@@ -9,6 +9,7 @@ from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc, _save_device_state
 from .sop import auto_start_sop
 from .schedules import _complete_schedule
+from .line import push_message
 
 logger = logging.getLogger("app")
 
@@ -187,9 +188,13 @@ def _try_complete_schedule_for_device(device_id: str) -> None:
                 Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
             ).first()
             if schedule:
+                proj, sample, dev = schedule.project_number, schedule.sample_name, schedule.device_id
                 _complete_schedule(db, schedule, now)
                 db.commit()
                 logger.info(f"[{device_id}] 排程 {schedule.id} 標為已完成")
+                asyncio.create_task(push_message(
+                    f"✅ 測試完成\n專案：{proj} / {sample}\n設備：{dev}"
+                ))
     except Exception as e:
         logger.error(f"[{device_id}] 更新排程失敗：{e}", exc_info=True)
 
@@ -331,9 +336,13 @@ async def data_simulator(cache: dict, locks: dict):
                                         asyncio.create_task(auto_start_sop(device_id, next_sop_id, cache, locks, skip_fixture_transfer=True))
                                         logger.info(f"[{device_id}] 自動啟動下一個條件: {next_sop_id}")
                                     else:
+                                        proj, sample, dev = schedule.project_number, schedule.sample_name, schedule.device_id
                                         _complete_schedule(db, schedule, now)
                                         db.commit()
                                         logger.info(f"[{device_id}] 排程 {schedule.id} 全條件完成，標為已完成")
+                                        asyncio.create_task(push_message(
+                                            f"✅ 測試完成\n專案：{proj} / {sample}\n設備：{dev}"
+                                        ))
                         except Exception as e:
                             logger.error(f"[{device_id}] 啟動下一個條件失敗：{e}", exc_info=True)
                     continue
