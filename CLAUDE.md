@@ -80,7 +80,7 @@ cd backend && python -m pytest  # 執行全套測試（45 tests）
 | AI 諮詢 | Gemini 2.5 Flash-Lite、RAG 檢索、多輪對話；推薦條件→直接申請排程 |
 | 三模組連動 | ✅ AI→排程、排程→治具預約、SOP→治具借出、完成→治具歸還 |
 | 存取控制 | 2 層（admin/guest）、IP Rate Limiting |
-| LINE Bot | 推播時機：排程已確認、測試開始、測試完成、緊急停止（推播給管理者個人 + LINE_GROUP_ID 群組）；群組 query 模式（Bot 加入工作群組，OP 問 → Bot reply，不耗額度） |
+| LINE Bot | 推播時機：排程已確認、測試開始、測試完成、緊急停止（推播給管理者個人） |
 
 ### 三模組連動流程
 
