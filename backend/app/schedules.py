@@ -754,7 +754,7 @@ async def confirm_condition(schedule_id: int, request: Request):
     from .sop import auto_start_sop
     _require_admin(request)
     cache = getattr(request.app.state, "AICM_CACHE", {})
-    locks = getattr(request.app.state, "LOCKS", {})
+    locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     now = _now_utc()
 
     with SessionLocal() as db:
