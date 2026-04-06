@@ -828,7 +828,7 @@ const TABS = [
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed }) {
+function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions }) {
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
@@ -909,6 +909,7 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
           <SOPPage
             active={activeTab === "device"}
             externalDevice={selectedDevice}
+            onOpenExecutions={onOpenExecutions}
           />
         </div>
         <div
@@ -1024,6 +1025,10 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           onApplySchedule={(sop_ids) => {
             setActiveTab("schedule");
             setScheduleInitConds(sop_ids);
+          }}
+          onOpenExecutions={() => {
+            setRecordsOpen(true);
+            setRecordsSubTab("executions");
           }}
         />
       </div>

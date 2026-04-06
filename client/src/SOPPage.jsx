@@ -44,9 +44,12 @@ function restoreSelectionFromSopId(sopId, standardTree) {
 }
 
 
-const SOPPage = ({ active = true, externalDevice }) => {
+const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   const { showToast } = useToast();
   const [selectedDevice, setSelectedDevice] = useState(externalDevice || "CH-01");
+  const [pendingSchedule, setPendingSchedule] = useState(null);
+  const [confirmingSched, setConfirmingSched] = useState(false);
+  const prevDeviceStatusRef = useRef({});
 
   // 同步外部設備選擇（ControlCenter LeftPanel 點選時）
   useEffect(() => {
@@ -205,6 +208,21 @@ const SOPPage = ({ active = true, externalDevice }) => {
     const t = setInterval(poll, 3000);
     return () => clearInterval(t);
   }, [selectedDevice, active, fetchHistory]);
+
+  // 偵測設備從 RUNNING → IDLE，查詢是否有等待確認的排程
+  useEffect(() => {
+    const prevStatus = prevDeviceStatusRef.current[selectedDevice];
+    const curStatus = data.status;
+    prevDeviceStatusRef.current[selectedDevice] = curStatus;
+    if (prevStatus && prevStatus !== "IDLE" && curStatus === "IDLE") {
+      api.get("/api/schedules?status=RUNNING").then((r) => {
+        const match = r.data.find((s) => s.device_id === selectedDevice);
+        setPendingSchedule(match || null);
+      }).catch(() => {});
+    } else if (curStatus !== "IDLE") {
+      setPendingSchedule(null);
+    }
+  }, [data.status, selectedDevice]); // eslint-disable-line
 
   useEffect(() => {
     if (!treeLoaded) return;
@@ -581,6 +599,77 @@ const SOPPage = ({ active = true, externalDevice }) => {
               )}
             </section>
           )}
+
+          {!isActive && !isFinishing && pendingSchedule && (() => {
+            const conds = pendingSchedule.conditions || [];
+            const idx = pendingSchedule.current_condition_index ?? 0;
+            const isLast = idx >= conds.length;
+            const label = isLast
+              ? "✅ 確認全部完成"
+              : `▶ 開始第 ${idx + 1} 條件（共 ${conds.length}）`;
+            const condName = isLast ? null : (pendingSchedule.condition_names?.[idx] || conds[idx]);
+            return (
+              <section
+                className="operation-box"
+                style={{ borderLeft: "3px solid #f0a500", background: "#1a1500" }}
+              >
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <div>
+                    <div style={{ color: "#f0a500", fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
+                      ⚠️ 條件 {idx}/{conds.length} 已完成，等待確認
+                    </div>
+                    <div style={{ color: "#8b949e", fontSize: 12, marginBottom: 4 }}>
+                      {pendingSchedule.project_number} / {pendingSchedule.sample_name}
+                    </div>
+                    {condName && (
+                      <div style={{ color: "#cdd9e5", fontSize: 12 }}>
+                        下一條件：{condName}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    {onOpenExecutions && (
+                      <button
+                        onClick={onOpenExecutions}
+                        style={{
+                          padding: "6px 12px", fontSize: 12, borderRadius: 6, cursor: "pointer",
+                          background: "#21262d", color: "#cdd9e5", border: "1px solid #30363d",
+                        }}
+                      >
+                        📋 查看報告
+                      </button>
+                    )}
+                    <button
+                      onClick={async () => {
+                        setConfirmingSched(true);
+                        try {
+                          const res = await api.post(`/api/schedules/${pendingSchedule.id}/confirm-condition`);
+                          if (res.data.status === "completed") {
+                            showToast("排程全部條件完成！", "success");
+                          } else {
+                            showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
+                          }
+                          setPendingSchedule(null);
+                        } catch (e) {
+                          showToast(e.response?.data?.detail || "操作失敗", "error");
+                        } finally {
+                          setConfirmingSched(false);
+                        }
+                      }}
+                      disabled={confirmingSched}
+                      style={{
+                        padding: "6px 12px", fontSize: 12, borderRadius: 6, cursor: "pointer",
+                        background: isLast ? "#238636" : "#1f6feb",
+                        color: "#fff", border: "none", fontWeight: 600,
+                      }}
+                    >
+                      {confirmingSched ? "處理中..." : label}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
 
           {!isActive && !isFinishing && (
             <>
