@@ -49,7 +49,6 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   const [selectedDevice, setSelectedDevice] = useState(externalDevice || "CH-01");
   const [pendingSchedule, setPendingSchedule] = useState(null);
   const [confirmingSched, setConfirmingSched] = useState(false);
-  const prevDeviceStatusRef = useRef({});
 
   // 同步外部設備選擇（ControlCenter LeftPanel 點選時）
   useEffect(() => {
@@ -209,17 +208,14 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
     return () => clearInterval(t);
   }, [selectedDevice, active, fetchHistory]);
 
-  // 偵測設備從 RUNNING → IDLE，查詢是否有等待確認的排程
+  // 設備為 IDLE 時主動查詢是否有等待確認的排程（切換設備或狀態變化都重查）
   useEffect(() => {
-    const prevStatus = prevDeviceStatusRef.current[selectedDevice];
-    const curStatus = data.status;
-    prevDeviceStatusRef.current[selectedDevice] = curStatus;
-    if (prevStatus && prevStatus !== "IDLE" && curStatus === "IDLE") {
+    if (data.status === "IDLE") {
       api.get("/api/schedules?status=RUNNING").then((r) => {
         const match = r.data.find((s) => s.device_id === selectedDevice);
         setPendingSchedule(match || null);
       }).catch(() => {});
-    } else if (curStatus !== "IDLE") {
+    } else {
       setPendingSchedule(null);
     }
   }, [data.status, selectedDevice]); // eslint-disable-line
