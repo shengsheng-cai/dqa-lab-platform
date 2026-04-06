@@ -443,10 +443,6 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
         if tasks:
             await asyncio.gather(*tasks)
 
-    for proj, sample, dev in running_info:
-        asyncio.create_task(push_message(
-            f"▶️ 測試開始\n專案：{proj} / {sample}\n設備：{dev}"
-        ))
 
 
 # ── Schedules 端點 ─────────────────────────────────────────────────────────
@@ -732,14 +728,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
         locks = getattr(request.app.state, "DEVICE_LOCKS", {})
         await auto_start_sop(device_id, conditions[0], cache, locks, skip_fixture_transfer=True)
 
-    if body.status == ScheduleStatus.CONFIRMED:
-        asyncio.create_task(push_message(
-            f"📋 排程已確認\n"
-            f"專案：{s.project_number} / {s.sample_name}\n"
-            f"設備：{s.device_id}\n"
-            f"開始：{_fmt(s.start_time)}"
-        ))
-
     return result
 
 
@@ -791,9 +779,6 @@ async def confirm_condition(schedule_id: int, request: Request):
             return {"status": "completed"}
 
     asyncio.create_task(auto_start_sop(dev, next_sop_id, cache, locks, skip_fixture_transfer=True))
-    asyncio.create_task(push_message(
-        f"▶️ 測試開始\n專案：{proj} / {sample}\n設備：{dev}"
-    ))
     return {"status": "started", "sop_id": next_sop_id}
 
 
