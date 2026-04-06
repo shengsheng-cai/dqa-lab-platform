@@ -89,6 +89,21 @@ class Fixture(Base):
     __table_args__ = (Index("ix_fixtures_interface_type", "interface_type"),)
 
 
+# ---------- 治具盤點紀錄 ----------
+class FixtureInventoryLog(Base):
+    __tablename__ = "fixture_inventory_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.id"), index=True)
+    previous_quantity: Mapped[int] = mapped_column(Integer)
+    counted_quantity: Mapped[int] = mapped_column(Integer)
+    difference: Mapped[int] = mapped_column(Integer)  # counted - previous
+    counted_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+    )
+    counted_by: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+
 # ---------- 治具借出紀錄 ----------
 class FixtureLoan(Base):
     __tablename__ = "fixture_loans"

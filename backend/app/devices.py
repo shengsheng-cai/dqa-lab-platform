@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from .models import SessionLocal, DeviceData, ErrorLog, SopExecution
+from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod
 from .line import push_message
 from .utils import _now_utc, _save_device_state
 from .auth import _require_admin
@@ -102,7 +102,17 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
 @router.get("/api/devices")
 async def get_all_devices(request: Request):
     cache = request.app.state.AICM_CACHE
-    now = _now_utc().strftime("%Y-%m-%dT%H:%M:%S")
+    now_dt = _now_utc()
+    now = now_dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+    # 查詢目前有哪些設備在不可用時段內
+    with SessionLocal() as db:
+        active_blocks = db.query(DeviceBlockedPeriod).filter(
+            DeviceBlockedPeriod.start_time <= now_dt,
+            DeviceBlockedPeriod.end_time >= now_dt,
+        ).all()
+    blocked_devices = {b.device_id: b.reason for b in active_blocks}
+
     return [
         {
             "device_id": device_id,
@@ -123,6 +133,8 @@ async def get_all_devices(request: Request):
             "estimated_end_at": _calc_estimated_end_at(item),
             "sim_cycle": item.get("sim_cycle", 0),
             "sim_phase": item.get("sim_phase", "idle"),
+            "is_blocked": device_id in blocked_devices,
+            "blocked_reason": blocked_devices.get(device_id),
         }
         for device_id, item in cache.items()
     ]

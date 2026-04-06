@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import api from "./api";
 import { downloadBlob } from "./utils/download";
 import { useToast } from "./components/Toast";
@@ -9,6 +9,101 @@ import ReturnModal from "./components/fixture/ReturnModal";
 import AddEditModal from "./components/fixture/AddEditModal";
 import StocktakeModal from "./components/fixture/StocktakeModal";
 import CreatePurchaseModal from "./components/fixture/CreatePurchaseModal";
+
+function ResizableTh({ children, defaultWidth, style, onClick }) {
+  const [width, setWidth] = useState(defaultWidth || null);
+  const startX = useRef(null);
+  const startW = useRef(null);
+  const cleanupRef = useRef(null);
+
+  useEffect(() => {
+    return () => { cleanupRef.current?.(); };
+  }, []);
+
+  const onMouseDown = (e) => {
+    if (!e.target.dataset.resize) return;
+    e.preventDefault();
+    startX.current = e.clientX;
+    startW.current = typeof width === "number" ? width : e.currentTarget.offsetWidth;
+    const onMove = (me) => setWidth(Math.max(40, startW.current + me.clientX - startX.current));
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      cleanupRef.current = null;
+    };
+    cleanupRef.current = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  return (
+    <th
+      style={{ ...style, width: width != null ? width : undefined, position: "relative", overflow: "hidden" }}
+      onMouseDown={onMouseDown}
+      onClick={onClick}
+    >
+      {children}
+      <span
+        data-resize="1"
+        style={{
+          position: "absolute",
+          right: 0,
+          top: 0,
+          width: 6,
+          height: "100%",
+          cursor: "col-resize",
+          userSelect: "none",
+          background: "transparent",
+          zIndex: 1,
+        }}
+      />
+    </th>
+  );
+}
+
+const RETURN_CONDITIONS = [
+  { condition: "normal",  label: "正常", color: "#3fb950", bg: "#1a2d1a", border: "#238636" },
+  { condition: "damaged", label: "損壞", color: "#f0a500", bg: "#2d2200", border: "#f0a500" },
+  { condition: "lost",    label: "遺失", color: "#f85149", bg: "#2d0f0f", border: "#f85149" },
+];
+
+function ReturnButtonGroup({ loanId, onSuccess }) {
+  return (
+    <>
+      {RETURN_CONDITIONS.map(({ condition, label, color, bg, border }) => (
+        <button
+          key={condition}
+          onClick={async () => {
+            try {
+              await api.post(`/api/fixtures/loans/${loanId}/return`, {
+                return_condition: condition,
+                returned_at: new Date().toISOString().slice(0, 10),
+              });
+              onSuccess();
+            } catch (e) {
+              alert(e.response?.data?.detail || "歸還失敗");
+            }
+          }}
+          style={{
+            marginRight: 4,
+            padding: "3px 8px",
+            borderRadius: 4,
+            background: bg,
+            color,
+            border: `1px solid ${border}`,
+            cursor: "pointer",
+            fontSize: 11,
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </>
+  );
+}
 
 const STATUS_COLORS = {
   ok: { bg: "#1a2d1a", color: "#3fb950", label: "庫存足夠" },
@@ -314,6 +409,14 @@ export default function FixturePage({ active, role }) {
             損壞／遺失
           </button>
         )}
+        {canOperate && (
+          <button
+            style={tabStyle("inv_log")}
+            onClick={() => setActiveTab("inv_log")}
+          >
+            盤點紀錄
+          </button>
+        )}
         <div style={{ flex: 1 }} />
         {canOperate && (
           <>
@@ -440,7 +543,7 @@ export default function FixturePage({ active, role }) {
               overflowX: "auto",
             }}
           >
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900, tableLayout: "fixed" }}>
               <thead>
                 <tr style={{ background: "#21262d" }}>
                   {[
@@ -458,7 +561,7 @@ export default function FixturePage({ active, role }) {
                     { label: "保管人", key: "keeper_name" },
                     { label: "實際數量", key: null },
                   ].map(({ label, key }) => (
-                    <th
+                    <ResizableTh
                       key={label}
                       style={{
                         ...thStyle,
@@ -473,9 +576,9 @@ export default function FixturePage({ active, role }) {
                           {sortDir === "asc" ? "↑" : "↓"}
                         </span>
                       )}
-                    </th>
+                    </ResizableTh>
                   ))}
-                  {canOperate && <th style={thStyle}>操作</th>}
+                  {canOperate && <ResizableTh style={thStyle}>操作</ResizableTh>}
                 </tr>
               </thead>
               <tbody>
@@ -681,18 +784,18 @@ export default function FixturePage({ active, role }) {
             overflow: "hidden",
           }}
         >
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
             <thead>
               <tr style={{ background: "#21262d" }}>
-                <th style={thStyle}>治具</th>
-                <th style={thStyle}>借用人</th>
-                <th style={thStyle}>綁定設備</th>
-                <th style={thStyle}>專案</th>
-                <th style={thStyle}>數量</th>
-                <th style={thStyle}>借出日</th>
-                <th style={thStyle}>到期日</th>
-                <th style={thStyle}>狀態</th>
-                {canOperate && <th style={thStyle}>操作</th>}
+                <ResizableTh style={thStyle}>治具</ResizableTh>
+                <ResizableTh style={thStyle}>借用人</ResizableTh>
+                <ResizableTh style={thStyle}>綁定設備</ResizableTh>
+                <ResizableTh style={thStyle}>專案</ResizableTh>
+                <ResizableTh style={thStyle}>數量</ResizableTh>
+                <ResizableTh style={thStyle}>借出日</ResizableTh>
+                <ResizableTh style={thStyle}>到期日</ResizableTh>
+                <ResizableTh style={thStyle}>狀態</ResizableTh>
+                {canOperate && <ResizableTh style={{ ...thStyle, width: 210 }}>操作</ResizableTh>}
               </tr>
             </thead>
             <tbody>
@@ -756,21 +859,8 @@ export default function FixturePage({ active, role }) {
                         <Badge status="loaned" />
                       </td>
                       {canOperate && (
-                        <td style={tdStyle}>
-                          <button
-                            onClick={() => setReturnTarget(loan)}
-                            style={{
-                              padding: "4px 10px",
-                              borderRadius: 4,
-                              background: "#1a2d1a",
-                              color: "#3fb950",
-                              border: "1px solid #238636",
-                              cursor: "pointer",
-                              fontSize: 12,
-                            }}
-                          >
-                            歸還
-                          </button>
+                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                          <ReturnButtonGroup loanId={loan.id} onSuccess={fetchAll} />
                         </td>
                       )}
                     </tr>
@@ -785,12 +875,13 @@ export default function FixturePage({ active, role }) {
       {activeTab === "overdue" && (
         <OverdueList
           canOperate={canOperate}
-          onReturn={(loan) => setReturnTarget(loan)}
           onRefresh={fetchAll}
         />
       )}
 
       {activeTab === "damaged" && <DamagedList />}
+
+      {activeTab === "inv_log" && <InventoryLogTab />}
 
       {activeTab === "purchase" && (
         <PurchaseTab
@@ -872,16 +963,19 @@ export default function FixturePage({ active, role }) {
   );
 }
 
-function OverdueList({ canOperate, onReturn }) {
+function OverdueList({ canOperate, onRefresh }) {
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const refresh = () => {
+    setLoading(true);
     api
       .get("/api/fixtures/loans/overdue")
       .then((r) => setLoans(r.data))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { refresh(); }, []);
 
   const thStyle = {
     padding: "8px 12px",
@@ -962,21 +1056,8 @@ function OverdueList({ canOperate, onReturn }) {
                   {loan.overdue_days} 天
                 </td>
                 {canOperate && (
-                  <td style={tdStyle}>
-                    <button
-                      onClick={() => onReturn(loan)}
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: 4,
-                        background: "#1a2d1a",
-                        color: "#3fb950",
-                        border: "1px solid #238636",
-                        cursor: "pointer",
-                        fontSize: 12,
-                      }}
-                    >
-                      歸還
-                    </button>
+                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                    <ReturnButtonGroup loanId={loan.id} onSuccess={() => { refresh(); onRefresh?.(); }} />
                   </td>
                 )}
               </tr>
@@ -1095,6 +1176,80 @@ function DamagedList() {
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ── 盤點紀錄 tab ────────────────────────────────────────────
+function InventoryLogTab() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterFixture, setFilterFixture] = useState("");
+
+  useEffect(() => {
+    api
+      .get("/api/fixtures/inventory-logs")
+      .then((r) => setLogs(r.data))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = filterFixture
+    ? logs.filter(
+        (l) =>
+          l.fixture_interface.toLowerCase().includes(filterFixture.toLowerCase()) ||
+          l.fixture_form_factor.toLowerCase().includes(filterFixture.toLowerCase())
+      )
+    : logs;
+
+  const thStyle = { padding: "8px 12px", fontSize: 11, color: "#8b949e", fontWeight: 600, textAlign: "left", borderBottom: "1px solid #21262d" };
+  const tdStyle = { padding: "9px 12px", fontSize: 13, color: "#cdd9e5", borderBottom: "1px solid #21262d" };
+
+  return (
+    <div style={{ background: "#161b22", borderRadius: 8, overflow: "hidden", border: "1px solid #21262d" }}>
+      <div style={{ padding: "10px 12px", borderBottom: "1px solid #21262d", display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          placeholder="篩選治具..."
+          value={filterFixture}
+          onChange={(e) => setFilterFixture(e.target.value)}
+          style={{ padding: "5px 10px", borderRadius: 5, border: "1px solid #30363d", background: "#0d1117", color: "#cdd9e5", fontSize: 12, width: 180 }}
+        />
+        <span style={{ fontSize: 12, color: "#484f58" }}>共 {filtered.length} 筆</span>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={thStyle}>時間</th>
+              <th style={thStyle}>治具</th>
+              <th style={thStyle}>盤點前</th>
+              <th style={thStyle}>盤點後</th>
+              <th style={thStyle}>差異</th>
+              <th style={thStyle}>盤點人</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#484f58" }}>載入中...</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#484f58" }}>目前無盤點紀錄</td></tr>
+            ) : filtered.map((log) => (
+              <tr key={log.id} style={{ transition: "background .15s" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#1c2128")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <td style={tdStyle}>{log.counted_at ? new Date(log.counted_at).toLocaleString("zh-TW") : "-"}</td>
+                <td style={tdStyle}>{log.fixture_interface} {log.fixture_form_factor}</td>
+                <td style={tdStyle}>{log.previous_quantity}</td>
+                <td style={tdStyle}>{log.counted_quantity}</td>
+                <td style={{ ...tdStyle, color: log.difference > 0 ? "#3fb950" : log.difference < 0 ? "#f85149" : "#8b949e", fontWeight: 600 }}>
+                  {log.difference > 0 ? `+${log.difference}` : log.difference}
+                </td>
+                <td style={{ ...tdStyle, color: "#8b949e" }}>{log.counted_by || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

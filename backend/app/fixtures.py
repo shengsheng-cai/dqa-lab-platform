@@ -5,8 +5,8 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from .models import SessionLocal, Fixture, FixtureLoan, PurchaseOrder, User
-from .utils import today_utc_window
+from .models import SessionLocal, Fixture, FixtureLoan, FixtureInventoryLog, PurchaseOrder, User
+from .utils import today_utc_window, _now_utc_naive
 from .auth import _require_admin
 
 try:
@@ -412,6 +412,14 @@ def get_fixture(fixture_id: int):
 # ---------- 借出 ----------
 
 
+def _fetch_fixtures_map(db, loans) -> dict:
+    """一次撈出 loans 相關的所有 Fixture，回傳 {id: fixture}。"""
+    ids = {loan.fixture_id for loan in loans}
+    if not ids:
+        return {}
+    return {f.id: f for f in db.query(Fixture).filter(Fixture.id.in_(ids)).all()}
+
+
 @router.get("/loans/active")
 def list_active_loans():
     db = SessionLocal()
@@ -422,26 +430,23 @@ def list_active_loans():
             .order_by(FixtureLoan.due_date.asc())
             .all()
         )
-
-        result = []
-        for loan in loans:
-            f = db.query(Fixture).filter(Fixture.id == loan.fixture_id).first()
-            result.append(
-                {
-                    "id": loan.id,
-                    "fixture_id": loan.fixture_id,
-                    "fixture_interface": f.interface_type if f else "",
-                    "fixture_form_factor": f.form_factor if f else "",
-                    "borrower_name": loan.borrower_name,
-                    "device_id": loan.device_id,
-                    "project_name": loan.project_name,
-                    "quantity": loan.quantity,
-                    "loan_date": loan.loan_date.isoformat() if loan.loan_date else None,
-                    "due_date": loan.due_date.isoformat() if loan.due_date else None,
-                    "status": loan.status,
-                }
-            )
-        return result
+        fixtures = _fetch_fixtures_map(db, loans)
+        return [
+            {
+                "id": loan.id,
+                "fixture_id": loan.fixture_id,
+                "fixture_interface": fixtures[loan.fixture_id].interface_type if loan.fixture_id in fixtures else "",
+                "fixture_form_factor": fixtures[loan.fixture_id].form_factor if loan.fixture_id in fixtures else "",
+                "borrower_name": loan.borrower_name,
+                "device_id": loan.device_id,
+                "project_name": loan.project_name,
+                "quantity": loan.quantity,
+                "loan_date": loan.loan_date.isoformat() if loan.loan_date else None,
+                "due_date": loan.due_date.isoformat() if loan.due_date else None,
+                "status": loan.status,
+            }
+            for loan in loans
+        ]
     finally:
         db.close()
 
@@ -450,35 +455,31 @@ def list_active_loans():
 def list_overdue_loans():
     db = SessionLocal()
     try:
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now_naive = _now_utc_naive()
         loans = (
             db.query(FixtureLoan)
             .filter(
                 FixtureLoan.status == "loaned",
-                FixtureLoan.due_date < now,
+                FixtureLoan.due_date < now_naive,
             )
             .order_by(FixtureLoan.due_date.asc())
             .all()
         )
-
-        result = []
-        for loan in loans:
-            f = db.query(Fixture).filter(Fixture.id == loan.fixture_id).first()
-            overdue_days = (now - loan.due_date).days if loan.due_date else 0
-            result.append(
-                {
-                    "id": loan.id,
-                    "fixture_id": loan.fixture_id,
-                    "fixture_interface": f.interface_type if f else "",
-                    "fixture_form_factor": f.form_factor if f else "",
-                    "borrower_name": loan.borrower_name,
-                    "device_id": loan.device_id,
-                    "project_name": loan.project_name,
-                    "due_date": loan.due_date.isoformat() if loan.due_date else None,
-                    "overdue_days": overdue_days,
-                }
-            )
-        return result
+        fixtures = _fetch_fixtures_map(db, loans)
+        return [
+            {
+                "id": loan.id,
+                "fixture_id": loan.fixture_id,
+                "fixture_interface": fixtures[loan.fixture_id].interface_type if loan.fixture_id in fixtures else "",
+                "fixture_form_factor": fixtures[loan.fixture_id].form_factor if loan.fixture_id in fixtures else "",
+                "borrower_name": loan.borrower_name,
+                "device_id": loan.device_id,
+                "project_name": loan.project_name,
+                "due_date": loan.due_date.isoformat() if loan.due_date else None,
+                "overdue_days": (now_naive - loan.due_date).days if loan.due_date else 0,
+            }
+            for loan in loans
+        ]
     finally:
         db.close()
 
@@ -494,14 +495,13 @@ def list_damaged_lost_loans():
             .order_by(FixtureLoan.return_date.desc())
             .all()
         )
-        result = []
-        for loan in loans:
-            f = db.query(Fixture).filter(Fixture.id == loan.fixture_id).first()
-            result.append({
+        fixtures = _fetch_fixtures_map(db, loans)
+        return [
+            {
                 "id": loan.id,
                 "fixture_id": loan.fixture_id,
-                "fixture_interface": f.interface_type if f else "",
-                "fixture_form_factor": f.form_factor if f else "",
+                "fixture_interface": fixtures[loan.fixture_id].interface_type if loan.fixture_id in fixtures else "",
+                "fixture_form_factor": fixtures[loan.fixture_id].form_factor if loan.fixture_id in fixtures else "",
                 "borrower_name": loan.borrower_name,
                 "device_id": loan.device_id,
                 "project_name": loan.project_name,
@@ -511,8 +511,9 @@ def list_damaged_lost_loans():
                 "status": loan.status,
                 "return_condition": loan.return_condition,
                 "keeper_note": loan.keeper_note,
-            })
-        return result
+            }
+            for loan in loans
+        ]
     finally:
         db.close()
 
@@ -781,21 +782,62 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request):
 def update_inventory(fixture_id: int, actual_quantity: int, request: Request):
     _require_admin(request)
 
+    user = getattr(request.state, "user", None)
+    counted_by = user.get("username") if user else None
+
     db = SessionLocal()
     try:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
 
-        diff = f.total_quantity - actual_quantity
+        previous = f.total_quantity
+        diff = actual_quantity - previous
         f.total_quantity = actual_quantity
+
+        log = FixtureInventoryLog(
+            fixture_id=fixture_id,
+            previous_quantity=previous,
+            counted_quantity=actual_quantity,
+            difference=diff,
+            counted_by=counted_by,
+        )
+        db.add(log)
         db.commit()
         return {
             "status": "success",
-            "previous": f.total_quantity + diff,
+            "previous": previous,
             "actual": actual_quantity,
             "diff": diff,
         }
+    finally:
+        db.close()
+
+
+@router.get("/inventory-logs")
+def list_inventory_logs(fixture_id: Optional[int] = None):
+    db = SessionLocal()
+    try:
+        q = db.query(FixtureInventoryLog).order_by(FixtureInventoryLog.counted_at.desc())
+        if fixture_id is not None:
+            q = q.filter(FixtureInventoryLog.fixture_id == fixture_id)
+        logs = q.limit(200).all()
+        fixture_ids = {log.fixture_id for log in logs}
+        fixtures = {f.id: f for f in db.query(Fixture).filter(Fixture.id.in_(fixture_ids)).all()} if fixture_ids else {}
+        return [
+            {
+                "id": log.id,
+                "fixture_id": log.fixture_id,
+                "fixture_interface": fixtures[log.fixture_id].interface_type if log.fixture_id in fixtures else "",
+                "fixture_form_factor": fixtures[log.fixture_id].form_factor if log.fixture_id in fixtures else "",
+                "previous_quantity": log.previous_quantity,
+                "counted_quantity": log.counted_quantity,
+                "difference": log.difference,
+                "counted_at": log.counted_at.isoformat() if log.counted_at else None,
+                "counted_by": log.counted_by,
+            }
+            for log in logs
+        ]
     finally:
         db.close()
 

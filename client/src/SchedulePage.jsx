@@ -757,13 +757,15 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
           <InfoRow label="法規標準" value={schedule.standard} />
           <div style={{ display: "flex", gap: 8, fontSize: 13 }}>
             <span style={{ color: "#8b949e", minWidth: 80, flexShrink: 0 }}>測試條件</span>
-            <span style={{ color: "#cdd9e5", wordBreak: "break-word" }}>
+            <div style={{ flex: 1, maxHeight: 200, overflowY: "auto" }}>
               {(schedule.condition_names || schedule.conditions || []).length > 0
                 ? (schedule.condition_names || schedule.conditions).map((c, i) => (
-                    <div key={i}>{i + 1}. {c}</div>
+                    <div key={i} style={{ color: "#cdd9e5", lineHeight: 1.6, paddingBottom: 2 }}>
+                      {i + 1}. {c}
+                    </div>
                   ))
-                : "—"}
-            </span>
+                : <span style={{ color: "#cdd9e5" }}>—</span>}
+            </div>
           </div>
           {schedule.fixtures?.length > 0 && (
             <InfoRow label="預約治具" value={
@@ -1485,15 +1487,13 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              title="刷新"
               style={{ ...scheduleIconBtn, opacity: refreshing ? 0.5 : 1 }}
-            >↺</button>
+            >重新整理</button>
             {isAdmin && (
               <button
                 onClick={() => setShowBlockModal(true)}
-                title="標記不可用時段"
                 style={scheduleIconBtn}
-              >🔒</button>
+              >+ 不可用時段</button>
             )}
             {canOperate && (
               <button onClick={() => { setPendingInitConds(null); setShowNewModal(true); }} style={primaryBtn}>

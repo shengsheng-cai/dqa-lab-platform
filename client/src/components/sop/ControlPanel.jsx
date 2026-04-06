@@ -8,8 +8,9 @@ const ControlPanel = ({
   effectiveStatus,
   effectiveIsActive,
   onAction,
+  isBlocked,
 }) => {
-  const sc = STATUS_CONFIG[data.status] || STATUS_CONFIG.OFFLINE;
+  const sc = isBlocked ? STATUS_CONFIG.BLOCKED : (STATUS_CONFIG[data.status] || STATUS_CONFIG.OFFLINE);
   const isOffline = data.status === OFFLINE_STATUS;
   const isEmergency = data.status === EMERGENCY_STATUS;
   const isFinishing = data.status === FINISHING_STATUS;
@@ -43,19 +44,21 @@ const ControlPanel = ({
             border: `1px solid ${sc.color}44`,
           }}
         >
-          {selectedDevice} — {data.status}
+          {selectedDevice} — {isBlocked ? "不可用" : data.status}
         </span>
       </div>
 
       <p className="task-desc">
-        {isOffline
-          ? "⚠️ 後端未連線，請確認伺服器是否正常啟動。"
-          : isEmergency
-            ? "🚨 緊急停止已觸發，請確認設備安全後，點下方按鈕觸發自動降溫。"
-            : data.description}
+        {isBlocked
+          ? `🔒 設備已鎖定：${data.blocked_reason || "排定不可用時段"}，無法啟動測試。`
+          : isOffline
+            ? "⚠️ 後端未連線，請確認伺服器是否正常啟動。"
+            : isEmergency
+              ? "🚨 緊急停止已觸發，請確認設備安全後，點下方按鈕觸發自動降溫。"
+              : data.description}
       </p>
 
-      <div className="btn-group-row">
+      {isBlocked ? null : <div className="btn-group-row">
         {!isFinishing && (
           <button
             className="ctrl-btn amber"
@@ -117,7 +120,7 @@ const ControlPanel = ({
         >
           🚨 緊急停止
         </button>
-      </div>
+      </div>}
     </section>
   );
 };

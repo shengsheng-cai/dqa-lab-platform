@@ -114,7 +114,8 @@ async def lifespan(app: FastAPI):
     # 重啟後重新註冊未來的 CONFIRMED 排程 date job
     from .schedules import _start_schedule_by_id
     from .models import Schedule, ScheduleStatus
-    _now_naive = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    from .utils import _now_utc_naive
+    _now_naive = _now_utc_naive()
     with SessionLocal() as db:
         future_confirmed = db.query(Schedule).filter(
             Schedule.status == ScheduleStatus.CONFIRMED,

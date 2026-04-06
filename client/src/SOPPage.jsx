@@ -92,6 +92,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   const isFinishing = data.status === FINISHING_STATUS;
   const isOffline = data.status === OFFLINE_STATUS;
   const isEmergency = data.status === EMERGENCY_STATUS;
+  const isBlocked = data.is_blocked && data.status === "IDLE";
   const canStop = isActive || isEmergency;
   const effectiveStatus = pauseOptimistic ?? data.status;
   const effectiveIsActive = ACTIVE_STATUSES.includes(effectiveStatus);
@@ -517,6 +518,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
               effectiveStatus={effectiveStatus}
               effectiveIsActive={effectiveIsActive}
               onAction={handleAction}
+              isBlocked={isBlocked}
             />
           )}
 
@@ -667,7 +669,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
             );
           })()}
 
-          {!isActive && !isFinishing && (
+          {!isActive && !isFinishing && !isBlocked && (
             <>
               <section
                 className="operation-box"

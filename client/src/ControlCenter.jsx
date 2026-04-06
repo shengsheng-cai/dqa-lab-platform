@@ -158,7 +158,8 @@ function fmtRemaining(secs) {
 }
 
 function DeviceCard({ device, isSelected, onClick }) {
-  const cfg = STATUS_CONFIG[device.status] || STATUS_CONFIG.OFFLINE;
+  const isBlocked = device.is_blocked && device.status === "IDLE";
+  const cfg = isBlocked ? STATUS_CONFIG.BLOCKED : (STATUS_CONFIG[device.status] || STATUS_CONFIG.OFFLINE);
   const remaining = useCountdown(device.estimated_end_at);
   const isActive = ACTIVE_STATUSES.includes(device.status);
   const isEmergency = device.status === EMERGENCY_STATUS;
@@ -251,6 +252,12 @@ function DeviceCard({ device, isSelected, onClick }) {
               剩 {fmtRemaining(remaining)}
             </div>
           )}
+        </div>
+      )}
+
+      {isBlocked && (
+        <div style={{ fontSize: 9, color: "#f85149", marginTop: 2 }}>
+          🔒 {device.blocked_reason || "排定不可用時段"}
         </div>
       )}
 
@@ -367,7 +374,7 @@ function ScheduleSummaryPanel({ devices }) {
       </div>
       <div style={{ fontSize: 9, color: "#484f58", padding: "4px 16px 4px", letterSpacing: 1, flexShrink: 0 }}>設備可用性</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 8px", overflowY: "auto" }}>
-        {devices.map(d => <DeviceAvailRow key={d.device_id} device={d} />)}
+        {devices.map(d => <DeviceCard key={d.device_id} device={d} isSelected={false} onClick={null} />)}
       </div>
     </div>
   );

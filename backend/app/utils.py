@@ -8,6 +8,11 @@ def _now_utc() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def _now_utc_naive() -> datetime.datetime:
+    """回傳 naive UTC datetime，用於與 SQLite 儲存的 naive datetime 比較。"""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+
 def today_utc_window() -> tuple:
     """回傳 (now, today_start, today_end) — 三者皆為 UTC-aware datetime"""
     now = datetime.datetime.now(datetime.timezone.utc)

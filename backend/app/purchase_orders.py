@@ -86,7 +86,7 @@ def create_purchase_order(body: PurchaseOrderCreate, request: Request):
         db.add(order)
         db.commit()
         db.refresh(order)
-        return _order_to_dict(order, db)
+        return _order_to_dict(order, {fixture.id: fixture})
 
 
 class PurchaseOrderUpdate(BaseModel):
@@ -129,7 +129,8 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Req
 
         db.commit()
         db.refresh(order)
-        return _order_to_dict(order, db)
+        fixture = db.query(Fixture).filter(Fixture.id == order.fixture_id).first()
+        return _order_to_dict(order, {order.fixture_id: fixture})
 
 
 @router.delete("/{order_id}")

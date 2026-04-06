@@ -11,7 +11,7 @@ App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, UsersPage
 
 - LeftPanel（155px）：依 activeTab 動態切換內容
   - device → DeviceCards（設備狀態，可點擊選擇設備）
-  - schedule → ScheduleSummaryPanel（待審核/進行中/已確認/已完成計數）+ DeviceAvailRow × 5
+  - schedule → ScheduleSummaryPanel（待審核/進行中/已確認/已完成計數）+ DeviceCard × 5（顯示設備即時狀態，含不可用鎖定）
   - fixture → FixtureSummaryPanel（借出中 / 今日到期 / 逾期未還 / 庫存不足）
   - users → UsersSummaryPanel（角色人數 + 有效 Token 計數）
   - 其他 → DeviceCards（預設）

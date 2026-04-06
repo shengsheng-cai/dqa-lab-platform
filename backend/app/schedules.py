@@ -14,7 +14,7 @@ from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
 from .auth import _require_admin
 from .line import push_message
-from .utils import _now_utc
+from .utils import _now_utc, _save_device_state
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
@@ -408,6 +408,26 @@ def _auto_assign(
 # ── 排程狀態自動推進 ──────────────────────────────────────────────────────────
 
 
+async def _force_normal_stop(device_id: str, cache: dict, locks: dict):
+    """取消/刪除排程時，若設備正在執行，改為正常收尾（不觸發 LINE 推播或錯誤記錄）。"""
+    device = cache.get(device_id)
+    if not device or device.get("status") not in ("RUNNING", "PAUSED"):
+        return
+    lock = locks.get(device_id)
+    if not lock:
+        return
+    async with lock:
+        if device.get("status") not in ("RUNNING", "PAUSED"):
+            return
+        device.update({
+            "status": "FINISHING",
+            "running_sop_name": "排程取消，降溫收尾中...",
+            "sim_phase": "ramp_to_ambient",
+            "sim_cycle": 0,
+        })
+        _save_device_state(device_id, device)
+
+
 async def _start_schedule_by_id(schedule_id: int, cache: dict, locks: dict):
     """排程到達 start_time 時由 APScheduler date job 精確觸發。"""
     from .sop import auto_start_sop
@@ -530,7 +550,6 @@ def get_gantt(request: Request):
     with SessionLocal() as db:
         schedules = (
             db.query(Schedule)
-            .filter(Schedule.status.notin_([ScheduleStatus.CANCELLED]))
             .order_by(Schedule.start_time)
             .all()
         )
@@ -636,6 +655,8 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             raise HTTPException(status_code=403, detail="僅管理者可審核排程")
         # 後續在讀取 schedule 後再驗證擁有權，這裡先通過
 
+    cancelled_device_id = None  # 取消排程時若設備正在跑，記錄 device_id 供後面停止
+
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
@@ -678,13 +699,13 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             s.device_id = device_id
             s.start_time = start
             s.end_time = end
-            s.status = ScheduleStatus.CONFIRMED
             s.confirmed_by = user_id
 
-            # 若 start_time ≤ now 代表立即啟動，治具直接 loaned；否則 reserved
+            # 若 start_time ≤ now 代表立即啟動，直接存為進行中；否則存為已確認等 date job
             now_utc = datetime.datetime.now(datetime.timezone.utc)
             start_aware = start if start.tzinfo else start.replace(tzinfo=datetime.timezone.utc)
             immediate_start = start_aware <= now_utc
+            s.status = ScheduleStatus.RUNNING if immediate_start else ScheduleStatus.CONFIRMED
             fixture_status = "loaned" if immediate_start else "reserved"
             fixture_loan_date = now_utc if immediate_start else None
             for sf in db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == s.id).all():
@@ -709,6 +730,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                 return dt.strftime("%m/%d %H:%M")
 
         elif body.status in (ScheduleStatus.CANCELLED, ScheduleStatus.RUNNING, ScheduleStatus.DONE):
+            original_status = s.status  # 保存改變前的狀態
             s.status = body.status
             if body.device_id:
                 s.device_id = body.device_id
@@ -723,6 +745,9 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                     FixtureLoan.schedule_id == schedule_id,
                     FixtureLoan.status == "reserved",
                 ).delete(synchronize_session=False)
+                # 若排程已在執行中（CONFIRMED/RUNNING），記錄 device_id 供後面停止設備
+                if original_status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) and s.device_id:
+                    cancelled_device_id = s.device_id
 
         else:
             # 純欄位更新（不改狀態）
@@ -744,7 +769,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
 
     if body.status == ScheduleStatus.CONFIRMED:
         if immediate_start and conditions and device_id:
-            # 立即啟動
+            # 立即啟動：狀態已在 DB session 中存為 RUNNING，直接啟動 SOP
             from .sop import auto_start_sop
             await auto_start_sop(device_id, conditions[0], _cache, _locks, skip_fixture_transfer=True)
         elif _scheduler and not immediate_start:
@@ -758,27 +783,44 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                 replace_existing=True,
             )
 
-    elif body.status == ScheduleStatus.CANCELLED and _scheduler:
-        try:
-            _scheduler.remove_job(f"sched_{schedule_id}")
-        except Exception:
-            pass
+    elif body.status == ScheduleStatus.CANCELLED:
+        if _scheduler:
+            try:
+                _scheduler.remove_job(f"sched_{schedule_id}")
+            except Exception:
+                pass
+        # 若設備正在執行此排程，改為正常收尾
+        if cancelled_device_id:
+            await _force_normal_stop(cancelled_device_id, _cache, _locks)
 
     return result
 
 
 @router.delete("/{schedule_id}")
-def delete_schedule(schedule_id: int, request: Request):
+async def delete_schedule(schedule_id: int, request: Request):
     _require_admin(request)
+    _cache = getattr(request.app.state, "AICM_CACHE", {})
+    _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
+    _scheduler = getattr(request.app.state, "scheduler", None)
 
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
             raise HTTPException(status_code=404, detail="找不到排程")
+        stop_device_id = s.device_id if s.status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) else None
         db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == schedule_id).delete(synchronize_session=False)
         db.query(FixtureLoan).filter(FixtureLoan.schedule_id == schedule_id).delete(synchronize_session=False)
         db.delete(s)
         db.commit()
+
+    if _scheduler:
+        try:
+            _scheduler.remove_job(f"sched_{schedule_id}")
+        except Exception:
+            pass
+    if stop_device_id:
+        await _force_normal_stop(stop_device_id, _cache, _locks)
+
     return {"ok": True}
 
 

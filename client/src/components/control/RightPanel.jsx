@@ -177,14 +177,14 @@ export default function RightPanel({ onClose, onApplySchedule }) {
           )}
         </div>
 
-        {/* ↓ 匯出 */}
+        {/* 匯出 */}
         <button
           onClick={() => exportChat(messages, activeTitle)}
           disabled={messages.length === 0}
           title="匯出對話紀錄"
           style={iconBtnS(messages.length === 0)}
         >
-          ↓
+          匯出
         </button>
 
         {/* 清除 / 刪除 */}
@@ -194,24 +194,24 @@ export default function RightPanel({ onClose, onApplySchedule }) {
           title="清除對話內容"
           style={iconBtnS(messages.length === 0)}
         >
-          ✕
+          清除
         </button>
         <button
           onClick={handleDelete}
           title="刪除此對話"
           style={{ ...iconBtnS(false), color: "#f85149", borderColor: "#3d1c1c" }}
         >
-          🗑
+          刪除
         </button>
 
-        {/* + 新增對話 */}
+        {/* 新增對話 */}
         <button onClick={() => addConversation()} disabled={loading} title="新增對話" style={iconBtnS(loading)}>
-          +
+          新對話
         </button>
 
-        {/* ✕ 關閉 */}
+        {/* 關閉 */}
         {onClose && (
-          <button onClick={onClose} title="關閉" style={iconBtnS(false)}>✕</button>
+          <button onClick={onClose} title="關閉" style={iconBtnS(false)}>關閉</button>
         )}
       </div>
 

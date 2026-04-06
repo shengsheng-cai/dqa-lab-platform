@@ -37,4 +37,5 @@ export const STATUS_CONFIG = {
   PAUSED:    { color: "#f0a500", bg: "#2d1f00", label: "PAUSED" },
   FINISHING: { color: "#58a6ff", bg: "#0d1f33", label: "FINISHING" },
   EMERGENCY: { color: "#f85149", bg: "#2d0f0f", label: "EMERGENCY" },
+  BLOCKED:   { color: "#f85149", bg: "#2d0f0f", label: "不可用" },
 };

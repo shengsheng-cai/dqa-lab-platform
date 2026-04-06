@@ -240,8 +240,8 @@ def list_users(request: Request):
 @router.post("/api/auth/users", status_code=201)
 def create_user(body: UserCreateBody, request: Request):
     _require_admin(request)
-    if body.role != "admin":
-        raise HTTPException(status_code=400, detail="role 必須是 admin")
+    if not body.role or not body.role.strip():
+        raise HTTPException(status_code=400, detail="角色不能為空")
     db = SessionLocal()
     try:
         # username 自動產生，這類使用者不需要登入
@@ -273,8 +273,8 @@ def update_user(user_id: int, body: UserUpdateBody, request: Request):
         if body.display_name is not None:
             user.display_name = body.display_name
         if body.role is not None:
-            if body.role != "admin":
-                raise HTTPException(status_code=400, detail="role 必須是 admin")
+            if not body.role.strip():
+                raise HTTPException(status_code=400, detail="角色不能為空")
             user.role = body.role
         # 使用 __fields_set__ 檢測是否被顯式傳入（包括 null）
         if body.is_active is not None:

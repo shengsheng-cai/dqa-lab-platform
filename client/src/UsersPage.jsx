@@ -28,13 +28,17 @@ function UserModal({ user, onClose, onSaved }) {
   const isEdit = !!user;
   const { showToast } = useToast();
   const [displayName, setDisplayName] = useState(user?.display_name || "");
-  const [role, setRole] = useState(user?.role || "admin");
+  const [role, setRole] = useState(user?.role || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
     if (!displayName.trim()) {
       setError("請輸入姓名");
+      return;
+    }
+    if (!role.trim()) {
+      setError("請輸入角色");
       return;
     }
     setLoading(true);
@@ -119,13 +123,12 @@ function UserModal({ user, onClose, onSaved }) {
           <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 4 }}>
             角色
           </div>
-          <select
+          <input
             value={role}
             onChange={(e) => setRole(e.target.value)}
+            placeholder="例：管理者、工程師、保管人"
             style={inputStyle}
-          >
-            <option value="admin">管理者</option>
-          </select>
+          />
         </div>
 
         {error && (
@@ -306,26 +309,6 @@ function DemoTokenSection({ active }) {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#cdd9e5" }}>訪客 Token</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#8b949e", cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={hideInactive}
-              onChange={(e) => setHideInactive(e.target.checked)}
-              style={{ cursor: "pointer" }}
-            />
-            隱藏已失效
-          </label>
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            style={{ padding: "5px 12px", borderRadius: 6, background: "#1f6feb", color: "#fff", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
-          >
-            + 生成
-          </button>
-        </div>
-      </div>
 
       {/* 建立表單 */}
       {showForm && (
@@ -404,22 +387,39 @@ function DemoTokenSection({ active }) {
           ? tokens.filter((t) => t.is_active && !t.expired && !t.used_up)
           : tokens;
         const hiddenCount = tokens.length - visible.length;
-        return visible.length === 0 ? (
-          <div style={{ color: "#484f58", textAlign: "center", padding: "28px 0", fontSize: 13 }}>
-            {tokens.length === 0 ? "尚無訪客 Token，點擊「+ 生成」建立第一個" : `所有 Token 已失效（共 ${tokens.length} 筆）`}
-          </div>
-        ) : (
-          <>
+        return (
+          <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ borderBottom: "1px solid #30363d" }}>
-                  {["Token", "用途", "到期日", "次數", "操作"].map((h) => (
+                <tr style={{ background: "#21262d", borderBottom: "1px solid #30363d" }}>
+                  {["Token", "用途", "到期日", "次數"].map((h) => (
                     <th key={h} style={{ padding: "6px 10px", fontSize: 11, color: "#8b949e", fontWeight: 600, textAlign: "left" }}>{h}</th>
                   ))}
+                  <th style={{ padding: "6px 10px", fontSize: 11, color: "#8b949e", fontWeight: 600, textAlign: "right" }}>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#8b949e", cursor: "pointer", marginRight: 8, fontWeight: 400 }}>
+                      <input
+                        type="checkbox"
+                        checked={hideInactive}
+                        onChange={(e) => setHideInactive(e.target.checked)}
+                        style={{ cursor: "pointer" }}
+                      />
+                      隱藏已失效
+                    </label>
+                    <button
+                      onClick={() => setShowForm((v) => !v)}
+                      style={{ padding: "2px 10px", borderRadius: 5, background: "#1f6feb", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+                    >
+                      + 生成
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {visible.map((t) => {
+                {visible.length === 0 ? (
+                  <tr><td colSpan={5} style={{ padding: "28px 0", textAlign: "center", color: "#484f58", fontSize: 13 }}>
+                    {tokens.length === 0 ? "尚無訪客 Token，點擊「+ 生成」建立第一個" : `所有 Token 已失效（共 ${tokens.length} 筆）`}
+                  </td></tr>
+                ) : visible.map((t) => {
                   const invalid = !t.is_active || t.expired || t.used_up;
                   return (
                     <tr key={t.id} style={{ borderBottom: "1px solid #21262d", opacity: invalid ? 0.5 : 1 }}>
@@ -434,11 +434,11 @@ function DemoTokenSection({ active }) {
                         {t.use_count} / {t.max_uses ?? "∞"}
                       </td>
                       <td style={{ padding: "8px 10px" }}>
-                        <div style={{ display: "flex", gap: 5 }}>
-                          <button onClick={() => handleToggle(t.id)} title={t.is_active ? "停用" : "啟用"} style={{ ...iconActionBtn, color: t.is_active ? "#8b949e" : "#3fb950", borderColor: t.is_active ? "#30363d" : "#238636" }}>
-                            {t.is_active ? "⏸" : "▶"}
+                        <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
+                          <button onClick={() => handleToggle(t.id)} style={{ ...iconActionBtn, color: t.is_active ? "#8b949e" : "#3fb950", borderColor: t.is_active ? "#30363d" : "#238636" }}>
+                            {t.is_active ? "停用" : "啟用"}
                           </button>
-                          <button onClick={() => handleDelete(t.id)} title="刪除" style={{ ...iconActionBtn, color: "#f85149", borderColor: "#da363344" }}>🗑</button>
+                          <button onClick={() => handleDelete(t.id)} style={{ ...iconActionBtn, color: "#f85149", borderColor: "#da363344" }}>刪除</button>
                         </div>
                       </td>
                     </tr>
@@ -451,7 +451,7 @@ function DemoTokenSection({ active }) {
                 已隱藏 {hiddenCount} 筆失效 Token
               </div>
             )}
-          </>
+          </div>
         );
       })()}
     </div>
@@ -558,15 +558,6 @@ export default function UsersPage({ active }) {
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
         {/* ── 左側：人員管理 ── */}
         <div style={{ flex: "0 0 38%", minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#cdd9e5" }}>人員</span>
-            <button
-              onClick={() => setModalUser(null)}
-              style={{ padding: "5px 12px", borderRadius: 6, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
-            >
-              + 新增
-            </button>
-          </div>
           <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
@@ -574,7 +565,15 @@ export default function UsersPage({ active }) {
                   <th style={thStyle}>姓名</th>
                   <th style={thStyle}>角色</th>
                   <th style={thStyle}>狀態</th>
-                  <th style={thStyle}>操作</th>
+                  <th style={{ ...thStyle, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span>操作</span>
+                    <button
+                      onClick={() => setModalUser(null)}
+                      style={{ padding: "2px 10px", borderRadius: 5, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+                    >
+                      + 新增
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -599,11 +598,11 @@ export default function UsersPage({ active }) {
                       </td>
                       <td style={tdStyle}>
                         <div style={{ display: "flex", gap: 5 }}>
-                          <button onClick={() => setModalUser(u)} title="編輯" style={iconActionBtn}>✏</button>
-                          <button onClick={() => handleToggleActive(u)} title={u.is_active ? "停用" : "啟用"} style={{ ...iconActionBtn, color: u.is_active ? "#8b949e" : "#3fb950", borderColor: u.is_active ? "#30363d" : "#238636" }}>
-                            {u.is_active ? "⏸" : "▶"}
+                          <button onClick={() => setModalUser(u)} style={iconActionBtn}>編輯</button>
+                          <button onClick={() => handleToggleActive(u)} style={{ ...iconActionBtn, color: u.is_active ? "#8b949e" : "#3fb950", borderColor: u.is_active ? "#30363d" : "#238636" }}>
+                            {u.is_active ? "停用" : "啟用"}
                           </button>
-                          <button onClick={() => setDeleteTarget(u)} title="刪除" style={{ ...iconActionBtn, color: "#f85149", borderColor: "#da363344" }}>🗑</button>
+                          <button onClick={() => setDeleteTarget(u)} style={{ ...iconActionBtn, color: "#f85149", borderColor: "#da363344" }}>刪除</button>
                         </div>
                       </td>
                     </tr>
