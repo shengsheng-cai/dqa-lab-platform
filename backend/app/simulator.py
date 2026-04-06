@@ -311,15 +311,19 @@ async def data_simulator(cache: dict, locks: dict):
                         })
                         _save_device_state(device_id, item)
                     if execution_id:
-                        try:
-                            with SessionLocal() as db:
-                                db.query(SopExecution).filter(
-                                    SopExecution.id == execution_id,
-                                    SopExecution.test_ended_at == None,
-                                ).update({"test_ended_at": now}, synchronize_session=False)
-                                db.commit()
-                        except Exception as e:
-                            logger.error(f"[{device_id}] 寫入 test_ended_at 失敗：{e}")
+                        for _attempt in range(3):
+                            try:
+                                with SessionLocal() as db:
+                                    db.query(SopExecution).filter(
+                                        SopExecution.id == execution_id,
+                                        SopExecution.test_ended_at == None,
+                                    ).update({"test_ended_at": now}, synchronize_session=False)
+                                    db.commit()
+                                break
+                            except Exception as e:
+                                logger.error(f"[{device_id}] 寫入 test_ended_at 失敗（第{_attempt+1}次）：{e}")
+                                if _attempt == 2:
+                                    logger.error(f"[{device_id}] 寫入 test_ended_at 三次失敗，放棄")
                     logger.info(f"[{device_id}] 測試自然完成，回待機。")
                     try:
                         with SessionLocal() as db:

@@ -643,7 +643,7 @@ function ExecutionList({ active, role }) {
                 "測試名稱",
                 "設備",
                 "執行人員",
-                "測試開始",
+                "完成時間",
                 ...(role !== "guest" ? ["照片", "報告"] : []),
               ].map((h) => (
                 <th key={h} style={thStyle}>
@@ -679,7 +679,7 @@ function ExecutionList({ active, role }) {
                     {role === "guest" ? "—" : (ex.operator || "—")}
                   </td>
                   <td style={{ ...tdStyle, color: "#8b949e" }}>
-                    {fmtDatetime(ex.test_started_at || ex.created_at)}
+                    {fmtDatetime(ex.test_ended_at || ex.test_started_at || ex.created_at)}
                   </td>
                   {role !== "guest" && (
                   <td style={tdStyle}>
