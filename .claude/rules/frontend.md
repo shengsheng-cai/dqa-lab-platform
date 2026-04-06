@@ -4,7 +4,7 @@
 
 ```
 App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, UsersPage, ErrorLog, ExecutionList]
-└─ components/ [sop/, ai/, control/RightPanel]
+└─ components/ [sop/, ai/, fixture/, control/RightPanel]
 ```
 
 ## ControlCenter 佈局

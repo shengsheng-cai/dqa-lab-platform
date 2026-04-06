@@ -447,7 +447,7 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
 
         if to_running:
             db.commit()
-            print(f"[scheduler] fallback 推進：{len(to_running)} 筆→進行中")
+            logger.info(f"[scheduler] fallback 推進：{len(to_running)} 筆→進行中")
 
         # 在 session 內提取需要的資料，避免 session 關閉後存取 ORM 物件
         start_info = []
