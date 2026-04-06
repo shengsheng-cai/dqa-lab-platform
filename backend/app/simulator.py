@@ -7,7 +7,6 @@ import random
 from .models import SessionLocal, DeviceData, SopExecution, Schedule, ScheduleStatus
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc, _save_device_state
-from .sop import auto_start_sop
 from .schedules import _complete_schedule
 from .line import push_message
 

@@ -408,16 +408,34 @@ def _auto_assign(
 # ── 排程狀態自動推進 ──────────────────────────────────────────────────────────
 
 
+async def _start_schedule_by_id(schedule_id: int, cache: dict, locks: dict):
+    """排程到達 start_time 時由 APScheduler date job 精確觸發。"""
+    from .sop import auto_start_sop
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    with SessionLocal() as db:
+        s = db.query(Schedule).filter(
+            Schedule.id == schedule_id,
+            Schedule.status == ScheduleStatus.CONFIRMED,
+        ).first()
+        if not s:
+            return
+        s.status = ScheduleStatus.RUNNING
+        s.updated_at = now
+        db.commit()
+        conditions = json.loads(s.conditions) if s.conditions else []
+        device_id = s.device_id
+
+    if conditions and device_id:
+        await auto_start_sop(device_id, conditions[0], cache, locks)
+
+
 async def auto_advance_schedules(cache: dict = None, locks: dict = None):
     """
-    每 5 分鐘執行：
-    - 已確認 + start_time ≤ now → 進行中，並自動啟動第一個 SOP
-    - 進行中 + end_time   ≤ now → 已完成
+    Fallback：每 5 分鐘掃一次，補抓任何漏掉的已確認排程（如重啟後 date job 遺失）。
     """
     from .sop import auto_start_sop
-    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)  # naive UTC for SQLite filter
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     with SessionLocal() as db:
-        # 已確認 → 進行中
         to_running = (
             db.query(Schedule)
             .filter(Schedule.status == ScheduleStatus.CONFIRMED, Schedule.start_time <= now)
@@ -429,17 +447,17 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
 
         if to_running:
             db.commit()
-            print(f"[scheduler] 排程狀態推進：{len(to_running)} 筆→進行中")
+            print(f"[scheduler] fallback 推進：{len(to_running)} 筆→進行中")
 
-        running_info = [(s.project_number, s.sample_name, s.device_id) for s in to_running]
-
-    # 自動啟動：已確認→進行中的排程，對應設備 IDLE 時啟動第一個 SOP
-    if cache is not None and locks is not None and to_running:
-        tasks = []
+        # 在 session 內提取需要的資料，避免 session 關閉後存取 ORM 物件
+        start_info = []
         for s in to_running:
             conditions = json.loads(s.conditions) if s.conditions else []
             if conditions and s.device_id:
-                tasks.append(auto_start_sop(s.device_id, conditions[0], cache, locks))
+                start_info.append((s.device_id, conditions[0]))
+
+    if cache is not None and locks is not None and start_info:
+        tasks = [auto_start_sop(dev, cond, cache, locks) for dev, cond in start_info]
         if tasks:
             await asyncio.gather(*tasks)
 
@@ -720,13 +738,31 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
         db.refresh(s)
         result = _enrich(s, db)
 
-    # 確認排程時，若 start_time ≤ now，立即啟動（不等 APScheduler）
-    # 治具已在 commit 時直接寫入 loaned，auto_start_sop 不需再轉換
-    if body.status == ScheduleStatus.CONFIRMED and immediate_start and conditions and device_id:
-        from .sop import auto_start_sop
-        cache = getattr(request.app.state, "AICM_CACHE", {})
-        locks = getattr(request.app.state, "DEVICE_LOCKS", {})
-        await auto_start_sop(device_id, conditions[0], cache, locks, skip_fixture_transfer=True)
+    _cache = getattr(request.app.state, "AICM_CACHE", {})
+    _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
+    _scheduler = getattr(request.app.state, "scheduler", None)
+
+    if body.status == ScheduleStatus.CONFIRMED:
+        if immediate_start and conditions and device_id:
+            # 立即啟動
+            from .sop import auto_start_sop
+            await auto_start_sop(device_id, conditions[0], _cache, _locks, skip_fixture_transfer=True)
+        elif _scheduler and not immediate_start:
+            # 未來時間：加精確 date job
+            _scheduler.add_job(
+                _start_schedule_by_id,
+                trigger="date",
+                run_date=start_aware,
+                kwargs={"schedule_id": schedule_id, "cache": _cache, "locks": _locks},
+                id=f"sched_{schedule_id}",
+                replace_existing=True,
+            )
+
+    elif body.status == ScheduleStatus.CANCELLED and _scheduler:
+        try:
+            _scheduler.remove_job(f"sched_{schedule_id}")
+        except Exception:
+            pass
 
     return result
 

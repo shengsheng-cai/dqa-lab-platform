@@ -1,6 +1,6 @@
 # DQA Lab Digital Twin
 
-![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
@@ -35,8 +35,8 @@ https://github.com/user-attachments/assets/f9d30698-6526-4770-a678-4bf9373e334c
 | 📊 **量測不確定度** | GUM 合規自動計算：Type A（穩定段重複測量）＋ Type B（感測器解析度）→ 組合 uc → 擴充 U（k=2, 95%），輸出於 PDF 報告 Section 5 |
 | 🗄️ **治具借還管理** | 借出 / 歸還 / 逾期追蹤、損壞遺失清單、月盤點、採購閉環、Excel 批次匯入；排程聯動（預約→自動借出→自動歸還） |
 | 🤖 **AI 法規諮詢** | 自然語言查詢、RAG 法規檢索、多輪對話（支援「加上/再加」累積推薦條件）；推薦測試後可直接「📅 申請此測試」預填排程；右下角 FAB 浮動按鈕，點擊從右側滑入 |
-| 🗓️ **排程系統** | 甘特圖永遠可見（固定區塊）、自動排程（排除超時卡機 / EMERGENCY 設備）、審核前即時預覽時段、不可用時段管理；排程確認後設備立即自動啟動（不等 APScheduler）；APScheduler 每 5 分鐘補位推進；確認後治具自動預約 |
-| 🚨 **LINE Bot 通知** | 緊急停止主動推播（push_message）給管理者個人 |
+| 🗓️ **排程系統** | 甘特圖永遠可見（固定區塊）、自動排程（排除超時卡機 / EMERGENCY 設備）、審核前即時預覽時段、不可用時段管理；排程確認後 APScheduler date job 精確觸發啟動（每 5 分鐘 fallback）；條件銜接改為人員確認制；確認後治具自動預約 |
+| 🚨 **LINE Bot 通知** | 條件完成（等待人員確認）、全部完成、緊急停止 — 主動推播給管理者個人 |
 | 👥 **人員管理** | 工程師名冊（左）+ 訪客 Token 管理（右）；Token 表支援「隱藏已失效」一鍵過濾 |
 | 🔐 **存取控制** | 管理員登入 + 訪客唯讀模式，bcrypt 密碼雜湊，IP Rate Limiting |
 
@@ -62,7 +62,7 @@ https://github.com/user-attachments/assets/f9d30698-6526-4770-a678-4bf9373e334c
 
 ## 快速啟動
 
-**前置需求：** Python 3.9+、Node.js 18+、macOS / Linux / WSL2
+**前置需求：** Python 3.13+、Node.js 18+、macOS / Linux / WSL2
 
 ```bash
 make install                  # 安裝所有依賴
@@ -100,7 +100,7 @@ cp .env.example backend/.env
 | **後端** | FastAPI、SQLAlchemy 2.0、SQLite、Alembic、APScheduler |
 | **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Flash-Lite）+ 可切換 RAG Embedding（Gemini / sentence-transformers） |
-| **通知** | LINE Messaging API（緊急推播）|
+| **通知** | LINE Messaging API（條件完成 / 測試完成 / 緊急停止推播）|
 
 ---
 
@@ -112,7 +112,7 @@ cp .env.example backend/.env
     ▼
 FastAPI（後端）
     ├── SQLite（SQLAlchemy 2.0 + Alembic）
-    ├── 物理模擬引擎（sim_phase 狀態機，APScheduler 每 5 分鐘推進）
+    ├── 物理模擬引擎（sim_phase 狀態機，APScheduler 精確排程觸發）
     ├── AI 諮詢（Gemini Flash-Lite + RAG Embedding）
     └── LINE Messaging API（Webhook 接收 + push_message 推播）
 ```

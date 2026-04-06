@@ -109,7 +109,31 @@ async def lifespan(app: FastAPI):
         kwargs={"cache": app.state.AICM_CACHE, "locks": app.state.DEVICE_LOCKS},
     )
     scheduler.start()
-    logger.info("APScheduler 已啟動（每 5 分鐘推進排程狀態）")
+    app.state.scheduler = scheduler
+
+    # 重啟後重新註冊未來的 CONFIRMED 排程 date job
+    from .schedules import _start_schedule_by_id
+    from .models import Schedule, ScheduleStatus
+    _now_naive = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    with SessionLocal() as db:
+        future_confirmed = db.query(Schedule).filter(
+            Schedule.status == ScheduleStatus.CONFIRMED,
+            Schedule.start_time > _now_naive,
+        ).all()
+        for s in future_confirmed:
+            start_aware = s.start_time.replace(tzinfo=datetime.timezone.utc)
+            scheduler.add_job(
+                _start_schedule_by_id,
+                trigger="date",
+                run_date=start_aware,
+                kwargs={"schedule_id": s.id, "cache": app.state.AICM_CACHE, "locks": app.state.DEVICE_LOCKS},
+                id=f"sched_{s.id}",
+                replace_existing=True,
+            )
+        if future_confirmed:
+            logger.info(f"重新註冊 {len(future_confirmed)} 筆未來排程 date job")
+
+    logger.info("APScheduler 已啟動（精確 date job + 每 5 分鐘 fallback）")
 
     yield
     scheduler.shutdown()
