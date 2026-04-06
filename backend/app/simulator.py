@@ -349,18 +349,24 @@ async def data_simulator(cache: dict, locks: dict):
             if status in ["RUNNING", "FINISHING", "EMERGENCY"]:
                 write_counters[device_id] += 1
                 if write_counters[device_id] >= 10:
-                    try:
-                        with SessionLocal() as db:
-                            db.add(DeviceData(
-                                device_id=device_id,
-                                temperature=item["temperature"],
-                                humidity=item.get("humidity", 55.0),
-                                timestamp=now,
-                            ))
-                            db.commit()
-                        _save_device_state(device_id, item)
-                    except Exception as e:
-                        logger.error(f"[{device_id}] DB write error: {e}")
+                    for _attempt in range(2):
+                        try:
+                            with SessionLocal() as db:
+                                db.add(DeviceData(
+                                    device_id=device_id,
+                                    temperature=item["temperature"],
+                                    humidity=item.get("humidity", 55.0),
+                                    timestamp=now,
+                                ))
+                                db.commit()
+                            _save_device_state(device_id, item)
+                            break
+                        except Exception as e:
+                            if _attempt == 0:
+                                logger.warning(f"[{device_id}] DB write retry: {e}")
+                                await asyncio.sleep(0.5)
+                            else:
+                                logger.error(f"[{device_id}] DB write error after retry: {e}")
                     write_counters[device_id] = 0
             else:
                 write_counters[device_id] = 0
