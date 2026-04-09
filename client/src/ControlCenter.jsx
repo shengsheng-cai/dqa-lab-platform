@@ -27,7 +27,8 @@ const PATH_TO_TAB = Object.fromEntries(
 function TopBar({ devices, fixtureSummary, displayName, role, onLogout }) {
   const running = devices.filter((d) => d.status === "RUNNING").length;
   const emergency = devices.filter((d) => d.status === "EMERGENCY").length;
-  const idle = devices.filter((d) => d.status === "IDLE").length;
+  const idle = devices.filter((d) => d.status === "IDLE" && !d.is_blocked).length;
+  const blocked = devices.filter((d) => d.is_blocked).length;
 
   const Stat = ({ label, value, color }) => (
     <span style={{ fontSize: 12, color: "#8b949e", whiteSpace: "nowrap" }}>
@@ -74,6 +75,7 @@ function TopBar({ devices, fixtureSummary, displayName, role, onLogout }) {
           color={emergency > 0 ? "#f85149" : "#8b949e"}
         />
         <Stat label="待機" value={idle} />
+        <Stat label="不可用" value={blocked} color={blocked > 0 ? "#f0a500" : "#8b949e"} />
         <span style={{ color: "#30363d" }}>│</span>
         <Stat
           label="治具借出"
@@ -972,6 +974,12 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   const [recordsOpen, setRecordsOpen] = useState(false);
   const [recordsSubTab, setRecordsSubTab] = useState("errors");
   const handleInitCondsConsumed = useCallback(() => setScheduleInitConds(null), []);
+  const { showToast } = useToast();
+  const handleApplySchedule = useCallback((sop_ids) => {
+    setActiveTab("schedule");
+    setScheduleInitConds(sop_ids);
+    showToast(`已帶入 ${sop_ids.length} 個條件，請至排程頁面確認`, "info");
+  }, [showToast]);
 
   // 輪詢設備狀態（3s）
   useEffect(() => {
@@ -1029,10 +1037,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           selectedDevice={selectedDevice}
           scheduleInitConds={scheduleInitConds}
           handleInitCondsConsumed={handleInitCondsConsumed}
-          onApplySchedule={(sop_ids) => {
-            setActiveTab("schedule");
-            setScheduleInitConds(sop_ids);
-          }}
+          onApplySchedule={handleApplySchedule}
           onOpenExecutions={() => {
             setRecordsOpen(true);
             setRecordsSubTab("executions");
@@ -1154,10 +1159,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       >
         <RightPanel
           onClose={() => setAiOpen(false)}
-          onApplySchedule={(sop_ids) => {
-            setActiveTab("schedule");
-            setScheduleInitConds(sop_ids);
-          }}
+          onApplySchedule={handleApplySchedule}
         />
       </div>
 

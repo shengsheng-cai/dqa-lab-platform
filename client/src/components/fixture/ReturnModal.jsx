@@ -3,6 +3,12 @@ import api from "../../api";
 import { useToast } from "../Toast";
 import DatePicker from "./DatePicker";
 
+const CONDITIONS = [
+  ["normal", "正常"],
+  ["damaged", "損壞"],
+  ["lost", "遺失"],
+];
+
 export default function ReturnModal({ loan, onClose, onSubmit }) {
   const { showToast } = useToast();
   const [condition, setCondition] = useState("normal");
@@ -11,8 +17,13 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
     new Date().toISOString().slice(0, 10)
   );
   const [loading, setLoading] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
 
   const handleSubmit = async () => {
+    if ((condition === "damaged" || condition === "lost") && !confirmed) {
+      setConfirmed(true);
+      return;
+    }
     setLoading(true);
     try {
       await api.post(`/api/fixtures/loans/${loan.id}/return`, {
@@ -28,6 +39,8 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
       setLoading(false);
     }
   };
+
+  const conditionLabel = CONDITIONS.find(([v]) => v === condition)?.[1] ?? condition;
 
   return (
     <div
@@ -62,14 +75,10 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
           借用人：{loan.borrower_name}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {[
-            ["normal", "正常"],
-            ["damaged", "損壞"],
-            ["lost", "遺失"],
-          ].map(([v, l]) => (
+          {CONDITIONS.map(([v, l]) => (
             <button
               key={v}
-              onClick={() => setCondition(v)}
+              onClick={() => { setCondition(v); setConfirmed(false); }}
               style={{
                 flex: 1,
                 padding: "7px",
@@ -152,15 +161,19 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
               flex: 1,
               padding: "8px",
               borderRadius: 6,
-              background: "#238636",
+              background: confirmed ? "#b62324" : "#238636",
               color: "#fff",
-              border: "none",
+              border: confirmed ? "1px solid #f85149" : "none",
               cursor: "pointer",
               fontSize: 13,
               fontWeight: 600,
             }}
           >
-            {loading ? "確認中..." : "確認歸還"}
+            {loading
+              ? "確認中..."
+              : confirmed
+                ? `⚠️ 確定標記為${conditionLabel}？`
+                : "確認歸還"}
           </button>
         </div>
       </div>

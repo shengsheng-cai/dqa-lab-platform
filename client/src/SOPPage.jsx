@@ -78,6 +78,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   const lastHistoryMinuteRef = useRef(-1);
   const prevSimPhaseRef = useRef("");
   const prevSimCycleRef = useRef(0);
+  const prevDwellHalfFiredRef = useRef(false);
 
   const data = allDevices[selectedDevice] || {
     status: "OFFLINE",
@@ -263,6 +264,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   // Phase 9-2: 根據 sim_phase 自動確認步驟
   const simPhase = allDevices[selectedDevice]?.sim_phase || "";
   const simCycle = allDevices[selectedDevice]?.sim_cycle || 0;
+  const dwellHalfFired = allDevices[selectedDevice]?.dwell_half_fired || false;
 
   const autoTriggerMap = useMemo(() => {
     const steps = deviceStates[selectedDevice]?.activeSop?.steps || [];
@@ -281,6 +283,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   useEffect(() => {
     prevSimPhaseRef.current = simPhase;
     prevSimCycleRef.current = simCycle;
+    prevDwellHalfFiredRef.current = dwellHalfFired;
   }, [selectedDevice]); // eslint-disable-line
 
   // 載入已執行中設備時，根據當前 sim_phase 恢復自動步驟狀態
@@ -301,6 +304,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
     if (["dwell_low", "ramp_to_ambient"].includes(phase)) firedTriggers.add("second_dwell");
     if (phase === "ramp_to_ambient") firedTriggers.add("complete");
     if (cycle >= Math.ceil(totalCycles / 2)) firedTriggers.add("cycle_half");
+    if (dwellHalfFired) firedTriggers.add("dwell_half");
 
     const newCompleted = {};
     steps.forEach((s) => {
@@ -318,8 +322,10 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   useEffect(() => {
     const prevPhase = prevSimPhaseRef.current;
     const prevCycle = prevSimCycleRef.current;
+    const prevDwellHalfFired = prevDwellHalfFiredRef.current;
     prevSimPhaseRef.current = simPhase;
     prevSimCycleRef.current = simCycle;
+    prevDwellHalfFiredRef.current = dwellHalfFired;
 
     // 初次載入或切換設備後第一次 poll，不觸發（refs 已在上方 useEffect 初始化）
     if (!prevPhase && !prevCycle) return;
@@ -354,6 +360,10 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
     if (simCycle !== prevCycle && simCycle >= Math.ceil(totalCycles / 2)) {
       autoCheck("cycle_half");
     }
+    // 停留過半（dwell_half_fired 由後端設定，只在 false → true 邊緣觸發）
+    if (!prevDwellHalfFired && dwellHalfFired) {
+      autoCheck("dwell_half");
+    }
 
     // 進入 ramp_to_ambient = 測試自然完成，自動確認剩餘步驟並標記自動存報告
     let triggerAutoSave = false;
@@ -377,7 +387,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
         };
       });
     }
-  }, [simPhase, simCycle]); // eslint-disable-line
+  }, [simPhase, simCycle, dwellHalfFired]); // eslint-disable-line
 
   const startSop = async (confirmedOperator) => {
     if (!testData || starting) return;

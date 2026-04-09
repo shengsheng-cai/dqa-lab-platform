@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, ScheduleStatus, FixtureLoan, DeviceBlockedPeriod
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
-from .utils import _save_device_state
+from .utils import _save_device_state, _parse_conditions
 from .auth import _require_admin
 from .line import push_message
 
@@ -111,6 +111,20 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
     if active_block:
         reason = active_block.reason or "不可用時段"
         raise HTTPException(status_code=409, detail=f"{device_id} 目前在不可用時段內（{reason}），無法啟動測試")
+
+    # 檢查設備是否有排程進行中（IDLE 條件間隙仍不允許手動啟動）
+    with SessionLocal() as db:
+        running_schedule = db.query(Schedule).filter(
+            Schedule.device_id == device_id,
+            Schedule.status == ScheduleStatus.RUNNING,
+        ).first()
+    if running_schedule:
+        total = len(_parse_conditions(running_schedule.conditions))
+        idx = (running_schedule.current_condition_index or 0) + 1
+        raise HTTPException(
+            status_code=409,
+            detail=f"{device_id} 正在執行排程（第 {idx}/{total} 條件），請透過排程頁面操作"
+        )
 
     # 若前端未填 operator，從登入帳號自動帶入顯示名稱
     if not operator and operator_user_id:

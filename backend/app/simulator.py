@@ -43,6 +43,12 @@ def _update_humidity(
         )
 
 
+def _tick_dwell_half(item: dict, elapsed: float, dwell_seconds: float) -> None:
+    """停留時間過半時設定 flag；只在首次過半時寫入，不重複賦值。"""
+    if elapsed >= dwell_seconds * 0.5 and not item.get("dwell_half_fired"):
+        item["dwell_half_fired"] = True
+
+
 def _advance_sim_phase(
     device_id: str,
     item: dict,
@@ -114,9 +120,11 @@ def _advance_sim_phase(
         dwell_key = f"{device_id}_high"
         dwell_start = _restore_dwell_start("high", "dwell_high_start")
         elapsed = (now - dwell_start).total_seconds()
+        _tick_dwell_half(item, elapsed, dwell_seconds)
         if elapsed >= dwell_seconds:
             dwell_start_times.pop(dwell_key, None)
             item.pop("dwell_high_start", None)
+            item["dwell_half_fired"] = False
             # 兩溫循環：降至 low_temp；單溫：直接回常溫
             item["sim_phase"] = "ramp_to_low2" if (low_temp is not None and abs(high_temp - low_temp) > 0.1) else "ramp_to_ambient"
 
@@ -132,9 +140,11 @@ def _advance_sim_phase(
         dwell_key = f"{device_id}_low"
         dwell_start = _restore_dwell_start("low", "dwell_low_start")
         elapsed = (now - dwell_start).total_seconds()
+        _tick_dwell_half(item, elapsed, dwell_seconds)
         if elapsed >= dwell_seconds:
             dwell_start_times.pop(dwell_key, None)
             item.pop("dwell_low_start", None)
+            item["dwell_half_fired"] = False
             item["sim_cycle"] = sim_cycle + 1
             item["sim_phase"] = "ramp_to_high" if item["sim_cycle"] < cycles else "ramp_to_ambient"
 
@@ -210,6 +220,7 @@ def _idle_state_patch() -> dict:
         "operator_user_id": None,
         "sim_phase": "idle",
         "sim_cycle": 0,
+        "dwell_half_fired": False,
     }
 
 
@@ -307,6 +318,7 @@ async def data_simulator(cache: dict, locks: dict):
                             "sim_cycle": 0,
                             "dwell_high_start": None,
                             "dwell_low_start": None,
+                            "dwell_half_fired": False,
                             "active_execution_id": None,
                         })
                         _save_device_state(device_id, item)

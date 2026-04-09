@@ -537,20 +537,6 @@ async def create_loan(body: LoanCreate, request: Request):
                 status_code=400, detail=f"庫存不足，目前可借：{available} 件"
             )
 
-        # 用 SQL-level atomic update 確保原子性，避免並發超借出
-        updated = (
-            db.query(Fixture)
-            .filter(
-                Fixture.id == body.fixture_id,
-                Fixture.total_quantity >= body.quantity + loaned + damaged
-            )
-            .update({}, synchronize_session="fetch")
-        )
-        if not updated:
-            raise HTTPException(
-                status_code=400, detail="並發借出失敗，庫存已被他人搶先取用，請重試"
-            )
-
         loan = FixtureLoan(
             fixture_id=body.fixture_id,
             borrower_name=body.borrower_name,

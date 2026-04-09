@@ -360,6 +360,7 @@ class Schedule(Base):
     status: Mapped[str] = mapped_column(String, default=ScheduleStatus.PENDING)
     current_condition_index: Mapped[int] = mapped_column(Integer, default=0)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    rejection_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )

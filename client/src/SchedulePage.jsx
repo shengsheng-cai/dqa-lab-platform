@@ -375,6 +375,8 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const [allFixtures, setAllFixtures] = useState([]);
@@ -382,6 +384,18 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
   useEffect(() => {
     api.get("/api/fixtures").then((r) => setAllFixtures(r.data)).catch(() => {});
   }, []);
+
+  const isDirty = useMemo(() => !!(
+    form.project_number.trim() ||
+    form.sample_name.trim() ||
+    form.note.trim() ||
+    form.conditions.length > (initialConditions?.length || 0) ||
+    form.fixtures.length > 0
+  ), [form, initialConditions]);
+  const handleClose = () => {
+    if (isDirty && !window.confirm("表單尚未送出，確定要關閉？資料將會消失。")) return;
+    onClose();
+  };
 
   const totalHours = form.conditions.reduce((acc, sop_id) => {
     const std = findStd(sop_id);
@@ -433,12 +447,12 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
   }
 
   return (
-    <div style={overlayStyle} onClick={onClose}>
+    <div style={overlayStyle} onClick={handleClose}>
       <div style={{ ...modalStyle, width: 680, maxHeight: "88vh", overflowY: "auto" }}
         onClick={(e) => e.stopPropagation()}>
         <div style={modalHeader}>
           <span style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>申請排程</span>
-          <button onClick={onClose} style={closeBtn}>✕</button>
+          <button onClick={handleClose} style={closeBtn}>✕</button>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 20px 20px" }}>
@@ -466,11 +480,35 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
               background: "#161b22", borderRadius: 6, padding: "10px 12px",
               border: "1px solid #30363d",
             }}>
-              <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 6 }}>已選條件（依序執行）</div>
+              <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 6 }}>已選條件（依序執行，可拖曳排序）</div>
               {form.conditions.map((sop_id, i) => {
                 const t = findStd(sop_id);
+                const isOver = dragOverIndex === i && dragIndex !== i;
                 return (
-                  <div key={sop_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <div
+                    key={sop_id}
+                    draggable
+                    onDragStart={() => setDragIndex(i)}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverIndex(i); }}
+                    onDrop={() => {
+                      if (dragIndex === null || dragIndex === i) return;
+                      const next = [...form.conditions];
+                      const [moved] = next.splice(dragIndex, 1);
+                      next.splice(i, 0, moved);
+                      setForm((f) => ({ ...f, conditions: next }));
+                      setDragIndex(null);
+                      setDragOverIndex(null);
+                    }}
+                    onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8, marginBottom: 4,
+                      borderRadius: 4, padding: "2px 0",
+                      borderTop: isOver ? "2px solid #58a6ff" : "2px solid transparent",
+                      opacity: dragIndex === i ? 0.4 : 1,
+                      transition: "opacity .15s",
+                    }}
+                  >
+                    <span style={{ fontSize: 14, color: "#484f58", cursor: "grab", userSelect: "none" }}>⠿</span>
                     <span style={{ fontSize: 11, color: "#484f58", width: 18 }}>{i + 1}.</span>
                     <span style={{ fontSize: 12, color: "#cdd9e5", flex: 1 }}>{t?.name || sop_id}</span>
                     <span style={{ fontSize: 11, color: "#3fb950" }}>≈ {t?.estimated_hours}h</span>
@@ -580,7 +618,7 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
           {error && <div style={{ color: "#f85149", fontSize: 13 }}>{error}</div>}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-            <button onClick={onClose} style={cancelBtn}>取消</button>
+            <button onClick={handleClose} style={cancelBtn}>取消</button>
             <button onClick={submit} disabled={saving} style={primaryBtn}>
               {saving ? "送出中..." : "送出申請"}
             </button>
@@ -600,6 +638,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
   const [note, setNote] = useState(schedule.note || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [cancelReason, setCancelReason] = useState(null); // null = 未展開，string = 已展開
   const [preview, setPreview] = useState(null);   // { device_id, start_time, end_time }
   const [previewing, setPreviewing] = useState(false);
   const [previewAt, setPreviewAt] = useState(null); // 上次 preview 計算時間
@@ -643,10 +682,14 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
   }
 
   async function cancel() {
-    if (!window.confirm("確定取消此排程？")) return;
+    if (cancelReason === null) { setCancelReason(""); return; }
     setSaving(true);
     try {
-      const res = await api.patch(`/api/schedules/${schedule.id}`, { status: "已取消", note: note || null });
+      const res = await api.patch(`/api/schedules/${schedule.id}`, {
+        status: "已取消",
+        note: note || null,
+        rejection_note: cancelReason.trim() || null,
+      });
       showToast("排程已取消", "success");
       onUpdated(res.data);
       onClose();
@@ -859,6 +902,25 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
                 />
               </div>
 
+              {schedule.rejection_note && (
+                <div style={{ padding: "8px 10px", borderRadius: 6, background: "#2d1a1a", border: "1px solid #f85149", fontSize: 12, color: "#ff7b72" }}>
+                  <span style={{ fontWeight: 600 }}>取消原因：</span>{schedule.rejection_note}
+                </div>
+              )}
+
+              {cancelReason !== null && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ fontSize: 12, color: "#f85149" }}>請填寫取消原因（選填），再次點擊確認取消</div>
+                  <textarea
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    rows={2}
+                    placeholder="例：測試需求變更、設備衝突..."
+                    style={{ ...inputStyle, resize: "vertical", borderColor: "#f85149" }}
+                  />
+                </div>
+              )}
+
               {error && <div style={{ color: "#f85149", fontSize: 13 }}>{error}</div>}
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
@@ -868,8 +930,13 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
                   </button>
                 )}
                 {schedule.status !== "已取消" && schedule.status !== "已完成" && (
-                  <button onClick={cancel} disabled={saving} style={cancelBtn}>
-                    取消排程
+                  <button onClick={cancel} disabled={saving} style={cancelReason !== null ? { ...cancelBtn, color: "#f85149", borderColor: "#f85149" } : cancelBtn}>
+                    {cancelReason !== null ? (saving ? "取消中..." : "確認取消排程") : "取消排程"}
+                  </button>
+                )}
+                {cancelReason !== null && (
+                  <button onClick={() => setCancelReason(null)} style={cancelBtn}>
+                    返回
                   </button>
                 )}
                 {schedule.status === "待審核" && (

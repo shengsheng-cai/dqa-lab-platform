@@ -7,9 +7,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod
+from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod, Schedule, ScheduleStatus
 from .line import push_message
-from .utils import _now_utc, _save_device_state
+from .utils import _now_utc, _save_device_state, _parse_conditions
 from .auth import _require_admin
 
 logger = logging.getLogger("app")
@@ -39,6 +39,19 @@ def _make_description(status: str, sop_name: str) -> str:
 
 def _calc_estimated_end_at(item: dict) -> Optional[str]:
     status = item.get("status")
+
+    # FINISHING：從當前溫度算降回 25°C 的剩餘時間
+    if status == "FINISHING":
+        current_temp = item.get("temperature", 25.0)
+        ramp_rate = 1.0
+        try:
+            sop = json.loads(item.get("active_sop_json") or "{}")
+            ramp_rate = sop.get("ramp_rate") or 1.0
+        except Exception:
+            pass
+        remaining_min = abs(current_temp - 25.0) / ramp_rate
+        return (_now_utc() + datetime.timedelta(minutes=remaining_min)).isoformat()
+
     if status not in ("RUNNING", "PAUSED"):
         return None
 
@@ -105,13 +118,21 @@ async def get_all_devices(request: Request):
     now_dt = _now_utc()
     now = now_dt.strftime("%Y-%m-%dT%H:%M:%S")
 
-    # 查詢目前有哪些設備在不可用時段內
+    # 查詢目前有哪些設備在不可用時段內，或有排程進行中
     with SessionLocal() as db:
         active_blocks = db.query(DeviceBlockedPeriod).filter(
             DeviceBlockedPeriod.start_time <= now_dt,
             DeviceBlockedPeriod.end_time >= now_dt,
         ).all()
+        running_schedules = db.query(Schedule).filter(
+            Schedule.status == ScheduleStatus.RUNNING,
+        ).all()
     blocked_devices = {b.device_id: b.reason for b in active_blocks}
+    for s in running_schedules:
+        if s.device_id and s.device_id not in blocked_devices:
+            total = len(_parse_conditions(s.conditions))
+            idx = (s.current_condition_index or 0) + 1
+            blocked_devices[s.device_id] = f"排程進行中（第 {idx}/{total} 條件）"
 
     return [
         {
@@ -133,6 +154,7 @@ async def get_all_devices(request: Request):
             "estimated_end_at": _calc_estimated_end_at(item),
             "sim_cycle": item.get("sim_cycle", 0),
             "sim_phase": item.get("sim_phase", "idle"),
+            "dwell_half_fired": item.get("dwell_half_fired", False),
             "is_blocked": device_id in blocked_devices,
             "blocked_reason": blocked_devices.get(device_id),
         }

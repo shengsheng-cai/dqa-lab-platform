@@ -77,6 +77,7 @@ function ReturnButtonGroup({ loanId, onSuccess }) {
         <button
           key={condition}
           onClick={async () => {
+            if (condition !== "normal" && !window.confirm(`確定標記為「${label}」？此操作無法復原。`)) return;
             try {
               await api.post(`/api/fixtures/loans/${loanId}/return`, {
                 return_condition: condition,
@@ -851,7 +852,7 @@ export default function FixturePage({ active, role }) {
                               color: "#f85149",
                             }}
                           >
-                            逾期
+                            逾期 {loan.overdue_days > 0 ? `${loan.overdue_days} 天` : ""}
                           </span>
                         )}
                       </td>

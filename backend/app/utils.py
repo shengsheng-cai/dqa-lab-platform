@@ -1,7 +1,17 @@
 # backend/app/utils.py
 
 import datetime
+import json
+from typing import Optional
 from .models import SessionLocal, DeviceState
+
+
+def _parse_conditions(conditions_str: Optional[str]) -> list:
+    """安全 parse schedule.conditions JSON 字串，失敗回傳空 list。"""
+    try:
+        return json.loads(conditions_str) if conditions_str else []
+    except Exception:
+        return []
 
 
 def _now_utc() -> datetime.datetime:

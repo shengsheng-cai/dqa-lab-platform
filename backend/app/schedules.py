@@ -14,7 +14,7 @@ from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
 from .auth import _require_admin
 from .line import push_message
-from .utils import _now_utc, _save_device_state
+from .utils import _now_utc, _save_device_state, _parse_conditions
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
@@ -59,6 +59,7 @@ class SchedulePatch(BaseModel):
     start_time: Optional[datetime.datetime] = None
     end_time: Optional[datetime.datetime] = None
     note: Optional[str] = None
+    rejection_note: Optional[str] = None
 
 
 class ScheduleOut(BaseModel):
@@ -266,10 +267,6 @@ def _get_condition_names(conditions: List[str]) -> List[str]:
     return names
 
 
-def _parse_conditions(raw: Optional[str]) -> list:
-    return json.loads(raw) if raw else []
-
-
 def _get_schedule_fixtures(schedule_id: int, db) -> list:
     """查詢排程治具清單，一次批次載入 Fixture 資料（避免 N+1）"""
     sfs = db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == schedule_id).all()
@@ -306,6 +303,7 @@ def _enrich(s: Schedule, db=None) -> dict:
         "end_time": s.end_time,
         "status": s.status,
         "note": s.note,
+        "rejection_note": s.rejection_note,
         "created_by": s.created_by,
         "confirmed_by": s.confirmed_by,
         "created_at": s.created_at,
@@ -674,6 +672,8 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
 
         if body.note is not None:
             s.note = body.note
+        if body.rejection_note is not None:
+            s.rejection_note = body.rejection_note
 
         if body.status == ScheduleStatus.CONFIRMED:
             if s.status != ScheduleStatus.PENDING:
