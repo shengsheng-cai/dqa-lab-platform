@@ -12,10 +12,9 @@
 
 ## LINE（Push）
 
-- 主動 push 時機（五個）：排程已確認、測試開始（排程進行中）、條件完成（等待人員確認）、測試完成、緊急停止。
-  - 排程推播：`schedules.py` `patch_schedule` + `auto_advance_schedules` + `confirm_condition`
+- 主動 push 時機（三個）：條件完成（等待人員確認）、測試完成、緊急停止。
   - 條件完成推播：`simulator.py`（sim_phase → done 時）
-  - 手動 SOP 無排程完成推播：`sop.py` `create_execution`（BackgroundTasks）
+  - 測試完成推播：`schedules.py` `confirm_condition`
   - 緊急停止推播：`devices.py`
 - `push_message` 推播給 `LINE_USER_ID`（管理者個人）。
 

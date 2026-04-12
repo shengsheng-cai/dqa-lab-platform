@@ -40,6 +40,7 @@ backend/test.db
 ### 本地開發文檔（不公開）
 docs/private/
 docs/business-strategy.md
+docs/slides.md
 .local/
 CLAUDE.local.md
 

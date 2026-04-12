@@ -6,7 +6,7 @@
 
 ## 技術規格
 
-### 資料庫（13 張）
+### 資料庫（15 張）
 
 | 表名 | 說明 |
 |------|------|
@@ -17,6 +17,8 @@
 | `error_logs` | 設備異常/錯誤日誌 |
 | `fixtures` | 治具主檔（庫存、狀態） |
 | `fixture_loans` | 治具借還記錄（含排程外鍵 `schedule_id`） |
+| `fixture_inventory_logs` | 治具盤點/異動紀錄 |
+| `schedule_fixtures` | 排程↔治具預約中間表 |
 | `users` | 管理員帳號（角色 admin） |
 | `demo_tokens` | 訪客唯讀 Token |
 | `sop_templates` | SOP 步驟模板 |
@@ -62,7 +64,7 @@ alembic revision --autogenerate -m "描述"
 alembic upgrade head
 
 # 後端單元測試（或用 make test）
-cd backend && python -m pytest  # 執行全套測試（45 tests）
+cd backend && python -m pytest  # 執行全套測試（57 tests）
 ```
 
 ---
@@ -80,7 +82,7 @@ cd backend && python -m pytest  # 執行全套測試（45 tests）
 | AI 諮詢 | Gemini 2.5 Flash-Lite、RAG 檢索、多輪對話；推薦條件→直接申請排程 |
 | 三模組連動 | ✅ AI→排程、排程→治具預約、SOP→治具借出、完成→治具歸還 |
 | 存取控制 | 2 層（admin/guest）、IP Rate Limiting |
-| LINE Bot | 推播時機：排程已確認、測試開始、條件完成（等待人員確認）、測試完成、緊急停止（推播給管理者個人） |
+| LINE Bot | 推播時機：條件完成（等待人員確認）、測試完成、緊急停止（推播給管理者個人） |
 
 ### 三模組連動流程
 
