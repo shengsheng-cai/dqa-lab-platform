@@ -71,6 +71,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   );
   const [confirmModal, setConfirmModal] = useState(null);
   const [manualMode, setManualMode] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(null);
   const role = localStorage.getItem("user_role") || "guest";
   const isAdmin = role === "admin";
 
@@ -79,6 +80,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   const prevSimPhaseRef = useRef("");
   const prevSimCycleRef = useRef(0);
   const prevDwellHalfFiredRef = useRef(false);
+  const savingExecutionRef = useRef(new Set());
 
   const data = allDevices[selectedDevice] || {
     status: "OFFLINE",
@@ -180,12 +182,8 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
                   /* ignore */
                 }
               }
-              if (
-                !cur.active_sop_json &&
-                p.activeSop &&
-                !ACTIVE_STATUSES.includes(cur.status) &&
-                cur.status !== FINISHING_STATUS
-              )
+              // 只有 EMERGENCY 才清除 activeSop；IDLE 保留讓 Step 5 照片可補充
+              if (!cur.active_sop_json && p.activeSop && cur.status === "EMERGENCY")
                 restoredSop = null;
               const selPatch =
                 restoredSop && !p.selectedStd && cur.active_sop_json
@@ -210,13 +208,39 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
     return () => clearInterval(t);
   }, [selectedDevice, active, fetchHistory]);
 
-  // 設備為 IDLE 時主動查詢是否有等待確認的排程（切換設備或狀態變化都重查）
+  // 設備為 IDLE 時主動查詢是否有等待確認的排程，並補齊 savedExecutionId
   useEffect(() => {
     if (data.status === "IDLE") {
       api.get("/api/schedules?status=RUNNING").then((r) => {
         const match = r.data.find((s) => s.device_id === selectedDevice);
         setPendingSchedule(match || null);
       }).catch(() => {});
+      // 快速跳轉 poll 漏掉 ramp_to_ambient 時，IDLE 後補存報告
+      // autoSave=true 代表 ExecutionPanel 正在處理；savingExecutionRef 防止並發重複存
+      const curDs = deviceStatesRef.current[selectedDevice];
+      if (
+        curDs?.activeSop && !curDs.savedExecutionId && !curDs.autoSave &&
+        Object.keys(curDs.completedSteps || {}).length > 0 &&
+        !savingExecutionRef.current.has(selectedDevice)
+      ) {
+        savingExecutionRef.current.add(selectedDevice);
+        const steps = curDs.activeSop.steps || [];
+        const allCompleted = Object.fromEntries(steps.map((s) => [s.step_id, true]));
+        api.post("/api/sop-executions/", {
+          sop_id: curDs.activeSop.sop_id,
+          device_id: selectedDevice,
+          operator: operator?.trim() || null,
+          test_started_at: null,
+          steps: steps.map((s) => ({ step_id: s.step_id, completed: true })),
+        }).then((res) => {
+          setDeviceStates((p) => ({
+            ...p,
+            [selectedDevice]: { ...p[selectedDevice], savedExecutionId: res.data.id, completedSteps: allCompleted },
+          }));
+        }).catch(() => {}).finally(() => {
+          savingExecutionRef.current.delete(selectedDevice);
+        });
+      }
     } else {
       setPendingSchedule(null);
     }
@@ -425,8 +449,9 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
     try {
       await api.post(`/api/stop/${selectedDevice}/${type}`);
       if (type === "normal" || type === "emergency") {
-        const patch = { completedSteps: {}, savedExecutionId: null, autoSave: false, safetyChecked: [false, false, false, false] };
-        if (type === "emergency") patch.activeSop = null;
+        const patch = { completedSteps: {}, autoSave: false, safetyChecked: [false, false, false, false] };
+        if (type === "emergency") { patch.savedExecutionId = null; patch.activeSop = null; }
+        if (type === "normal") patch.activeSop = null; // 手動停止清掉步驟區；自然完成/跳轉由 IDLE effect 處理
         updateDS(selectedDevice, patch);
         setStartError("");
         const msg = type === "emergency" ? "緊急停止已執行" : "測試已停止";
@@ -441,6 +466,21 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
       showToast(msg, "error");
     } finally {
       setPauseOptimistic(null);
+    }
+  };
+
+  const uploadPhoto = async (exId, photoType, file) => {
+    setPhotoUploading(photoType);
+    try {
+      const form = new FormData();
+      form.append("photo_type", photoType);
+      form.append("file", file);
+      await api.post(`/api/sop-executions/${exId}/photos`, form);
+      showToast("照片已上傳", "success");
+    } catch (e) {
+      showToast(e.response?.data?.detail || "上傳失敗", "error");
+    } finally {
+      setPhotoUploading(null);
     }
   };
 
@@ -532,7 +572,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
             />
           )}
 
-          {isActive && ds.activeSop && (
+          {ds.activeSop && (
             <section
               className="operation-box"
               style={{ borderLeft: "3px solid #58a6ff" }}
@@ -542,7 +582,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
                   <span>📋</span>
                   <h2 style={{ fontSize: 13 }}>{ds.activeSop.name}</h2>
                 </div>
-                {isAdmin && (
+                {isAdmin && isActive && (
                   <div style={{ display: "flex", gap: 6 }}>
                     <button
                       onClick={() => setManualMode((v) => !v)}
@@ -589,8 +629,12 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
                 completedSteps={ds.completedSteps}
                 onToggle={handleToggleStep}
                 manualMode={manualMode}
+                isAdmin={isAdmin}
+                savedExecutionId={ds.savedExecutionId}
+                uploadPhoto={uploadPhoto}
+                photoUploading={photoUploading}
               />
-              {allStepsDone && (
+              {allStepsDone && (isActive || isFinishing) && (
                 <ExecutionPanel
                   activeSop={ds.activeSop}
                   selectedDevice={selectedDevice}

@@ -215,11 +215,14 @@ def download_csv_report(execution_id: int):
 
 
 @router.get("/list")
-def list_executions():
+def list_executions(device_id: str = None, limit: int = None):
     with SessionLocal() as db:
-        executions = (
-            db.query(SopExecution).order_by(SopExecution.created_at.desc()).all()
-        )
+        q = db.query(SopExecution).order_by(SopExecution.created_at.desc())
+        if device_id:
+            q = q.filter(SopExecution.device_id == device_id)
+        if limit:
+            q = q.limit(limit)
+        executions = q.all()
         return [
             {
                 "id": e.id,

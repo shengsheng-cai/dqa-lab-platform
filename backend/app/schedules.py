@@ -302,6 +302,7 @@ def _enrich(s: Schedule, db=None) -> dict:
         "start_time": s.start_time,
         "end_time": s.end_time,
         "status": s.status,
+        "current_condition_index": s.current_condition_index,
         "note": s.note,
         "rejection_note": s.rejection_note,
         "created_by": s.created_by,

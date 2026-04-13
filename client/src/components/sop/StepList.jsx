@@ -8,7 +8,7 @@ const PHASE_LABELS = {
   ramp_to_high: "升溫段開始時",
 };
 
-const StepList = ({ steps, completedSteps, onToggle, manualMode = false }) => {
+const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin = false, savedExecutionId = null, uploadPhoto, photoUploading }) => {
   const totalSteps = steps.length;
   const doneCnt = Object.values(completedSteps).filter(Boolean).length;
   const allStepsDone = totalSteps > 0 && doneCnt === totalSteps;
@@ -114,6 +114,24 @@ const StepList = ({ steps, completedSteps, onToggle, manualMode = false }) => {
               <div style={{ fontSize: 11, color: "#8b949e", marginTop: 2 }}>
                 {step.description}
               </div>
+              {step.requires_photo && !!completedSteps[step.step_id] && savedExecutionId && isAdmin && (
+                <div style={{ marginTop: 6 }}>
+                  <label style={{
+                    display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer",
+                    padding: "4px 10px", borderRadius: 4, fontSize: 11,
+                    border: "1px dashed #2d5a3a", color: "#57ab5a", background: "#0f2318",
+                  }}>
+                    {photoUploading === "after" ? "⏳ 上傳中..." : "📷 上傳測試結束照片"}
+                    <input type="file" accept="image/*" style={{ display: "none" }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadPhoto(savedExecutionId, "after", f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
             </div>
           </label>
         );

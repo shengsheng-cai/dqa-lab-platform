@@ -631,7 +631,7 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
 
 // ── 排程詳情 / 審核 Modal ───────────────────────────────────────────────────
 
-function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onClose, onUpdated, onDeleted }) {
+function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onClose, onUpdated, onDeleted, onRefresh }) {
   const { showToast } = useToast();
   const [status, setStatus] = useState(schedule.status);
   const [deviceId, setDeviceId] = useState(schedule.device_id || "");
@@ -726,6 +726,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
       } else {
         showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
         onUpdated({ ...schedule });
+        onRefresh?.();
       }
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
@@ -1652,6 +1653,7 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
           userId={userId}
           deviceStatuses={deviceStatuses}
           onClose={() => setSelectedSchedule(null)}
+          onRefresh={fetchAll}
           onUpdated={(updated) => {
             setSchedules((prev) => prev.map((s) => s.id === updated.id ? updated : s));
             setSelectedSchedule(updated);

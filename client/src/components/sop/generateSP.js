@@ -87,16 +87,24 @@ export function mergeSpPv(spData, pvData) {
     map[p.min] = { ...p };
   });
   const spMins = spData.map((p) => p.min);
-  if (spMins.length === 0) return [];
+  const spMaxMin = spMins.length > 0 ? Math.max(...spMins) : 0;
   pvData.forEach((p) => {
     if (p.min == null) return;
-    // 找最近的 SP 時間點，容差 ±2 分鐘
-    const nearest = spMins.reduce((a, b) =>
-      Math.abs(b - p.min) < Math.abs(a - p.min) ? b : a,
-    );
-    if (Math.abs(nearest - p.min) <= 2) {
+    const minKey = Math.round(p.min);
+    if (spMins.length > 0 && minKey <= spMaxMin + 2) {
+      // SP 範圍內：找最近的 SP 時間點附著
+      const nearest = spMins.reduce((a, b) =>
+        Math.abs(b - minKey) < Math.abs(a - minKey) ? b : a,
+      );
       map[nearest].pv_temp = p.temperature;
       map[nearest].pv_humi = p.humidity;
+    } else {
+      // 超出 SP 結尾：建新時間槽，SP 值為 null
+      if (!map[minKey]) {
+        map[minKey] = { min: minKey, sp_temp: null, sp_humi: null, label: String(minKey) };
+      }
+      map[minKey].pv_temp = p.temperature;
+      map[minKey].pv_humi = p.humidity;
     }
   });
   return Object.values(map).sort((a, b) => a.min - b.min);
