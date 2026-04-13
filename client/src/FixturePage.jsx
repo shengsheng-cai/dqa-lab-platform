@@ -212,6 +212,7 @@ export default function FixturePage({ active, role }) {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [purchasePreFill, setPurchasePreFill] = useState(null);
   const [showStocktakeModal, setShowStocktakeModal] = useState(false);
+  const [invLogRefreshKey, setInvLogRefreshKey] = useState(0);
   const canOperate = role === "admin";
   const [sortKey, setSortKey] = useState("interface_type");
   const [sortDir, setSortDir] = useState("asc");
@@ -882,7 +883,7 @@ export default function FixturePage({ active, role }) {
 
       {activeTab === "damaged" && <DamagedList />}
 
-      {activeTab === "inv_log" && <InventoryLogTab />}
+      {activeTab === "inv_log" && <InventoryLogTab refreshKey={invLogRefreshKey} />}
 
       {activeTab === "purchase" && (
         <PurchaseTab
@@ -957,6 +958,7 @@ export default function FixturePage({ active, role }) {
           onComplete={() => {
             setShowStocktakeModal(false);
             fetchAll();
+            setInvLogRefreshKey((k) => k + 1);
           }}
         />
       )}
@@ -1182,17 +1184,18 @@ function DamagedList() {
 }
 
 // ── 盤點紀錄 tab ────────────────────────────────────────────
-function InventoryLogTab() {
+function InventoryLogTab({ refreshKey }) {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterFixture, setFilterFixture] = useState("");
 
   useEffect(() => {
+    setLoading(true);
     api
       .get("/api/fixtures/inventory-logs")
       .then((r) => setLogs(r.data))
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   const filtered = filterFixture
     ? logs.filter(
