@@ -24,15 +24,15 @@ export default function StocktakeModal({ fixtures, onClose, onComplete }) {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const diffs = active.filter((f) => {
-        const actual = parseInt(actuals[f.id] !== undefined ? actuals[f.id] : f.total_quantity);
-        return actual !== f.total_quantity;
-      });
+      const results = active.map((f) => ({
+        fixture: f,
+        actual: parseInt(actuals[f.id] !== undefined ? actuals[f.id] : f.total_quantity),
+      }));
+      const diffs = results.filter((r) => r.actual !== r.fixture.total_quantity);
       await Promise.all(
-        diffs.map((f) => {
-          const actual = parseInt(actuals[f.id]);
-          return api.post(`/api/fixtures/${f.id}/inventory?actual_quantity=${actual}`);
-        })
+        results.map(({ fixture, actual }) =>
+          api.post(`/api/fixtures/${fixture.id}/inventory?actual_quantity=${actual}`)
+        )
       );
       showToast(`盤點完成：正常 ${active.length - diffs.length} 、差異 ${diffs.length}`, "success");
       onComplete();
