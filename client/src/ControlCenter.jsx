@@ -837,7 +837,7 @@ const TABS = [
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions }) {
+function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices }) {
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
@@ -935,7 +935,7 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
             height: "100%",
           }}
         >
-          <SchedulePage active={activeTab === "schedule"} role={role} userId={userId} initConditions={scheduleInitConds} onInitCondsConsumed={handleInitCondsConsumed} />
+          <SchedulePage active={activeTab === "schedule"} role={role} userId={userId} initConditions={scheduleInitConds} onInitCondsConsumed={handleInitCondsConsumed} liveDeviceStatuses={Object.fromEntries(devices.map(d => [d.device_id, (d.is_blocked && d.status === "IDLE") ? "BLOCKED" : d.status]))} />
         </div>
         {role === "admin" && (
           <div
@@ -1037,6 +1037,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           selectedDevice={selectedDevice}
           scheduleInitConds={scheduleInitConds}
           handleInitCondsConsumed={handleInitCondsConsumed}
+          devices={devices}
           onApplySchedule={handleApplySchedule}
           onOpenExecutions={() => {
             setRecordsOpen(true);

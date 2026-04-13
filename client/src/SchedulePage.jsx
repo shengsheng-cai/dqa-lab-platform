@@ -881,7 +881,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
                     <option value="">自動選擇最早可用設備</option>
                     {DEVICE_IDS.map((id) => {
                       const st = deviceStatuses[id];
-                      const blocked = st === "EMERGENCY";
+                      const blocked = st === "EMERGENCY" || st === "BLOCKED";
                       return (
                         <option key={id} value={id} disabled={blocked}>
                           {id}{st ? ` (${st})` : ""}
@@ -1311,7 +1311,7 @@ const cancelBtn = {
 
 // ── 主頁面 ───────────────────────────────────────────────────────────────────
 
-export default function SchedulePage({ active, role, userId, initConditions, onInitCondsConsumed }) {
+export default function SchedulePage({ active, role, userId, initConditions, onInitCondsConsumed, liveDeviceStatuses = {} }) {
   const [schedules, setSchedules] = useState([]);
   const [blockedPeriods, setBlockedPeriods] = useState([]);
   const [deviceStatuses, setDeviceStatuses] = useState({});
@@ -1651,7 +1651,7 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
           schedule={selectedSchedule}
           role={role}
           userId={userId}
-          deviceStatuses={deviceStatuses}
+          deviceStatuses={{ ...deviceStatuses, ...liveDeviceStatuses }}
           onClose={() => setSelectedSchedule(null)}
           onRefresh={fetchAll}
           onUpdated={(updated) => {
