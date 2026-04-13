@@ -40,7 +40,7 @@ https://github.com/user-attachments/assets/f9d30698-6526-4770-a678-4bf9373e334c
 | 👥 **人員管理** | 人員名冊（左）+ 訪客 Token 管理（右）；Token 表支援「隱藏已失效」一鍵過濾 |
 | 🔐 **存取控制** | 管理員登入 + 訪客唯讀模式，bcrypt 密碼雜湊，IP Rate Limiting |
 
-<img src="docs/line-1.png" width="260"> <img src="docs/line-2.png" width="260">
+<img src="docs/line-1.png" width="260"> <img src="docs/line-2.png" width="260"> <img src="docs/line-3.png" width="260">
 
 ---
 
