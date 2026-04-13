@@ -397,6 +397,107 @@ def export_fixtures():
         db.close()
 
 
+@router.patch("/inventory-logs/{log_id}")
+def patch_inventory_log(log_id: int, actual_quantity: int, request: Request):
+    _require_admin(request)
+    db = SessionLocal()
+    try:
+        log = db.query(FixtureInventoryLog).filter(FixtureInventoryLog.id == log_id).first()
+        if not log:
+            raise HTTPException(status_code=404, detail="盤點紀錄不存在")
+        f = db.query(Fixture).filter(Fixture.id == log.fixture_id).first()
+        if not f:
+            raise HTTPException(status_code=404, detail="治具不存在")
+        f.total_quantity = actual_quantity
+        log.counted_quantity = actual_quantity
+        log.difference = actual_quantity - log.previous_quantity
+        db.commit()
+        return {"id": log.id, "counted_quantity": log.counted_quantity, "difference": log.difference}
+    finally:
+        db.close()
+
+
+@router.delete("/inventory-logs/{log_id}")
+def delete_inventory_log(log_id: int, request: Request):
+    _require_admin(request)
+    db = SessionLocal()
+    try:
+        log = db.query(FixtureInventoryLog).filter(FixtureInventoryLog.id == log_id).first()
+        if not log:
+            raise HTTPException(status_code=404, detail="盤點紀錄不存在")
+        db.delete(log)
+        db.commit()
+        return {"status": "deleted"}
+    finally:
+        db.close()
+
+
+@router.post("/inventory-logs")
+def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request):
+    _require_admin(request)
+    user = getattr(request.state, "user", None)
+    counted_by = user.get("username") if user else None
+    db = SessionLocal()
+    try:
+        f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
+        if not f:
+            raise HTTPException(status_code=404, detail="治具不存在")
+        previous = f.total_quantity
+        diff = actual_quantity - previous
+        f.total_quantity = actual_quantity
+        log = FixtureInventoryLog(
+            fixture_id=fixture_id,
+            previous_quantity=previous,
+            counted_quantity=actual_quantity,
+            difference=diff,
+            counted_by=counted_by,
+        )
+        db.add(log)
+        db.commit()
+        db.refresh(log)
+        return {
+            "id": log.id,
+            "fixture_id": log.fixture_id,
+            "fixture_interface": f.interface_type,
+            "fixture_form_factor": f.form_factor,
+            "previous_quantity": log.previous_quantity,
+            "counted_quantity": log.counted_quantity,
+            "difference": log.difference,
+            "counted_at": log.counted_at.isoformat() if log.counted_at else None,
+            "counted_by": log.counted_by,
+        }
+    finally:
+        db.close()
+
+
+@router.get("/inventory-logs")
+def list_inventory_logs(fixture_id: Optional[int] = None):
+    db = SessionLocal()
+    try:
+        q = db.query(FixtureInventoryLog).order_by(FixtureInventoryLog.counted_at.desc())
+        if fixture_id is not None:
+            q = q.filter(FixtureInventoryLog.fixture_id == fixture_id)
+        logs = q.limit(200).all()
+        fixture_ids = {log.fixture_id for log in logs}
+        fixtures = {f.id: f for f in db.query(Fixture).filter(Fixture.id.in_(fixture_ids)).all()} if fixture_ids else {}
+        return [
+            {
+                "id": log.id,
+                "fixture_id": log.fixture_id,
+                "fixture_interface": fixtures[log.fixture_id].interface_type if log.fixture_id in fixtures else "",
+                "fixture_form_factor": fixtures[log.fixture_id].form_factor if log.fixture_id in fixtures else "",
+                "previous_quantity": log.previous_quantity,
+                "counted_quantity": log.counted_quantity,
+                "difference": log.difference,
+                "counted_at": log.counted_at.isoformat() if log.counted_at else None,
+                "counted_by": log.counted_by,
+            }
+            for log in logs
+        ]
+    finally:
+        db.close()
+
+
 @router.get("/{fixture_id}")
 def get_fixture(fixture_id: int):
     db = SessionLocal()
@@ -796,34 +897,6 @@ def update_inventory(fixture_id: int, actual_quantity: int, request: Request):
             "actual": actual_quantity,
             "diff": diff,
         }
-    finally:
-        db.close()
-
-
-@router.get("/inventory-logs")
-def list_inventory_logs(fixture_id: Optional[int] = None):
-    db = SessionLocal()
-    try:
-        q = db.query(FixtureInventoryLog).order_by(FixtureInventoryLog.counted_at.desc())
-        if fixture_id is not None:
-            q = q.filter(FixtureInventoryLog.fixture_id == fixture_id)
-        logs = q.limit(200).all()
-        fixture_ids = {log.fixture_id for log in logs}
-        fixtures = {f.id: f for f in db.query(Fixture).filter(Fixture.id.in_(fixture_ids)).all()} if fixture_ids else {}
-        return [
-            {
-                "id": log.id,
-                "fixture_id": log.fixture_id,
-                "fixture_interface": fixtures[log.fixture_id].interface_type if log.fixture_id in fixtures else "",
-                "fixture_form_factor": fixtures[log.fixture_id].form_factor if log.fixture_id in fixtures else "",
-                "previous_quantity": log.previous_quantity,
-                "counted_quantity": log.counted_quantity,
-                "difference": log.difference,
-                "counted_at": log.counted_at.isoformat() if log.counted_at else None,
-                "counted_by": log.counted_by,
-            }
-            for log in logs
-        ]
     finally:
         db.close()
 

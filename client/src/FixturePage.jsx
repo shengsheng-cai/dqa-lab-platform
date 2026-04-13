@@ -1184,26 +1184,197 @@ function DamagedList() {
 }
 
 // ── 盤點紀錄 tab ────────────────────────────────────────────
+function BatchTable({ rows, setLogs, tdStyle, thStyle, allFixtures }) {
+  const { showToast } = useToast();
+  const [editMode, setEditMode] = useState(false);
+  const [drafts, setDrafts] = useState({});
+  const [deleted, setDeleted] = useState(new Set());
+  const [newRows, setNewRows] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  const enterEdit = () => {
+    const init = {};
+    rows.forEach((r) => { init[r.id] = String(r.counted_quantity); });
+    setDrafts(init);
+    setDeleted(new Set());
+    setNewRows([]);
+    setEditMode(true);
+  };
+
+  const cancelEdit = () => {
+    setEditMode(false);
+    setDrafts({});
+    setDeleted(new Set());
+    setNewRows([]);
+  };
+
+  const addNewRow = () => {
+    setNewRows((p) => [...p, { _key: Date.now(), fixture_id: "", qty: "0" }]);
+  };
+
+  const handleSaveAll = async () => {
+    setSaving(true);
+    try {
+      // 刪除
+      await Promise.all([...deleted].map((id) => api.delete(`/api/fixtures/inventory-logs/${id}`)));
+      // 修改
+      const changed = rows.filter((r) => !deleted.has(r.id) && parseInt(drafts[r.id]) !== r.counted_quantity);
+      await Promise.all(changed.map((r) => api.patch(`/api/fixtures/inventory-logs/${r.id}?actual_quantity=${parseInt(drafts[r.id])}`)));
+      // 新增
+      const addedRes = await Promise.all(
+        newRows.filter((nr) => nr.fixture_id).map((nr) =>
+          api.post(`/api/fixtures/inventory-logs?fixture_id=${nr.fixture_id}&actual_quantity=${parseInt(nr.qty) || 0}`)
+        )
+      );
+
+      setLogs((prev) => {
+        let updated = prev
+          .filter((l) => !deleted.has(l.id))
+          .map((l) => {
+            if (drafts[l.id] !== undefined && parseInt(drafts[l.id]) !== l.counted_quantity) {
+              const newQty = parseInt(drafts[l.id]);
+              return { ...l, counted_quantity: newQty, difference: newQty - l.previous_quantity };
+            }
+            return l;
+          });
+        addedRes.forEach((r) => updated.push(r.data));
+        return updated;
+      });
+
+      setEditMode(false);
+      setDrafts({});
+      setDeleted(new Set());
+      setNewRows([]);
+      showToast(`已更新`, "success");
+    } catch {
+      showToast("更新失敗", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputStyle = { width: 80, padding: "5px 8px", borderRadius: 4, border: "1px solid #30363d", background: "#0d1117", color: "#cdd9e5", fontSize: 13, textAlign: "center" };
+  const selectStyle = { padding: "5px 8px", borderRadius: 4, border: "1px solid #30363d", background: "#0d1117", color: "#cdd9e5", fontSize: 13, width: "100%" };
+  const delBtnStyle = { padding: "3px 8px", borderRadius: 4, border: "1px solid #da3633", background: "transparent", color: "#f85149", fontSize: 12, cursor: "pointer" };
+
+  return (
+    <div>
+      <div style={{ padding: "8px 14px", display: "flex", justifyContent: "flex-end", gap: 8, borderBottom: "1px solid #21262d" }}>
+        {editMode ? (
+          <>
+            <button onClick={addNewRow} style={{ padding: "5px 14px", borderRadius: 5, border: "1px solid #238636", background: "transparent", color: "#3fb950", fontSize: 12, cursor: "pointer" }}>＋ 新增一筆</button>
+            <button onClick={cancelEdit} disabled={saving} style={{ padding: "5px 14px", borderRadius: 5, border: "1px solid #30363d", background: "transparent", color: "#8b949e", fontSize: 12, cursor: "pointer" }}>取消</button>
+            <button onClick={handleSaveAll} disabled={saving} style={{ padding: "5px 14px", borderRadius: 5, border: "none", background: "#238636", color: "#fff", fontSize: 12, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "儲存中..." : "儲存"}</button>
+          </>
+        ) : (
+          <button onClick={enterEdit} style={{ padding: "5px 14px", borderRadius: 5, border: "1px solid #30363d", background: "transparent", color: "#cdd9e5", fontSize: 12, cursor: "pointer" }}>編輯</button>
+        )}
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={thStyle}>治具</th>
+              <th style={thStyle}>盤點前</th>
+              <th style={thStyle}>盤點後</th>
+              <th style={thStyle}>差異</th>
+              <th style={thStyle}>盤點人</th>
+              {editMode && <th style={thStyle}></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.filter((r) => !deleted.has(r.id)).map((log) => {
+              const draftVal = drafts[log.id];
+              const diff = editMode ? (parseInt(draftVal || 0) - log.previous_quantity) : log.difference;
+              return (
+                <tr key={log.id}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#1c2128")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <td style={tdStyle}>{log.fixture_interface} {log.fixture_form_factor}</td>
+                  <td style={tdStyle}>{log.previous_quantity}</td>
+                  <td style={{ ...tdStyle, padding: "6px 12px" }}>
+                    {editMode ? (
+                      <input type="number" min="0" value={draftVal} onChange={(e) => setDrafts((p) => ({ ...p, [log.id]: e.target.value }))} style={inputStyle} />
+                    ) : log.counted_quantity}
+                  </td>
+                  <td style={{ ...tdStyle, color: diff > 0 ? "#3fb950" : diff < 0 ? "#f85149" : "#8b949e", fontWeight: 600 }}>
+                    {diff > 0 ? `+${diff}` : diff}
+                  </td>
+                  <td style={{ ...tdStyle, color: "#8b949e" }}>{log.counted_by || "-"}</td>
+                  {editMode && <td style={tdStyle}><button style={delBtnStyle} onClick={() => setDeleted((p) => new Set([...p, log.id]))}>刪除</button></td>}
+                </tr>
+              );
+            })}
+            {editMode && newRows.map((nr, i) => (
+              <tr key={nr._key} style={{ background: "#112318" }}>
+                <td style={{ ...tdStyle, padding: "6px 12px" }}>
+                  <select value={nr.fixture_id} onChange={(e) => setNewRows((p) => p.map((r, idx) => idx === i ? { ...r, fixture_id: e.target.value } : r))} style={selectStyle}>
+                    <option value="">選擇治具...</option>
+                    {allFixtures.map((f) => <option key={f.id} value={f.id}>{f.interface_type} / {f.form_factor}</option>)}
+                  </select>
+                </td>
+                <td style={tdStyle}>—</td>
+                <td style={{ ...tdStyle, padding: "6px 12px" }}>
+                  <input type="number" min="0" value={nr.qty} onChange={(e) => setNewRows((p) => p.map((r, idx) => idx === i ? { ...r, qty: e.target.value } : r))} style={inputStyle} />
+                </td>
+                <td style={tdStyle}>—</td>
+                <td style={tdStyle}>—</td>
+                <td style={tdStyle}><button style={delBtnStyle} onClick={() => setNewRows((p) => p.filter((_, idx) => idx !== i))}>刪除</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function InventoryLogTab({ refreshKey }) {
+  const { showToast } = useToast();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterFixture, setFilterFixture] = useState("");
+  const [expandedBatch, setExpandedBatch] = useState(null);
+  const [allFixtures, setAllFixtures] = useState([]);
+  const [deletingBatch, setDeletingBatch] = useState(null);
+
+  const handleDeleteBatch = async (e, key, batchRows) => {
+    e.stopPropagation();
+    if (!window.confirm(`確定要刪除此批次共 ${batchRows.length} 筆盤點紀錄？此操作無法復原。`)) return;
+    setDeletingBatch(key);
+    try {
+      await Promise.all(batchRows.map((r) => api.delete(`/api/fixtures/inventory-logs/${r.id}`)));
+      const deletedIds = new Set(batchRows.map((r) => r.id));
+      setLogs((prev) => prev.filter((l) => !deletedIds.has(l.id)));
+      showToast(`已刪除 ${batchRows.length} 筆紀錄`, "success");
+    } catch {
+      showToast("刪除失敗", "error");
+    } finally {
+      setDeletingBatch(null);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
-    api
-      .get("/api/fixtures/inventory-logs")
-      .then((r) => setLogs(r.data))
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.get("/api/fixtures/inventory-logs"),
+      api.get("/api/fixtures/"),
+    ]).then(([logsRes, fixturesRes]) => {
+      setLogs(logsRes.data);
+      if (logsRes.data.length > 0) setExpandedBatch(logsRes.data[0].counted_at?.slice(0, 16));
+      setAllFixtures(fixturesRes.data);
+    }).finally(() => setLoading(false));
   }, [refreshKey]);
 
-  const filtered = filterFixture
-    ? logs.filter(
-        (l) =>
-          l.fixture_interface.toLowerCase().includes(filterFixture.toLowerCase()) ||
-          l.fixture_form_factor.toLowerCase().includes(filterFixture.toLowerCase())
-      )
-    : logs;
+  // 按分鐘分組
+  const batches = logs.reduce((acc, log) => {
+    const key = log.counted_at?.slice(0, 16) ?? "unknown";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(log);
+    return acc;
+  }, {});
+  const batchKeys = Object.keys(batches).sort((a, b) => b.localeCompare(a));
 
   const thStyle = { padding: "8px 12px", fontSize: 11, color: "#8b949e", fontWeight: 600, textAlign: "left", borderBottom: "1px solid #21262d" };
   const tdStyle = { padding: "9px 12px", fontSize: 13, color: "#cdd9e5", borderBottom: "1px solid #21262d" };
@@ -1217,43 +1388,46 @@ function InventoryLogTab({ refreshKey }) {
           onChange={(e) => setFilterFixture(e.target.value)}
           style={{ padding: "5px 10px", borderRadius: 5, border: "1px solid #30363d", background: "#0d1117", color: "#cdd9e5", fontSize: 12, width: 180 }}
         />
-        <span style={{ fontSize: 12, color: "#484f58" }}>共 {filtered.length} 筆</span>
+        <span style={{ fontSize: 12, color: "#484f58" }}>{batchKeys.length} 次盤點 · 共 {logs.length} 筆</span>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={thStyle}>時間</th>
-              <th style={thStyle}>治具</th>
-              <th style={thStyle}>盤點前</th>
-              <th style={thStyle}>盤點後</th>
-              <th style={thStyle}>差異</th>
-              <th style={thStyle}>盤點人</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#484f58" }}>載入中...</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#484f58" }}>目前無盤點紀錄</td></tr>
-            ) : filtered.map((log) => (
-              <tr key={log.id} style={{ transition: "background .15s" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#1c2128")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      {loading ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#484f58", fontSize: 13 }}>載入中...</div>
+      ) : batchKeys.length === 0 ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#484f58", fontSize: 13 }}>目前無盤點紀錄</div>
+      ) : batchKeys.map((key, i) => {
+        const rows = batches[key].filter((l) =>
+          !filterFixture ||
+          l.fixture_interface.toLowerCase().includes(filterFixture.toLowerCase()) ||
+          l.fixture_form_factor.toLowerCase().includes(filterFixture.toLowerCase())
+        );
+        if (rows.length === 0) return null;
+        const allBatchRows = batches[key];
+        const diffCount = rows.filter((l) => l.difference !== 0).length;
+        const isOpen = expandedBatch === key;
+        const isDeleting = deletingBatch === key;
+        const batchTime = new Date(key).toLocaleString("zh-TW", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+        return (
+          <div key={key} style={{ borderBottom: "1px solid #21262d" }}>
+            <div
+              onClick={() => setExpandedBatch(isOpen ? null : key)}
+              style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", background: isOpen ? "#1c2128" : "transparent", userSelect: "none" }}
+            >
+              <span style={{ fontSize: 12, color: "#adbac7", fontWeight: 600 }}>{i === 0 ? "最新　" : ""}{batchTime}</span>
+              <span style={{ fontSize: 11, color: "#484f58" }}>{rows.length} 筆</span>
+              {diffCount > 0 && <span style={{ fontSize: 11, color: "#f85149", fontWeight: 600 }}>差異 {diffCount} 筆</span>}
+              <button
+                onClick={(e) => handleDeleteBatch(e, key, allBatchRows)}
+                disabled={isDeleting}
+                style={{ marginLeft: "auto", padding: "3px 10px", borderRadius: 4, border: "1px solid #da3633", background: "transparent", color: isDeleting ? "#484f58" : "#f85149", fontSize: 11, cursor: isDeleting ? "not-allowed" : "pointer" }}
               >
-                <td style={tdStyle}>{log.counted_at ? new Date(log.counted_at).toLocaleString("zh-TW") : "-"}</td>
-                <td style={tdStyle}>{log.fixture_interface} {log.fixture_form_factor}</td>
-                <td style={tdStyle}>{log.previous_quantity}</td>
-                <td style={tdStyle}>{log.counted_quantity}</td>
-                <td style={{ ...tdStyle, color: log.difference > 0 ? "#3fb950" : log.difference < 0 ? "#f85149" : "#8b949e", fontWeight: 600 }}>
-                  {log.difference > 0 ? `+${log.difference}` : log.difference}
-                </td>
-                <td style={{ ...tdStyle, color: "#8b949e" }}>{log.counted_by || "-"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                {isDeleting ? "刪除中..." : "刪除此批次"}
+              </button>
+              <span style={{ color: "#484f58", fontSize: 12 }}>{isOpen ? "▲" : "▼"}</span>
+            </div>
+            {isOpen && <BatchTable rows={rows} setLogs={setLogs} tdStyle={tdStyle} thStyle={thStyle} allFixtures={allFixtures} />}
+          </div>
+        );
+      })}
     </div>
   );
 }
