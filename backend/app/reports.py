@@ -279,12 +279,15 @@ def _fetch_execution_data(execution_id: int, db):
 # ─────────────────────────────────────────────────────────────────────────────
 
 _CJK_TTF_FONT_NAME = "CJK-TTF"
-# Railway/Linux + 本地 macOS 常見路徑；可用 REPORT_CJK_FONT_PATH 覆蓋
-_CJK_FONT_PATHS = [
-    "/System/Library/Fonts/STHeiti Light.ttc",
-    "/System/Library/Fonts/STHeiti Medium.ttc",
+# TTF/OTF 路徑（Linux/Railway 環境）
+_CJK_TTF_PATHS = [
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
     "/usr/share/fonts/truetype/noto/NotoSansTC-Regular.ttf",
+]
+# TTC 路徑（macOS），用 BytesIO 方式載入讓 ReportLab 完整嵌入字體
+_CJK_TTC_PATHS = [
+    "/System/Library/Fonts/STHeiti Light.ttc",
+    "/System/Library/Fonts/STHeiti Medium.ttc",
 ]
 _CJK_CID_FONT_CANDIDATES = [
     "MSung-Light",   # 繁中
@@ -298,40 +301,52 @@ def _try_register_ttf(path: str):
     from reportlab.pdfbase.ttfonts import TTFont
 
     try:
-        pdfmetrics.registerFont(TTFont(_CJK_TTF_FONT_NAME, path, subfontIndex=0))
+        pdfmetrics.registerFont(TTFont(_CJK_TTF_FONT_NAME, path))
         return _CJK_TTF_FONT_NAME
     except Exception:
-        # 某些字型檔不支援 subfontIndex
-        try:
-            pdfmetrics.registerFont(TTFont(_CJK_TTF_FONT_NAME, path))
-            return _CJK_TTF_FONT_NAME
-        except Exception:
-            return None
+        return None
 
 
 def _get_cjk_font():
-    """初次呼叫時偵測並註冊 CJK 字型，結果快取於模組變數。"""
+    """初次呼叫時偵測並註冊 CJK 字型，結果快取於模組變數。
+    優先順序：環境變數指定 > TTF/OTF（Linux）> TTC via BytesIO（macOS）> CID font（fallback）
+    TTC 用 BytesIO 傳入讓 ReportLab 視為獨立字體並完整嵌入，避免 Preview/Edge 缺字問題。
+    """
     global _cjk_font_resolved
     if _cjk_font_resolved != "unset":
         return _cjk_font_resolved
 
     try:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+
         env_font = os.getenv("REPORT_CJK_FONT_PATH", "").strip()
-        if env_font and os.path.exists(env_font):
+        if env_font:
             font_name = _try_register_ttf(env_font)
             if font_name:
                 _cjk_font_resolved = font_name
                 return font_name
 
-        for path in _CJK_FONT_PATHS:
-            if not os.path.exists(path):
-                continue
+        # 1. TTF/OTF（Linux/Railway 常見路徑）
+        for path in _CJK_TTF_PATHS:
             font_name = _try_register_ttf(path)
             if font_name:
                 _cjk_font_resolved = font_name
                 return font_name
 
-        from reportlab.pdfbase import pdfmetrics
+        # 2. TTC via BytesIO（macOS）
+        # BytesIO 讓 ReportLab 完整嵌入字體，避免透過路徑載入時 CMap 不完整導致缺字
+        for path in _CJK_TTC_PATHS:
+            try:
+                with open(path, "rb") as _f:
+                    font_bytes = io.BytesIO(_f.read())
+                pdfmetrics.registerFont(TTFont(_CJK_TTF_FONT_NAME, font_bytes))
+                _cjk_font_resolved = _CJK_TTF_FONT_NAME
+                return _CJK_TTF_FONT_NAME
+            except Exception:
+                continue
+
+        # 3. CID font（fallback，macOS Preview 可能渲染不完整）
         from reportlab.pdfbase.cidfonts import UnicodeCIDFont
         for cid_name in _CJK_CID_FONT_CANDIDATES:
             try:
