@@ -40,7 +40,8 @@ backend/test.db
 ### 本地開發文檔（不公開）
 docs/private/
 docs/business-strategy.md
-docs/slides.md
+docs/dqa-lab-digital-twin.md
+dqa-lab-digital-twin.pptx
 .local/
 CLAUDE.local.md
 
