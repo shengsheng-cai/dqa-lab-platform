@@ -861,6 +861,33 @@ async def confirm_condition(schedule_id: int, request: Request):
     return {"status": "started", "sop_id": next_sop_id}
 
 
+@router.post("/{schedule_id}/start")
+async def start_schedule(schedule_id: int, request: Request):
+    """手動立即啟動「已確認」排程（補救 APScheduler 漏掉的情況）。"""
+    from .sop import auto_start_sop
+    _require_admin(request)
+    cache = getattr(request.app.state, "AICM_CACHE", {})
+    locks = getattr(request.app.state, "DEVICE_LOCKS", {})
+    now = _now_utc()
+
+    with SessionLocal() as db:
+        s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+        if not s:
+            raise HTTPException(status_code=404, detail="找不到排程")
+        if s.status != ScheduleStatus.CONFIRMED:
+            raise HTTPException(status_code=400, detail="只有「已確認」狀態的排程才能手動啟動")
+        s.status = ScheduleStatus.RUNNING
+        s.updated_at = now
+        db.commit()
+        conditions = _parse_conditions(s.conditions)
+        device_id = s.device_id
+
+    sop_id = conditions[0] if conditions else None
+    if sop_id and device_id:
+        asyncio.create_task(auto_start_sop(device_id, sop_id, cache, locks))
+    return {"status": "started", "device_id": device_id, "sop_id": sop_id}
+
+
 # ── Device Blocked Periods 端點 ────────────────────────────────────────────
 
 

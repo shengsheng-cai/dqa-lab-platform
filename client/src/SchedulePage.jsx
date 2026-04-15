@@ -736,6 +736,22 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
     }
   }
 
+  async function startNow() {
+    setSaving(true);
+    setError("");
+    try {
+      await api.post(`/api/schedules/${schedule.id}/start`);
+      showToast("排程已立即啟動", "success");
+      onRefresh?.();
+      onClose();
+    } catch (e) {
+      setError(e.response?.data?.detail || "操作失敗");
+      showToast(e.response?.data?.detail || "操作失敗", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function del() {
     if (!window.confirm("確定刪除此排程？此動作無法復原。")) return;
     try {
@@ -945,7 +961,12 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
                     {saving ? "處理中..." : "確認排程"}
                   </button>
                 )}
-                {schedule.status === "進行中" && deviceStatuses[schedule.device_id] === "IDLE" && (() => {
+                {schedule.status === "已確認" && (
+                  <button onClick={startNow} disabled={saving} style={{ ...primaryBtn, background: "#1f6feb" }}>
+                    {saving ? "啟動中..." : "▶ 立即開始"}
+                  </button>
+                )}
+                {schedule.status === "進行中" && ["IDLE", "BLOCKED"].includes(deviceStatuses[schedule.device_id]) && (() => {
                   const conds = schedule.conditions || [];
                   const idx = schedule.current_condition_index ?? 0;
                   const isLast = idx >= conds.length;
