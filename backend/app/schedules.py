@@ -33,6 +33,7 @@ def _complete_schedule(db, schedule, now: datetime.datetime) -> None:
     )
 
 INTER_CONDITION_BUFFER_HOURS = 0.5  # 條件間設備穩定緩衝（30 分鐘）
+ACTIVE_STATUSES = [ScheduleStatus.PENDING, ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]
 
 
 # ── Pydantic Schemas ────────────────────────────────────────────────────────
@@ -350,12 +351,12 @@ def _find_earliest_slot(
         if live_end and live_end > candidate_start:
             candidate_start = live_end
 
-    # 再找 DB 已確認/進行中排程的最晚結束時間
+    # 再找 DB 待審核/已確認/進行中排程的最晚結束時間
     existing = (
         db.query(Schedule)
         .filter(
             Schedule.device_id == device_id,
-            Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
+            Schedule.status.in_(ACTIVE_STATUSES),
             Schedule.end_time.isnot(None),
         )
         .all()
@@ -705,6 +706,22 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                 device_id = body.device_id
                 start = body.start_time
                 end = body.end_time
+                overlap = (
+                    db.query(Schedule)
+                    .filter(
+                        Schedule.device_id == device_id,
+                        Schedule.id != schedule_id,
+                        Schedule.status.in_(ACTIVE_STATUSES),
+                        Schedule.start_time < end,
+                        Schedule.end_time > start,
+                    )
+                    .first()
+                )
+                if overlap:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"時段與排程 #{overlap.id}（{overlap.project_number}）重疊"
+                    )
             elif body.device_id:
                 device_id = body.device_id
                 total_hours = _calc_total_hours(conditions)
