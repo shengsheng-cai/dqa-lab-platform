@@ -62,6 +62,13 @@ class SchedulePatch(BaseModel):
     rejection_note: Optional[str] = None
 
 
+class ScheduleFixtureOut(BaseModel):
+    fixture_id: int
+    quantity: int
+    interface_type: str
+    form_factor: str
+
+
 class ScheduleOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,15 +82,24 @@ class ScheduleOut(BaseModel):
     conditions: List[str]
     start_time: Optional[datetime.datetime]
     end_time: Optional[datetime.datetime]
-    status: str
+    status: ScheduleStatus
     current_condition_index: int = 0
     note: Optional[str]
+    rejection_note: Optional[str] = None
     created_by: Optional[int]
     confirmed_by: Optional[int]
     created_at: datetime.datetime
     updated_at: datetime.datetime
     total_hours: Optional[float] = None
     condition_names: Optional[List[str]] = None
+    fixtures: List[ScheduleFixtureOut] = []
+
+
+class SchedulePreviewOut(BaseModel):
+    device_id: Optional[str]
+    start_time: str
+    end_time: str
+    total_hours: float
 
 
 class BlockedPeriodCreate(BaseModel):
@@ -485,7 +501,7 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
 # ── Schedules 端點 ─────────────────────────────────────────────────────────
 
 
-@router.get("/preview")
+@router.get("/preview", response_model=SchedulePreviewOut)
 def preview_schedule(request: Request, conditions: str, device_id: Optional[str] = None):
     """預覽排程時間（不寫入 DB）。conditions 為逗號分隔的 sop_id 清單。"""
     cond_list = [c.strip() for c in conditions.split(",") if c.strip()]
@@ -571,7 +587,7 @@ def get_gantt(request: Request):
         }
 
 
-@router.get("")
+@router.get("", response_model=list[ScheduleOut])
 def list_schedules(request: Request, status: Optional[str] = None):
     """排程清單（可依 status 篩選）"""
     with SessionLocal() as db:
@@ -582,7 +598,7 @@ def list_schedules(request: Request, status: Optional[str] = None):
         return [_enrich(s, db) for s in schedules]
 
 
-@router.get("/{schedule_id}")
+@router.get("/{schedule_id}", response_model=ScheduleOut)
 def get_schedule(schedule_id: int):
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
@@ -591,7 +607,7 @@ def get_schedule(schedule_id: int):
         return _enrich(s, db)
 
 
-@router.post("")
+@router.post("", response_model=ScheduleOut, status_code=201)
 def create_schedule(body: ScheduleCreate, request: Request):
     """提交新排程申請（admin）"""
     _require_admin(request)
@@ -639,7 +655,7 @@ def create_schedule(body: ScheduleCreate, request: Request):
         return _enrich(s, db)
 
 
-@router.patch("/{schedule_id}")
+@router.patch("/{schedule_id}", response_model=ScheduleOut)
 async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request):
     """
     更新排程（admin only）。
@@ -891,25 +907,26 @@ async def start_schedule(schedule_id: int, request: Request):
 # ── Device Blocked Periods 端點 ────────────────────────────────────────────
 
 
-@blocked_router.get("")
+def _blocked_period_dict(b: DeviceBlockedPeriod) -> dict:
+    return {
+        "id": b.id,
+        "device_id": b.device_id,
+        "start_time": b.start_time,
+        "end_time": b.end_time,
+        "reason": b.reason,
+        "created_by": b.created_by,
+        "created_at": b.created_at,
+    }
+
+
+@blocked_router.get("", response_model=list[BlockedPeriodOut])
 def list_blocked_periods():
     with SessionLocal() as db:
         items = db.query(DeviceBlockedPeriod).order_by(DeviceBlockedPeriod.start_time).all()
-        return [
-            {
-                "id": b.id,
-                "device_id": b.device_id,
-                "start_time": b.start_time,
-                "end_time": b.end_time,
-                "reason": b.reason,
-                "created_by": b.created_by,
-                "created_at": b.created_at,
-            }
-            for b in items
-        ]
+        return [_blocked_period_dict(b) for b in items]
 
 
-@blocked_router.post("")
+@blocked_router.post("", response_model=BlockedPeriodOut, status_code=201)
 def create_blocked_period(body: BlockedPeriodCreate, request: Request):
     _require_admin(request)
 
@@ -931,16 +948,10 @@ def create_blocked_period(body: BlockedPeriodCreate, request: Request):
         db.add(b)
         db.commit()
         db.refresh(b)
-        return {
-            "id": b.id,
-            "device_id": b.device_id,
-            "start_time": b.start_time,
-            "end_time": b.end_time,
-            "reason": b.reason,
-        }
+        return _blocked_period_dict(b)
 
 
-@blocked_router.patch("/{period_id}")
+@blocked_router.patch("/{period_id}", response_model=BlockedPeriodOut)
 def update_blocked_period(period_id: int, body: BlockedPeriodPatch, request: Request):
     _require_admin(request)
 
@@ -962,7 +973,7 @@ def update_blocked_period(period_id: int, body: BlockedPeriodPatch, request: Req
             raise HTTPException(status_code=400, detail="結束時間必須晚於開始時間")
         db.commit()
         db.refresh(b)
-        return {"id": b.id, "device_id": b.device_id, "start_time": b.start_time, "end_time": b.end_time, "reason": b.reason}
+        return _blocked_period_dict(b)
 
 
 @blocked_router.delete("/{period_id}")
