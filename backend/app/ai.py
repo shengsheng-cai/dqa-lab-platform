@@ -89,8 +89,10 @@ _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
 
 _FIXTURE_KEYWORDS = ["治具", "庫存", "借出", "逾期", "缺貨", "可借", "缺少"]
 
+_DEVICE_KEYWORDS = ["設備", "溫箱", "CH-", "可用", "空著", "哪台", "排程", "IDLE", "RUNNING"]
 
 _fixture_context_cache: dict = {"data": "", "expires_at": None}
+_device_context_cache: dict = {"data": "", "expires_at": None}
 
 
 def _query_fixture_context() -> str:
@@ -169,6 +171,36 @@ def _query_fixture_context() -> str:
         result = "\n\n".join(parts)
         _fixture_context_cache["data"] = result
         _fixture_context_cache["expires_at"] = now + datetime.timedelta(minutes=5)
+        return result
+    except Exception:
+        return ""
+    finally:
+        db.close()
+
+
+def _query_device_context() -> str:
+    """查詢所有設備即時狀態，注入 AI context。結果快取 1 分鐘。"""
+    from .models import SessionLocal, DeviceState
+    now = _now_utc()
+    if _device_context_cache["data"] and _device_context_cache["expires_at"] > now:
+        return _device_context_cache["data"]
+    db = SessionLocal()
+    try:
+        devices = db.query(DeviceState).order_by(DeviceState.device_id).all()
+        if not devices:
+            return ""
+        lines = ["【設備狀態】："]
+        for d in devices:
+            if d.status == "IDLE":
+                lines.append(f"- {d.device_id}：空閒可用（IDLE）")
+            elif d.status in ("RUNNING", "PAUSED", "FINISHING"):
+                sop = f"，執行中：{d.running_sop_name}" if d.running_sop_name else ""
+                lines.append(f"- {d.device_id}：{d.status}{sop}")
+            else:
+                lines.append(f"- {d.device_id}：{d.status}")
+        result = "\n".join(lines)
+        _device_context_cache["data"] = result
+        _device_context_cache["expires_at"] = now + datetime.timedelta(minutes=1)
         return result
     except Exception:
         return ""
@@ -276,11 +308,15 @@ async def _build_context(msg: str, history: list = []) -> tuple[str, list[str]]:
             return f"- {prefix}{h['text']}"
         parts.append("\n".join(_hit_line(h) for h in hits))
 
-    # 偵測到治具相關關鍵字時，從 DB 注入即時庫存資料
     if any(kw in msg for kw in _FIXTURE_KEYWORDS):
         fixture_ctx = _query_fixture_context()
         if fixture_ctx:
             parts.append(fixture_ctx)
+
+    if any(kw in msg for kw in _DEVICE_KEYWORDS):
+        device_ctx = _query_device_context()
+        if device_ctx:
+            parts.append(device_ctx)
 
     sop_ids = [h["raw"]["sop_id"] for h in hits if h.get("raw", {}).get("sop_id")][:10]
     return "\n\n".join(parts) if parts else "", sop_ids
