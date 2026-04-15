@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import json
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -109,10 +109,46 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
     return estimated_end.isoformat()
 
 
+# ── Response Schemas ────────────────────────────────────────────────────────
+
+DeviceStatus = Literal["IDLE", "RUNNING", "PAUSED", "FINISHING", "EMERGENCY", "OFFLINE"]
+SimPhase = Literal["idle", "ramp_to_low", "ramp_to_high", "dwell_high", "ramp_to_low2", "dwell_low", "ramp_to_ambient"]
+
+
+class DeviceBasicOut(BaseModel):
+    status: DeviceStatus
+    temperature: float
+    humidity: float
+    running_sop_name: str
+    description: str
+    timestamp: str
+
+
+class DeviceOut(DeviceBasicOut):
+    device_id: str
+    active_sop_json: Optional[str] = None
+    completed_steps: int
+    total_steps: int
+    started_at: Optional[str] = None
+    estimated_end_at: Optional[str] = None
+    sim_cycle: int
+    sim_phase: SimPhase
+    dwell_half_fired: bool
+    is_blocked: bool
+    blocked_reason: Optional[str] = None
+
+
+class DeviceHistoryPoint(BaseModel):
+    time: str
+    full_time: str
+    temperature: Optional[float] = None
+    humidity: Optional[float] = None
+
+
 # ── 路由 ────────────────────────────────────────────────────────────────────
 
 
-@router.get("/api/devices")
+@router.get("/api/devices", response_model=list[DeviceOut])
 async def get_all_devices(request: Request):
     cache = request.app.state.AICM_CACHE
     now_dt = _now_utc()
@@ -162,7 +198,7 @@ async def get_all_devices(request: Request):
     ]
 
 
-@router.get("/api/devices/{device_id}/history")
+@router.get("/api/devices/{device_id}/history", response_model=list[DeviceHistoryPoint])
 async def get_device_history(device_id: str, request: Request):
     device = _get_device(request.app.state.AICM_CACHE, device_id)
 
@@ -222,7 +258,7 @@ async def get_device_history(device_id: str, request: Request):
     return result
 
 
-@router.get("/api/latest")
+@router.get("/api/latest", response_model=DeviceBasicOut)
 async def get_latest(request: Request):
     cache = request.app.state.AICM_CACHE
     if not cache or "CH-01" not in cache:
