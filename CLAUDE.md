@@ -64,7 +64,7 @@ alembic revision --autogenerate -m "描述"
 alembic upgrade head
 
 # 後端單元測試（或用 make test）
-cd backend && python -m pytest  # 執行全套測試（57 tests）
+cd backend && python -m pytest  # 執行全套測試（109 tests）
 ```
 
 ---
