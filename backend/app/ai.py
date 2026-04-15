@@ -1,11 +1,13 @@
 import os
 import re
 import json
+import datetime
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
+from .utils import _now_utc
 from .rag import (
     retrieve,
     match_std_keys,
@@ -88,38 +90,86 @@ _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
 _FIXTURE_KEYWORDS = ["治具", "庫存", "借出", "逾期", "缺貨", "可借", "缺少"]
 
 
+_fixture_context_cache: dict = {"data": "", "expires_at": None}
+
+
 def _query_fixture_context() -> str:
-    """查詢治具庫存不足清單，注入 AI context。"""
-    from .models import SessionLocal, Fixture
+    """查詢治具即時狀態（借出中 + 逾期 + 庫存不足），注入 AI context。結果快取 5 分鐘。"""
+    from .models import SessionLocal, Fixture, FixtureLoan
+    now = _now_utc()
+    if _fixture_context_cache["data"] and _fixture_context_cache["expires_at"] > now:
+        return _fixture_context_cache["data"]
     db = SessionLocal()
     try:
+        parts = []
+
+        # 借出中（含逾期標記）
+        loaned_rows = (
+            db.query(FixtureLoan, Fixture)
+            .join(Fixture, FixtureLoan.fixture_id == Fixture.id)
+            .filter(FixtureLoan.status == "loaned", FixtureLoan.return_date == None)
+            .all()
+        )
+        if loaned_rows:
+            # key -> {qty, overdue_qty, earliest_due}
+            loaned: dict[str, dict] = {}
+            for loan, fix in loaned_rows:
+                key = f"{fix.interface_type} {fix.form_factor or ''}".strip()
+                if key not in loaned:
+                    loaned[key] = {"qty": 0, "overdue": 0, "earliest_due": None}
+                loaned[key]["qty"] += loan.quantity
+                due = loan.due_date
+                if due:
+                    if due.tzinfo is None:
+                        due = due.replace(tzinfo=datetime.timezone.utc)
+                    if due < now:
+                        loaned[key]["overdue"] += loan.quantity
+                    prev = loaned[key]["earliest_due"]
+                    if prev is None or due < prev:
+                        loaned[key]["earliest_due"] = due
+            lines = ["【治具借出狀態】目前借出中的治具："]
+            for desc, info in sorted(loaned.items()):
+                due_str = ""
+                if info["overdue"]:
+                    due_str = f"（⚠️ 逾期 {info['overdue']} 件）"
+                elif info["earliest_due"]:
+                    due_str = f"（應還日：{info['earliest_due'].strftime('%Y-%m-%d')}）"
+                lines.append(f"- {desc}：借出 {info['qty']} 件{due_str}")
+            parts.append("\n".join(lines))
+        else:
+            parts.append("【治具借出狀態】目前無借出中的治具。")
+
+        # 庫存不足
         shortage_items = (
             db.query(Fixture)
             .filter(Fixture.is_active == True, Fixture.shortage > 0)
             .order_by(Fixture.shortage.desc())
             .all()
         )
-        if not shortage_items:
-            return "【治具庫存資料】目前無庫存不足的治具。"
-        # 依 (interface_type, form_factor) 去重，取 shortage 最大值那筆
-        seen: dict[tuple, dict] = {}
-        for f in shortage_items:
-            key = (f.interface_type, (f.form_factor or "").strip())
-            if key not in seen or f.shortage > seen[key]["shortage"]:
-                seen[key] = {
-                    "desc": f"{f.interface_type} {f.form_factor or ''}".strip(),
-                    "total": f.total_quantity,
-                    "shortage": f.shortage,
-                    "note": f.note,
-                }
-        sorted_items = sorted(seen.values(), key=lambda x: x["shortage"], reverse=True)
-        lines = ["【治具庫存資料】庫存不足的治具："]
-        for item in sorted_items:
-            lines.append(
-                f"- {item['desc']}：庫存 {item['total']} 件，缺 {item['shortage']} 件"
-                + (f"（備註：{item['note']}）" if item["note"] else "")
-            )
-        return "\n".join(lines)
+        if shortage_items:
+            seen: dict[tuple, dict] = {}
+            for f in shortage_items:
+                key = (f.interface_type, (f.form_factor or "").strip())
+                if key not in seen or f.shortage > seen[key]["shortage"]:
+                    seen[key] = {
+                        "desc": f"{f.interface_type} {f.form_factor or ''}".strip(),
+                        "total": f.total_quantity,
+                        "shortage": f.shortage,
+                        "note": f.note,
+                    }
+            sorted_items = sorted(seen.values(), key=lambda x: x["shortage"], reverse=True)
+            lines = ["【治具庫存不足】："]
+            for item in sorted_items:
+                lines.append(
+                    f"- {item['desc']}：庫存 {item['total']} 件，缺 {item['shortage']} 件"
+                    + (f"（備註：{item['note']}）" if item["note"] else "")
+                )
+            parts.append("\n".join(lines))
+
+        result = "\n\n".join(parts)
+        _fixture_context_cache["data"] = result
+        _fixture_context_cache["expires_at"] = now + datetime.timedelta(minutes=5)
+        return result
     except Exception:
         return ""
     finally:
