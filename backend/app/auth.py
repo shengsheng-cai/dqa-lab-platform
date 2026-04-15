@@ -119,6 +119,19 @@ def _get_tracker(ip: str) -> dict:
     return _fail_tracker[ip]
 
 
+# ---------- Pydantic Schemas ----------
+
+class UserMeResponse(BaseModel):
+    id: int
+    display_name: str
+    role: str
+
+
+class UserOut(UserMeResponse):
+    is_active: bool
+    created_at: Optional[str] = None
+
+
 # ---------- 登入 API ----------
 class LoginRequest(BaseModel):
     username: str
@@ -179,7 +192,7 @@ def logout(request: Request):
     return {"ok": True}
 
 
-@router.get("/api/auth/me")
+@router.get("/api/auth/me", response_model=UserMeResponse)
 def get_me(request: Request):
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
@@ -217,7 +230,7 @@ class UserUpdateBody(BaseModel):
     is_active: Optional[bool] = None
 
 
-@router.get("/api/auth/users")
+@router.get("/api/auth/users", response_model=list[UserOut])
 def list_users(request: Request):
     _require_admin(request)
     db = SessionLocal()
@@ -237,7 +250,7 @@ def list_users(request: Request):
         db.close()
 
 
-@router.post("/api/auth/users", status_code=201)
+@router.post("/api/auth/users", status_code=201, response_model=UserMeResponse)
 def create_user(body: UserCreateBody, request: Request):
     _require_admin(request)
     if not body.role or not body.role.strip():

@@ -4,7 +4,7 @@ import io
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from .models import SessionLocal, Fixture, FixtureLoan, FixtureInventoryLog, PurchaseOrder, User
 from .utils import today_utc_window, _now_utc_naive
 from .auth import _require_admin
@@ -64,8 +64,7 @@ class FixtureOut(BaseModel):
     loan_count: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LoanCreate(BaseModel):
@@ -116,8 +115,7 @@ class LoanOut(BaseModel):
     return_condition: Optional[str]
     extension_note: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ReturnUpdate(BaseModel):

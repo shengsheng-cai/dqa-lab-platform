@@ -8,6 +8,21 @@ from .auth import _require_admin
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
 
 
+class PurchaseOrderOut(BaseModel):
+    id: int
+    fixture_id: int
+    fixture_label: str
+    quantity: int
+    unit_price: Optional[float] = None
+    total_price: Optional[float] = None
+    vendor: Optional[str] = None
+    status: str
+    ordered_at: Optional[str] = None
+    arrived_at: Optional[str] = None
+    note: Optional[str] = None
+    created_at: str
+
+
 def _fmt_dt(dt) -> Optional[str]:
     if dt is None:
         return None
@@ -35,7 +50,7 @@ def _order_to_dict(o: PurchaseOrder, fixtures: dict) -> dict:
     }
 
 
-@router.get("/")
+@router.get("/", response_model=list[PurchaseOrderOut])
 def list_purchase_orders(status: Optional[str] = None):
     """列出採購清單，可用 ?status=pending/arrived/cancelled 篩選"""
     with SessionLocal() as db:
@@ -56,7 +71,7 @@ class PurchaseOrderCreate(BaseModel):
     note: Optional[str] = None
 
 
-@router.post("/")
+@router.post("/", response_model=PurchaseOrderOut)
 def create_purchase_order(body: PurchaseOrderCreate, request: Request):
     """新增採購單（admin only）"""
     _require_admin(request)
@@ -97,7 +112,7 @@ class PurchaseOrderUpdate(BaseModel):
     arrived_quantity: Optional[int] = None  # 到貨時填寫，自動累加至治具庫存
 
 
-@router.patch("/{order_id}")
+@router.patch("/{order_id}", response_model=PurchaseOrderOut)
 def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Request):
     """更新採購單；status=arrived 時自動將 arrived_quantity 加入治具庫存（admin only）"""
     _require_admin(request)
