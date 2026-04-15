@@ -91,8 +91,11 @@ _FIXTURE_KEYWORDS = ["治具", "庫存", "借出", "逾期", "缺貨", "可借",
 
 _DEVICE_KEYWORDS = ["設備", "溫箱", "CH-", "可用", "空著", "哪台", "排程", "IDLE", "RUNNING"]
 
+_SCHEDULE_KEYWORDS = ["排程", "進行中", "待確認", "哪個案子", "哪個專案", "測試中"]
+
 _fixture_context_cache: dict = {"data": "", "expires_at": None}
 _device_context_cache: dict = {"data": "", "expires_at": None}
+_schedule_context_cache: dict = {"data": "", "expires_at": None}
 
 
 def _query_fixture_context() -> str:
@@ -171,6 +174,42 @@ def _query_fixture_context() -> str:
         result = "\n\n".join(parts)
         _fixture_context_cache["data"] = result
         _fixture_context_cache["expires_at"] = now + datetime.timedelta(minutes=5)
+        return result
+    except Exception:
+        return ""
+    finally:
+        db.close()
+
+
+def _query_schedule_context() -> str:
+    """查詢進行中與已確認排程，注入 AI context。結果快取 2 分鐘。"""
+    from .models import SessionLocal, Schedule, ScheduleStatus
+    now = _now_utc()
+    if _schedule_context_cache["data"] and _schedule_context_cache["expires_at"] > now:
+        return _schedule_context_cache["data"]
+    db = SessionLocal()
+    try:
+        schedules = (
+            db.query(Schedule)
+            .filter(Schedule.status.in_([ScheduleStatus.RUNNING, ScheduleStatus.CONFIRMED]))
+            .order_by(Schedule.start_time)
+            .all()
+        )
+        if not schedules:
+            result = "【排程狀態】目前無進行中或已確認的排程。"
+            _schedule_context_cache["data"] = result
+            _schedule_context_cache["expires_at"] = now + datetime.timedelta(minutes=2)
+            return result
+        lines = ["【排程狀態】進行中 / 已確認的排程："]
+        for s in schedules:
+            device = s.device_id or "未分配"
+            lines.append(
+                f"- [{s.status}] #{s.id} {s.project_number}｜{s.sample_name}"
+                f"｜設備：{device}｜標準：{s.standard}"
+            )
+        result = "\n".join(lines)
+        _schedule_context_cache["data"] = result
+        _schedule_context_cache["expires_at"] = now + datetime.timedelta(minutes=2)
         return result
     except Exception:
         return ""
@@ -317,6 +356,11 @@ async def _build_context(msg: str, history: list = []) -> tuple[str, list[str]]:
         device_ctx = _query_device_context()
         if device_ctx:
             parts.append(device_ctx)
+
+    if any(kw in msg for kw in _SCHEDULE_KEYWORDS):
+        schedule_ctx = _query_schedule_context()
+        if schedule_ctx:
+            parts.append(schedule_ctx)
 
     sop_ids = [h["raw"]["sop_id"] for h in hits if h.get("raw", {}).get("sop_id")][:10]
     return "\n\n".join(parts) if parts else "", sop_ids
