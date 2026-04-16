@@ -6,8 +6,8 @@
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-blue)
 
-> **Environmental test lab management platform** built with FastAPI + React.
-> Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-assisted scheduling for temperature/humidity chambers.
+**Environmental test lab management platform** built with FastAPI + React.  
+Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-assisted scheduling for temperature/humidity chambers.
 
 - 78 built-in test conditions across 5 international standards (IEC 60068 / EN 50155 / IEC 61850-3 / IEC 60945 / DNV)
 - GUM-compliant measurement uncertainty analysis (Type A/B → U, k=2)
