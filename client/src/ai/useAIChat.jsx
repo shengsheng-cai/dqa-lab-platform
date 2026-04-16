@@ -6,7 +6,7 @@ import {
   createConversation,
   deleteConversation as _deleteConv,
 } from "./aiStorage";
-import { API_BASE } from "../api";
+import { API_BASE, buildAuthHeaders } from "../api";
 
 const MAX_HISTORY = 4;
 // Matches \n[META:{...}] — sop_ids values never contain }, so [^}]* is safe
@@ -28,18 +28,6 @@ function parseStreamingResponse(fullText) {
   displayText = displayText.replace(S_ID_REGEX, "");
   displayText = displayText.replace(RECOMMENDED_ID_REGEX, "");
   return { displayText, metadata };
-}
-
-function getAuthHeaders() {
-  const userToken = localStorage.getItem("user_token");
-  if (userToken) {
-    return { "Content-Type": "application/json", "X-User-Token": userToken };
-  }
-  const pwd = localStorage.getItem("demo_password") || "";
-  return {
-    "Content-Type": "application/json",
-    ...(pwd ? { "X-Demo-Password": pwd } : {}),
-  };
 }
 
 export default function useAIChat() {
@@ -286,7 +274,7 @@ export default function useAIChat() {
       try {
         const res = await fetch(`${API_BASE}/api/ai/standards-query-stream`, {
           method: "POST",
-          headers: getAuthHeaders(),
+          headers: buildAuthHeaders(),
           body: JSON.stringify({ message: rawMsg, history }),
           signal: controller.signal,
         });
