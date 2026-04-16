@@ -1,8 +1,10 @@
 import asyncio
+import dataclasses
 import datetime
 import json
 import logging
 import random
+from typing import Optional
 
 from .models import SessionLocal, DeviceData, SopExecution, Schedule, ScheduleStatus
 from .standards import get_ramp_rate, get_standard
@@ -11,6 +13,16 @@ from .schedules import _complete_schedule
 from .line import push_message
 
 logger = logging.getLogger("app")
+
+
+@dataclasses.dataclass
+class _SimParams:
+    high_temp: float
+    low_temp: Optional[float]
+    dwell_seconds: float
+    cycles: int
+    max_ramp_rate: float
+    elapsed_seconds: float = 1.0
 
 
 # ── 模擬器輔助函數 ──────────────────────────────────────────────────────────
@@ -54,21 +66,16 @@ def _advance_sim_phase(
     item: dict,
     now,
     dwell_start_times: dict,
-    high_temp: float,
-    low_temp,
-    dwell_seconds: float,
-    cycles: int,
-    max_ramp_rate: float,
-    elapsed_seconds: float = 1.0,
+    p: _SimParams,
 ) -> float:
     ambient = 25.0
-    max_change = max_ramp_rate / 60.0 * elapsed_seconds
+    max_change = p.max_ramp_rate / 60.0 * p.elapsed_seconds
     sim_phase = item.get("sim_phase", "")
     sim_cycle = item.get("sim_cycle", 0)
 
     # 首次啟動或從 idle 恢復
     if not sim_phase or sim_phase == "idle":
-        item["sim_phase"] = "ramp_to_low" if (low_temp is not None and low_temp < ambient) else "ramp_to_high"
+        item["sim_phase"] = "ramp_to_low" if (p.low_temp is not None and p.low_temp < ambient) else "ramp_to_high"
         item["sim_cycle"] = 0
         sim_phase = item["sim_phase"]
         dwell_start_times.pop(device_id, None)
@@ -98,10 +105,10 @@ def _advance_sim_phase(
         return dwell_start_times[key]
 
     if sim_phase == "ramp_to_low":
-        new_temp = _move_toward(current_temp, low_temp, max_change)
-        if abs(new_temp - low_temp) <= 0.1:
-            new_temp = low_temp
-            if abs(high_temp - low_temp) <= 0.1:
+        new_temp = _move_toward(current_temp, p.low_temp, max_change)
+        if abs(new_temp - p.low_temp) <= 0.1:
+            new_temp = p.low_temp
+            if abs(p.high_temp - p.low_temp) <= 0.1:
                 # 單溫冷測：直接進入 dwell_high
                 item["sim_phase"] = "dwell_high"
                 _set_dwell_start("high", "dwell_high_start")
@@ -109,44 +116,44 @@ def _advance_sim_phase(
                 item["sim_phase"] = "ramp_to_high"
 
     elif sim_phase == "ramp_to_high":
-        new_temp = _move_toward(current_temp, high_temp, max_change)
-        if abs(new_temp - high_temp) <= 0.1:
-            new_temp = high_temp
+        new_temp = _move_toward(current_temp, p.high_temp, max_change)
+        if abs(new_temp - p.high_temp) <= 0.1:
+            new_temp = p.high_temp
             item["sim_phase"] = "dwell_high"
             _set_dwell_start("high", "dwell_high_start")
 
     elif sim_phase == "dwell_high":
-        new_temp = high_temp
+        new_temp = p.high_temp
         dwell_key = f"{device_id}_high"
         dwell_start = _restore_dwell_start("high", "dwell_high_start")
         elapsed = (now - dwell_start).total_seconds()
-        _tick_dwell_half(item, elapsed, dwell_seconds)
-        if elapsed >= dwell_seconds:
+        _tick_dwell_half(item, elapsed, p.dwell_seconds)
+        if elapsed >= p.dwell_seconds:
             dwell_start_times.pop(dwell_key, None)
             item.pop("dwell_high_start", None)
             item["dwell_half_fired"] = False
             # 兩溫循環：降至 low_temp；單溫：直接回常溫
-            item["sim_phase"] = "ramp_to_low2" if (low_temp is not None and abs(high_temp - low_temp) > 0.1) else "ramp_to_ambient"
+            item["sim_phase"] = "ramp_to_low2" if (p.low_temp is not None and abs(p.high_temp - p.low_temp) > 0.1) else "ramp_to_ambient"
 
     elif sim_phase == "ramp_to_low2":
-        new_temp = _move_toward(current_temp, low_temp, max_change)
-        if abs(new_temp - low_temp) <= 0.1:
-            new_temp = low_temp
+        new_temp = _move_toward(current_temp, p.low_temp, max_change)
+        if abs(new_temp - p.low_temp) <= 0.1:
+            new_temp = p.low_temp
             item["sim_phase"] = "dwell_low"
             _set_dwell_start("low", "dwell_low_start")
 
     elif sim_phase == "dwell_low":
-        new_temp = low_temp
+        new_temp = p.low_temp
         dwell_key = f"{device_id}_low"
         dwell_start = _restore_dwell_start("low", "dwell_low_start")
         elapsed = (now - dwell_start).total_seconds()
-        _tick_dwell_half(item, elapsed, dwell_seconds)
-        if elapsed >= dwell_seconds:
+        _tick_dwell_half(item, elapsed, p.dwell_seconds)
+        if elapsed >= p.dwell_seconds:
             dwell_start_times.pop(dwell_key, None)
             item.pop("dwell_low_start", None)
             item["dwell_half_fired"] = False
             item["sim_cycle"] = sim_cycle + 1
-            item["sim_phase"] = "ramp_to_high" if item["sim_cycle"] < cycles else "ramp_to_ambient"
+            item["sim_phase"] = "ramp_to_high" if item["sim_cycle"] < p.cycles else "ramp_to_ambient"
 
     elif sim_phase == "ramp_to_ambient":
         new_temp = _move_toward(current_temp, ambient, max_change)
@@ -179,8 +186,14 @@ async def _sim_handle_running(
 
     new_temp = _advance_sim_phase(
         device_id, item, now, dwell_start_times,
-        high_temp, low_temp, dwell_seconds, cycles, max_ramp_rate,
-        elapsed_seconds,
+        _SimParams(
+            high_temp=high_temp,
+            low_temp=low_temp,
+            dwell_seconds=dwell_seconds,
+            cycles=cycles,
+            max_ramp_rate=max_ramp_rate,
+            elapsed_seconds=elapsed_seconds,
+        ),
     )
 
     item["temperature"] = round(new_temp, 2)

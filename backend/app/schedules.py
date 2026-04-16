@@ -405,18 +405,17 @@ def _auto_assign(
     conditions: List[str],
     db,
     running_until: Optional[dict] = None,
-    stuck_devices: Optional[set] = None,
-    emergency_devices: Optional[set] = None,
+    cache: Optional[dict] = None,
 ) -> tuple[str, datetime.datetime, datetime.datetime]:
     """自動選最早可用設備，回傳 (device_id, start_time, end_time)。
-    emergency_devices / stuck_devices 內的設備跳過；若所有設備皆排除則退回全選。"""
+    超時卡機設備與 EMERGENCY 設備跳過；若所有設備皆排除則退回全選。"""
+    stuck = _get_stuck_devices(cache) if cache is not None else set()
+    emergency = _get_emergency_devices(cache) if cache is not None else set()
     total_hours = _calc_total_hours(conditions)
     best_device = None
     best_start = None
 
-    candidates = [d for d in DEVICE_IDS
-                  if (not stuck_devices or d not in stuck_devices)
-                  and (not emergency_devices or d not in emergency_devices)]
+    candidates = [d for d in DEVICE_IDS if d not in stuck and d not in emergency]
     if not candidates:
         candidates = DEVICE_IDS  # 所有設備都被排除時退回全選
 
@@ -521,15 +520,12 @@ def preview_schedule(request: Request, conditions: str, device_id: Optional[str]
     total_hours = _calc_total_hours(cond_list)
     cache = getattr(request.app.state, "AICM_CACHE", {})
     running_until = _build_running_until(cache)
-    stuck_devices = _get_stuck_devices(cache)
-    emergency_devices = _get_emergency_devices(cache)
-
     with SessionLocal() as db:
         if device_id and device_id in DEVICE_IDS:
             start = _find_earliest_slot(device_id, total_hours, db, running_until)
             assigned_device = device_id
         else:
-            assigned_device, start, _ = _auto_assign(cond_list, db, running_until, stuck_devices, emergency_devices)
+            assigned_device, start, _ = _auto_assign(cond_list, db, running_until, cache)
 
     end = start + datetime.timedelta(hours=total_hours)
     return {
@@ -709,8 +705,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             conditions = _parse_conditions(s.conditions)
             cache = getattr(request.app.state, "AICM_CACHE", {})
             running_until = _build_running_until(cache)
-            stuck_devices = _get_stuck_devices(cache)
-            emergency_devices = _get_emergency_devices(cache)
             # 若管理人指定設備 + 手動時間 → 直接套用；只指定設備 → 自動算時間；否則全自動
             if body.device_id and body.start_time and body.end_time:
                 device_id = body.device_id
@@ -738,7 +732,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                 start = _find_earliest_slot(device_id, total_hours, db, running_until)
                 end = start + datetime.timedelta(hours=total_hours)
             else:
-                device_id, start, end = _auto_assign(conditions, db, running_until, stuck_devices, emergency_devices)
+                device_id, start, end = _auto_assign(conditions, db, running_until, cache)
 
             s.device_id = device_id
             s.start_time = start
