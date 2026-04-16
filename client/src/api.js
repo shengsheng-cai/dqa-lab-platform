@@ -38,5 +38,17 @@ api.interceptors.response.use(
   },
 );
 
+export function buildAuthHeaders() {
+  const userToken = localStorage.getItem("user_token");
+  if (userToken) {
+    return { "Content-Type": "application/json", "X-User-Token": userToken };
+  }
+  const pwd = localStorage.getItem("demo_password") || "";
+  return {
+    "Content-Type": "application/json",
+    ...(pwd ? { "X-Demo-Password": pwd } : {}),
+  };
+}
+
 export default api;
 export { API_BASE };
