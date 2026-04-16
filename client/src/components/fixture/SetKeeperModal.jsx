@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
 import { useToast } from "../Toast";
+import ModalShell, { inputStyle } from "./ModalShell";
 
 export default function SetKeeperModal({ fixture, onClose, onSubmit }) {
   const { showToast } = useToast();
@@ -34,41 +35,8 @@ export default function SetKeeperModal({ fixture, onClose, onSubmit }) {
     }
   };
 
-  const inputStyle = {
-    padding: "8px 10px",
-    borderRadius: 6,
-    border: "1px solid #30363d",
-    background: "#0d1117",
-    color: "#cdd9e5",
-    fontSize: 13,
-    width: "100%",
-    boxSizing: "border-box",
-  };
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 2000,
-      }}
-    >
-      <div
-        style={{
-          background: "#161b22",
-          border: "1px solid #30363d",
-          borderRadius: 12,
-          padding: 24,
-          width: 360,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
+    <ModalShell width={360} gap={12} onClose={onClose}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
           設定保管人
         </div>
@@ -126,7 +94,6 @@ export default function SetKeeperModal({ fixture, onClose, onSubmit }) {
             {loading ? "儲存中..." : "確認"}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

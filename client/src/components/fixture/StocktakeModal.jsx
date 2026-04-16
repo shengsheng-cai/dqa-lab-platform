@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "../../api";
 import { useToast } from "../Toast";
+import ModalShell from "./ModalShell";
 
 function getStatus(f) {
   if (f.available_quantity === 0 && f.total_quantity === 0)
@@ -44,30 +45,7 @@ export default function StocktakeModal({ fixtures, onClose, onComplete }) {
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 2000,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "#161b22",
-          border: "1px solid #30363d",
-          borderRadius: 12,
-          padding: 24,
-          width: 600,
-          maxHeight: "80vh",
-          overflowY: "auto",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalShell width={600} maxHeight="80vh" onClose={onClose}>
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>月盤點</div>
           <div style={{ fontSize: 12, color: "#8b949e", marginTop: 4 }}>
@@ -165,7 +143,6 @@ export default function StocktakeModal({ fixtures, onClose, onComplete }) {
             {loading ? "提交中..." : "完成盤點"}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

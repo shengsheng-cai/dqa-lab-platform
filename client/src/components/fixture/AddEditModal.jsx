@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "../../api";
 import { useToast } from "../Toast";
+import ModalShell, { inputStyle } from "./ModalShell";
 
 export default function AddEditModal({ fixture, onClose, onSuccess }) {
   const { showToast } = useToast();
@@ -69,18 +70,12 @@ export default function AddEditModal({ fixture, onClose, onSuccess }) {
     }
   };
 
-  const inputStyle = {
-    padding: "7px 10px", borderRadius: 6, border: "1px solid #30363d",
-    background: "#0d1117", color: "#cdd9e5", fontSize: 13,
-    width: "100%", boxSizing: "border-box",
-  };
   const label = (txt) => (
     <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 3 }}>{txt}</div>
   );
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000 }}>
-      <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 24, width: 520, maxHeight: "85vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+    <ModalShell width={520} maxHeight="85vh" gap={12} onClose={onClose}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
           {isEdit ? "編輯治具" : "新增治具"}
         </div>
@@ -174,7 +169,6 @@ export default function AddEditModal({ fixture, onClose, onSuccess }) {
             {loading ? "儲存中..." : isEdit ? "儲存" : "新增"}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
