@@ -43,11 +43,12 @@ export function formatLocal(date, format = "datetime", locale = "zh-TW") {
     date: { year: "numeric", month: "2-digit", day: "2-digit" },
     time: { hour: "2-digit", minute: "2-digit", second: "2-digit" },
     datetime: {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit",
+    },
+    datetimeSec: {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
     },
   };
 

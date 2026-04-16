@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { generateSP } from "./generateSP";
 import { parseUtcDate } from "../../constants";
+import { formatLocal } from "../../utils/timezone";
 
 function fmtMin(min) {
   const h = Math.floor(min / 60);
@@ -31,9 +32,7 @@ const ExecutionInfoPanel = ({ sop, startedAt, simCycle, doneCnt }) => {
   const totalStepCount = sop.steps?.length ?? 0;
   const cycles = sop.cycles ?? 1;
 
-  const fmt = (d) =>
-    `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ` +
-    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const fmt = (d) => formatLocal(d, "datetime");
 
   const rows = [
     ["Pgm", sop.sop_id || "—"],

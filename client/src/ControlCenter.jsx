@@ -10,6 +10,7 @@ import ErrorLog from "./ErrorLog";
 import RightPanel from "./components/control/RightPanel";
 import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL, ACTIVE_STATUSES, FINISHING_STATUS, EMERGENCY_STATUS } from "./constants";
 import { downloadBlob, buildReportFilename } from "./utils/download";
+import { formatLocal } from "./utils/timezone";
 
 const TAB_TO_PATH = {
   device: "/",
@@ -518,13 +519,7 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixture
 
 function fmtDatetime(str) {
   if (!str) return "—";
-  try {
-    const d = parseUtcDate(str);
-    if (!d || isNaN(d.getTime())) return str;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  } catch {
-    return str;
-  }
+  return formatLocal(str, "datetime");
 }
 
 function ExecutionList({ active, role }) {

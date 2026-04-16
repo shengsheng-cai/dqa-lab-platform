@@ -1,16 +1,10 @@
 import React, { useState, useEffect } from "react";
 import api from "./api";
-import { parseUtcDate } from "./constants";
+import { formatLocal } from "./utils/timezone";
 
 function fmtDatetime(str) {
   if (!str) return "—";
-  try {
-    const d = parseUtcDate(str);
-    if (isNaN(d.getTime())) return str;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
-  } catch {
-    return str;
-  }
+  return formatLocal(str, "datetimeSec");
 }
 
 const card = {

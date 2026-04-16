@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import api from "./api";
 import { downloadBlob } from "./utils/download";
+import { formatLocal } from "./utils/timezone";
 import { useToast } from "./components/Toast";
 import ImportModal from "./components/fixture/ImportModal";
 import LoanModal from "./components/fixture/LoanModal";
@@ -833,7 +834,7 @@ export default function FixturePage({ active, role }) {
                       <td style={tdStyle}>{loan.quantity}</td>
                       <td style={{ ...tdStyle, color: "#8b949e" }}>
                         {loan.loan_date
-                          ? new Date(loan.loan_date).toLocaleDateString("zh-TW")
+                          ? formatLocal(loan.loan_date, "date")
                           : "—"}
                       </td>
                       <td
@@ -843,7 +844,7 @@ export default function FixturePage({ active, role }) {
                         }}
                       >
                         {loan.due_date
-                          ? new Date(loan.due_date).toLocaleDateString("zh-TW")
+                          ? formatLocal(loan.due_date, "date")
                           : "—"}
                         {isOverdue && (
                           <span
@@ -1052,7 +1053,7 @@ function OverdueList({ canOperate, onRefresh }) {
                 </td>
                 <td style={{ ...tdStyle, color: "#f85149" }}>
                   {loan.due_date
-                    ? new Date(loan.due_date).toLocaleDateString("zh-TW")
+                    ? formatLocal(loan.due_date, "date")
                     : "—"}
                 </td>
                 <td style={{ ...tdStyle, color: "#f85149", fontWeight: 700 }}>
@@ -1153,7 +1154,7 @@ function DamagedList() {
                   <td style={{ ...tdStyle, fontWeight: 600 }}>{loan.quantity}</td>
                   <td style={{ ...tdStyle, color: "#8b949e" }}>
                     {loan.return_date
-                      ? new Date(loan.return_date).toLocaleDateString("zh-TW")
+                      ? formatLocal(loan.return_date, "date")
                       : "—"}
                   </td>
                   <td style={tdStyle}>
@@ -1405,7 +1406,7 @@ function InventoryLogTab({ refreshKey }) {
         const diffCount = rows.filter((l) => l.difference !== 0).length;
         const isOpen = expandedBatch === key;
         const isDeleting = deletingBatch === key;
-        const batchTime = new Date(key).toLocaleString("zh-TW", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+        const batchTime = formatLocal(key, "datetime");
         return (
           <div key={key} style={{ borderBottom: "1px solid #21262d" }}>
             <div
