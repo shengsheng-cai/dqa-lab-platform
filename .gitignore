@@ -64,6 +64,7 @@ pnpm-lock.yaml
 simulator/__pycache__/
 simulator/venv/
 .socat_info.log
+backend/rag_cache.pkl
 
 ### IDE、編輯器與系統
 .vscode/
