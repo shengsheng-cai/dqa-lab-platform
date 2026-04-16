@@ -12,6 +12,7 @@ from .models import (
     FixtureInventoryLog,
     PurchaseOrder,
     User,
+    ReturnCondition,
 )
 from .utils import today_utc_window, _now_utc_naive
 from .auth import require_admin
@@ -130,14 +131,14 @@ class LoanOut(BaseModel):
     due_date: Optional[datetime.datetime]
     return_date: Optional[datetime.datetime]
     status: str
-    return_condition: Optional[str]
+    return_condition: Optional[ReturnCondition]
     extension_note: Optional[str]
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class ReturnUpdate(BaseModel):
-    return_condition: str  # normal / damaged / lost
+    return_condition: ReturnCondition
     keeper_note: Optional[str] = None
     returned_at: Optional[str] = None  # YYYY-MM-DD，不填則用當下時間
 
@@ -800,11 +801,11 @@ def return_loan(loan_id: int, body: ReturnUpdate, _: None = Depends(require_admi
         loan.return_condition = body.return_condition
         loan.keeper_note = body.keeper_note
 
-        if body.return_condition == "normal":
+        if body.return_condition == ReturnCondition.NORMAL:
             loan.status = "returned"
-        elif body.return_condition == "damaged":
+        elif body.return_condition == ReturnCondition.DAMAGED:
             loan.status = "damaged"
-        elif body.return_condition == "lost":
+        elif body.return_condition == ReturnCondition.LOST:
             loan.status = "lost"
             f = db.query(Fixture).filter(Fixture.id == loan.fixture_id).first()
             if f:

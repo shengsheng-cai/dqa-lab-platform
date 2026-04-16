@@ -336,6 +336,12 @@ class ScheduleStatus(StrEnum):
     CANCELLED = "已取消"
 
 
+class ReturnCondition(StrEnum):
+    NORMAL  = "normal"
+    DAMAGED = "damaged"
+    LOST    = "lost"
+
+
 # ---------- 排程申請單 ----------
 class Schedule(Base):
     __tablename__ = "schedules"
