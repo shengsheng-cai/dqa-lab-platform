@@ -14,7 +14,7 @@ from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
 from .auth import require_admin
 from .line import push_message
-from .utils import _now_utc, _save_device_state, _parse_conditions
+from .utils import _now_utc, _save_device_state, _parse_conditions, parse_iso_utc
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
@@ -197,7 +197,7 @@ def _est_end_from_device(device: dict) -> Optional[datetime.datetime]:
     if cached_end:
         try:
             if isinstance(cached_end, str):
-                dt = datetime.datetime.fromisoformat(cached_end.replace("Z", "+00:00"))
+                dt = parse_iso_utc(cached_end)
             else:
                 dt = cached_end
             if dt.tzinfo is None:
@@ -243,7 +243,7 @@ def _est_end_from_device(device: dict) -> Optional[datetime.datetime]:
         total_min = r_up + dwell_min + r_up
 
     if isinstance(started_at, str):
-        started_dt = datetime.datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        started_dt = parse_iso_utc(started_at)
     else:
         started_dt = started_at
     if started_dt.tzinfo is None:

@@ -141,14 +141,17 @@ function useCountdown(estimatedEndAt) {
       setRemaining(null);
       return;
     }
+    let timerId;
     const calc = () => {
       const endMs = parseUtcDate(estimatedEndAt);
       const diff = endMs - new Date();
-      setRemaining(Math.max(0, Math.floor(diff / 1000)));
+      const next = Math.max(0, Math.floor(diff / 1000));
+      setRemaining(prev => (prev === next ? prev : next));
+      if (next === 0) clearInterval(timerId);
     };
     calc();
-    const t = setInterval(calc, 1000);
-    return () => clearInterval(t);
+    timerId = setInterval(calc, 1000);
+    return () => clearInterval(timerId);
   }, [estimatedEndAt]);
   return remaining;
 }

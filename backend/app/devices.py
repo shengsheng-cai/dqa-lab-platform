@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod, Schedule, ScheduleStatus
 from .line import push_message
-from .utils import _now_utc, _save_device_state, _parse_conditions
+from .utils import _now_utc, _save_device_state, _parse_conditions, parse_iso_utc
 from .auth import require_admin
 
 logger = logging.getLogger("app")
@@ -99,7 +99,7 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
     total_seconds = (total_min + STABILIZATION_HOURS * 60) * 60.0
 
     if isinstance(started_at, str):
-        started_dt = datetime.datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        started_dt = parse_iso_utc(started_at)
     else:
         started_dt = started_at
     if started_dt.tzinfo is None:
@@ -207,7 +207,7 @@ async def get_device_history(device_id: str, request: Request):
         return []
 
     if isinstance(started_at, str):
-        started_dt = datetime.datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        started_dt = parse_iso_utc(started_at)
     else:
         started_dt = started_at
 

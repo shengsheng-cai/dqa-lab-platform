@@ -14,6 +14,12 @@ def _parse_conditions(conditions_str: Optional[str]) -> list:
         return []
 
 
+def parse_iso_utc(s: str) -> datetime.datetime:
+    """將 ISO 8601 字串解析為 UTC-aware datetime。
+    接受帶 Z 結尾（替換為 +00:00）或已含 +HH:MM offset 的字串。"""
+    return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
 def _now_utc() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
@@ -52,9 +58,7 @@ def _save_device_state(device_id: str, item: dict):
         started_at = item.get("started_at")
         if started_at is not None:
             if isinstance(started_at, str):
-                started_at = datetime.datetime.fromisoformat(
-                    started_at.replace("Z", "+00:00")
-                )
+                started_at = parse_iso_utc(started_at)
             # 存入 DB 前去掉 tzinfo（SQLite 不支援 aware datetime）
             state.started_at = started_at.replace(tzinfo=None)
         else:
@@ -68,7 +72,7 @@ def _save_device_state(device_id: str, item: dict):
             val = item.get(field)
             if val is not None:
                 if isinstance(val, str):
-                    val = datetime.datetime.fromisoformat(val.replace("Z", "+00:00"))
+                    val = parse_iso_utc(val)
                 setattr(state, field, val.replace(tzinfo=None))
             else:
                 setattr(state, field, None)
