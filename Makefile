@@ -29,9 +29,9 @@ dev:
 # 3. 清理流程
 clean:
 	@echo "🧹 正在清理所有服務..."
-	-@pkill -9 -f "uvicorn"
-	-@pkill -9 -f "node.*vite"
-	-@pkill -9 -f "ngrok"
+	-@pkill -9 -f "uvicorn" 2>/dev/null
+	-@pkill -9 -f "node.*vite" 2>/dev/null
+	-@pkill -9 -f "ngrok" 2>/dev/null
 	@rm -f .socat_info.log .serial_ports.tmp .backend.log
 	@echo "✨ 清理完成。"
 

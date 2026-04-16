@@ -168,42 +168,9 @@ function LoginPage({ onLogin }) {
                 後端目前 offline
               </div>
               <div style={{ color: "#8b949e", fontSize: 12, lineHeight: 1.6 }}>
-                這是 Railway Trial 方案，平常處於休眠狀態。請依以下步驟喚醒：
+                請在專案根目錄執行 <code>make dev</code> 啟動後端。
               </div>
             </div>
-            <ol
-              style={{
-                color: "#8b949e",
-                fontSize: 12,
-                lineHeight: 2,
-                paddingLeft: 20,
-                margin: 0,
-              }}
-            >
-              <li>前往 Railway Dashboard</li>
-              <li>找到 dqa-lab-digital-twin 專案</li>
-              <li>點選 Redeploy</li>
-              <li>等待約 30 秒後重新整理此頁</li>
-            </ol>
-            <a
-              href="https://railway.app"
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: "block",
-                textAlign: "center",
-                padding: "9px",
-                background: "#21262d",
-                color: "#58a6ff",
-                borderRadius: 6,
-                fontSize: 12,
-                textDecoration: "none",
-                fontWeight: 600,
-                border: "1px solid #30363d",
-              }}
-            >
-              前往 Railway Dashboard
-            </a>
             <button
               onClick={() => setBackendOffline(false)}
               style={{

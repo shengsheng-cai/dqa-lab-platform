@@ -279,7 +279,7 @@ def _fetch_execution_data(execution_id: int, db):
 # ─────────────────────────────────────────────────────────────────────────────
 
 _CJK_TTF_FONT_NAME = "CJK-TTF"
-# TTF/OTF 路徑（Linux/Railway 環境）
+# TTF/OTF 路徑（Linux 環境）
 _CJK_TTF_PATHS = [
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
     "/usr/share/fonts/truetype/noto/NotoSansTC-Regular.ttf",
@@ -327,7 +327,7 @@ def _get_cjk_font():
                 _cjk_font_resolved = font_name
                 return font_name
 
-        # 1. TTF/OTF（Linux/Railway 常見路徑）
+        # 1. TTF/OTF（Linux 常見路徑）
         for path in _CJK_TTF_PATHS:
             font_name = _try_register_ttf(path)
             if font_name:

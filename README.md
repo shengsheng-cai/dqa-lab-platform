@@ -101,8 +101,6 @@ cp .env.example backend/.env
 | **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Flash-Lite）+ 可切換 RAG Embedding（Gemini / sentence-transformers） |
 | **通知** | LINE Messaging API（條件完成 / 測試完成 / 緊急停止推播）|
-| **監控** | Sentry（後端錯誤追蹤） |
-| **部署** | Railway（後端）+ Vercel（前端） |
 
 ---
 

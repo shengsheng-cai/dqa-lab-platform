@@ -64,7 +64,6 @@ pnpm-lock.yaml
 simulator/__pycache__/
 simulator/venv/
 .socat_info.log
-# backend/rag_cache.pkl  # 已 track，讓 Vercel 部署時跳過重建
 
 ### IDE、編輯器與系統
 .vscode/

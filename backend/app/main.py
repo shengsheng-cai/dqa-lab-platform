@@ -4,12 +4,6 @@ from pathlib import Path
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 import os
-import sentry_sdk
-
-_sentry_dsn = os.getenv("SENTRY_DSN", "")
-if _sentry_dsn:
-    sentry_sdk.init(dsn=_sentry_dsn, send_default_pii=False)
-
 import asyncio
 import datetime
 import random
