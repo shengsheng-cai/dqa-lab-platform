@@ -285,26 +285,33 @@ def _get_condition_names(conditions: List[str]) -> List[str]:
 
 
 def _get_schedule_fixtures(schedule_id: int, db) -> list:
-    """查詢排程治具清單，一次批次載入 Fixture 資料（避免 N+1）"""
-    sfs = db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == schedule_id).all()
+    return _build_schedule_fixtures_map(db, [schedule_id]).get(schedule_id, [])
+
+
+def _build_schedule_fixtures_map(db, schedule_ids: list) -> dict:
+    """一次取回所有排程的治具資料，回傳 {schedule_id: [fixture dicts]}"""
+    if not schedule_ids:
+        return {}
+    sfs = db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id.in_(schedule_ids)).all()
     if not sfs:
-        return []
+        return {}
     fixture_map = {
         f.id: f
         for f in db.query(Fixture).filter(Fixture.id.in_([sf.fixture_id for sf in sfs])).all()
     }
-    return [
-        {
+    result: dict = {}
+    for sf in sfs:
+        f = fixture_map.get(sf.fixture_id)
+        result.setdefault(sf.schedule_id, []).append({
             "fixture_id": sf.fixture_id,
             "quantity": sf.quantity,
-            "interface_type": fixture_map[sf.fixture_id].interface_type if sf.fixture_id in fixture_map else "",
-            "form_factor": fixture_map[sf.fixture_id].form_factor if sf.fixture_id in fixture_map else "",
-        }
-        for sf in sfs
-    ]
+            "interface_type": f.interface_type if f else "",
+            "form_factor": f.form_factor if f else "",
+        })
+    return result
 
 
-def _enrich(s: Schedule, db=None) -> dict:
+def _enrich(s: Schedule, db=None, fixtures_map=None) -> dict:
     """Schedule ORM → dict，附加計算欄位"""
     conditions = _parse_conditions(s.conditions)
     return {
@@ -328,7 +335,9 @@ def _enrich(s: Schedule, db=None) -> dict:
         "updated_at": s.updated_at,
         "total_hours": _calc_total_hours(conditions),
         "condition_names": _get_condition_names(conditions),
-        "fixtures": _get_schedule_fixtures(s.id, db) if db is not None else [],
+        "fixtures": fixtures_map.get(s.id, []) if fixtures_map is not None else (
+            _get_schedule_fixtures(s.id, db) if db is not None else []
+        ),
     }
 
 
@@ -570,9 +579,10 @@ def get_gantt(request: Request):
             .all()
         )
         blocked = db.query(DeviceBlockedPeriod).all()
+        fixtures_map = _build_schedule_fixtures_map(db, [s.id for s in schedules])
 
         return {
-            "schedules": [_enrich(s, db) for s in schedules],
+            "schedules": [_enrich(s, db, fixtures_map) for s in schedules],
             "blocked_periods": [
                 {
                     "id": b.id,
@@ -596,7 +606,8 @@ def list_schedules(request: Request, status: Optional[str] = None):
         if status:
             q = q.filter(Schedule.status == status)
         schedules = q.order_by(Schedule.created_at.desc()).limit(200).all()
-        return [_enrich(s, db) for s in schedules]
+        fixtures_map = _build_schedule_fixtures_map(db, [s.id for s in schedules])
+        return [_enrich(s, db, fixtures_map) for s in schedules]
 
 
 @router.get("/{schedule_id}", response_model=ScheduleOut)

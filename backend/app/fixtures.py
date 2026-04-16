@@ -5,7 +5,14 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
-from .models import SessionLocal, Fixture, FixtureLoan, FixtureInventoryLog, PurchaseOrder, User
+from .models import (
+    SessionLocal,
+    Fixture,
+    FixtureLoan,
+    FixtureInventoryLog,
+    PurchaseOrder,
+    User,
+)
 from .utils import today_utc_window, _now_utc_naive
 from .auth import _require_admin
 
@@ -18,22 +25,33 @@ router = APIRouter(prefix="/api/fixtures", tags=["fixtures"])
 
 # 欄位別名對應表（中英文都接受，不分大小寫）
 COLUMN_ALIASES = {
-    "interface_type":    ["介面", "interface", "interface_type", "接口"],
-    "form_factor":       ["型態", "form factor", "form_factor", "formfactor"],
-    "priority":          ["優先度", "priority"],
-    "size":              ["尺寸", "size"],
-    "purpose":           ["用途", "purpose"],
-    "estimated_usage":   ["預估用量", "estimated usage", "estimated_usage"],
-    "total_quantity":    ["現有數量", "數量", "quantity", "total_quantity", "total quantity"],
-    "shortage":          ["缺貨數", "shortage"],
-    "usage_frequency":   ["使用頻率", "使用率", "usage frequency", "usage_frequency"],
-    "replacement_years": ["汰換年限", "汰換時間", "replacement years", "replacement_years"],
-    "note":              ["備註", "note"],
-    "keeper_name":       ["保管人", "keeper", "keeper_name"],
-    "deputy_name":       ["代理人", "deputy", "deputy_name"],
-    "vendor":            ["廠商", "vendor"],
-    "model_number":      ["型號", "model", "model_number", "model number"],
-    "unit_price":        ["單價", "price", "unit price", "unit_price"],
+    "interface_type": ["介面", "interface", "interface_type", "接口"],
+    "form_factor": ["型態", "form factor", "form_factor", "formfactor"],
+    "priority": ["優先度", "priority"],
+    "size": ["尺寸", "size"],
+    "purpose": ["用途", "purpose"],
+    "estimated_usage": ["預估用量", "estimated usage", "estimated_usage"],
+    "total_quantity": [
+        "現有數量",
+        "數量",
+        "quantity",
+        "total_quantity",
+        "total quantity",
+    ],
+    "shortage": ["缺貨數", "shortage"],
+    "usage_frequency": ["使用頻率", "使用率", "usage frequency", "usage_frequency"],
+    "replacement_years": [
+        "汰換年限",
+        "汰換時間",
+        "replacement years",
+        "replacement_years",
+    ],
+    "note": ["備註", "note"],
+    "keeper_name": ["保管人", "keeper", "keeper_name"],
+    "deputy_name": ["代理人", "deputy", "deputy_name"],
+    "vendor": ["廠商", "vendor"],
+    "model_number": ["型號", "model", "model_number", "model number"],
+    "unit_price": ["單價", "price", "unit price", "unit_price"],
 }
 
 
@@ -134,6 +152,7 @@ class ExtensionRequest(BaseModel):
 
 def _calc_loan_qty(db, fixture_id: int, status: str) -> int:
     from sqlalchemy import func
+
     result = (
         db.query(func.sum(FixtureLoan.quantity))
         .filter(FixtureLoan.fixture_id == fixture_id, FixtureLoan.status == status)
@@ -142,12 +161,28 @@ def _calc_loan_qty(db, fixture_id: int, status: str) -> int:
     return result or 0
 
 
+def _build_loan_qty_map(db, fixture_ids: list) -> dict:
+    """一次 GROUP BY 查回所有 fixture 的借用數量，回傳 {(fixture_id, status): qty}"""
+    if not fixture_ids:
+        return {}
+    from sqlalchemy import func
+
+    rows = (
+        db.query(FixtureLoan.fixture_id, FixtureLoan.status, func.sum(FixtureLoan.quantity))
+        .filter(FixtureLoan.fixture_id.in_(fixture_ids))
+        .group_by(FixtureLoan.fixture_id, FixtureLoan.status)
+        .all()
+    )
+    return {(fid, st): qty for fid, st, qty in rows}
+
+
 def _calc_replacement_date(f: Fixture) -> Optional[str]:
     """根據 replacement_years 與 created_at 計算預估汰換日期"""
     if not f.replacement_years or not f.created_at:
         return None
     try:
         import re
+
         years = float(re.search(r"[\d.]+", str(f.replacement_years)).group())
         days = int(years * 365)
         created = f.created_at
@@ -158,10 +193,15 @@ def _calc_replacement_date(f: Fixture) -> Optional[str]:
         return None
 
 
-def _fixture_to_out(db, f: Fixture) -> dict:
-    loaned = _calc_loan_qty(db, f.id, "loaned")
-    reserved = _calc_loan_qty(db, f.id, "reserved")
-    damaged = _calc_loan_qty(db, f.id, "damaged")
+def _fixture_to_out(db, f: Fixture, loan_map: Optional[dict] = None) -> dict:
+    if loan_map is not None:
+        loaned = loan_map.get((f.id, "loaned"), 0)
+        reserved = loan_map.get((f.id, "reserved"), 0)
+        damaged = loan_map.get((f.id, "damaged"), 0)
+    else:
+        loaned = _calc_loan_qty(db, f.id, "loaned")
+        reserved = _calc_loan_qty(db, f.id, "reserved")
+        damaged = _calc_loan_qty(db, f.id, "damaged")
     available = max(0, f.total_quantity - loaned - reserved - damaged)
     return {
         "id": f.id,
@@ -212,9 +252,12 @@ def list_fixtures(
             )
         fixtures = q.order_by(Fixture.priority.asc(), Fixture.id.asc()).all()
 
+        fixture_ids = [f.id for f in fixtures]
+        loan_map = _build_loan_qty_map(db, fixture_ids)
+
         result = []
         for f in fixtures:
-            data = _fixture_to_out(db, f)
+            data = _fixture_to_out(db, f, loan_map)
             if status:
                 avail = data["available_quantity"]
                 total = data["total_quantity"]
@@ -239,6 +282,7 @@ def get_summary():
         now, today_start, today_end = today_utc_window()
 
         from sqlalchemy import func as _func
+
         total_loaned = (
             db.query(_func.sum(FixtureLoan.quantity))
             .filter(FixtureLoan.status == "loaned")
@@ -321,8 +365,7 @@ def list_users(request: Request):
             .all()
         )
         return [
-            {"id": u.id, "display_name": u.display_name, "role": u.role}
-            for u in users
+            {"id": u.id, "display_name": u.display_name, "role": u.role} for u in users
         ]
     finally:
         db.close()
@@ -334,10 +377,42 @@ def download_template():
     if pd is None:
         raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
 
-    columns = ["介面", "型態", "現有數量", "缺貨數", "優先度", "尺寸", "用途",
-               "預估用量", "使用頻率", "汰換年限", "備註", "保管人", "代理人",
-               "廠商", "型號", "單價"]
-    example = ["USB-C", "轉接頭", 10, 0, 1, "", "連接測試設備", "", "", "5年", "", "", "", "", "", ""]
+    columns = [
+        "介面",
+        "型態",
+        "現有數量",
+        "缺貨數",
+        "優先度",
+        "尺寸",
+        "用途",
+        "預估用量",
+        "使用頻率",
+        "汰換年限",
+        "備註",
+        "保管人",
+        "代理人",
+        "廠商",
+        "型號",
+        "單價",
+    ]
+    example = [
+        "USB-C",
+        "轉接頭",
+        10,
+        0,
+        1,
+        "",
+        "連接測試設備",
+        "",
+        "",
+        "5年",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+    ]
     df = pd.DataFrame([example], columns=columns)
 
     buf = io.BytesIO()
@@ -360,27 +435,34 @@ def export_fixtures():
 
     db = SessionLocal()
     try:
-        fixtures = db.query(Fixture).filter(Fixture.is_active == True).order_by(Fixture.interface_type).all()
+        fixtures = (
+            db.query(Fixture)
+            .filter(Fixture.is_active == True)
+            .order_by(Fixture.interface_type)
+            .all()
+        )
         rows = []
         for f in fixtures:
-            rows.append({
-                "介面": f.interface_type,
-                "型態": f.form_factor,
-                "現有數量": f.total_quantity,
-                "缺貨數": f.shortage,
-                "優先度": f.priority or "",
-                "尺寸": f.size or "",
-                "用途": f.purpose or "",
-                "預估用量": f.estimated_usage or "",
-                "使用頻率": f.usage_frequency or "",
-                "汰換年限": f.replacement_years or "",
-                "備註": f.note or "",
-                "保管人": f.keeper_name or "",
-                "代理人": f.deputy_name or "",
-                "廠商": f.vendor or "",
-                "型號": f.model_number or "",
-                "單價": f.unit_price or "",
-            })
+            rows.append(
+                {
+                    "介面": f.interface_type,
+                    "型態": f.form_factor,
+                    "現有數量": f.total_quantity,
+                    "缺貨數": f.shortage,
+                    "優先度": f.priority or "",
+                    "尺寸": f.size or "",
+                    "用途": f.purpose or "",
+                    "預估用量": f.estimated_usage or "",
+                    "使用頻率": f.usage_frequency or "",
+                    "汰換年限": f.replacement_years or "",
+                    "備註": f.note or "",
+                    "保管人": f.keeper_name or "",
+                    "代理人": f.deputy_name or "",
+                    "廠商": f.vendor or "",
+                    "型號": f.model_number or "",
+                    "單價": f.unit_price or "",
+                }
+            )
         df = pd.DataFrame(rows)
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as writer:
@@ -389,7 +471,9 @@ def export_fixtures():
         return StreamingResponse(
             buf,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=fixtures_export.xlsx"},
+            headers={
+                "Content-Disposition": "attachment; filename=fixtures_export.xlsx"
+            },
         )
     finally:
         db.close()
@@ -400,7 +484,11 @@ def patch_inventory_log(log_id: int, actual_quantity: int, request: Request):
     _require_admin(request)
     db = SessionLocal()
     try:
-        log = db.query(FixtureInventoryLog).filter(FixtureInventoryLog.id == log_id).first()
+        log = (
+            db.query(FixtureInventoryLog)
+            .filter(FixtureInventoryLog.id == log_id)
+            .first()
+        )
         if not log:
             raise HTTPException(status_code=404, detail="盤點紀錄不存在")
         f = db.query(Fixture).filter(Fixture.id == log.fixture_id).first()
@@ -410,7 +498,11 @@ def patch_inventory_log(log_id: int, actual_quantity: int, request: Request):
         log.counted_quantity = actual_quantity
         log.difference = actual_quantity - log.previous_quantity
         db.commit()
-        return {"id": log.id, "counted_quantity": log.counted_quantity, "difference": log.difference}
+        return {
+            "id": log.id,
+            "counted_quantity": log.counted_quantity,
+            "difference": log.difference,
+        }
     finally:
         db.close()
 
@@ -420,7 +512,11 @@ def delete_inventory_log(log_id: int, request: Request):
     _require_admin(request)
     db = SessionLocal()
     try:
-        log = db.query(FixtureInventoryLog).filter(FixtureInventoryLog.id == log_id).first()
+        log = (
+            db.query(FixtureInventoryLog)
+            .filter(FixtureInventoryLog.id == log_id)
+            .first()
+        )
         if not log:
             raise HTTPException(status_code=404, detail="盤點紀錄不存在")
         db.delete(log)
@@ -472,18 +568,31 @@ def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request
 def list_inventory_logs(fixture_id: Optional[int] = None):
     db = SessionLocal()
     try:
-        q = db.query(FixtureInventoryLog).order_by(FixtureInventoryLog.counted_at.desc())
+        q = db.query(FixtureInventoryLog).order_by(
+            FixtureInventoryLog.counted_at.desc()
+        )
         if fixture_id is not None:
             q = q.filter(FixtureInventoryLog.fixture_id == fixture_id)
         logs = q.limit(200).all()
         fixture_ids = {log.fixture_id for log in logs}
-        fixtures = {f.id: f for f in db.query(Fixture).filter(Fixture.id.in_(fixture_ids)).all()} if fixture_ids else {}
+        fixtures = (
+            {
+                f.id: f
+                for f in db.query(Fixture).filter(Fixture.id.in_(fixture_ids)).all()
+            }
+            if fixture_ids
+            else {}
+        )
         return [
             {
                 "id": log.id,
                 "fixture_id": log.fixture_id,
-                "fixture_interface": fixtures[log.fixture_id].interface_type if log.fixture_id in fixtures else "",
-                "fixture_form_factor": fixtures[log.fixture_id].form_factor if log.fixture_id in fixtures else "",
+                "fixture_interface": fixtures[log.fixture_id].interface_type
+                if log.fixture_id in fixtures
+                else "",
+                "fixture_form_factor": fixtures[log.fixture_id].form_factor
+                if log.fixture_id in fixtures
+                else "",
                 "previous_quantity": log.previous_quantity,
                 "counted_quantity": log.counted_quantity,
                 "difference": log.difference,
@@ -503,7 +612,8 @@ def get_fixture(fixture_id: int):
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
-        return _fixture_to_out(db, f)
+        loan_map = _build_loan_qty_map(db, [f.id])
+        return _fixture_to_out(db, f, loan_map)
     finally:
         db.close()
 
@@ -534,8 +644,12 @@ def list_active_loans():
             {
                 "id": loan.id,
                 "fixture_id": loan.fixture_id,
-                "fixture_interface": fixtures[loan.fixture_id].interface_type if loan.fixture_id in fixtures else "",
-                "fixture_form_factor": fixtures[loan.fixture_id].form_factor if loan.fixture_id in fixtures else "",
+                "fixture_interface": fixtures[loan.fixture_id].interface_type
+                if loan.fixture_id in fixtures
+                else "",
+                "fixture_form_factor": fixtures[loan.fixture_id].form_factor
+                if loan.fixture_id in fixtures
+                else "",
                 "borrower_name": loan.borrower_name,
                 "device_id": loan.device_id,
                 "project_name": loan.project_name,
@@ -569,13 +683,19 @@ def list_overdue_loans():
             {
                 "id": loan.id,
                 "fixture_id": loan.fixture_id,
-                "fixture_interface": fixtures[loan.fixture_id].interface_type if loan.fixture_id in fixtures else "",
-                "fixture_form_factor": fixtures[loan.fixture_id].form_factor if loan.fixture_id in fixtures else "",
+                "fixture_interface": fixtures[loan.fixture_id].interface_type
+                if loan.fixture_id in fixtures
+                else "",
+                "fixture_form_factor": fixtures[loan.fixture_id].form_factor
+                if loan.fixture_id in fixtures
+                else "",
                 "borrower_name": loan.borrower_name,
                 "device_id": loan.device_id,
                 "project_name": loan.project_name,
                 "due_date": loan.due_date.isoformat() if loan.due_date else None,
-                "overdue_days": (now_naive - loan.due_date).days if loan.due_date else 0,
+                "overdue_days": (now_naive - loan.due_date).days
+                if loan.due_date
+                else 0,
             }
             for loan in loans
         ]
@@ -599,14 +719,20 @@ def list_damaged_lost_loans():
             {
                 "id": loan.id,
                 "fixture_id": loan.fixture_id,
-                "fixture_interface": fixtures[loan.fixture_id].interface_type if loan.fixture_id in fixtures else "",
-                "fixture_form_factor": fixtures[loan.fixture_id].form_factor if loan.fixture_id in fixtures else "",
+                "fixture_interface": fixtures[loan.fixture_id].interface_type
+                if loan.fixture_id in fixtures
+                else "",
+                "fixture_form_factor": fixtures[loan.fixture_id].form_factor
+                if loan.fixture_id in fixtures
+                else "",
                 "borrower_name": loan.borrower_name,
                 "device_id": loan.device_id,
                 "project_name": loan.project_name,
                 "quantity": loan.quantity,
                 "loan_date": loan.loan_date.isoformat() if loan.loan_date else None,
-                "return_date": loan.return_date.isoformat() if loan.return_date else None,
+                "return_date": loan.return_date.isoformat()
+                if loan.return_date
+                else None,
                 "status": loan.status,
                 "return_condition": loan.return_condition,
                 "keeper_note": loan.keeper_note,
@@ -672,7 +798,9 @@ def return_loan(loan_id: int, body: ReturnUpdate, request: Request):
         if body.returned_at:
             try:
                 d = datetime.date.fromisoformat(body.returned_at)
-                loan.return_date = datetime.datetime(d.year, d.month, d.day, tzinfo=datetime.timezone.utc)
+                loan.return_date = datetime.datetime(
+                    d.year, d.month, d.day, tzinfo=datetime.timezone.utc
+                )
             except ValueError:
                 loan.return_date = datetime.datetime.now(datetime.timezone.utc)
         else:
@@ -790,11 +918,15 @@ async def import_fixtures(request: Request, file: UploadFile = File(...)):
                 skipped += 1
                 continue
 
-            existing = db.query(Fixture).filter(
-                Fixture.interface_type == interface_type,
-                Fixture.form_factor == form_factor,
-                Fixture.is_active == True,
-            ).first()
+            existing = (
+                db.query(Fixture)
+                .filter(
+                    Fixture.interface_type == interface_type,
+                    Fixture.form_factor == form_factor,
+                    Fixture.is_active == True,
+                )
+                .first()
+            )
 
             fields = dict(
                 priority=safe_int(row, "priority"),
@@ -818,17 +950,25 @@ async def import_fixtures(request: Request, file: UploadFile = File(...)):
                     setattr(existing, k, v)
                 updated += 1
             else:
-                db.add(Fixture(interface_type=interface_type, form_factor=form_factor, **fields))
+                db.add(
+                    Fixture(
+                        interface_type=interface_type, form_factor=form_factor, **fields
+                    )
+                )
                 imported += 1
 
         db.commit()
-        return {"status": "success", "imported": imported, "updated": updated, "skipped": skipped}
+        return {
+            "status": "success",
+            "imported": imported,
+            "updated": updated,
+            "skipped": skipped,
+        }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
-
 
 
 # ---------- 設定保管人 ----------
@@ -927,7 +1067,8 @@ def create_fixture(body: FixtureUpsert, request: Request):
         db.add(f)
         db.commit()
         db.refresh(f)
-        return _fixture_to_out(db, f)
+        loan_map = _build_loan_qty_map(db, [f.id])
+        return _fixture_to_out(db, f, loan_map)
     finally:
         db.close()
 
@@ -940,7 +1081,11 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request):
     _require_admin(request)
     db = SessionLocal()
     try:
-        f = db.query(Fixture).filter(Fixture.id == fixture_id, Fixture.is_active == True).first()
+        f = (
+            db.query(Fixture)
+            .filter(Fixture.id == fixture_id, Fixture.is_active == True)
+            .first()
+        )
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
         f.interface_type = body.interface_type
@@ -959,7 +1104,8 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request):
         f.model_number = body.model_number
         f.unit_price = body.unit_price
         db.commit()
-        return _fixture_to_out(db, f)
+        loan_map = _build_loan_qty_map(db, [f.id])
+        return _fixture_to_out(db, f, loan_map)
     finally:
         db.close()
 
@@ -972,15 +1118,26 @@ def delete_fixture(fixture_id: int, request: Request):
     _require_admin(request)
     db = SessionLocal()
     try:
-        f = db.query(Fixture).filter(Fixture.id == fixture_id, Fixture.is_active == True).first()
+        f = (
+            db.query(Fixture)
+            .filter(Fixture.id == fixture_id, Fixture.is_active == True)
+            .first()
+        )
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
-        active_loans = db.query(FixtureLoan).filter(
-            FixtureLoan.fixture_id == fixture_id,
-            FixtureLoan.status == "loaned",
-        ).count()
+        active_loans = (
+            db.query(FixtureLoan)
+            .filter(
+                FixtureLoan.fixture_id == fixture_id,
+                FixtureLoan.status == "loaned",
+            )
+            .count()
+        )
         if active_loans > 0:
-            raise HTTPException(status_code=400, detail=f"此治具有 {active_loans} 筆借出未歸還，無法刪除")
+            raise HTTPException(
+                status_code=400,
+                detail=f"此治具有 {active_loans} 筆借出未歸還，無法刪除",
+            )
         f.is_active = False
         db.commit()
         return {"status": "success"}
