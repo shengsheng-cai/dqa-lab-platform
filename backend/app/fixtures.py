@@ -1,7 +1,9 @@
 import asyncio
 import datetime
 import io
+import re
 from typing import Optional, List
+from sqlalchemy import func
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
@@ -152,8 +154,6 @@ class ExtensionRequest(BaseModel):
 
 
 def _calc_loan_qty(db, fixture_id: int, status: str) -> int:
-    from sqlalchemy import func
-
     result = (
         db.query(func.sum(FixtureLoan.quantity))
         .filter(FixtureLoan.fixture_id == fixture_id, FixtureLoan.status == status)
@@ -166,8 +166,6 @@ def _build_loan_qty_map(db, fixture_ids: list) -> dict:
     """一次 GROUP BY 查回所有 fixture 的借用數量，回傳 {(fixture_id, status): qty}"""
     if not fixture_ids:
         return {}
-    from sqlalchemy import func
-
     rows = (
         db.query(FixtureLoan.fixture_id, FixtureLoan.status, func.sum(FixtureLoan.quantity))
         .filter(FixtureLoan.fixture_id.in_(fixture_ids))
@@ -182,8 +180,6 @@ def _calc_replacement_date(f: Fixture) -> Optional[str]:
     if not f.replacement_years or not f.created_at:
         return None
     try:
-        import re
-
         years = float(re.search(r"[\d.]+", str(f.replacement_years)).group())
         days = int(years * 365)
         created = f.created_at

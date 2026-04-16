@@ -25,6 +25,10 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=_connect_args, **_p
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def _utcnow() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -50,7 +54,7 @@ class User(Base):
         DateTime, nullable=True
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
 
 
@@ -83,7 +87,7 @@ class Fixture(Base):
     loan_count: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
 
     __table_args__ = (Index("ix_fixtures_interface_type", "interface_type"),)
@@ -99,7 +103,7 @@ class FixtureInventoryLog(Base):
     counted_quantity: Mapped[int] = mapped_column(Integer)
     difference: Mapped[int] = mapped_column(Integer)  # counted - previous
     counted_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
     counted_by: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
@@ -118,7 +122,7 @@ class FixtureLoan(Base):
     project_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     loan_date: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
     due_date: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
@@ -131,7 +135,7 @@ class FixtureLoan(Base):
     extension_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     keeper_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
 
     schedule_id: Mapped[Optional[int]] = mapped_column(
@@ -157,7 +161,7 @@ class ScheduleFixture(Base):
     )
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
 
 
@@ -180,7 +184,7 @@ class PurchaseOrder(Base):
     )
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
 
 
@@ -201,7 +205,7 @@ class DemoToken(Base):
     use_count: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
 
 
@@ -217,7 +221,7 @@ class SopTemplate(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     steps_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
 
 
@@ -239,7 +243,7 @@ class SopExecution(Base):
     photo_before_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     photo_after_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
 
 
@@ -264,7 +268,7 @@ class DeviceData(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     device_id: Mapped[str] = mapped_column(String, index=True)
     timestamp: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
     temperature: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     humidity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -286,7 +290,7 @@ class DeviceState(Base):
     humidity: Mapped[float] = mapped_column(Float, default=55.0)
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime,
-        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        default=_utcnow,
     )
 
     # --- SOP 執行狀態 ---
@@ -324,7 +328,7 @@ class ErrorLog(Base):
     completed_steps: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     total_steps: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
 
 
@@ -374,12 +378,12 @@ class Schedule(Base):
         ForeignKey("users.id"), nullable=True
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime,
-        default=lambda: datetime.datetime.now(datetime.timezone.utc),
-        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        default=_utcnow,
+        onupdate=_utcnow,
     )
 
     __table_args__ = (
@@ -401,7 +405,7 @@ class DeviceBlockedPeriod(Base):
         ForeignKey("users.id"), nullable=True
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime, default=_utcnow
     )
 
 
