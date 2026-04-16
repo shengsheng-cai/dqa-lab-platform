@@ -2,6 +2,7 @@ import { useState } from "react";
 import api from "../../api";
 import { useToast } from "../Toast";
 import DatePicker from "./DatePicker";
+import ModalShell, { inputStyle } from "./ModalShell";
 
 const CONDITIONS = [
   ["normal", "正常"],
@@ -43,29 +44,7 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
   const conditionLabel = CONDITIONS.find(([v]) => v === condition)?.[1] ?? condition;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 2000,
-      }}
-    >
-      <div
-        style={{
-          background: "#161b22",
-          border: "1px solid #30363d",
-          borderRadius: 12,
-          padding: 24,
-          width: 380,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
+    <ModalShell width={380} gap={12} onClose={onClose}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
           歸還確認
         </div>
@@ -112,31 +91,14 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
           <DatePicker
             value={returnDate}
             onChange={setReturnDate}
-            style={{
-              padding: "8px 10px",
-              borderRadius: 6,
-              border: "1px solid #30363d",
-              background: "#0d1117",
-              color: "#cdd9e5",
-              fontSize: 13,
-              boxSizing: "border-box",
-            }}
+            style={inputStyle}
           />
         </div>
         <textarea
           placeholder="備註（選填）"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          style={{
-            padding: "8px 10px",
-            borderRadius: 6,
-            border: "1px solid #30363d",
-            background: "#0d1117",
-            color: "#cdd9e5",
-            fontSize: 13,
-            resize: "none",
-            height: 60,
-          }}
+          style={{ ...inputStyle, resize: "none", height: 60 }}
         />
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -176,7 +138,6 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
                 : "確認歸還"}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

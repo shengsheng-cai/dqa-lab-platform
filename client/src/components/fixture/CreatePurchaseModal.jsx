@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "../../api";
 import { useToast } from "../Toast";
+import ModalShell, { inputStyle } from "./ModalShell";
 
 export default function CreatePurchaseModal({ fixtures, preFill, onClose, onSubmit }) {
   const { showToast } = useToast();
@@ -38,42 +39,10 @@ export default function CreatePurchaseModal({ fixtures, preFill, onClose, onSubm
     }
   };
 
-  const inputStyle = {
-    width: "100%",
-    padding: "8px 10px",
-    borderRadius: 6,
-    border: "1px solid #30363d",
-    background: "#0d1117",
-    color: "#cdd9e5",
-    fontSize: 13,
-    boxSizing: "border-box",
-  };
   const labelStyle = { fontSize: 12, color: "#8b949e", marginBottom: 4 };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 2000,
-      }}
-    >
-      <div
-        style={{
-          background: "#161b22",
-          border: "1px solid #30363d",
-          borderRadius: 12,
-          padding: 24,
-          width: 420,
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-        }}
-      >
+    <ModalShell width={420} gap={14} onClose={onClose}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
           新增採購單
         </div>
@@ -177,7 +146,6 @@ export default function CreatePurchaseModal({ fixtures, preFill, onClose, onSubm
             {loading ? "送出中..." : "建立採購單"}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

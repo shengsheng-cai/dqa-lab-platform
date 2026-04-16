@@ -2,6 +2,7 @@ import { useState } from "react";
 import api from "../../api";
 import { downloadBlob } from "../../utils/download";
 import { useToast } from "../Toast";
+import ModalShell from "./ModalShell";
 
 export default function ImportModal({ onClose, onSuccess }) {
   const { showToast } = useToast();
@@ -56,29 +57,7 @@ export default function ImportModal({ onClose, onSuccess }) {
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 2000,
-      }}
-    >
-      <div
-        style={{
-          background: "#161b22",
-          border: "1px solid #30363d",
-          borderRadius: 12,
-          padding: 24,
-          width: 440,
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-        }}
-      >
+    <ModalShell width={440} gap={14} onClose={onClose}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
           匯入 Excel 治具資料
         </div>
@@ -243,7 +222,6 @@ export default function ImportModal({ onClose, onSuccess }) {
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
