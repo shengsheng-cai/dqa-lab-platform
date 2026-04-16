@@ -639,10 +639,8 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [cancelReason, setCancelReason] = useState(null); // null = 未展開，string = 已展開
-  const [preview, setPreview] = useState(null);   // { device_id, start_time, end_time }
-  const [previewing, setPreviewing] = useState(false);
-  const [previewAt, setPreviewAt] = useState(null); // 上次 preview 計算時間
-  const [confirmedResult, setConfirmedResult] = useState(null); // 確認成功後的實際分配結果
+  const [previewState, setPreviewState] = useState({ data: null, loading: false, updatedAt: null });
+  const [confirmedResult, setConfirmedResult] = useState(null);
   const canEdit = role === "admin";
   const isPending = schedule.status === "待審核";
 
@@ -650,12 +648,11 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
     if (!isPending) return;
     const conditions = schedule.conditions?.join(",") || "";
     if (!conditions) return;
-    setPreviewing(true);
+    setPreviewState(s => ({ ...s, loading: true }));
     api
       .get("/api/schedules/preview", { params: { conditions, device_id: deviceId || undefined } })
-      .then((r) => { setPreview(r.data); setPreviewAt(new Date()); })
-      .catch(() => setPreview(null))
-      .finally(() => setPreviewing(false));
+      .then((r) => setPreviewState({ data: r.data, loading: false, updatedAt: new Date() }))
+      .catch(() => setPreviewState(s => ({ ...s, data: null, loading: false })));
   }, [deviceId, isPending, schedule.conditions]);
 
   // 待審核時自動抓預覽（modal 開啟 or 設備選擇改變時）
@@ -839,7 +836,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
             label="指定設備"
             value={
               isPending
-                ? previewing ? "計算中..." : (preview?.device_id || "—")
+                ? previewState.loading ? "計算中..." : (previewState.data?.device_id || "—")
                 : schedule.device_id || "（自動排程）"
             }
           />
@@ -847,7 +844,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
             label="開始時間"
             value={
               isPending
-                ? previewing ? "計算中..." : (preview ? fmtDt(preview.start_time) : "—")
+                ? previewState.loading ? "計算中..." : (previewState.data ? fmtDt(previewState.data.start_time) : "—")
                 : fmtDt(schedule.start_time)
             }
             muted={isPending}
@@ -856,7 +853,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
             label="結束時間"
             value={
               isPending
-                ? previewing ? "計算中..." : (preview ? fmtDt(preview.end_time) : "—")
+                ? previewState.loading ? "計算中..." : (previewState.data ? fmtDt(previewState.data.end_time) : "—")
                 : fmtDt(schedule.end_time)
             }
             muted={isPending}
@@ -866,16 +863,16 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
           {isPending && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 11, color: "#484f58" }}>
-                {previewAt
-                  ? `預覽計算於 ${previewAt.getHours().toString().padStart(2,"0")}:${previewAt.getMinutes().toString().padStart(2,"0")}:${previewAt.getSeconds().toString().padStart(2,"0")}，確認前建議刷新`
+                {previewState.updatedAt
+                  ? `預覽計算於 ${previewState.updatedAt.getHours().toString().padStart(2,"0")}:${previewState.updatedAt.getMinutes().toString().padStart(2,"0")}:${previewState.updatedAt.getSeconds().toString().padStart(2,"0")}，確認前建議刷新`
                   : "預覽計算中..."}
               </span>
               <button
                 onClick={fetchPreview}
-                disabled={previewing}
+                disabled={previewState.loading}
                 style={{ ...cancelBtn, fontSize: 11, padding: "2px 8px" }}
               >
-                {previewing ? "計算中..." : "↻ 刷新預覽"}
+                {previewState.loading ? "計算中..." : "↻ 刷新預覽"}
               </button>
             </div>
           )}

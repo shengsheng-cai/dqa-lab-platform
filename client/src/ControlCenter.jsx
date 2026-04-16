@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "./api";
 import { useToast } from "./components/Toast";
@@ -965,6 +965,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       temperature: null,
     })),
   );
+  const devicesJsonRef = useRef(null);
   const [fixtureSummary, setFixtureSummary] = useState({});
   const [selectedDevice, setSelectedDevice] = useState("CH-01");
   const [aiOpen, setAiOpen] = useState(false);
@@ -984,7 +985,11 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
     const fetchDevices = async () => {
       try {
         const res = await api.get("/api/devices");
-        setDevices(res.data);
+        const json = JSON.stringify(res.data);
+        if (json !== devicesJsonRef.current) {
+          devicesJsonRef.current = json;
+          setDevices(res.data);
+        }
       } catch (e) {
         console.error("設備狀態輪詢失敗:", e);
       }
