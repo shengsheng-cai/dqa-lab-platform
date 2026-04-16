@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import io
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from .models import (
@@ -14,7 +14,7 @@ from .models import (
     User,
 )
 from .utils import today_utc_window, _now_utc_naive
-from .auth import _require_admin
+from .auth import require_admin
 
 try:
     import pandas as pd
@@ -353,9 +353,8 @@ def get_interface_types():
 
 
 @router.get("/users")
-def list_users(request: Request):
+def list_users(_: None = Depends(require_admin)):
     """回傳使用者清單（供借出登記下拉選單用，admin only）"""
-    _require_admin(request)
     db = SessionLocal()
     try:
         users = (
@@ -480,8 +479,7 @@ def export_fixtures():
 
 
 @router.patch("/inventory-logs/{log_id}")
-def patch_inventory_log(log_id: int, actual_quantity: int, request: Request):
-    _require_admin(request)
+def patch_inventory_log(log_id: int, actual_quantity: int, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         log = (
@@ -508,8 +506,7 @@ def patch_inventory_log(log_id: int, actual_quantity: int, request: Request):
 
 
 @router.delete("/inventory-logs/{log_id}")
-def delete_inventory_log(log_id: int, request: Request):
-    _require_admin(request)
+def delete_inventory_log(log_id: int, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         log = (
@@ -527,8 +524,7 @@ def delete_inventory_log(log_id: int, request: Request):
 
 
 @router.post("/inventory-logs")
-def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request):
-    _require_admin(request)
+def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
     user = getattr(request.state, "user", None)
     counted_by = user.get("username") if user else None
     db = SessionLocal()
@@ -744,9 +740,7 @@ def list_damaged_lost_loans():
 
 
 @router.post("/loans")
-async def create_loan(body: LoanCreate, request: Request):
-    _require_admin(request)
-
+async def create_loan(body: LoanCreate, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         f = db.query(Fixture).filter(Fixture.id == body.fixture_id).first()
@@ -784,9 +778,7 @@ async def create_loan(body: LoanCreate, request: Request):
 
 
 @router.post("/loans/{loan_id}/return")
-def return_loan(loan_id: int, body: ReturnUpdate, request: Request):
-    _require_admin(request)
-
+def return_loan(loan_id: int, body: ReturnUpdate, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
@@ -825,9 +817,7 @@ def return_loan(loan_id: int, body: ReturnUpdate, request: Request):
 
 
 @router.post("/loans/{loan_id}/extend")
-def extend_loan(loan_id: int, body: ExtensionRequest, request: Request):
-    _require_admin(request)
-
+def extend_loan(loan_id: int, body: ExtensionRequest, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
@@ -848,9 +838,8 @@ def extend_loan(loan_id: int, body: ExtensionRequest, request: Request):
 
 
 @router.post("/import")
-async def import_fixtures(request: Request, file: UploadFile = File(...)):
+async def import_fixtures(file: UploadFile = File(...), _: None = Depends(require_admin)):
     """從 Excel 匯入治具資料（admin only）"""
-    _require_admin(request)
     if pd is None:
         raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
 
@@ -975,9 +964,8 @@ async def import_fixtures(request: Request, file: UploadFile = File(...)):
 
 
 @router.patch("/{fixture_id}/keeper")
-def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request):
+def set_keeper(fixture_id: int, body: SetKeeperBody, _: None = Depends(require_admin)):
     """設定治具的系統保管人（admin only）"""
-    _require_admin(request)
     db = SessionLocal()
     try:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
@@ -1004,9 +992,7 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request):
 
 
 @router.post("/{fixture_id}/inventory")
-def update_inventory(fixture_id: int, actual_quantity: int, request: Request):
-    _require_admin(request)
-
+def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
     user = getattr(request.state, "user", None)
     counted_by = user.get("username") if user else None
 
@@ -1043,8 +1029,7 @@ def update_inventory(fixture_id: int, actual_quantity: int, request: Request):
 
 
 @router.post("/")
-def create_fixture(body: FixtureUpsert, request: Request):
-    _require_admin(request)
+def create_fixture(body: FixtureUpsert, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         f = Fixture(
@@ -1077,8 +1062,7 @@ def create_fixture(body: FixtureUpsert, request: Request):
 
 
 @router.patch("/{fixture_id}")
-def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request):
-    _require_admin(request)
+def update_fixture(fixture_id: int, body: FixtureUpsert, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         f = (
@@ -1114,8 +1098,7 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request):
 
 
 @router.delete("/{fixture_id}")
-def delete_fixture(fixture_id: int, request: Request):
-    _require_admin(request)
+def delete_fixture(fixture_id: int, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         f = (

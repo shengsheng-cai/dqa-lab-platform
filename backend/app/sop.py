@@ -5,13 +5,13 @@ import json
 import datetime
 import os
 import shutil
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Body, Request, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Body, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, ScheduleStatus, FixtureLoan, DeviceBlockedPeriod
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _save_device_state, _parse_conditions
-from .auth import _require_admin
+from .auth import require_admin
 from .line import push_message
 
 PHOTO_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "photos")
@@ -90,9 +90,8 @@ def get_standards_tree():
 
 # 啟動 SOP 路由
 @router.post("/start")
-async def start_sop(request: Request, payload: Dict[str, Any] = Body(...)):
+async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: None = Depends(require_admin)):
     """啟動指定設備的 SOP 測試（admin 才可操作）"""
-    _require_admin(request)
 
     operator: str = payload.get("operator", "")
     operator_user_id: Optional[int] = getattr(request.state, "user_id", None)
@@ -310,8 +309,7 @@ class ExecutionResponse(BaseModel):
 
 
 @execution_router.post("/", response_model=ExecutionResponse)
-def create_execution(data: ExecutionCreate, request: Request, background_tasks: BackgroundTasks):
-    _require_admin(request)
+def create_execution(data: ExecutionCreate, request: Request, background_tasks: BackgroundTasks, _: None = Depends(require_admin)):
     operator_user_id = getattr(request.state, "user_id", None)
     with SessionLocal() as db:
         execution = SopExecution(
@@ -411,12 +409,11 @@ def get_execution(execution_id: int):
 @execution_router.post("/{execution_id}/photos")
 async def upload_execution_photo(
     execution_id: int,
-    request: Request,
     photo_type: str = Form(...),  # "before" | "after"
     file: UploadFile = File(...),
+    _: None = Depends(require_admin),
 ):
     """補充照片：上架時照片（before）或測試結束照（after）"""
-    _require_admin(request)
     if photo_type not in ("before", "after"):
         raise HTTPException(status_code=400, detail="photo_type 必須為 before 或 after")
 

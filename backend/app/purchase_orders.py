@@ -1,9 +1,9 @@
 import datetime
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 from .models import SessionLocal, PurchaseOrder, Fixture
-from .auth import _require_admin
+from .auth import require_admin
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
 
@@ -72,9 +72,8 @@ class PurchaseOrderCreate(BaseModel):
 
 
 @router.post("/", response_model=PurchaseOrderOut)
-def create_purchase_order(body: PurchaseOrderCreate, request: Request):
+def create_purchase_order(body: PurchaseOrderCreate, _: None = Depends(require_admin)):
     """新增採購單（admin only）"""
-    _require_admin(request)
 
     if body.quantity <= 0:
         raise HTTPException(status_code=400, detail="數量必須大於 0")
@@ -113,9 +112,8 @@ class PurchaseOrderUpdate(BaseModel):
 
 
 @router.patch("/{order_id}", response_model=PurchaseOrderOut)
-def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Request):
+def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, _: None = Depends(require_admin)):
     """更新採購單；status=arrived 時自動將 arrived_quantity 加入治具庫存（admin only）"""
-    _require_admin(request)
 
     with SessionLocal() as db:
         order = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()
@@ -149,9 +147,8 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Req
 
 
 @router.delete("/{order_id}")
-def delete_purchase_order(order_id: int, request: Request):
+def delete_purchase_order(order_id: int, _: None = Depends(require_admin)):
     """刪除採購單（admin only，僅限 pending 狀態）"""
-    _require_admin(request)
 
     with SessionLocal() as db:
         order = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()

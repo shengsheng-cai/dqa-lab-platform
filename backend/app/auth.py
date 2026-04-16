@@ -4,7 +4,7 @@ import secrets
 import datetime
 import logging
 from typing import Optional
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from .models import SessionLocal, User, DemoToken
@@ -213,7 +213,7 @@ def get_me(request: Request):
 
 # ---------- 使用者管理（admin only）----------
 
-def _require_admin(request: Request):
+def require_admin(request: Request):
     role = getattr(request.state, "user_role", None)
     if role != "admin":
         raise HTTPException(status_code=403, detail="需要管理者權限")
@@ -231,8 +231,7 @@ class UserUpdateBody(BaseModel):
 
 
 @router.get("/api/auth/users", response_model=list[UserOut])
-def list_users(request: Request):
-    _require_admin(request)
+def list_users(_: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         users = db.query(User).order_by(User.created_at.asc()).all()
@@ -251,8 +250,7 @@ def list_users(request: Request):
 
 
 @router.post("/api/auth/users", status_code=201, response_model=UserMeResponse)
-def create_user(body: UserCreateBody, request: Request):
-    _require_admin(request)
+def create_user(body: UserCreateBody, _: None = Depends(require_admin)):
     if not body.role or not body.role.strip():
         raise HTTPException(status_code=400, detail="角色不能為空")
     db = SessionLocal()
@@ -276,8 +274,7 @@ def create_user(body: UserCreateBody, request: Request):
 
 
 @router.patch("/api/auth/users/{user_id}")
-def update_user(user_id: int, body: UserUpdateBody, request: Request):
-    _require_admin(request)
+def update_user(user_id: int, body: UserUpdateBody, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.id == user_id).first()
@@ -299,8 +296,7 @@ def update_user(user_id: int, body: UserUpdateBody, request: Request):
 
 
 @router.delete("/api/auth/users/{user_id}")
-def delete_user(user_id: int, request: Request):
-    _require_admin(request)
+def delete_user(user_id: int, request: Request, _: None = Depends(require_admin)):
     # 取得當前登入者 ID，不允許刪除自己
     current_token = request.headers.get("X-User-Token", "")
     db = SessionLocal()
@@ -334,8 +330,7 @@ class DemoTokenCreate(BaseModel):
 
 
 @router.get("/api/auth/demo-tokens")
-def list_demo_tokens(request: Request):
-    _require_admin(request)
+def list_demo_tokens(_: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         rows = db.query(DemoToken).order_by(DemoToken.created_at.desc()).all()
@@ -366,8 +361,7 @@ def list_demo_tokens(request: Request):
 
 
 @router.post("/api/auth/demo-tokens")
-def create_demo_token(req: DemoTokenCreate, request: Request):
-    _require_admin(request)
+def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         expires_at = None
@@ -401,8 +395,7 @@ def create_demo_token(req: DemoTokenCreate, request: Request):
 
 
 @router.delete("/api/auth/demo-tokens/{token_id}")
-def delete_demo_token(token_id: int, request: Request):
-    _require_admin(request)
+def delete_demo_token(token_id: int, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         t = db.query(DemoToken).filter(DemoToken.id == token_id).first()
@@ -416,8 +409,7 @@ def delete_demo_token(token_id: int, request: Request):
 
 
 @router.patch("/api/auth/demo-tokens/{token_id}/toggle")
-def toggle_demo_token(token_id: int, request: Request):
-    _require_admin(request)
+def toggle_demo_token(token_id: int, _: None = Depends(require_admin)):
     db = SessionLocal()
     try:
         t = db.query(DemoToken).filter(DemoToken.id == token_id).first()

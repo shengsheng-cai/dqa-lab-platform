@@ -6,13 +6,13 @@ import datetime
 import json
 from typing import Optional, List
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
 from .models import SessionLocal, Schedule, ScheduleStatus, DeviceBlockedPeriod, User, ScheduleFixture, Fixture, FixtureLoan
 from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
-from .auth import _require_admin
+from .auth import require_admin
 from .line import push_message
 from .utils import _now_utc, _save_device_state, _parse_conditions
 
@@ -620,9 +620,8 @@ def get_schedule(schedule_id: int):
 
 
 @router.post("", response_model=ScheduleOut, status_code=201)
-def create_schedule(body: ScheduleCreate, request: Request):
+def create_schedule(body: ScheduleCreate, request: Request, _: None = Depends(require_admin)):
     """提交新排程申請（admin）"""
-    _require_admin(request)
 
     if not body.conditions:
         raise HTTPException(status_code=400, detail="至少選擇一個測試條件")
@@ -842,8 +841,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
 
 
 @router.delete("/{schedule_id}")
-async def delete_schedule(schedule_id: int, request: Request):
-    _require_admin(request)
+async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(require_admin)):
     _cache = getattr(request.app.state, "AICM_CACHE", {})
     _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     _scheduler = getattr(request.app.state, "scheduler", None)
@@ -873,9 +871,8 @@ async def delete_schedule(schedule_id: int, request: Request):
 
 
 @router.post("/{schedule_id}/confirm-condition")
-async def confirm_condition(schedule_id: int, request: Request):
+async def confirm_condition(schedule_id: int, request: Request, _: None = Depends(require_admin)):
     from .sop import auto_start_sop
-    _require_admin(request)
     cache = getattr(request.app.state, "AICM_CACHE", {})
     locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     now = _now_utc()
@@ -906,10 +903,9 @@ async def confirm_condition(schedule_id: int, request: Request):
 
 
 @router.post("/{schedule_id}/start")
-async def start_schedule(schedule_id: int, request: Request):
+async def start_schedule(schedule_id: int, request: Request, _: None = Depends(require_admin)):
     """手動立即啟動「已確認」排程（補救 APScheduler 漏掉的情況）。"""
     from .sop import auto_start_sop
-    _require_admin(request)
     cache = getattr(request.app.state, "AICM_CACHE", {})
     locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     now = _now_utc()
@@ -955,9 +951,7 @@ def list_blocked_periods():
 
 
 @blocked_router.post("", response_model=BlockedPeriodOut, status_code=201)
-def create_blocked_period(body: BlockedPeriodCreate, request: Request):
-    _require_admin(request)
-
+def create_blocked_period(body: BlockedPeriodCreate, request: Request, _: None = Depends(require_admin)):
     if body.end_time <= body.start_time:
         raise HTTPException(status_code=400, detail="結束時間必須晚於開始時間")
 
@@ -980,9 +974,7 @@ def create_blocked_period(body: BlockedPeriodCreate, request: Request):
 
 
 @blocked_router.patch("/{period_id}", response_model=BlockedPeriodOut)
-def update_blocked_period(period_id: int, body: BlockedPeriodPatch, request: Request):
-    _require_admin(request)
-
+def update_blocked_period(period_id: int, body: BlockedPeriodPatch, _: None = Depends(require_admin)):
     with SessionLocal() as db:
         b = db.query(DeviceBlockedPeriod).filter(DeviceBlockedPeriod.id == period_id).first()
         if not b:
@@ -1005,9 +997,7 @@ def update_blocked_period(period_id: int, body: BlockedPeriodPatch, request: Req
 
 
 @blocked_router.delete("/{period_id}")
-def delete_blocked_period(period_id: int, request: Request):
-    _require_admin(request)
-
+def delete_blocked_period(period_id: int, _: None = Depends(require_admin)):
     with SessionLocal() as db:
         b = db.query(DeviceBlockedPeriod).filter(DeviceBlockedPeriod.id == period_id).first()
         if not b:
