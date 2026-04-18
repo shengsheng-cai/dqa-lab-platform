@@ -414,7 +414,7 @@ async def pause_test(device_id: str, request: Request, _: None = Depends(require
 
 
 @router.post("/api/stop/{device_id}/normal")
-async def normal_stop(device_id: str, request: Request, _: None = Depends(require_admin)):
+async def normal_stop(device_id: str, request: Request, skip_push: bool = False, _: None = Depends(require_admin)):
     cache = request.app.state.AICM_CACHE
     locks = request.app.state.DEVICE_LOCKS
     device = _get_device(cache, device_id)
@@ -429,6 +429,7 @@ async def normal_stop(device_id: str, request: Request, _: None = Depends(requir
                 "standard_id": None,
                 "sim_phase": "ramp_to_ambient",
                 "sim_cycle": 0,
+                "skip_push": skip_push,
             }
         )
         _save_device_state(device_id, device)

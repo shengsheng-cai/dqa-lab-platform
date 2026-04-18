@@ -11,6 +11,7 @@ const ExecutionPanel = ({
   startedAt,
   savedExecutionId,
   autoSave = false,
+  manualMode = false,
   onSaved,
   onError,
 }) => {
@@ -63,13 +64,14 @@ const ExecutionPanel = ({
         device_id: selectedDevice,
         operator: operator?.trim() || null,
         test_started_at: startedAt || null,
+        test_ended_at: new Date().toISOString(),
+        manual_mode: manualMode,
         steps: stepPayload,
       });
 
       const execId = res.data.id;
       onSaved(execId);
       showToast("執行紀錄已儲存", "success");
-      await downloadReport(execId);
     } catch (err) {
       const detail = err?.response?.data?.detail || "請確認後端連線";
       onError(`❌ 儲存失敗：${detail}`);
@@ -121,7 +123,7 @@ const ExecutionPanel = ({
             border: "1px solid #21262d",
           }}
         >
-          下一步：確認報告已下載後，點「正常停止」讓設備自動降溫回待機。
+          測試已完成，可下載報告。
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {[

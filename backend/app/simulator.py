@@ -255,14 +255,16 @@ async def _sim_handle_finishing(
     else:
         item["temperature"] = 25.0
         sop_name = item.get("running_sop_name") or "未知測試"
+        skip_push = item.pop("skip_push", False)
         async with locks[device_id]:
             item.update(_idle_state_patch())
             _save_device_state(device_id, item)
         logger.info(f"[{device_id}] 手動停止降溫完成，回待機。")
-        push_text = _try_complete_schedule_for_device(device_id)
-        if push_text is None:
-            push_text = f"✅ 測試完成\n設備：{device_id}\n測試：{sop_name}"
-        asyncio.create_task(push_message(push_text))
+        if not skip_push:
+            push_text = _try_complete_schedule_for_device(device_id)
+            if push_text is None:
+                push_text = f"✅ 測試完成\n設備：{device_id}\n測試：{sop_name}"
+            asyncio.create_task(push_message(push_text))
 
     item["humidity"] = round(
         max(0.0, min(100.0, current_humi + random.uniform(-0.2, 0.2))), 1

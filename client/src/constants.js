@@ -17,6 +17,7 @@ export function parseUtcDate(s) {
 }
 
 export const ACTIVE_STATUSES = ["RUNNING", "PAUSED"];
+export const IDLE_STATUS = "IDLE";
 export const FINISHING_STATUS = "FINISHING";
 export const OFFLINE_STATUS = "OFFLINE";
 export const EMERGENCY_STATUS = "EMERGENCY";

@@ -296,6 +296,7 @@ class ExecutionCreate(BaseModel):
     operator: Optional[str] = None
     test_started_at: Optional[datetime.datetime] = None
     test_ended_at: Optional[datetime.datetime] = None
+    manual_mode: bool = False
     steps: List[StepRecordSchema]
 
 
@@ -305,6 +306,8 @@ class ExecutionResponse(BaseModel):
     device_id: Optional[str] = None
     operator: Optional[str] = None
     created_at: datetime.datetime
+    test_started_at: Optional[datetime.datetime] = None
+    test_ended_at: Optional[datetime.datetime] = None
     steps: List[StepRecordSchema]
 
 
@@ -345,11 +348,12 @@ def create_execution(data: ExecutionCreate, request: Request, background_tasks: 
         sop_template = db.query(SopTemplate).filter(SopTemplate.sop_id == data.sop_id).first()
         sop_display_name = sop_template.name if sop_template else data.sop_id
         # 有進行中排程時，simulator 完成後會 push；手動啟動無排程才從這裡 push
+        # 手動模式（除錯）完全不推播，避免消耗 LINE 200/月額度
         has_schedule = db.query(Schedule).filter(
             Schedule.device_id == data.device_id,
             Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
         ).first() is not None
-        if not has_schedule:
+        if not has_schedule and not data.manual_mode:
             background_tasks.add_task(
                 push_message,
                 f"✅ 測試完成\n設備：{data.device_id}\n測試：{sop_display_name}",
@@ -371,6 +375,8 @@ def create_execution(data: ExecutionCreate, request: Request, background_tasks: 
             device_id=execution.device_id,
             operator=execution.operator,
             created_at=execution.created_at,
+            test_started_at=execution.test_started_at,
+            test_ended_at=execution.test_ended_at,
             steps=steps_response,
         )
 
@@ -402,6 +408,8 @@ def get_execution(execution_id: int):
             device_id=execution.device_id,
             operator=execution.operator,
             created_at=execution.created_at,
+            test_started_at=execution.test_started_at,
+            test_ended_at=execution.test_ended_at,
             steps=steps,
         )
 

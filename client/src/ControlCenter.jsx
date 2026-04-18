@@ -8,7 +8,7 @@ import SchedulePage from "./SchedulePage";
 import UsersPage from "./UsersPage";
 import ErrorLog from "./ErrorLog";
 import RightPanel from "./components/control/RightPanel";
-import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL, ACTIVE_STATUSES, FINISHING_STATUS, EMERGENCY_STATUS } from "./constants";
+import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL, ACTIVE_STATUSES, IDLE_STATUS, FINISHING_STATUS, EMERGENCY_STATUS } from "./constants";
 import { downloadBlob, buildReportFilename } from "./utils/download";
 import { formatLocal } from "./utils/timezone";
 
@@ -28,7 +28,7 @@ const PATH_TO_TAB = Object.fromEntries(
 function TopBar({ devices, fixtureSummary, displayName, role, onLogout }) {
   const running = devices.filter((d) => d.status === "RUNNING").length;
   const emergency = devices.filter((d) => d.status === "EMERGENCY").length;
-  const idle = devices.filter((d) => d.status === "IDLE" && !d.is_blocked).length;
+  const idle = devices.filter((d) => d.status === IDLE_STATUS && !d.is_blocked).length;
   const blocked = devices.filter((d) => d.is_blocked).length;
 
   const Stat = ({ label, value, color }) => (
@@ -163,13 +163,37 @@ function fmtRemaining(secs) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-function DeviceCard({ device, isSelected, onClick }) {
-  const isBlocked = device.is_blocked && device.status === "IDLE";
+function toDeviceMap(schedules) {
+  const map = {};
+  schedules.forEach(s => { if (s.device_id) map[s.device_id] = s; });
+  return map;
+}
+
+function conditionLabel(schedule, prefix = "") {
+  const idx = schedule.current_condition_index ?? 0;
+  const total = (schedule.conditions || []).length;
+  const isLast = idx >= total;
+  return { idx, total, label: `${prefix}${isLast ? "✅ 確認完成" : `▶ 第 ${idx + 1}/${total} 條件`}` };
+}
+
+function DeviceCard({ device, isSelected, onClick, pendingSchedule, onConfirmCondition }) {
+  const isBlocked = device.is_blocked && device.status === IDLE_STATUS;
   const cfg = isBlocked ? STATUS_CONFIG.BLOCKED : (STATUS_CONFIG[device.status] || STATUS_CONFIG.OFFLINE);
   const remaining = useCountdown(device.estimated_end_at);
   const isActive = ACTIVE_STATUSES.includes(device.status);
   const isEmergency = device.status === EMERGENCY_STATUS;
   const isFinishing = device.status === FINISHING_STATUS;
+  const [confirming, setConfirming] = useState(false);
+
+  const isWaiting = device.status === IDLE_STATUS && !!pendingSchedule && !!onConfirmCondition;
+  const { idx: waitingIdx, total: waitingTotal, label: waitingLabel } = isWaiting
+    ? conditionLabel(pendingSchedule)
+    : { idx: 0, total: 0, label: "" };
+  const handleConfirm = async (e) => {
+    e.stopPropagation();
+    setConfirming(true);
+    try { await onConfirmCondition(pendingSchedule.id); } finally { setConfirming(false); }
+  };
 
   const totalMs = useMemo(
     () => parseUtcDate(device.estimated_end_at) - parseUtcDate(device.started_at),
@@ -281,6 +305,26 @@ function DeviceCard({ device, isSelected, onClick }) {
           <div>⏳ 正在自動降溫到 25°C，請稍候...</div>
         </div>
       )}
+
+      {isWaiting && (
+        <div style={{ marginTop: 5 }}>
+          <div style={{ fontSize: 9, color: "#f0a500", marginBottom: 3 }}>
+            ⚠ 等待確認 ({waitingIdx}/{waitingTotal})
+          </div>
+          <button
+            disabled={confirming}
+            onClick={handleConfirm}
+            style={{
+              width: "100%", padding: "3px 0", fontSize: 9, fontWeight: 700,
+              background: confirming ? "#2d2600" : "#f0a50022",
+              border: "1px solid #f0a500", borderRadius: 4,
+              color: "#f0a500", cursor: confirming ? "not-allowed" : "pointer",
+            }}
+          >
+            {confirming ? "處理中..." : waitingLabel}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -297,24 +341,6 @@ function TabBadge({ count, bg, color = "#0d1117" }) {
     }}>
       {count}
     </span>
-  );
-}
-
-// ── DeviceAvailRow ────────────────────────────────────────────────────────────
-
-function DeviceAvailRow({ device }) {
-  const cfg = STATUS_CONFIG[device.status] || STATUS_CONFIG.OFFLINE;
-  const remaining = useCountdown(device.estimated_end_at);
-  return (
-    <div style={{ padding: "5px 8px", borderRadius: 5, border: "1px solid #21262d" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#cdd9e5" }}>{device.device_id}</span>
-        <span style={{ fontSize: 9, fontWeight: 600, color: cfg.color }}>{cfg.label}</span>
-      </div>
-      {remaining !== null && (
-        <div style={{ fontSize: 9, color: "#58a6ff", marginTop: 2 }}>剩 {fmtRemaining(remaining)}</div>
-      )}
-    </div>
   );
 }
 
@@ -341,7 +367,7 @@ function FixtureSummaryPanel({ fixtureSummary }) {
 
 // ── ScheduleSummaryPanel ──────────────────────────────────────────────────────
 
-function ScheduleSummaryPanel({ devices }) {
+function ScheduleSummaryPanel({ devices, pendingByDevice, onConfirmCondition }) {
   const [counts, setCounts] = useState({ pending: 0, confirmed: 0, running: 0 });
 
   useEffect(() => {
@@ -380,7 +406,7 @@ function ScheduleSummaryPanel({ devices }) {
       </div>
       <div style={{ fontSize: 9, color: "#484f58", padding: "4px 16px 4px", letterSpacing: 1, flexShrink: 0 }}>設備可用性</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 8px", overflowY: "auto" }}>
-        {devices.map(d => <DeviceCard key={d.device_id} device={d} isSelected={false} onClick={null} />)}
+        {devices.map(d => <DeviceCard key={d.device_id} device={d} isSelected={false} onClick={null} pendingSchedule={pendingByDevice?.[d.device_id]} onConfirmCondition={onConfirmCondition} />)}
       </div>
     </div>
   );
@@ -430,7 +456,7 @@ function UsersSummaryPanel() {
 
 // ── LeftPanel ─────────────────────────────────────────────────────────────────
 
-function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary, onOpenRecords }) {
+function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary, onOpenRecords, pendingByDevice, onConfirmCondition }) {
   const title = activeTab === "schedule" ? "排程概況"
     : activeTab === "fixture" ? "治具概況"
     : activeTab === "users" ? "人員概況"
@@ -473,7 +499,7 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixture
         {activeTab === "fixture" ? (
           <FixtureSummaryPanel fixtureSummary={fixtureSummary} />
         ) : activeTab === "schedule" ? (
-          <ScheduleSummaryPanel devices={devices} />
+          <ScheduleSummaryPanel devices={devices} pendingByDevice={pendingByDevice} onConfirmCondition={onConfirmCondition} />
         ) : activeTab === "users" ? (
           <UsersSummaryPanel />
         ) : (
@@ -826,6 +852,26 @@ function ExecutionList({ active, role }) {
   );
 }
 
+// ── BannerConfirmBtn ──────────────────────────────────────────────────────────
+
+function BannerConfirmBtn({ device, schedule, onConfirmCondition }) {
+  const [busy, setBusy] = useState(false);
+  const { label } = conditionLabel(schedule, `${device.device_id} `);
+  return (
+    <button
+      disabled={busy}
+      onClick={async () => { setBusy(true); try { await onConfirmCondition(schedule.id); } finally { setBusy(false); } }}
+      style={{
+        fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 4,
+        background: busy ? "#2d2600" : "#f0a50022", border: "1px solid #f0a500",
+        color: "#f0a500", cursor: busy ? "not-allowed" : "pointer",
+      }}
+    >
+      {busy ? "處理中..." : label}
+    </button>
+  );
+}
+
 // ── CenterPanel ───────────────────────────────────────────────────────────────
 
 const TABS = [
@@ -835,7 +881,7 @@ const TABS = [
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices }) {
+function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, pendingByDevice, onConfirmCondition }) {
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
@@ -858,6 +904,13 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
     const timer = setInterval(fetch, POLL_GENERAL_MS);
     return () => clearInterval(timer);
   }, [role]);
+
+  const waitingDevices = useMemo(
+    () => role === "admin" && pendingByDevice
+      ? devices.filter(d => d.status === IDLE_STATUS && pendingByDevice[d.device_id])
+      : [],
+    [role, devices, pendingByDevice]
+  );
 
   return (
     <div
@@ -905,6 +958,16 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
         ))}
       </div>
 
+      {/* 等待確認 Banner */}
+      {waitingDevices.length > 0 && (
+        <div style={{ flexShrink: 0, background: "#1a1500", borderBottom: "1px solid #f0a500", padding: "6px 12px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: "#f0a500", fontWeight: 700, marginRight: 4 }}>⚠ 等待確認</span>
+          {waitingDevices.map(d => (
+            <BannerConfirmBtn key={d.device_id} device={d} schedule={pendingByDevice[d.device_id]} onConfirmCondition={onConfirmCondition} />
+          ))}
+        </div>
+      )}
+
       {/* Tab content（display:none 保留狀態）*/}
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
         <div
@@ -933,7 +996,7 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
             height: "100%",
           }}
         >
-          <SchedulePage active={activeTab === "schedule"} role={role} userId={userId} initConditions={scheduleInitConds} onInitCondsConsumed={handleInitCondsConsumed} liveDeviceStatuses={Object.fromEntries(devices.map(d => [d.device_id, (d.is_blocked && d.status === "IDLE") ? "BLOCKED" : d.status]))} />
+          <SchedulePage active={activeTab === "schedule"} role={role} userId={userId} initConditions={scheduleInitConds} onInitCondsConsumed={handleInitCondsConsumed} liveDeviceStatuses={Object.fromEntries(devices.map(d => [d.device_id, (d.is_blocked && d.status === IDLE_STATUS) ? "BLOCKED" : d.status]))} />
         </div>
         {role === "admin" && (
           <div
@@ -966,6 +1029,8 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
     })),
   );
   const devicesJsonRef = useRef(null);
+  const [pendingByDevice, setPendingByDevice] = useState({});
+  const pendingJsonRef = useRef(null);
   const [fixtureSummary, setFixtureSummary] = useState({});
   const [selectedDevice, setSelectedDevice] = useState("CH-01");
   const [aiOpen, setAiOpen] = useState(false);
@@ -999,6 +1064,42 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
     return () => clearInterval(t);
   }, []);
 
+  // 輪詢進行中排程（3s），建 device_id → schedule map
+  useEffect(() => {
+    if (role === "guest") return;
+    const fetch = async () => {
+      try {
+        const res = await api.get("/api/schedules?status=進行中");
+        const map = toDeviceMap(res.data);
+        const json = JSON.stringify(map);
+        if (json !== pendingJsonRef.current) {
+          pendingJsonRef.current = json;
+          setPendingByDevice(map);
+        }
+      } catch (e) {}
+    };
+    fetch();
+    const t = setInterval(fetch, POLL_DEVICES_MS);
+    return () => clearInterval(t);
+  }, [role]);
+
+  const handleConfirmCondition = useCallback(async (scheduleId) => {
+    try {
+      const res = await api.post(`/api/schedules/${scheduleId}/confirm-condition`);
+      if (res.data.status === "completed") {
+        showToast("排程全部條件完成！", "success");
+      } else {
+        showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
+      }
+      const r = await api.get("/api/schedules?status=進行中");
+      const map = toDeviceMap(r.data);
+      pendingJsonRef.current = JSON.stringify(map);
+      setPendingByDevice(map);
+    } catch (e) {
+      showToast(e.response?.data?.detail || "操作失敗", "error");
+    }
+  }, [showToast]);
+
   // 輪詢治具摘要（30s）
   useEffect(() => {
     const fetchSummary = async () => {
@@ -1031,6 +1132,8 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           activeTab={activeTab}
           fixtureSummary={fixtureSummary}
           onOpenRecords={() => setRecordsOpen(true)}
+          pendingByDevice={pendingByDevice}
+          onConfirmCondition={handleConfirmCondition}
         />
         <CenterPanel
           role={role}
@@ -1041,6 +1144,8 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           scheduleInitConds={scheduleInitConds}
           handleInitCondsConsumed={handleInitCondsConsumed}
           devices={devices}
+          pendingByDevice={pendingByDevice}
+          onConfirmCondition={handleConfirmCondition}
           onApplySchedule={handleApplySchedule}
           onOpenExecutions={() => {
             setRecordsOpen(true);

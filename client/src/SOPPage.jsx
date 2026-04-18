@@ -9,7 +9,7 @@ import StepList from "./components/sop/StepList";
 import ExecutionPanel from "./components/sop/ExecutionPanel";
 import SafetyChecklist from "./components/sop/SafetyChecklist";
 import "./SOPPage.css";
-import { DEVICE_IDS, ACTIVE_STATUSES, FINISHING_STATUS, OFFLINE_STATUS, EMERGENCY_STATUS } from "./constants";
+import { DEVICE_IDS, ACTIVE_STATUSES, IDLE_STATUS, FINISHING_STATUS, EMERGENCY_STATUS } from "./constants";
 import ConfirmModal from "./components/ConfirmModal";
 
 const initDeviceState = () => ({
@@ -93,10 +93,8 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   const ds = deviceStates[selectedDevice];
   const isActive = ACTIVE_STATUSES.includes(data.status);
   const isFinishing = data.status === FINISHING_STATUS;
-  const isOffline = data.status === OFFLINE_STATUS;
   const isEmergency = data.status === EMERGENCY_STATUS;
-  const isBlocked = data.is_blocked && data.status === "IDLE";
-  const canStop = isActive || isEmergency;
+  const isBlocked = data.is_blocked && data.status === IDLE_STATUS;
   const effectiveStatus = pauseOptimistic ?? data.status;
   const effectiveIsActive = ACTIVE_STATUSES.includes(effectiveStatus);
   const doneCnt = Object.values(ds.completedSteps).filter(Boolean).length;
@@ -210,7 +208,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
 
   // 設備為 IDLE 時主動查詢是否有等待確認的排程，並補齊 savedExecutionId
   useEffect(() => {
-    if (data.status === "IDLE") {
+    if (data.status === IDLE_STATUS) {
       api.get("/api/schedules?status=RUNNING").then((r) => {
         const match = r.data.find((s) => s.device_id === selectedDevice);
         setPendingSchedule(match || null);
@@ -313,7 +311,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   // 載入已執行中設備時，根據當前 sim_phase 恢復自動步驟狀態
   useEffect(() => {
     const curDs = deviceStatesRef.current[selectedDevice];
-    if (!curDs?.activeSop || Object.keys(curDs.completedSteps).length > 0) return;
+    if (!curDs?.activeSop) return;
     // FINISHING 不恢復：正常停止後 active_sop_json 尚未清除會導致誤觸發
     if (!ACTIVE_STATUSES.includes(allDevices[selectedDevice]?.status)) return;
 
@@ -328,17 +326,26 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
     if (["dwell_low", "ramp_to_ambient"].includes(phase)) firedTriggers.add("second_dwell");
     if (phase === "ramp_to_ambient") firedTriggers.add("complete");
     if (cycle >= Math.ceil(totalCycles / 2)) firedTriggers.add("cycle_half");
-    if (dwellHalfFired) firedTriggers.add("dwell_half");
+    // dwell_half_fired 是瞬時 flag（dwell 結束後會被後端重置為 false），
+    // 所以還要看 sim_phase 是否已跨過第一個 dwell。
+    if (dwellHalfFired || ["ramp_to_low2", "dwell_low", "ramp_to_ambient"].includes(phase)) {
+      firedTriggers.add("dwell_half");
+    }
 
     const newCompleted = {};
     steps.forEach((s) => {
-      if (s.auto_trigger && firedTriggers.has(s.auto_trigger)) newCompleted[s.step_id] = true;
+      if (s.auto_trigger && firedTriggers.has(s.auto_trigger) && !curDs.completedSteps[s.step_id]) {
+        newCompleted[s.step_id] = true;
+      }
     });
 
     if (Object.keys(newCompleted).length > 0) {
       setDeviceStates((prev) => ({
         ...prev,
-        [selectedDevice]: { ...prev[selectedDevice], completedSteps: newCompleted },
+        [selectedDevice]: {
+          ...prev[selectedDevice],
+          completedSteps: { ...prev[selectedDevice].completedSteps, ...newCompleted },
+        },
       }));
     }
   }, [ds.activeSop?.sop_id, selectedDevice, simPhase]); // eslint-disable-line
@@ -447,7 +454,8 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
     if (type === "pause")
       setPauseOptimistic(effectiveStatus === "RUNNING" ? "PAUSED" : "RUNNING");
     try {
-      await api.post(`/api/stop/${selectedDevice}/${type}`);
+      const skipPush = manualMode && type === "normal";
+      await api.post(`/api/stop/${selectedDevice}/${type}${skipPush ? "?skip_push=true" : ""}`);
       if (type === "normal" || type === "emergency") {
         const patch = { completedSteps: {}, autoSave: false, safetyChecked: [false, false, false, false] };
         if (type === "emergency") { patch.savedExecutionId = null; patch.activeSop = null; }
@@ -599,12 +607,12 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
                     <button
                       onClick={() => {
                         setConfirmModal({
-                          message: "確定跳至降溫階段？此操作將略過剩餘測試步驟，直接回溫到 25°C。",
+                          message: "確定提前結束測試？設備將跳過剩餘步驟，立即開始降溫回待機狀態。",
                           onConfirm: async () => {
                             setConfirmModal(null);
                             try {
                               await api.post(`/api/devices/${selectedDevice}/set-phase`, { phase: "ramp_to_ambient" });
-                              showToast("已跳轉至降溫階段", "success");
+                              showToast("已提前結束，設備開始降溫", "success");
                             } catch (e) {
                               const msg = e?.response?.data?.detail || "操作失敗";
                               showToast(msg, "error");
@@ -612,14 +620,14 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
                           },
                         });
                       }}
-                      title="跳至降溫（略過剩餘測試直接回 25°C）"
+                      title="提前結束測試，設備立即開始降溫回待機"
                       style={{
                         padding: "3px 8px", fontSize: 10, borderRadius: 4, cursor: "pointer",
                         background: "#21262d", color: "#58a6ff",
                         border: "1px solid #1f6feb",
                       }}
                     >
-                      ⏩ 跳至降溫
+                      ⏭ 提前結束測試
                     </button>
                   </div>
                 )}
@@ -634,7 +642,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
                 uploadPhoto={uploadPhoto}
                 photoUploading={photoUploading}
               />
-              {allStepsDone && (isActive || isFinishing) && (
+              {((allStepsDone && (isActive || isFinishing)) || (ds.savedExecutionId && !ds.activeSop && !isActive)) && (
                 <ExecutionPanel
                   activeSop={ds.activeSop}
                   selectedDevice={selectedDevice}
@@ -643,9 +651,10 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
                   startedAt={data.started_at}
                   savedExecutionId={ds.savedExecutionId}
                   autoSave={ds.autoSave}
-                  onSaved={(id) =>
-                    updateDS(selectedDevice, { savedExecutionId: id, autoSave: false })
-                  }
+                  manualMode={manualMode}
+                  onSaved={(id) => {
+                    updateDS(selectedDevice, { savedExecutionId: id, autoSave: false });
+                  }}
                   onError={setStartError}
                 />
               )}
