@@ -485,6 +485,7 @@ export default function UsersPage({ active }) {
   const [loading, setLoading] = useState(false);
   const [modalUser, setModalUser] = useState(undefined); // undefined=隱藏, null=新增, obj=編輯
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const { showToast } = useToast();
 
   const fetchUsers = useCallback(async () => {
     if (!active) return;
@@ -522,7 +523,7 @@ export default function UsersPage({ active }) {
       setDeleteTarget(null);
       fetchUsers();
     } catch (e) {
-      alert(e.response?.data?.detail || "刪除失敗");
+      showToast(e.response?.data?.detail || "刪除失敗", "error");
     } finally {
       setDeleteTarget(null);
     }
