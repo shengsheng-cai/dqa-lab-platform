@@ -4,7 +4,10 @@
 import asyncio
 import datetime
 import json
+import logging
 from typing import Optional, List
+
+logger = logging.getLogger("schedules")
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
@@ -574,7 +577,7 @@ def get_gantt(request: Request):
             .order_by(Schedule.start_time)
             .all()
         )
-        blocked = db.query(DeviceBlockedPeriod).all()
+        blocked = db.query(DeviceBlockedPeriod).limit(500).all()
         fixtures_map = _build_schedule_fixtures_map(db, [s.id for s in schedules])
 
         return {

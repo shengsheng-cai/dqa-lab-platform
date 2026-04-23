@@ -439,6 +439,7 @@ def _validate_demo_token(provided: str) -> bool:
             return False
         return True
     except Exception:
+        logger.exception("_check_demo_token 驗證失敗")
         return False
     finally:
         db.close()
@@ -474,6 +475,7 @@ def _use_demo_token(provided: str) -> bool:
         db.commit()
         return updated > 0
     except Exception:
+        logger.exception("_use_demo_token 更新失敗")
         return False
     finally:
         db.close()

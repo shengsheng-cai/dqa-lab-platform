@@ -251,6 +251,7 @@ function DemoTokenSection({ active }) {
   const [maxUses, setMaxUses] = useState("");
   const [creating, setCreating] = useState(false);
   const [newToken, setNewToken] = useState(null); // 剛建立的 token（高亮顯示）
+  const [deleteTokenId, setDeleteTokenId] = useState(null);
 
   const fetchTokens = useCallback(async () => {
     if (!active) return;
@@ -294,8 +295,13 @@ function DemoTokenSection({ active }) {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("確定刪除此 Token？")) return;
+  const handleDelete = (id) => {
+    setDeleteTokenId(id);
+  };
+
+  const performDeleteToken = async () => {
+    const id = deleteTokenId;
+    setDeleteTokenId(null);
     try {
       await api.delete(`/api/auth/demo-tokens/${id}`);
       fetchTokens();
@@ -454,6 +460,13 @@ function DemoTokenSection({ active }) {
           </div>
         );
       })()}
+      {deleteTokenId && (
+        <ConfirmModal
+          message="確定刪除此 Token？"
+          onConfirm={performDeleteToken}
+          onClose={() => setDeleteTokenId(null)}
+        />
+      )}
     </div>
   );
 }

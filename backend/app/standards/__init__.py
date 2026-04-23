@@ -39,9 +39,12 @@ ramp_rate 說明：
 注意：KEMA / NMEA 因無原始法規文件可供對照，暫不納入。
 """
 
+import logging
 from typing import Dict, Any, Optional
 
 from . import iec60068, en50155, iec61850, iec60945, dnv
+
+logger = logging.getLogger("standards")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -71,7 +74,7 @@ def _build_flat_standards() -> Dict[str, Any]:
             for test_key, test_data in ver_data["tests"].items():
                 sop_id = test_data["sop_id"]
                 if sop_id in flat:
-                    print(f"⚠️  WARNING: duplicate sop_id '{sop_id}' in STANDARD_TREE")
+                    logger.warning(f"duplicate sop_id '{sop_id}' in STANDARD_TREE")
                 flat[sop_id] = {
                     **test_data,
                     "standard_id": sop_id,

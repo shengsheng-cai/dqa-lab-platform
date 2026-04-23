@@ -10,6 +10,7 @@ import ReturnModal from "./components/fixture/ReturnModal";
 import AddEditModal from "./components/fixture/AddEditModal";
 import StocktakeModal from "./components/fixture/StocktakeModal";
 import CreatePurchaseModal from "./components/fixture/CreatePurchaseModal";
+import ConfirmModal from "./components/ConfirmModal";
 
 function ResizableTh({ children, defaultWidth, style, onClick }) {
   const [width, setWidth] = useState(defaultWidth || null);
@@ -215,12 +216,22 @@ export default function FixturePage({ active, role }) {
   const [purchasePreFill, setPurchasePreFill] = useState(null);
   const [showStocktakeModal, setShowStocktakeModal] = useState(false);
   const [invLogRefreshKey, setInvLogRefreshKey] = useState(0);
+  const [deleteFixtureTarget, setDeleteFixtureTarget] = useState(null);
   const canOperate = role === "admin";
   const [sortKey, setSortKey] = useState("interface_type");
   const [sortDir, setSortDir] = useState("asc");
   const handleSort = (key) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("asc"); }
+  };
+  const handleDeleteFixture = async () => {
+    try {
+      await api.delete(`/api/fixtures/${deleteFixtureTarget.id}`);
+      setDeleteFixtureTarget(null);
+      fetchAll();
+    } catch (e) {
+      showToast(e.response?.data?.detail || "刪除失敗", "error");
+    }
   };
 
   const fetchAll = useCallback(async () => {
@@ -750,15 +761,7 @@ export default function FixturePage({ active, role }) {
                               </button>
                             )}
                             <button
-                              onClick={async () => {
-                                if (!window.confirm(`確定刪除「${f.interface_type} — ${f.form_factor}」？`)) return;
-                                try {
-                                  await api.delete(`/api/fixtures/${f.id}`);
-                                  fetchAll();
-                                } catch (e) {
-                                  showToast(e.response?.data?.detail || "刪除失敗", "error");
-                                }
-                              }}
+                              onClick={() => setDeleteFixtureTarget(f)}
                               style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #f8514944", background: "transparent", color: "#f85149", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
                             >
                               刪除
@@ -959,6 +962,16 @@ export default function FixturePage({ active, role }) {
             fetchAll();
             setInvLogRefreshKey((k) => k + 1);
           }}
+        />
+      )}
+      {deleteFixtureTarget && (
+        <ConfirmModal
+          title="刪除治具"
+          message={`確定刪除「${deleteFixtureTarget.interface_type} — ${deleteFixtureTarget.form_factor}」？`}
+          type="danger"
+          confirmText="刪除"
+          onConfirm={handleDeleteFixture}
+          onCancel={() => setDeleteFixtureTarget(null)}
         />
       )}
     </div>
@@ -1337,10 +1350,16 @@ function InventoryLogTab({ refreshKey }) {
   const [expandedBatch, setExpandedBatch] = useState(null);
   const [allFixtures, setAllFixtures] = useState([]);
   const [deletingBatch, setDeletingBatch] = useState(null);
+  const [pendingBatch, setPendingBatch] = useState(null);
 
-  const handleDeleteBatch = async (e, key, batchRows) => {
+  const handleDeleteBatch = (e, key, batchRows) => {
     e.stopPropagation();
-    if (!window.confirm(`確定要刪除此批次共 ${batchRows.length} 筆盤點紀錄？此操作無法復原。`)) return;
+    setPendingBatch({ key, batchRows });
+  };
+
+  const performDeleteBatch = async () => {
+    const { key, batchRows } = pendingBatch;
+    setPendingBatch(null);
     setDeletingBatch(key);
     try {
       await Promise.all(batchRows.map((r) => api.delete(`/api/fixtures/inventory-logs/${r.id}`)));
@@ -1427,6 +1446,16 @@ function InventoryLogTab({ refreshKey }) {
           </div>
         );
       })}
+      {pendingBatch && (
+        <ConfirmModal
+          title="刪除盤點紀錄"
+          message={`確定要刪除此批次共 ${pendingBatch.batchRows.length} 筆盤點紀錄？此操作無法復原。`}
+          type="danger"
+          confirmText="刪除"
+          onConfirm={performDeleteBatch}
+          onCancel={() => setPendingBatch(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1441,6 +1470,7 @@ const PO_STATUS = {
 function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [deletePOTarget, setDeletePOTarget] = useState(null);
 
   const handleArrive = async (order) => {
     setLoading(true);
@@ -1456,8 +1486,13 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
     }
   };
 
-  const handleDelete = async (order) => {
-    if (!window.confirm(`確認刪除此採購單？`)) return;
+  const handleDelete = (order) => {
+    setDeletePOTarget(order);
+  };
+
+  const performDelete = async () => {
+    const order = deletePOTarget;
+    setDeletePOTarget(null);
     setLoading(true);
     try {
       await api.delete(`/api/purchase-orders/${order.id}`);
@@ -1489,6 +1524,16 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
 
   return (
     <>
+      {deletePOTarget && (
+        <ConfirmModal
+          title="刪除採購單"
+          message="確認刪除此採購單？"
+          type="danger"
+          confirmText="刪除"
+          onConfirm={performDelete}
+          onCancel={() => setDeletePOTarget(null)}
+        />
+      )}
       {canOperate && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
           <button

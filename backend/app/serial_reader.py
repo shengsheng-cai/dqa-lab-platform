@@ -5,9 +5,12 @@
 # 並在 main.py 中將 data_simulator() 替換為 SerialReader.read_loop()。
 # =============================================================
 import asyncio
+import logging
 import serial_asyncio
 import datetime
 from .models import SessionLocal, DeviceData
+
+logger = logging.getLogger("serial_reader")
 
 
 class AsyncSerialReader:
@@ -28,7 +31,7 @@ class AsyncSerialReader:
                 reader, writer = await serial_asyncio.open_serial_connection(
                     url=self.port, baudrate=self.baudrate
                 )
-                print(f"✅ [Backend] 成功連線至虛擬串口: {self.port}")
+                logger.info(f"成功連線至虛擬串口: {self.port}")
 
                 while True:
                     line = await reader.readline()
@@ -49,7 +52,7 @@ class AsyncSerialReader:
 
                 writer.close()
             except Exception as e:
-                print(f"⚠️ [Reader Error] {self.port}: {e}")
+                logger.error(f"串口連線錯誤 {self.port}: {e}")
                 await asyncio.sleep(2)
 
     def parse_aicm_protocol(self, line):
@@ -71,7 +74,7 @@ class AsyncSerialReader:
                 "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
             }
         except Exception as e:
-            print(f"❌ [Parse Failed] 原始字串: {line} | 錯誤: {e}")
+            logger.warning(f"解析失敗 原始字串: {line} | 錯誤: {e}")
             return None
 
     async def save_to_db(self, data, raw):

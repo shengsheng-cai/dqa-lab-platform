@@ -12,8 +12,11 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Mapped, mapped_column
 from enum import StrEnum
 import datetime
+import logging
 import os
 from typing import Optional
+
+logger = logging.getLogger("models")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _db_url = os.getenv("DATABASE_URL")
@@ -434,7 +437,7 @@ def ensure_admin_user():
             user.hashed_password = hashed
             user.is_active = True
             db.commit()
-            print("✅ Admin 帳號密碼已更新！")
+            logger.info("Admin 帳號密碼已更新")
         else:
             db.add(
                 User(
@@ -446,7 +449,7 @@ def ensure_admin_user():
                 )
             )
             db.commit()
-            print("✅ Admin 帳號建立完成！")
+            logger.info("Admin 帳號建立完成")
     finally:
         db.close()
 
