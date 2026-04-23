@@ -68,8 +68,6 @@ backend/rag_cache.pkl
 
 ### IDE、編輯器與系統
 .vscode/
-.vscode/settings.json
-.vscode/launch.json
 .idea/
 *.swp
 *.swo
@@ -82,7 +80,6 @@ Thumbs.db
 .LSOverride
 
 ### 臨時檔案
-.ngrok.log
 *.tmp
 *.bak
 *.pid

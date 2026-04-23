@@ -32,7 +32,7 @@ clean:
 	-@pkill -9 -f "uvicorn" 2>/dev/null
 	-@pkill -9 -f "node.*vite" 2>/dev/null
 	-@pkill -9 -f "ngrok" 2>/dev/null
-	@rm -f .socat_info.log .serial_ports.tmp .backend.log
+	@rm -f .socat_info.log .serial_ports.tmp .backend.log .ngrok.log
 	@echo "✨ 清理完成。"
 
 # 4. 日誌追蹤

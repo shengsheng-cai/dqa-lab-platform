@@ -89,7 +89,7 @@ fi
 echo "------------------------------------------------"
 echo "✅ 系統已全面啟動！"
 echo "🌐 前端網址:    http://localhost:5173"
-echo "📡 後端網址:    http://localhost:8000/api/latest"
+echo "📡 後端網址:    http://localhost:8000"
 echo "🔍 API 文件:    http://localhost:8000/docs"
 echo "🌐 ngrok 面板:  http://localhost:4040"
 echo "💡 按下 Ctrl+C 同時停止所有服務"
