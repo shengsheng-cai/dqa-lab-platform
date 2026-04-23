@@ -72,6 +72,7 @@ const RETURN_CONDITIONS = [
 ];
 
 function ReturnButtonGroup({ loanId, onSuccess }) {
+  const { showToast } = useToast();
   return (
     <>
       {RETURN_CONDITIONS.map(({ condition, label, color, bg, border }) => (
@@ -86,7 +87,7 @@ function ReturnButtonGroup({ loanId, onSuccess }) {
               });
               onSuccess();
             } catch (e) {
-              alert(e.response?.data?.detail || "歸還失敗");
+              showToast(e.response?.data?.detail || "歸還失敗", "error");
             }
           }}
           style={{
@@ -256,7 +257,6 @@ export default function FixturePage({ active, role }) {
     if (isNaN(num) || num < 0) return;
     try {
       await api.post(`/api/fixtures/${fixtureId}/inventory?actual_quantity=${num}`);
-      setInventoryEdits((prev) => { const n = { ...prev }; delete n[fixtureId]; return n; });
       fetchAll();
       showToast("盤點記錄已保存", "success");
     } catch (e) {
@@ -756,9 +756,7 @@ export default function FixturePage({ active, role }) {
                                   await api.delete(`/api/fixtures/${f.id}`);
                                   fetchAll();
                                 } catch (e) {
-                                  alert(e.response?.data?.detail || "刪除失敗");
-                                } finally {
-                                  // 確保刪除操作不留下未清理的狀態
+                                  showToast(e.response?.data?.detail || "刪除失敗", "error");
                                 }
                               }}
                               style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #f8514944", background: "transparent", color: "#f85149", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
