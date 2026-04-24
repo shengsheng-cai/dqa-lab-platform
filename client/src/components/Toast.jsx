@@ -5,9 +5,9 @@ const ToastContext = createContext();
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
-  const showToast = useCallback((message, type = "info", duration = 3000) => {
+  const showToast = useCallback((message, type = "info", duration = 3000, hint = null) => {
     const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type, hint }]);
 
     if (duration > 0) {
       setTimeout(() => {
@@ -115,7 +115,14 @@ function ToastItem({ toast, onRemove }) {
       }}
     >
       <span style={{ fontSize: 16, flexShrink: 0 }}>{style.icon}</span>
-      <span style={{ flex: 1 }}>{toast.message}</span>
+      <span style={{ flex: 1 }}>
+        {toast.message}
+        {toast.hint && (
+          <span style={{ display: "block", fontSize: 11, color: "#8b949e", marginTop: 3 }}>
+            {toast.hint}
+          </span>
+        )}
+      </span>
       <button
         onClick={() => onRemove(toast.id)}
         style={{
