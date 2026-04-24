@@ -244,7 +244,7 @@ export default function FixturePage({ active, role }) {
         settle(api.get("/api/fixtures/summary")),
         settle(api.get("/api/fixtures/loans/active")),
         settle(api.get("/api/fixtures/interface-types")),
-        settle(api.get("/api/purchase-orders")),
+        settle(api.get("/api/purchase-orders/")),
       ]);
       if (fixtures) setFixtures(fixtures);
       if (summary) setSummary(summary);
