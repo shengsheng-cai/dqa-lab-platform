@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api from "./api";
 import { useToast } from "./components/Toast";
 import { DEVICE_IDS, parseUtcDate } from "./constants";
+import ConfirmModal from "./components/ConfirmModal";
 
 // ── 常數 ───────────────────────────────────────────────────────────────────
 const HOUR_PX = 6;          // 每小時多少像素
@@ -380,6 +381,7 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const [allFixtures, setAllFixtures] = useState([]);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   useEffect(() => {
     api.get("/api/fixtures").then((r) => setAllFixtures(r.data)).catch(() => {});
@@ -393,7 +395,7 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
     form.fixtures.length > 0
   ), [form, initialConditions]);
   const handleClose = () => {
-    if (isDirty && !window.confirm("表單尚未送出，確定要關閉？資料將會消失。")) return;
+    if (isDirty) { setShowCloseConfirm(true); return; }
     onClose();
   };
 
@@ -447,6 +449,7 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
   }
 
   return (
+    <>
     <div style={overlayStyle} onClick={handleClose}>
       <div style={{ ...modalStyle, width: 680, maxHeight: "88vh", overflowY: "auto" }}
         onClick={(e) => e.stopPropagation()}>
@@ -626,6 +629,18 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
         </div>
       </div>
     </div>
+    {showCloseConfirm && (
+      <ConfirmModal
+        title="確認關閉"
+        message="表單尚未送出，確定要關閉？資料將會消失。"
+        type="warning"
+        confirmText="關閉"
+        cancelText="繼續填寫"
+        onConfirm={() => { setShowCloseConfirm(false); onClose(); }}
+        onCancel={() => setShowCloseConfirm(false)}
+      />
+    )}
+    </>
   );
 }
 
@@ -641,6 +656,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
   const [cancelReason, setCancelReason] = useState(null); // null = 未展開，string = 已展開
   const [previewState, setPreviewState] = useState({ data: null, loading: false, updatedAt: null });
   const [confirmedResult, setConfirmedResult] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const canEdit = role === "admin";
   const isPending = schedule.status === "待審核";
 
@@ -749,8 +765,12 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
     }
   }
 
-  async function del() {
-    if (!window.confirm("確定刪除此排程？此動作無法復原。")) return;
+  function del() {
+    setShowDeleteConfirm(true);
+  }
+
+  async function performDel() {
+    setShowDeleteConfirm(false);
     try {
       await api.delete(`/api/schedules/${schedule.id}`);
       onDeleted(schedule.id);
@@ -792,6 +812,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
   }
 
   return (
+    <>
     <div style={overlayStyle} onClick={onClose}>
       <div style={{ ...modalStyle, width: 540, maxHeight: "88vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
         <div style={modalHeader}>
@@ -985,6 +1006,17 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
         </div>
       </div>
     </div>
+    {showDeleteConfirm && (
+      <ConfirmModal
+        title="刪除排程"
+        message="確定刪除此排程？此動作無法復原。"
+        type="danger"
+        confirmText="刪除"
+        onConfirm={performDel}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+    )}
+    </>
   );
 }
 

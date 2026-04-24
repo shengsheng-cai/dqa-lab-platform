@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import useAIChat from "../../ai/useAIChat";
 import ChatArea from "../../ai/ChatArea";
 import { exportChat } from "../../ai/aiStorage";
+import ConfirmModal from "../ConfirmModal";
 
 const QUESTION_POOL = [
   { label: "查庫存", text: "目前治具庫存不足的有哪些？" },
@@ -57,6 +58,7 @@ export default function RightPanel({ onClose, onApplySchedule }) {
   );
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [confirmState, setConfirmState] = useState(null);
   const renameRef = useRef(null);
 
   const convIds = Object.keys(conversations).sort(
@@ -71,13 +73,21 @@ export default function RightPanel({ onClose, onApplySchedule }) {
 
   const goPrev = () => {
     if (loading || total <= 1) return;
-    if (input.trim() && !window.confirm("⚠️ 您有未發送的內容，確定要切換對話嗎？")) return;
-    switchConversation(convIds[(currentIdx - 1 + total) % total]);
+    const target = convIds[(currentIdx - 1 + total) % total];
+    if (input.trim()) {
+      setConfirmState({ message: "您有未發送的內容，確定要切換對話嗎？", action: () => switchConversation(target) });
+      return;
+    }
+    switchConversation(target);
   };
   const goNext = () => {
     if (loading || total <= 1) return;
-    if (input.trim() && !window.confirm("⚠️ 您有未發送的內容，確定要切換對話嗎？")) return;
-    switchConversation(convIds[(currentIdx + 1) % total]);
+    const target = convIds[(currentIdx + 1) % total];
+    if (input.trim()) {
+      setConfirmState({ message: "您有未發送的內容，確定要切換對話嗎？", action: () => switchConversation(target) });
+      return;
+    }
+    switchConversation(target);
   };
 
   const startRename = () => {
@@ -93,12 +103,11 @@ export default function RightPanel({ onClose, onApplySchedule }) {
   };
 
   const handleDelete = () => {
-    if (window.confirm(`確定刪除「${activeTitle}」？`)) {
-      deleteConversation(activeId);
-    }
+    setConfirmState({ message: `確定刪除「${activeTitle}」？`, action: () => deleteConversation(activeId) });
   };
 
   return (
+    <>
     <div
       style={{
         flex: 1,
@@ -290,6 +299,16 @@ export default function RightPanel({ onClose, onApplySchedule }) {
         />
       </div>
     </div>
+    {confirmState && (
+      <ConfirmModal
+        title="確認操作"
+        message={confirmState.message}
+        type="warning"
+        onConfirm={() => { confirmState.action(); setConfirmState(null); }}
+        onCancel={() => setConfirmState(null)}
+      />
+    )}
+    </>
   );
 }
 
