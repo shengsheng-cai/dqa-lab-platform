@@ -26,6 +26,7 @@ SKIP_PATHS = {
     "/health",
     "/api/auth/login",
     "/api/auth/demo-login",
+    "/api/auth/guest-hint",
 }
 MAX_ATTEMPTS = 5
 BLOCK_SECONDS = 600
@@ -312,6 +313,14 @@ def delete_user(user_id: int, request: Request, _: None = Depends(require_admin)
         return {"ok": True}
     finally:
         db.close()
+
+
+@router.get("/api/auth/guest-hint")
+def guest_hint():
+    """供登入頁顯示一鍵體驗按鈕，DEMO_PASSWORD 有設定時回傳 token 值。"""
+    if not DEMO_PASSWORD:
+        return {"token": None}
+    return {"token": DEMO_PASSWORD}
 
 
 # ---------- Demo Token ----------

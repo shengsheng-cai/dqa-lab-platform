@@ -37,6 +37,14 @@ function LoginPage({ onLogin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [backendOffline, setBackendOffline] = useState(false);
+  const [demoHint, setDemoHint] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/auth/guest-hint`)
+      .then((r) => r.json())
+      .then((d) => { if (d.token) setDemoHint(d.token); })
+      .catch(() => {});
+  }, []);
 
   const handleUserLogin = async () => {
     if (!username.trim() || !password.trim()) return;
@@ -66,8 +74,9 @@ function LoginPage({ onLogin }) {
     }
   };
 
-  const handleDemoLogin = async () => {
-    if (!pwdInput.trim()) return;
+  const handleDemoLogin = async (tokenOverride = null) => {
+    const token = tokenOverride ?? pwdInput;
+    if (!token.trim()) return;
     setLoading(true);
     setError("");
     setBackendOffline(false);
@@ -75,7 +84,7 @@ function LoginPage({ onLogin }) {
       const res = await fetch(`${API_BASE}/api/auth/demo-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: pwdInput }),
+        body: JSON.stringify({ token }),
       });
       if (res.status === 401 || res.status === 429) {
         const data = await res.json();
@@ -300,6 +309,23 @@ function LoginPage({ onLogin }) {
                   gap: 8,
                 }}
               >
+                {demoHint && (
+                  <button
+                    onClick={() => handleDemoLogin(demoHint)}
+                    style={{
+                      padding: "10px",
+                      borderRadius: 6,
+                      background: "#1f6feb",
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      fontSize: 14,
+                    }}
+                  >
+                    🚀 一鍵訪客體驗
+                  </button>
+                )}
                 <input
                   type="text"
                   placeholder="請輸入訪客 Token（8 碼）"
