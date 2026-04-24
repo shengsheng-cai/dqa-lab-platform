@@ -186,3 +186,24 @@ async def health():
 @app.get("/robots.txt", include_in_schema=False)
 async def robots_txt():
     return PlainTextResponse("User-agent: *\nDisallow: /\n")
+
+
+# ── 前端靜態檔案（容器化部署時同 origin serve）────────────────────
+# 開發時前端走 Vite dev server（5173），靜態資料夾不存在就 skip；
+# 部署時 Dockerfile 把 client/dist 複製到 /app/static，這段會生效。
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi import HTTPException
+
+_static_dir = Path(__file__).parent.parent.parent / "static"
+if _static_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404)
+        target = _static_dir / full_path
+        if target.is_file():
+            return FileResponse(target)
+        return FileResponse(_static_dir / "index.html")

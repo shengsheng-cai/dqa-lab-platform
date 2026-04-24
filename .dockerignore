@@ -1,0 +1,44 @@
+# Git / IDE
+.git
+.github
+.gitignore
+.vscode
+.idea
+.claude
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+venv
+.venv
+backend/test.db
+backend/rag_cache.pkl
+backend/alembic/versions/__pycache__
+
+# Node
+node_modules
+client/dist
+client/.vite
+
+# 日誌 / 環境
+*.log
+.socat_info.log
+.serial_ports.tmp
+.backend.log
+.ngrok.log
+.env
+backend/.env
+
+# 文件 / 測試
+tests
+docs
+*.md
+!README.md
+
+# macOS
+.DS_Store
+
+# Phase 3 未啟用代碼的依賴
+~/Downloads/PyKsonLib-*

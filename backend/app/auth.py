@@ -514,6 +514,11 @@ def demo_login(body: DemoLoginRequest, request: Request):
 
 # ---------- Middleware ----------
 async def auth_middleware(request: Request, call_next):
+    # 非 API 路徑（前端 SPA 靜態檔案：/, /assets/*, /index.html 等）直接放行
+    # 保護範圍僅限 /api/*；登入驗證由前端 LoginPage 把關
+    if not request.url.path.startswith("/api/"):
+        return await call_next(request)
+
     if any(request.url.path.startswith(p) for p in SKIP_PATHS):
         return await call_next(request)
 

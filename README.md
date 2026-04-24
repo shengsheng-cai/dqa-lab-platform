@@ -1,3 +1,15 @@
+---
+title: DQA Lab Digital Twin
+emoji: 🌡️
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+license: agpl-3.0
+short_description: Environmental test lab management (FastAPI + React + AI)
+---
+
 # DQA Lab Digital Twin
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
