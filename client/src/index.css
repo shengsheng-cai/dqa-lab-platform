@@ -25,6 +25,14 @@ body {
   box-sizing: border-box;
 }
 
+@keyframes banner-flash {
+  0%, 100% { border-bottom-color: #f0a500; }
+  50%       { border-bottom-color: #f0a50066; }
+}
+.banner-flash {
+  animation: banner-flash 1.2s ease-in-out infinite;
+}
+
 @keyframes fab-pulse {
   0%   { box-shadow: 0 4px 14px rgba(0,0,0,0.5), 0 0 0 0 rgba(31,111,235,0.6); }
   70%  { box-shadow: 0 4px 14px rgba(0,0,0,0.5), 0 0 0 14px rgba(31,111,235,0); }

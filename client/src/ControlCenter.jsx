@@ -960,7 +960,7 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
 
       {/* 等待確認 Banner */}
       {waitingDevices.length > 0 && (
-        <div style={{ flexShrink: 0, background: "#1a1500", borderBottom: "1px solid #f0a500", padding: "6px 12px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <div className="banner-flash" style={{ flexShrink: 0, background: "#1a1500", borderBottom: "1px solid #f0a500", padding: "6px 12px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 11, color: "#f0a500", fontWeight: 700, marginRight: 4 }}>⚠ 等待確認</span>
           {waitingDevices.map(d => (
             <BannerConfirmBtn key={d.device_id} device={d} schedule={pendingByDevice[d.device_id]} onConfirmCondition={onConfirmCondition} />
