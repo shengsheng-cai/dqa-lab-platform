@@ -525,10 +525,6 @@ async def auth_middleware(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
 
-    # 未設定 DEMO_PASSWORD 時放行（開發環境，未設定任何認證）
-    if not DEMO_PASSWORD:
-        return await call_next(request)
-
     ip = request.client.host
     tracker = _get_tracker(ip)
     now = time.time()
@@ -548,7 +544,7 @@ async def auth_middleware(request: Request, call_next):
             status_code=400, content={"detail": "不能同時使用帳號 Token 與訪客 Token"}
         )
 
-    # 方式一：X-User-Token（帳號登入，查 DB）
+    # 方式一：X-User-Token（帳號登入，查 DB）— 不受 DEMO_PASSWORD 是否設定影響
     if user_token:
         info = get_token_info(user_token)
         if info:
@@ -559,6 +555,10 @@ async def auth_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=401, content={"detail": "Token 無效或已過期，請重新登入"}
         )
+
+    # 未設定 DEMO_PASSWORD 時放行（開發環境，未設定訪客認證）
+    if not DEMO_PASSWORD:
+        return await call_next(request)
 
     # 方式二：X-Demo-Password（訪客模式）
     # 優先查 demo_tokens DB；後備：環境變數 DEMO_PASSWORD（master key）
