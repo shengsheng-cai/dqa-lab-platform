@@ -16,6 +16,10 @@ short_description: Environmental test lab management (FastAPI + React + AI)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+![Gemini](https://img.shields.io/badge/AI-Gemini%20%2B%20RAG-4285F4?logo=google&logoColor=white)
+![APScheduler](https://img.shields.io/badge/APScheduler-Precision%20Scheduling-FF6B35)
+![LINE](https://img.shields.io/badge/LINE-Bot%20Alerts-00C300?logo=line&logoColor=white)
+![ISO 17025](https://img.shields.io/badge/ISO%2017025-GUM%20Uncertainty-blueviolet)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-blue)
 
 **Environmental test lab management platform** built with FastAPI + React.  
