@@ -4,7 +4,10 @@
 #   alembic revision --autogenerate -m "描述變更"
 #   alembic upgrade head
 import os
-from app.models import Base, engine, SessionLocal, User, Fixture
+import json
+import math
+import datetime
+from app.models import Base, engine, SessionLocal, User, Fixture, Schedule, SopExecution, DeviceData, ScheduleStatus, _utcnow
 from app.auth import hash_password
 
 print("正在建立資料表...")
@@ -57,5 +60,72 @@ try:
         db.add_all(_demo_fixtures)
         db.commit()
         print(f"✅ Demo 治具資料 {len(_demo_fixtures)} 筆建立完成！")
+
+    _now = _utcnow()
+
+    if db.query(Schedule).count() == 0:
+        _schedules = [
+            Schedule(
+                project_number="PRJ-2025-001", sample_name="車載 USB Hub 模組 v2",
+                applicant_name="林怡君", device_id="CH-01",
+                standard="IEC 60068-2-14", conditions=json.dumps(["IEC60068-2-14_TC"]),
+                start_time=_now - datetime.timedelta(days=5),
+                end_time=_now - datetime.timedelta(days=3),
+                status=ScheduleStatus.DONE, current_condition_index=0,
+            ),
+            Schedule(
+                project_number="PRJ-2025-002", sample_name="工業用 RJ-45 Switch",
+                applicant_name="陳柏宇", device_id="CH-02",
+                standard="IEC 60068-2-1", conditions=json.dumps(["IEC60068-2-1_Ab", "IEC60068-2-2_Bb"]),
+                start_time=_now - datetime.timedelta(days=2),
+                end_time=_now - datetime.timedelta(hours=6),
+                status=ScheduleStatus.DONE, current_condition_index=1,
+            ),
+            Schedule(
+                project_number="PRJ-2025-003", sample_name="PCIe x16 顯示卡擴充板",
+                applicant_name="王詠晴", device_id=None,
+                standard="IEC 60068-2-14", conditions=json.dumps(["IEC60068-2-14_TC"]),
+                start_time=_now + datetime.timedelta(days=1),
+                end_time=_now + datetime.timedelta(days=3),
+                status=ScheduleStatus.PENDING, current_condition_index=0,
+            ),
+        ]
+        db.add_all(_schedules)
+        db.commit()
+        print(f"✅ Demo 排程資料 {len(_schedules)} 筆建立完成！")
+
+    if db.query(SopExecution).count() == 0:
+        _executions = [
+            SopExecution(
+                sop_id="IEC60068-2-14_TC", device_id="CH-01", operator="林怡君",
+                test_started_at=_now - datetime.timedelta(days=5),
+                test_ended_at=_now - datetime.timedelta(days=3),
+            ),
+            SopExecution(
+                sop_id="IEC60068-2-1_Ab", device_id="CH-02", operator="陳柏宇",
+                test_started_at=_now - datetime.timedelta(days=2),
+                test_ended_at=_now - datetime.timedelta(days=1),
+            ),
+        ]
+        db.add_all(_executions)
+        db.commit()
+        print(f"✅ Demo SOP 執行紀錄 {len(_executions)} 筆建立完成！")
+
+    if db.query(DeviceData).count() == 0:
+        _device_data = []
+        for i in range(60):
+            t = _now - datetime.timedelta(minutes=(59 - i) * 2)
+            # CH-01：模擬高低溫循環（-40°C → 85°C → -40°C）
+            phase = (i / 60) * 2 * math.pi
+            temp_ch01 = 22.5 + 62.5 * math.sin(phase)
+            _device_data.append(DeviceData(device_id="CH-01", timestamp=t,
+                temperature=round(temp_ch01, 1), humidity=round(45 + 5 * math.sin(phase * 0.5), 1)))
+            # CH-02：模擬低溫測試（穩定在 -25°C）
+            temp_ch02 = -25.0 + 0.5 * math.sin(phase * 3)
+            _device_data.append(DeviceData(device_id="CH-02", timestamp=t,
+                temperature=round(temp_ch02, 1), humidity=round(60 + 2 * math.sin(phase), 1)))
+        db.add_all(_device_data)
+        db.commit()
+        print(f"✅ Demo 設備資料 {len(_device_data)} 筆建立完成！")
 finally:
     db.close()
