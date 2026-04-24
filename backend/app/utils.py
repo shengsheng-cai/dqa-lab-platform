@@ -4,6 +4,7 @@ import datetime
 import json
 from typing import Optional
 from .models import SessionLocal, DeviceState
+from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 
 
 def _parse_conditions(conditions_str: Optional[str]) -> list:
@@ -45,8 +46,8 @@ def _save_device_state(device_id: str, item: dict):
             db.add(state)
 
         state.status = item.get("status", "IDLE")
-        state.temperature = item.get("temperature", 25.0)
-        state.humidity = item.get("humidity", 55.0)
+        state.temperature = item.get("temperature", AMBIENT_TEMP)
+        state.humidity = item.get("humidity", AMBIENT_HUMIDITY)
         state.running_sop_id = item.get("running_sop_id")
         state.running_sop_name = item.get("running_sop_name")
         state.standard_id = item.get("standard_id")

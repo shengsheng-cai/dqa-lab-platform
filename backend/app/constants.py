@@ -1,0 +1,2 @@
+AMBIENT_TEMP: float = 25.0
+AMBIENT_HUMIDITY: float = 55.0

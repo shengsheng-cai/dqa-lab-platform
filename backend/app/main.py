@@ -24,6 +24,7 @@ from .schedules import router as schedules_router, blocked_router as device_bloc
 from .models import SessionLocal, DeviceState
 from .simulator import data_simulator
 from .devices import router as devices_router
+from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 import httpx as _httpx
 import logging
 
@@ -68,8 +69,8 @@ async def lifespan(app: FastAPI):
             logger.info(f"[{device_id}] 恢復狀態：{s.status}，溫度：{s.temperature}°C")
         else:
             cache[device_id] = {
-                "temperature": round(25.0 + random.uniform(-1.0, 1.0), 2),
-                "humidity": round(55.0 + random.uniform(-2.0, 2.0), 1),
+                "temperature": round(AMBIENT_TEMP + random.uniform(-1.0, 1.0), 2),
+                "humidity": round(AMBIENT_HUMIDITY + random.uniform(-2.0, 2.0), 1),
                 "status": "IDLE",
                 "running_sop_name": "STANDBY",
                 "running_sop_id": None,

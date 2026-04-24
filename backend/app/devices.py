@@ -11,6 +11,7 @@ from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBloc
 from .line import push_message
 from .utils import _now_utc, _save_device_state, _parse_conditions, parse_iso_utc
 from .auth import require_admin
+from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 
 logger = logging.getLogger("app")
 
@@ -42,14 +43,14 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
 
     # FINISHING：從當前溫度算降回 25°C 的剩餘時間
     if status == "FINISHING":
-        current_temp = item.get("temperature", 25.0)
+        current_temp = item.get("temperature", AMBIENT_TEMP)
         ramp_rate = 1.0
         try:
             sop = json.loads(item.get("active_sop_json") or "{}")
             ramp_rate = sop.get("ramp_rate") or 1.0
         except Exception:
             pass
-        remaining_min = abs(current_temp - 25.0) / ramp_rate
+        remaining_min = abs(current_temp - AMBIENT_TEMP) / ramp_rate
         return (_now_utc() + datetime.timedelta(minutes=remaining_min)).isoformat()
 
     if status not in ("RUNNING", "PAUSED"):
@@ -70,9 +71,9 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
     dwell_hours = sop.get("dwell_time_hours") or 0.0
     dwell_min = dwell_hours * 60.0
     cycles = sop.get("cycles") or 1
-    high_temp = sop.get("high_temperature") or sop.get("target_temperature") or 25.0
+    high_temp = sop.get("high_temperature") or sop.get("target_temperature") or AMBIENT_TEMP
     low_temp = sop.get("low_temperature")
-    ambient = 25.0
+    ambient = AMBIENT_TEMP
 
     if low_temp is not None and low_temp < ambient and abs(high_temp - low_temp) <= 0.1:
         # 單溫冷測（high_temp == low_temp，如 Test Ab/Ad）：只有一段 dwell

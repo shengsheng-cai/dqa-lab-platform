@@ -10,6 +10,7 @@ from .models import SessionLocal, DeviceData, SopExecution, Schedule, ScheduleSt
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc, _save_device_state
 from .schedules import _complete_schedule
+from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 from .line import push_message
 
 logger = logging.getLogger("app")
@@ -68,7 +69,7 @@ def _advance_sim_phase(
     dwell_start_times: dict,
     p: _SimParams,
 ) -> float:
-    ambient = 25.0
+    ambient = AMBIENT_TEMP
     max_change = p.max_ramp_rate / 60.0 * p.elapsed_seconds
     sim_phase = item.get("sim_phase", "")
     sim_cycle = item.get("sim_cycle", 0)
@@ -80,7 +81,7 @@ def _advance_sim_phase(
         sim_phase = item["sim_phase"]
         dwell_start_times.pop(device_id, None)
 
-    current_temp = item.get("temperature", 25.0)
+    current_temp = item.get("temperature", AMBIENT_TEMP)
     new_temp = current_temp
 
     def _set_dwell_start(key_suffix: str, field: str):
@@ -171,14 +172,14 @@ async def _sim_handle_running(
     standard = get_standard(standard_id) if standard_id else None
     max_ramp_rate = get_ramp_rate(standard_id) if standard_id else 1.0
 
-    high_temp = 25.0
+    high_temp = AMBIENT_TEMP
     low_temp = None
     dwell_seconds = 3600.0
     cycles = 1
     target_humi = None
 
     if standard:
-        high_temp = standard.get("high_temperature") or standard.get("target_temperature", 25.0)
+        high_temp = standard.get("high_temperature") or standard.get("target_temperature", AMBIENT_TEMP)
         low_temp = standard.get("low_temperature")
         dwell_seconds = (standard.get("dwell_time_hours") or 1.0) * 3600.0
         cycles = standard.get("cycles") or 1
@@ -197,7 +198,7 @@ async def _sim_handle_running(
     )
 
     item["temperature"] = round(new_temp, 2)
-    _update_humidity(item, target_humi, new_temp, item.get("humidity", 55.0))
+    _update_humidity(item, target_humi, new_temp, item.get("humidity", AMBIENT_HUMIDITY))
 
 
 def _try_complete_schedule_for_device(device_id: str) -> str | None:
@@ -247,13 +248,13 @@ async def _sim_handle_finishing(
         ramp_rate = 1.0
     finishing_ramp = ramp_rate / 60.0 * elapsed_seconds
 
-    diff = 25.0 - current_temp
+    diff = AMBIENT_TEMP - current_temp
     if abs(diff) > 0.5:
         item["temperature"] = round(
             current_temp + (finishing_ramp if diff > 0 else -finishing_ramp), 2
         )
     else:
-        item["temperature"] = 25.0
+        item["temperature"] = AMBIENT_TEMP
         sop_name = item.get("running_sop_name") or "未知測試"
         skip_push = item.pop("skip_push", False)
         async with locks[device_id]:
@@ -300,8 +301,8 @@ async def data_simulator(cache: dict, locks: dict):
                 last_tick.pop(device_id, None)
                 continue
 
-            current_temp = item.get("temperature", 25.0)
-            current_humi = item.get("humidity", 55.0)
+            current_temp = item.get("temperature", AMBIENT_TEMP)
+            current_humi = item.get("humidity", AMBIENT_HUMIDITY)
 
             if device_id not in write_counters:
                 write_counters[device_id] = 0
@@ -385,7 +386,7 @@ async def data_simulator(cache: dict, locks: dict):
                                 db.add(DeviceData(
                                     device_id=device_id,
                                     temperature=item["temperature"],
-                                    humidity=item.get("humidity", 55.0),
+                                    humidity=item.get("humidity", AMBIENT_HUMIDITY),
                                     timestamp=now,
                                 ))
                                 db.commit()
