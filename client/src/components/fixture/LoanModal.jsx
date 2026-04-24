@@ -3,6 +3,7 @@ import api from "../../api";
 import { useToast } from "../Toast";
 import DatePicker from "./DatePicker";
 import ModalShell, { inputStyle } from "./ModalShell";
+import { DEVICE_IDS } from "../../constants";
 
 export default function LoanModal({ onClose, onSubmit, fixtures }) {
   const { showToast } = useToast();
@@ -110,13 +111,7 @@ export default function LoanModal({ onClose, onSubmit, fixtures }) {
           style={inputStyle}
         >
           <option value="">綁定設備（選填）</option>
-          {[
-            "CH-01",
-            "CH-02",
-            "CH-03",
-            "CH-04",
-            "CH-05",
-          ].map((d) => (
+          {DEVICE_IDS.map((d) => (
             <option key={d} value={d}>
               {d}
             </option>

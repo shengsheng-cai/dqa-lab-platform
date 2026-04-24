@@ -46,7 +46,7 @@ function restoreSelectionFromSopId(sopId, standardTree) {
 
 const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   const { showToast } = useToast();
-  const [selectedDevice, setSelectedDevice] = useState(externalDevice || "CH-01");
+  const [selectedDevice, setSelectedDevice] = useState(externalDevice || DEVICE_IDS[0]);
   const [pendingSchedule, setPendingSchedule] = useState(null);
   const [confirmingSched, setConfirmingSched] = useState(false);
 

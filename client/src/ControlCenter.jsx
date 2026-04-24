@@ -1032,7 +1032,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   const [pendingByDevice, setPendingByDevice] = useState({});
   const pendingJsonRef = useRef(null);
   const [fixtureSummary, setFixtureSummary] = useState({});
-  const [selectedDevice, setSelectedDevice] = useState("CH-01");
+  const [selectedDevice, setSelectedDevice] = useState(DEVICE_IDS[0]);
   const [aiOpen, setAiOpen] = useState(false);
   const [scheduleInitConds, setScheduleInitConds] = useState(null);
   const [recordsOpen, setRecordsOpen] = useState(false);

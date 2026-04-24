@@ -12,6 +12,7 @@ from .line import push_message
 from .utils import _now_utc, _save_device_state, _parse_conditions, parse_iso_utc
 from .auth import require_admin
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
+from .sop import DEVICE_IDS
 
 logger = logging.getLogger("app")
 
@@ -262,7 +263,7 @@ async def get_device_history(device_id: str, request: Request):
 @router.get("/api/latest", response_model=DeviceBasicOut)
 async def get_latest(request: Request):
     cache = request.app.state.AICM_CACHE
-    if not cache or "CH-01" not in cache:
+    if not cache or DEVICE_IDS[0] not in cache:
         return {
             "status": "OFFLINE",
             "temperature": 0.0,
@@ -271,7 +272,7 @@ async def get_latest(request: Request):
             "description": "等待模擬器啟動...",
             "timestamp": _now_utc().strftime("%Y-%m-%dT%H:%M:%S"),
         }
-    data = cache["CH-01"]
+    data = cache[DEVICE_IDS[0]]
     status = data.get("status", "OFFLINE")
     return {
         "status": status,

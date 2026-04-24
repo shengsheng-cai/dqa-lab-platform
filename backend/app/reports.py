@@ -13,6 +13,7 @@ from reportlab.platypus import (
 )
 from .models import SessionLocal, SopExecution, StepRecord, DeviceData
 from .standards import STANDARDS_AND_SOPS
+from .sop import DEVICE_IDS
 from . import uncertainty as unc
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -57,7 +58,7 @@ def download_csv_report(execution_id: int):
     """
     with SessionLocal() as db:
         execution, steps, device_records, truncated = _fetch_execution_data(execution_id, db)
-        device_id_filter = execution.device_id or "CH-01"
+        device_id_filter = execution.device_id or DEVICE_IDS[0]
         sop_data = STANDARDS_AND_SOPS.get(execution.sop_id, {})
         temp_tolerance = sop_data.get("temp_tolerance", 2.0)
         humi_tolerance = sop_data.get("humi_tolerance", 5.0)
@@ -256,7 +257,7 @@ def _fetch_execution_data(execution_id: int, db):
 
     device_records = []
     truncated = False
-    device_id_filter = execution.device_id or "CH-01"
+    device_id_filter = execution.device_id or DEVICE_IDS[0]
     if execution.test_started_at and execution.test_ended_at:
         device_records = (
             db.query(DeviceData)
@@ -404,7 +405,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
         t.setStyle(_kv_style)
         return t
 
-    device_id = execution.device_id or "CH-01"
+    device_id = execution.device_id or DEVICE_IDS[0]
     temps = [r.temperature for r in device_records if r.temperature is not None]
     humis = [r.humidity for r in device_records if r.humidity is not None]
     temp_tolerance = sop_data.get("temp_tolerance", 2.0)

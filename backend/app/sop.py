@@ -31,7 +31,7 @@ logger = logging.getLogger("sop")
 def _validate_start_sop_input(payload: dict, cache: dict) -> tuple:
     """sop_id / device_id / 設備存在性驗證，回傳 (sop_id, device_id, device)"""
     sop_id: str = payload.get("sop_id", "")
-    device_id: str = payload.get("device_id", "CH-01")
+    device_id: str = payload.get("device_id", DEVICE_IDS[0])
 
     if not sop_id:
         raise HTTPException(status_code=400, detail="sop_id 不能為空")
