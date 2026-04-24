@@ -1,0 +1,36 @@
+name: Deploy to HF Spaces
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push orphan commit to HF Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+
+          # 孤立 branch：拋棄舊歷史，避免大檔被 HF 拒絕
+          git checkout --orphan hf-deploy
+          git rm --cached -r . --quiet
+
+          # 重新暫存全部，排除大檔
+          git add .
+          git rm --cached docs/ -r --ignore-unmatch --quiet
+          git rm --cached backend/rag_cache.pkl --ignore-unmatch --quiet
+
+          git commit -m "deploy: $(git log -1 --format='%h %s' origin/main)"
+
+          git push \
+            "https://user:${HF_TOKEN}@huggingface.co/spaces/sshengsheng/dqa-lab-digital-twin" \
+            HEAD:main --force
