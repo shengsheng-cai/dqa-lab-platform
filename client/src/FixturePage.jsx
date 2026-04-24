@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import api from "./api";
+const settle = (p) => p.then((r) => r.data).catch((e) => { console.warn("[FixturePage] API fail:", e?.response?.status, e?.config?.url); return null; });
 import { downloadBlob } from "./utils/download";
 import { formatLocal } from "./utils/timezone";
 import { useToast } from "./components/Toast";
@@ -238,20 +239,18 @@ export default function FixturePage({ active, role }) {
     if (!active) return;
     setLoading(true);
     try {
-      const [fRes, sRes, lRes, iRes, poRes] = await Promise.all([
-        api.get("/api/fixtures/"),
-        api.get("/api/fixtures/summary"),
-        api.get("/api/fixtures/loans/active"),
-        api.get("/api/fixtures/interface-types"),
-        api.get("/api/purchase-orders"),
+      const [fixtures, summary, loans, types, orders] = await Promise.all([
+        settle(api.get("/api/fixtures/")),
+        settle(api.get("/api/fixtures/summary")),
+        settle(api.get("/api/fixtures/loans/active")),
+        settle(api.get("/api/fixtures/interface-types")),
+        settle(api.get("/api/purchase-orders")),
       ]);
-      setFixtures(fRes.data);
-      setSummary(sRes.data);
-      setActiveLoans(lRes.data);
-      setInterfaceTypes(iRes.data);
-      setPurchaseOrders(poRes.data);
-    } catch (e) {
-      console.error(e);
+      if (fixtures) setFixtures(fixtures);
+      if (summary) setSummary(summary);
+      if (loans) setActiveLoans(loans);
+      if (types) setInterfaceTypes(types);
+      if (orders) setPurchaseOrders(orders);
     } finally {
       setLoading(false);
     }
