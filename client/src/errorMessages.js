@@ -1,4 +1,4 @@
-// API 錯誤訊息轉譯層（技術訊息 → 使用者友善訊息）
+// API 錯誤訊息轉譯層（技術訊息 → 使用者友善訊息 + 恢復建議）
 
 const ERROR_TRANSLATION_MAP = {
   // 治具相關
@@ -60,6 +60,22 @@ const ERROR_TRANSLATION_MAP = {
   "admin only": "需要管理者權限",
 };
 
+// 錯誤對應恢復建議（以轉譯後中文訊息的關鍵字比對）
+const RECOVERY_HINT_MAP = {
+  "治具庫存不足": "可至治具管理申請採購",
+  "時段衝突": "建議改用自動排程功能",
+  "設備在該時段無法使用": "請查看甘特圖選擇其他時段",
+  "設備正在使用中": "請等設備完成後再試，或選擇其他設備",
+  "您沒有權限": "此功能僅限管理者使用",
+  "治具正在借出中": "請等歸還後再操作",
+  "資料重複": "請確認是否已存在相同資料",
+  "連線逾時": "請確認後端服務是否正常運行",
+  "網路連線失敗": "請確認後端服務是否正常運行",
+  "無法取消": "只有待審核的排程可以取消",
+  "無法確認": "請確認排程狀態是否正確",
+  "必填欄位未填": "請填寫所有必填欄位後再送出",
+};
+
 /**
  * 將技術錯誤訊息轉換為使用者友善訊息
  * @param {string} technicalMessage - 來自後端的技術錯誤訊息
@@ -88,6 +104,19 @@ export function translateErrorMessage(technicalMessage, fallback = "操作失敗
 
   // 無法轉譯，返回預設訊息
   return fallback;
+}
+
+/**
+ * 根據已翻譯的中文訊息，找出對應的恢復建議
+ * @param {string} translatedMessage - 已翻譯的使用者訊息
+ * @returns {string|null}
+ */
+export function getRecoveryHint(translatedMessage) {
+  if (!translatedMessage) return null;
+  for (const [keyword, hint] of Object.entries(RECOVERY_HINT_MAP)) {
+    if (translatedMessage.includes(keyword)) return hint;
+  }
+  return null;
 }
 
 /**

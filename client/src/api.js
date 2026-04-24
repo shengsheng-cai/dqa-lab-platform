@@ -1,5 +1,5 @@
 import axios from "axios";
-import { translateErrorMessage } from "./errorMessages";
+import { translateErrorMessage, getRecoveryHint } from "./errorMessages";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -30,9 +30,11 @@ api.interceptors.response.use(
       localStorage.removeItem("user_id");
       window.location.href = "/";
     }
-    // 轉譯錯誤訊息為使用者友善版本
+    // 轉譯錯誤訊息為使用者友善版本，並附上恢復建議
     if (err.response?.data?.detail) {
-      err.response.data.detail = translateErrorMessage(err.response.data.detail);
+      const translated = translateErrorMessage(err.response.data.detail);
+      err.response.data.detail = translated;
+      err.response.data.hint = getRecoveryHint(translated);
     }
     return Promise.reject(err);
   },

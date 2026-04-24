@@ -442,7 +442,7 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
       onCreated(res.data);
     } catch (e) {
       setError(e.response?.data?.detail || "申請失敗");
-      showToast(e.response?.data?.detail || "申請失敗", "error");
+      showToast(e.response?.data?.detail || "申請失敗", "error", 4000, e.response?.data?.hint);
     } finally {
       setSaving(false);
     }
@@ -688,7 +688,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
       setConfirmedResult(res.data); // 顯示最終分配結果，不立即關閉
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
-      showToast(e.response?.data?.detail || "操作失敗", "error");
+      showToast(e.response?.data?.detail || "操作失敗", "error", 4000, e.response?.data?.hint);
     } finally {
       setSaving(false);
     }
@@ -708,7 +708,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
       onClose();
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
-      showToast(e.response?.data?.detail || "操作失敗", "error");
+      showToast(e.response?.data?.detail || "操作失敗", "error", 4000, e.response?.data?.hint);
     } finally {
       setSaving(false);
     }
@@ -743,7 +743,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
       }
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
-      showToast(e.response?.data?.detail || "操作失敗", "error");
+      showToast(e.response?.data?.detail || "操作失敗", "error", 4000, e.response?.data?.hint);
     } finally {
       setSaving(false);
     }
@@ -759,7 +759,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
       onClose();
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
-      showToast(e.response?.data?.detail || "操作失敗", "error");
+      showToast(e.response?.data?.detail || "操作失敗", "error", 4000, e.response?.data?.hint);
     } finally {
       setSaving(false);
     }
@@ -1165,7 +1165,7 @@ function ManageBlockedPeriodsModal({ onClose, onChanged }) {
     } catch (e) {
       const msg = e.response?.data?.detail || "操作失敗";
       setError(msg);
-      showToast(msg, "error");
+      showToast(msg, "error", 4000, e.response?.data?.hint);
     } finally {
       setSaving(false);
     }
@@ -1179,7 +1179,7 @@ function ManageBlockedPeriodsModal({ onClose, onChanged }) {
       await fetchList();
       onChanged();
     } catch (e) {
-      showToast(e.response?.data?.detail || "刪除失敗", "error");
+      showToast(e.response?.data?.detail || "刪除失敗", "error", 4000, e.response?.data?.hint);
     } finally {
       setDeletingId(null);
     }
