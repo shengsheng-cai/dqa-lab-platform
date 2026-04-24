@@ -15,5 +15,18 @@
       "Bash(python3*)",
       "Bash(claude --version)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); if echo \"$input\" | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('command',''))\" 2>/dev/null | grep -qE 'git push'; then echo '[Push 守門] 是否已依序完成 /simplify 和 /review？確認過再繼續。' >&2; fi"
+          }
+        ]
+      }
+    ]
   }
 }
