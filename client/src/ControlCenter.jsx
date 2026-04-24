@@ -457,10 +457,10 @@ function UsersSummaryPanel() {
 // ── LeftPanel ─────────────────────────────────────────────────────────────────
 
 function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary, onOpenRecords, pendingByDevice, onConfirmCondition }) {
-  const title = activeTab === "schedule" ? "排程概況"
-    : activeTab === "fixture" ? "治具概況"
-    : activeTab === "users" ? "人員概況"
-    : "設備狀態";
+  const title = activeTab === "schedule" ? "本欄：排程概況"
+    : activeTab === "fixture" ? "本欄：治具概況"
+    : activeTab === "users" ? "本欄：人員概況"
+    : "本欄：設備狀態";
 
   return (
     <div
@@ -477,9 +477,9 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixture
         style={{
           padding: "7px 10px 4px",
           fontSize: 10,
-          color: "#484f58",
+          color: "#6e7681",
           fontWeight: 600,
-          letterSpacing: 1,
+          letterSpacing: 0.5,
           flexShrink: 0,
         }}
       >
