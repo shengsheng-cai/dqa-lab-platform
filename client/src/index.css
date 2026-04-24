@@ -25,6 +25,11 @@ body {
   box-sizing: border-box;
 }
 
+@keyframes slideIn {
+  from { transform: translateX(400px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
 @keyframes banner-flash {
   0%, 100% { border-bottom-color: #f0a500; }
   50%       { border-bottom-color: #f0a50066; }

@@ -76,23 +76,18 @@ const RECOVERY_HINT_MAP = {
   "必填欄位未填": "請填寫所有必填欄位後再送出",
 };
 
-/**
- * 將技術錯誤訊息轉換為使用者友善訊息
- * @param {string} technicalMessage - 來自後端的技術錯誤訊息
- * @param {string} fallback - 預設訊息（如果無法轉譯）
- * @returns {string} 使用者友善的訊息
- */
+// 預編譯所有 regex，避免每次呼叫都重新 new RegExp
+const _COMPILED_TRANSLATIONS = Object.entries(ERROR_TRANSLATION_MAP).map(
+  ([pattern, msg]) => [new RegExp(pattern, "i"), msg]
+);
+
 export function translateErrorMessage(technicalMessage, fallback = "操作失敗，請稍後重試") {
   if (!technicalMessage || typeof technicalMessage !== "string") {
     return fallback;
   }
 
-  const lowerMessage = technicalMessage.toLowerCase();
-
-  // 尋找匹配的轉譯規則
-  for (const [pattern, friendlyMsg] of Object.entries(ERROR_TRANSLATION_MAP)) {
-    const regex = new RegExp(pattern, "i");
-    if (regex.test(lowerMessage)) {
+  for (const [regex, friendlyMsg] of _COMPILED_TRANSLATIONS) {
+    if (regex.test(technicalMessage)) {
       return friendlyMsg;
     }
   }

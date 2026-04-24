@@ -722,6 +722,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
       onUpdated(res.data);
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
+      showToast(e.response?.data?.detail || "操作失敗", "error", 4000, e.response?.data?.hint);
     } finally {
       setSaving(false);
     }
@@ -776,6 +777,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
       onDeleted(schedule.id);
     } catch (e) {
       setError(e.response?.data?.detail || "刪除失敗");
+      showToast(e.response?.data?.detail || "刪除失敗", "error", 4000, e.response?.data?.hint);
     }
   }
 

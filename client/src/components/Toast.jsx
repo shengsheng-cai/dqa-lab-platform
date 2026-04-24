@@ -107,12 +107,6 @@ function ToastItem({ toast, onRemove }) {
         animation: "slideIn 0.3s ease-out",
         pointerEvents: "auto",
       }}
-      onMouseEnter={() => {
-        // 滑鼠懸停時不自動消失
-      }}
-      onMouseLeave={() => {
-        // 滑鼠離開後恢復自動消失
-      }}
     >
       <span style={{ fontSize: 16, flexShrink: 0 }}>{style.icon}</span>
       <span style={{ flex: 1 }}>
@@ -137,18 +131,6 @@ function ToastItem({ toast, onRemove }) {
       >
         ✕
       </button>
-      <style>{`
-        @keyframes slideIn {
-          from {
-            transform: translateX(400px);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-      `}</style>
     </div>
   );
 }

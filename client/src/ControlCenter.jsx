@@ -594,7 +594,7 @@ function ExecutionList({ active, role }) {
       showToast("照片已上傳", "success");
     } catch (e) {
       const msg = e.response?.data?.detail || "上傳失敗";
-      showToast(msg, "error");
+      showToast(msg, "error", 3000, e.response?.data?.hint);
     } finally {
       setUploading(null);
     }
@@ -1096,7 +1096,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       pendingJsonRef.current = JSON.stringify(map);
       setPendingByDevice(map);
     } catch (e) {
-      showToast(e.response?.data?.detail || "操作失敗", "error");
+      showToast(e.response?.data?.detail || "操作失敗", "error", 3000, e.response?.data?.hint);
     }
   }, [showToast]);
 
