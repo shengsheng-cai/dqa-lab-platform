@@ -1218,6 +1218,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       {!aiOpen && <button
         onClick={() => setAiOpen((v) => !v)}
         title="AI 諮詢"
+        className="ai-fab-pulse"
         style={{
           position: "fixed",
           bottom: 24,
@@ -1226,11 +1227,10 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           width: 46,
           height: 46,
           borderRadius: "50%",
-          background: aiOpen ? "#1158c7" : "#1f6feb",
+          background: "#1f6feb",
           border: "none",
           cursor: "pointer",
           fontSize: 20,
-          boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
