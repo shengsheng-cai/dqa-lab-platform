@@ -102,7 +102,7 @@ function LoginPage({ onLogin }) {
         keysToRemove.forEach(k => localStorage.removeItem(k));
 
         // 批量設定訪客會話
-        localStorage.setItem("demo_password", pwdInput);
+        localStorage.setItem("demo_password", token);
         localStorage.setItem("demo_login_at", Date.now().toString());
         localStorage.setItem("user_role", "guest");
 
