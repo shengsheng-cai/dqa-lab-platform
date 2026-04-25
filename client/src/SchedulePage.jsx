@@ -1364,6 +1364,13 @@ const cancelBtn = {
 // ── 主頁面 ───────────────────────────────────────────────────────────────────
 
 export default function SchedulePage({ active, role, userId, initConditions, onInitCondsConsumed, liveDeviceStatuses = {} }) {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+
   const [schedules, setSchedules] = useState([]);
   const [blockedPeriods, setBlockedPeriods] = useState([]);
   const [deviceStatuses, setDeviceStatuses] = useState({});
@@ -1474,7 +1481,7 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
     }}>
 
       {/* 甘特圖（固定區塊，永遠可見） */}
-      <div style={{ flexShrink: 0, padding: "10px 16px", borderBottom: "1px solid #30363d" }}>
+      <div style={{ flexShrink: 0, padding: "10px 16px", borderBottom: "1px solid #30363d", ...(isMobile && { maxHeight: 200, overflow: "hidden" }) }}>
         {loading ? (
           <div style={{
             height: HEADER_H + DEVICE_IDS.length * ROW_H,

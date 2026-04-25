@@ -65,6 +65,9 @@ simulator/venv/
 .socat_info.log
 backend/rag_cache.pkl
 
+### 真機驅動層（不公開，含廠商協定）
+backend/app/kson_driver.py
+
 ### IDE、編輯器與系統
 .vscode/
 .idea/
