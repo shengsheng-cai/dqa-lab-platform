@@ -297,6 +297,13 @@ async def emergency_stop(device_id: str, request: Request, _: None = Depends(req
                 "message": f"{device_id} 已在緊急停止狀態",
             }
 
+        # 真機模式：物理停機（Demo 模式 KSON_DEVICES 不存在，getattr 回 {} 直接跳過）
+        kson = getattr(request.app.state, "KSON_DEVICES", {}).get(device_id)
+        if kson:
+            stopped = await kson.stop()
+            if not stopped:
+                logger.warning(f"[{device_id}] kson.stop() 未收到 ACK，仍繼續更新狀態")
+
         operator = device.get("operator", "") or "未填寫"
         operator_user_id = device.get("operator_user_id")
         sop_name = device.get("running_sop_name", "") or "未知測試"
