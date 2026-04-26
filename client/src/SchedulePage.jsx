@@ -233,6 +233,9 @@ function GanttChart({ schedules, blockedPeriods, rangeStart, rangeEnd, onClickSc
                             fontWeight: 600,
                           }}>
                             {s.project_number} {s.sample_name}
+                            {s.status === "進行中" && (s.conditions?.length ?? 0) > 1
+                              ? ` (${(s.current_condition_index ?? 0) + 1}/${s.conditions.length})`
+                              : ""}
                           </span>
                         )}
                       </div>
@@ -653,9 +656,10 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
   const [note, setNote] = useState(schedule.note || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [cancelReason, setCancelReason] = useState(null); // null = 未展開，string = 已展開
+  const [cancelReason, setCancelReason] = useState(null);
   const [previewState, setPreviewState] = useState({ data: null, loading: false, updatedAt: null });
   const [confirmedResult, setConfirmedResult] = useState(null);
+  const [completedResult, setCompletedResult] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const canEdit = role === "admin";
   const isPending = schedule.status === "待審核";
@@ -736,7 +740,7 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
       if (res.data.status === "completed") {
         showToast("排程全部條件完成！", "success");
         onUpdated({ ...schedule, status: "已完成" });
-        onClose();
+        setCompletedResult(true);
       } else {
         showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
         onUpdated({ ...schedule });
@@ -782,6 +786,31 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
   }
 
   const color = STATUS_COLOR[schedule.status] || STATUS_COLOR["待審核"];
+
+  if (completedResult) {
+    const total = (schedule.conditions || []).length;
+    return (
+      <div style={overlayStyle} onClick={onClose}>
+        <div style={{ ...modalStyle, width: 540 }} onClick={(e) => e.stopPropagation()}>
+          <div style={modalHeader}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>測試完成</span>
+            <button onClick={onClose} style={closeBtn}>✕</button>
+          </div>
+          <div style={{ padding: "20px 24px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ background: "#1a3828", border: "1px solid #3fb950", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#7ee787", fontWeight: 600 }}>
+              ✅ 全部 {total} 個條件已完成，排程結束
+            </div>
+            <InfoRow label="專案" value={`${schedule.project_number} / ${schedule.sample_name}`} />
+            <InfoRow label="設備" value={schedule.device_id || "—"} />
+            <InfoRow label="條件數" value={`${total} 個`} />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+              <button onClick={onClose} style={primaryBtn}>關閉</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 確認成功後顯示最終分配結果
   if (confirmedResult) {
@@ -947,6 +976,11 @@ function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onCl
 
               {cancelReason !== null && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {schedule.status === "進行中" && (
+                    <div style={{ fontSize: 12, color: "#f85149", background: "#2d0f0f", border: "1px solid #f85149", borderRadius: 6, padding: "8px 10px", fontWeight: 600 }}>
+                      ⚠️ {schedule.device_id} 正在執行測試中，取消將強制停止目前的溫度循環
+                    </div>
+                  )}
                   <div style={{ fontSize: 12, color: "#f85149" }}>請填寫取消原因（選填），再次點擊確認取消</div>
                   <textarea
                     value={cancelReason}
