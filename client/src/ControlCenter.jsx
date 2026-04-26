@@ -367,26 +367,7 @@ function FixtureSummaryPanel({ fixtureSummary }) {
 
 // ── ScheduleSummaryPanel ──────────────────────────────────────────────────────
 
-function ScheduleSummaryPanel({ devices, pendingByDevice, onConfirmCondition }) {
-  const [counts, setCounts] = useState({ pending: 0, confirmed: 0, running: 0 });
-
-  useEffect(() => {
-    const fetch = () => {
-      api.get("/api/schedules").then(r => {
-        const all = r.data;
-        setCounts({
-          pending: all.filter(s => s.status === "待審核").length,
-          confirmed: all.filter(s => s.status === "已確認").length,
-          running: all.filter(s => s.status === "進行中").length,
-          done: all.filter(s => s.status === "已完成").length,
-        });
-      }).catch(() => {});
-    };
-    fetch();
-    const t = setInterval(fetch, POLL_GENERAL_MS);
-    return () => clearInterval(t);
-  }, []);
-
+function ScheduleSummaryPanel({ devices, pendingByDevice, onConfirmCondition, counts = {} }) {
   const summaryItems = [
     { label: "待審核", value: counts.pending, color: counts.pending > 0 ? "#e3b341" : "#8b949e" },
     { label: "進行中", value: counts.running, color: counts.running > 0 ? "#3fb950" : "#8b949e" },
@@ -456,7 +437,7 @@ function UsersSummaryPanel() {
 
 // ── LeftPanel ─────────────────────────────────────────────────────────────────
 
-function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary, onOpenRecords, pendingByDevice, onConfirmCondition }) {
+function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary, onOpenRecords, pendingByDevice, onConfirmCondition, scheduleCounts }) {
   const title = activeTab === "schedule" ? "本欄：排程概況"
     : activeTab === "fixture" ? "本欄：治具概況"
     : activeTab === "users" ? "本欄：人員概況"
@@ -499,7 +480,7 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixture
         {activeTab === "fixture" ? (
           <FixtureSummaryPanel fixtureSummary={fixtureSummary} />
         ) : activeTab === "schedule" ? (
-          <ScheduleSummaryPanel devices={devices} pendingByDevice={pendingByDevice} onConfirmCondition={onConfirmCondition} />
+          <ScheduleSummaryPanel devices={devices} pendingByDevice={pendingByDevice} onConfirmCondition={onConfirmCondition} counts={scheduleCounts} />
         ) : activeTab === "users" ? (
           <UsersSummaryPanel />
         ) : (
@@ -881,29 +862,15 @@ const TABS = [
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, pendingByDevice, onConfirmCondition }) {
+function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, pendingByDevice, onConfirmCondition, scheduleCounts }) {
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
-  const [pendingScheduleCount, setPendingScheduleCount] = useState(0);
 
   // 切換 tab 時重置滾動位置
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [activeTab]);
-
-
-  useEffect(() => {
-    if (role === "guest") return;
-    const fetch = () => {
-      api.get("/api/schedules?status=待審核").then((res) => {
-        setPendingScheduleCount(res.data.length);
-      }).catch(() => {});
-    };
-    fetch();
-    const timer = setInterval(fetch, POLL_GENERAL_MS);
-    return () => clearInterval(timer);
-  }, [role]);
 
   const waitingDevices = useMemo(
     () => role === "admin" && pendingByDevice
@@ -953,7 +920,7 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
             }}
           >
             {t.label}
-            {t.key === "schedule" && <TabBadge count={pendingScheduleCount} bg="#e3b341" />}
+            {t.key === "schedule" && <TabBadge count={scheduleCounts.pending} bg="#e3b341" />}
           </button>
         ))}
       </div>
@@ -1100,6 +1067,26 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
     }
   }, [showToast]);
 
+  const [scheduleCounts, setScheduleCounts] = useState({ pending: 0, confirmed: 0, running: 0, done: 0 });
+
+  useEffect(() => {
+    if (role === "guest") return;
+    const fetch = () => {
+      api.get("/api/schedules").then((res) => {
+        const all = res.data;
+        setScheduleCounts({
+          pending: all.filter(s => s.status === "待審核").length,
+          confirmed: all.filter(s => s.status === "已確認").length,
+          running: all.filter(s => s.status === "進行中").length,
+          done: all.filter(s => s.status === "已完成").length,
+        });
+      }).catch(() => {});
+    };
+    fetch();
+    const timer = setInterval(fetch, POLL_GENERAL_MS);
+    return () => clearInterval(timer);
+  }, [role]);
+
   // 輪詢治具摘要（30s）
   useEffect(() => {
     const fetchSummary = async () => {
@@ -1134,6 +1121,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           onOpenRecords={() => setRecordsOpen(true)}
           pendingByDevice={pendingByDevice}
           onConfirmCondition={handleConfirmCondition}
+          scheduleCounts={scheduleCounts}
         />
         <CenterPanel
           role={role}
@@ -1147,6 +1135,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           pendingByDevice={pendingByDevice}
           onConfirmCondition={handleConfirmCondition}
           onApplySchedule={handleApplySchedule}
+          scheduleCounts={scheduleCounts}
           onOpenExecutions={() => {
             setRecordsOpen(true);
             setRecordsSubTab("executions");

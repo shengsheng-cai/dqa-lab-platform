@@ -559,8 +559,7 @@ def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request
 
 @router.get("/inventory-logs")
 def list_inventory_logs(fixture_id: Optional[int] = None):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         q = db.query(FixtureInventoryLog).order_by(
             FixtureInventoryLog.counted_at.desc()
         )
@@ -594,21 +593,16 @@ def list_inventory_logs(fixture_id: Optional[int] = None):
             }
             for log in logs
         ]
-    finally:
-        db.close()
 
 
 @router.get("/{fixture_id}")
 def get_fixture(fixture_id: int):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
         loan_map = _build_loan_qty_map(db, [f.id])
         return _fixture_to_out(db, f, loan_map)
-    finally:
-        db.close()
 
 
 # ---------- 借出 ----------
