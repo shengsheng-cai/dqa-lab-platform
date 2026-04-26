@@ -61,7 +61,7 @@ def download_csv_report(execution_id: int):
         device_id_filter = execution.device_id or DEVICE_IDS[0]
         sop_data = STANDARDS_AND_SOPS.get(execution.sop_id, {})
         temp_tolerance = sop_data.get("temp_tolerance", 2.0)
-        humi_tolerance = sop_data.get("humi_tolerance", 5.0)
+        humi_tolerance = sop_data.get("humi_tolerance", 3.0)
 
         temps = [r.temperature for r in device_records if r.temperature is not None]
         humis = [r.humidity for r in device_records if r.humidity is not None]
@@ -409,7 +409,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     temps = [r.temperature for r in device_records if r.temperature is not None]
     humis = [r.humidity for r in device_records if r.humidity is not None]
     temp_tolerance = sop_data.get("temp_tolerance", 2.0)
-    humi_tolerance = sop_data.get("humi_tolerance", 5.0)
+    humi_tolerance = sop_data.get("humi_tolerance", 3.0)
     target_high = sop_data.get("high_temperature") or sop_data.get("target_temperature")
     target_low = sop_data.get("low_temperature")
     humi_target = sop_data.get("humidity_rh_percent")
