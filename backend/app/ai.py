@@ -15,7 +15,6 @@ from .rag import (
     retrieve_multi,
     retrieve_by_std,
     filter_chunks_by_hints,
-    retrieve_filtered,
     get_all_sop_ids,
 )
 
