@@ -25,6 +25,13 @@ short_description: Environmental test lab management (FastAPI + React + AI)
 **Environmental test lab management platform** built with FastAPI + React.  
 Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-assisted scheduling for temperature/humidity chambers.
 
+| | |
+|---|---|
+| **109 automated tests** | Device state machine · Schedule calculation · Fixture lifecycle · Three-module integration · SOP validation · Measurement uncertainty |
+| **GitHub Actions CI/CD** | Push-triggered test gate + auto-deploy to HF Spaces |
+| **RAG + backend validation** | Gemini Flash-Lite with retrieval-augmented generation — AI output validated server-side before DB write |
+| **Three-module integration** | AI → Schedule → Fixture fully automated (reserve → loan → return) |
+
 - 78 built-in test conditions across 5 international standards (IEC 60068 / EN 50155 / IEC 61850-3 / IEC 60945 / DNV)
 - GUM-compliant measurement uncertainty analysis (Type A/B → U, k=2)
 - AI advisor (Gemini + RAG) — recommend conditions → one-click scheduling
@@ -117,6 +124,7 @@ cp .env.example backend/.env
 | **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Flash-Lite）+ 可切換 RAG Embedding（Gemini / sentence-transformers） |
 | **通知** | LINE Messaging API（條件完成 / 測試完成 / 緊急停止推播）|
+| **品質** | pytest 109 tests · GitHub Actions CI/CD · Alembic 版本控制遷移 |
 
 ---
 
