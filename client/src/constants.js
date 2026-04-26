@@ -9,12 +9,7 @@ export const POLL_DEVICES_MS = 3000;    // 設備狀態
 export const POLL_FIXTURE_MS = 30000;   // 治具摘要
 export const POLL_GENERAL_MS = 60000;   // 其他清單（逾期借出、申請數）
 
-// 後端回傳 naive UTC 字串（無 Z），補上 Z 讓瀏覽器正確解析為 UTC
-export function parseUtcDate(s) {
-  if (!s) return null;
-  if (s instanceof Date) return s;
-  return new Date(s.includes("Z") || s.includes("+") ? s : s + "Z");
-}
+export { parseUTC as parseUtcDate } from "./utils/timezone";
 
 export const ACTIVE_STATUSES = ["RUNNING", "PAUSED"];
 export const IDLE_STATUS = "IDLE";

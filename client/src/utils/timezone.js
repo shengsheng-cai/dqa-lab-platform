@@ -17,6 +17,7 @@
  */
 export function parseUTC(dateStr) {
   if (!dateStr) return null;
+  if (dateStr instanceof Date) return dateStr;
   try {
     // 檢查是否已有時區資訊
     const hasTimezone = /[Z+\-]\d{2}:?\d{2}$/.test(dateStr);
