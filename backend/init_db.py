@@ -8,7 +8,7 @@ import math
 import datetime
 from app.models import (
     Base, engine, SessionLocal, Fixture, Schedule, SopExecution,
-    DeviceData, DeviceState, ErrorLog, FixtureLoan, ScheduleStatus, _utcnow,
+    DeviceData, DeviceState, ErrorLog, FixtureLoan, ScheduleFixture, ScheduleStatus, _utcnow,
     ensure_admin_user,
 )
 
@@ -68,7 +68,7 @@ try:
         _schedules = [
             # 歷史完成
             Schedule(
-                project_number="PRJ-2025-009", sample_name="車用 HDMI 傳輸模組",
+                project_number="PRJ-2026-009", sample_name="車用 HDMI 傳輸模組",
                 applicant_name="林怡君", device_id="CH-03",
                 standard="IEC 60068-2-1",
                 conditions=json.dumps(["iec60068_ab_-40_16h"]),
@@ -77,7 +77,7 @@ try:
                 status=ScheduleStatus.DONE, current_condition_index=0,
             ),
             Schedule(
-                project_number="PRJ-2025-007", sample_name="PCIe x16 顯示卡散熱模組",
+                project_number="PRJ-2026-007", sample_name="PCIe x16 顯示卡散熱模組",
                 applicant_name="王詠晴", device_id="CH-04",
                 standard="IEC 60068-2-2",
                 conditions=json.dumps(["iec60068_ba_+85_16h"]),
@@ -86,7 +86,7 @@ try:
                 status=ScheduleStatus.DONE, current_condition_index=0,
             ),
             Schedule(
-                project_number="PRJ-2025-008", sample_name="工業 IoT 網關模組",
+                project_number="PRJ-2026-008", sample_name="工業 IoT 網關模組",
                 applicant_name="陳柏宇", device_id="CH-04",
                 standard="IEC 60068-2-30",
                 conditions=json.dumps(["iec60068_db_25_55_6cycle"]),
@@ -95,7 +95,7 @@ try:
                 status=ScheduleStatus.DONE, current_condition_index=0,
             ),
             Schedule(
-                project_number="PRJ-2025-001", sample_name="車載 USB Hub 模組 v2",
+                project_number="PRJ-2026-001", sample_name="車載 USB Hub 模組 v2",
                 applicant_name="林怡君", device_id="CH-01",
                 standard="IEC 60068-2-14",
                 conditions=json.dumps(["iec60068_nb_-40_+85_5cycle"]),
@@ -104,7 +104,7 @@ try:
                 status=ScheduleStatus.DONE, current_condition_index=0,
             ),
             Schedule(
-                project_number="PRJ-2025-002", sample_name="工業用 RJ-45 Switch",
+                project_number="PRJ-2026-002", sample_name="工業用 RJ-45 Switch",
                 applicant_name="陳柏宇", device_id="CH-02",
                 standard="IEC 60068-2-1",
                 conditions=json.dumps(["iec60068_ab_-25_16h"]),
@@ -114,7 +114,7 @@ try:
             ),
             # 進行中
             Schedule(
-                project_number="PRJ-2025-004", sample_name="Wi-Fi 6E M.2 無線模組",
+                project_number="PRJ-2026-004", sample_name="Wi-Fi 6E M.2 無線模組",
                 applicant_name="林怡君", device_id="CH-01",
                 standard="IEC 60068-2-14",
                 conditions=json.dumps(["iec60068_nb_-40_+85_5cycle"]),
@@ -123,7 +123,7 @@ try:
                 status=ScheduleStatus.RUNNING, current_condition_index=0,
             ),
             Schedule(
-                project_number="PRJ-2025-005", sample_name="低溫工作 NVMe SSD 模組",
+                project_number="PRJ-2026-005", sample_name="低溫工作 NVMe SSD 模組",
                 applicant_name="陳柏宇", device_id="CH-02",
                 standard="IEC 60068-2-1",
                 conditions=json.dumps(["iec60068_ab_-25_16h"]),
@@ -133,7 +133,7 @@ try:
             ),
             # 已確認待開始
             Schedule(
-                project_number="PRJ-2025-006", sample_name="防水連接器 IP67 模組",
+                project_number="PRJ-2026-006", sample_name="防水連接器 IP67 模組",
                 applicant_name="王詠晴", device_id="CH-03",
                 standard="IEC 60068-2-78",
                 conditions=json.dumps(["iec60068_cab_65_16h_95rh"]),
@@ -143,7 +143,7 @@ try:
             ),
             # 待審核
             Schedule(
-                project_number="PRJ-2025-003", sample_name="PCIe x16 顯示卡擴充板",
+                project_number="PRJ-2026-003", sample_name="PCIe x16 顯示卡擴充板",
                 applicant_name="王詠晴", device_id="CH-05",
                 standard="IEC 60068-2-14",
                 conditions=json.dumps(["iec60068_nb_-40_+85_5cycle"]),
@@ -263,50 +263,77 @@ try:
             # 進行中借出
             FixtureLoan(
                 fixture_id=_fmap["12401610E4#2A"].id, borrower_name="林怡君",
-                device_id="CH-01", project_name="PRJ-2025-004 Wi-Fi 6E M.2 無線模組",
+                device_id="CH-01", project_name="PRJ-2026-004 Wi-Fi 6E M.2 無線模組",
                 quantity=2, loan_date=_now - datetime.timedelta(hours=2),
                 due_date=_now + datetime.timedelta(days=2),
-                status="loaned", schedule_id=_smap["PRJ-2025-004"].id,
+                status="loaned", schedule_id=_smap["PRJ-2026-004"].id,
             ),
             FixtureLoan(
                 fixture_id=_fmap["5031760892"].id, borrower_name="陳柏宇",
-                device_id="CH-02", project_name="PRJ-2025-005 低溫工作 NVMe SSD 模組",
+                device_id="CH-02", project_name="PRJ-2026-005 低溫工作 NVMe SSD 模組",
                 quantity=1, loan_date=_now - datetime.timedelta(hours=4),
                 due_date=_now + datetime.timedelta(days=2),
-                status="loaned", schedule_id=_smap["PRJ-2025-005"].id,
+                status="loaned", schedule_id=_smap["PRJ-2026-005"].id,
             ),
             # 已歸還
             FixtureLoan(
                 fixture_id=_fmap["105450-0101"].id, borrower_name="林怡君",
-                device_id="CH-01", project_name="PRJ-2025-001 車載 USB Hub 模組 v2",
+                device_id="CH-01", project_name="PRJ-2026-001 車載 USB Hub 模組 v2",
                 quantity=3, loan_date=_now - datetime.timedelta(days=5),
                 due_date=_now - datetime.timedelta(days=3),
                 return_date=_now - datetime.timedelta(days=3),
                 status="returned", return_condition="normal",
-                schedule_id=_smap["PRJ-2025-001"].id,
+                schedule_id=_smap["PRJ-2026-001"].id,
             ),
             FixtureLoan(
                 fixture_id=_fmap["RJHSE-5380"].id, borrower_name="王詠晴",
-                device_id="CH-04", project_name="PRJ-2025-007 PCIe x16 顯示卡散熱模組",
+                device_id="CH-04", project_name="PRJ-2026-007 PCIe x16 顯示卡散熱模組",
                 quantity=2, loan_date=_now - datetime.timedelta(days=10),
                 due_date=_now - datetime.timedelta(days=7),
                 return_date=_now - datetime.timedelta(days=7),
                 status="returned", return_condition="normal",
-                schedule_id=_smap["PRJ-2025-007"].id,
+                schedule_id=_smap["PRJ-2026-007"].id,
             ),
             FixtureLoan(
                 fixture_id=_fmap["TX24-30P-6ST"].id, borrower_name="林怡君",
-                device_id="CH-03", project_name="PRJ-2025-009 車用 HDMI 傳輸模組",
+                device_id="CH-03", project_name="PRJ-2026-009 車用 HDMI 傳輸模組",
                 quantity=1, loan_date=_now - datetime.timedelta(days=14),
                 due_date=_now - datetime.timedelta(days=11),
                 return_date=_now - datetime.timedelta(days=11),
                 status="returned", return_condition="normal",
-                schedule_id=_smap["PRJ-2025-009"].id,
+                schedule_id=_smap["PRJ-2026-009"].id,
             ),
         ]
         db.add_all(_loans)
         db.commit()
         print(f"✅ Demo 治具借還紀錄 {len(_loans)} 筆建立完成！")
+
+    # ── 排程治具預約（schedule_fixtures）────────────────────────────────────
+    if db.query(ScheduleFixture).count() == 0:
+        _fmap2 = {f.model_number: f for f in db.query(Fixture).all()}
+        _smap2 = {s.project_number: s for s in db.query(Schedule).all()}
+        _sf_list = [
+            # CONFIRMED 排程 PRJ-2026-006 預約 HDMI + USB Type-C 治具
+            ScheduleFixture(
+                schedule_id=_smap2["PRJ-2026-006"].id,
+                fixture_id=_fmap2["TX24-30P-6ST"].id,
+                quantity=1,
+            ),
+            ScheduleFixture(
+                schedule_id=_smap2["PRJ-2026-006"].id,
+                fixture_id=_fmap2["12401610E4#2A"].id,
+                quantity=2,
+            ),
+            # PENDING 排程 PRJ-2026-003 預約 PCIe 治具
+            ScheduleFixture(
+                schedule_id=_smap2["PRJ-2026-003"].id,
+                fixture_id=_fmap2["CP3-128B1-0100"].id,
+                quantity=1,
+            ),
+        ]
+        db.add_all(_sf_list)
+        db.commit()
+        print(f"✅ Demo 排程治具預約 {len(_sf_list)} 筆建立完成！")
 
     # ── 設備時序資料 ──────────────────────────────────────────────────────
     if db.query(DeviceData).count() == 0:
