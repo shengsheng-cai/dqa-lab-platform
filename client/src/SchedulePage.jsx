@@ -384,11 +384,19 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const [allFixtures, setAllFixtures] = useState([]);
+  const [fixturesError, setFixturesError] = useState(false);
+  const [fixturesLoaded, setFixturesLoaded] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
-  useEffect(() => {
-    api.get("/api/fixtures/").then((r) => setAllFixtures(r.data)).catch(() => {});
-  }, []);
+  const loadFixtures = () => {
+    setFixturesError(false);
+    setFixturesLoaded(false);
+    api.get("/api/fixtures/")
+      .then((r) => { setAllFixtures(Array.isArray(r.data) ? r.data : []); setFixturesLoaded(true); })
+      .catch((e) => { console.error("[fixtures]", e?.response?.status, e?.message); setFixturesError(true); setFixturesLoaded(true); });
+  };
+
+  useEffect(() => { loadFixtures(); }, []);
 
   const isDirty = useMemo(() => !!(
     form.project_number.trim() ||
@@ -553,14 +561,22 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
             </>
           )}
 
-          {allFixtures.length > 0 && (
-            <div>
+          <div>
               <div style={labelStyle}>治具需求（選填）</div>
               <div style={{
                 background: "#161b22", borderRadius: 6, border: "1px solid #30363d",
                 maxHeight: 180, overflowY: "auto",
               }}>
-                {allFixtures.map((f) => {
+                {fixturesError ? (
+                  <div style={{ padding: "10px 12px", fontSize: 12, color: "#f85149", display: "flex", alignItems: "center", gap: 8 }}>
+                    治具資料載入失敗
+                    <button onClick={loadFixtures} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#21262d", border: "1px solid #30363d", color: "#cdd9e5", cursor: "pointer" }}>重試</button>
+                  </div>
+                ) : !fixturesLoaded ? (
+                  <div style={{ padding: "10px 12px", fontSize: 12, color: "#8b949e" }}>載入中…</div>
+                ) : allFixtures.length === 0 ? (
+                  <div style={{ padding: "10px 12px", fontSize: 12, color: "#8b949e" }}>無治具資料</div>
+                ) : allFixtures.map((f) => {
                   const sel = form.fixtures.find((x) => x.fixture_id === f.id);
                   const checked = !!sel;
                   const qty = sel?.quantity ?? 1;
@@ -616,7 +632,6 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
                 </div>
               )}
             </div>
-          )}
 
           <LabelInput label="備註" value={form.note}
             onChange={(v) => setForm((f) => ({ ...f, note: v }))} placeholder="可選" />
