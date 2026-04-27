@@ -14,7 +14,7 @@ WORKDIR /build
 COPY client/package.json client/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# copy 其餘前端原始碼再 build
+# copy 其餘前端原始碼再 build（含修正 api/fixtures trailing slash）
 COPY client/ ./
 # 同 origin 部署：API_BASE 走相對路徑（前端請求 /api/... 直接打同一個 host）
 ENV VITE_API_URL=""
