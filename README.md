@@ -63,6 +63,8 @@ https://github.com/user-attachments/assets/1383848e-56c3-4fa1-8e7c-fd6182ef6dd6
 | 👥 **人員管理** | 人員名冊（左）+ 訪客 Token 管理（右）；Token 表支援「隱藏已失效」一鍵過濾 |
 | 🔐 **存取控制** | 管理員登入 + 訪客唯讀模式，bcrypt 密碼雜湊，IP Rate Limiting |
 
+> ⚠️ **AI 諮詢功能限制**：線上版使用 Gemini 免費方案，每日限制 20 次請求，額度用完後顯示提示並隔日自動恢復。完整 demo 建議以本地端執行。
+> 
 <img src="docs/line-1.png" width="260"> <img src="docs/line-2.png" width="260"> <img src="docs/line-3.png" width="260">
 
 ---
@@ -107,7 +109,7 @@ cp .env.example backend/.env
 ```
 
 **必須設置（可選功能會自動跳過）：**
-- `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com) 免費申請（Embedding + Flash-Lite）
+- `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com) 免費申請（Embedding + Flash-Lite）；免費方案每日限制 20 次 AI 諮詢請求
 - `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN` — LINE Developers 後台取得（推播功能）
 
 **可選（RAG 對比測試）：**
