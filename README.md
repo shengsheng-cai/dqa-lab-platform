@@ -45,7 +45,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 
 ## Demo
 
-https://github.com/user-attachments/assets/80052b37-c452-4363-8189-c35c41ca1aaa
+https://github.com/user-attachments/assets/0ec611ed-b8d4-46c1-83a0-d75519044b5f
 
 ---
 
