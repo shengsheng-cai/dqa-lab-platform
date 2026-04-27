@@ -387,7 +387,7 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   useEffect(() => {
-    api.get("/api/fixtures").then((r) => setAllFixtures(r.data)).catch(() => {});
+    api.get("/api/fixtures/").then((r) => setAllFixtures(r.data)).catch(() => {});
   }, []);
 
   const isDirty = useMemo(() => !!(
