@@ -465,8 +465,6 @@ async def standards_query_stream(req: QueryRequest):
                     if resp.status_code == 429:
                         try:
                             err = await resp.aread()
-                            import re
-
                             match = re.search(r"retry in ([\d.]+)s", err.decode())
                             wait = (
                                 f"{int(float(match.group(1)))} 秒"
@@ -505,9 +503,10 @@ async def standards_query_stream(req: QueryRequest):
             yield f"\n\n[AI 服務不可用：{e}]"
             return
         # AI 從 [S:xxx] 清單選 ID 輸出 [APPLY:id1,id2]，後端白名單驗證防幻覺
-        # Fallback：AI 未輸出 APPLY 但 RAG 精確命中少量條件（≤5）時直接用
+        # Fallback：AI 未輸出或驗證全失敗時，取 RAG 命中的前 5 個
         full_text = "".join(collected)
         apply_match = re.search(r"\[APPLY:([^\]]+)\]", full_text)
+        valid_ids = []
         if apply_match:
             all_ids = get_all_sop_ids()
             valid_ids = [
@@ -515,9 +514,9 @@ async def standards_query_stream(req: QueryRequest):
                 for i in apply_match.group(1).split(",")
                 if i.strip() in all_ids
             ]
-            if valid_ids:
-                yield f"{META_PREFIX}{json.dumps({'sop_ids': valid_ids})}{META_SUFFIX}"
-        elif sop_ids and len(sop_ids) <= 5:
-            yield f"{META_PREFIX}{json.dumps({'sop_ids': sop_ids})}{META_SUFFIX}"
+        if valid_ids:
+            yield f"{META_PREFIX}{json.dumps({'sop_ids': valid_ids})}{META_SUFFIX}"
+        elif sop_ids:
+            yield f"{META_PREFIX}{json.dumps({'sop_ids': sop_ids[:5]})}{META_SUFFIX}"
 
     return StreamingResponse(generate(), media_type="text/plain")
