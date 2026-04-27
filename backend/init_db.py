@@ -141,14 +141,14 @@ try:
                 end_time=_now + datetime.timedelta(days=2),
                 status=ScheduleStatus.CONFIRMED, current_condition_index=0,
             ),
-            # 待審核
+            # 待審核（排在 CH-01 RUNNING 結束後，CH-05 保持完全空閒）
             Schedule(
                 project_number="PRJ-2026-003", sample_name="PCIe x16 顯示卡擴充板",
-                applicant_name="王詠晴", device_id="CH-05",
+                applicant_name="王詠晴", device_id="CH-01",
                 standard="IEC 60068-2-14",
                 conditions=json.dumps(["iec60068_nb_-40_+85_5cycle"]),
-                start_time=_now + datetime.timedelta(days=3),
-                end_time=_now + datetime.timedelta(days=6),
+                start_time=_now + datetime.timedelta(hours=24),
+                end_time=_now + datetime.timedelta(hours=96),
                 status=ScheduleStatus.PENDING, current_condition_index=0,
             ),
         ]
