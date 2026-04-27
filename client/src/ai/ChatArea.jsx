@@ -29,6 +29,7 @@ export default function ChatArea({
   messages,
   loading,
   streamText,
+  cooldownSeconds = 0,
   input,
   chatAreaRef,
   bottomRef,
@@ -42,9 +43,14 @@ export default function ChatArea({
   onApplySchedule,
   compact = false,
 }) {
+  const isCooling = cooldownSeconds > 0;
+
   return (
     <div style={S.main}>
-      <div ref={chatAreaRef} style={{ ...S.chatArea, ...(compact ? S.chatAreaCompact : {}) }}>
+      <div
+        ref={chatAreaRef}
+        style={{ ...S.chatArea, ...(compact ? S.chatAreaCompact : {}) }}
+      >
         {messages.length === 0 && !loading && (
           <div style={S.emptyHint}>
             <div style={S.emptyIcon}>🔬</div>
@@ -53,30 +59,41 @@ export default function ChatArea({
               描述你的產品或測試需求，AI 將從 5 大法規、78
               個測試條件中推薦最適合的方案。
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                marginBottom: 12,
+              }}
+            >
               {[
                 "工業乙太網設備要選哪個測試標準？",
                 "IEC 60068-2-14 有哪些溫度循環條件？",
               ].map((q) => (
                 <button
                   key={q}
-                  onClick={() => onSend(q)}
+                  onClick={() => !isCooling && onSend(q)}
+                  disabled={isCooling}
                   style={{
                     background: "#0d1117",
                     border: "1px solid #30363d",
                     borderRadius: 8,
-                    color: "#8b949e",
+                    color: isCooling ? "#6e7681" : "#8b949e",
                     fontSize: 13,
                     padding: "10px 14px",
                     textAlign: "left",
-                    cursor: "pointer",
+                    cursor: isCooling ? "not-allowed" : "pointer",
                     transition: "border-color .15s, color .15s",
+                    opacity: isCooling ? 0.5 : 1,
                   }}
                   onMouseEnter={(e) => {
+                    if (isCooling) return;
                     e.currentTarget.style.borderColor = "#58a6ff";
                     e.currentTarget.style.color = "#cdd9e5";
                   }}
                   onMouseLeave={(e) => {
+                    if (isCooling) return;
                     e.currentTarget.style.borderColor = "#30363d";
                     e.currentTarget.style.color = "#8b949e";
                   }}
@@ -126,13 +143,20 @@ export default function ChatArea({
             inputRef.current = el;
             textareaRef.current = el;
           }}
-          style={S.textarea}
+          style={{
+            ...S.textarea,
+            opacity: isCooling ? 0.5 : 1,
+          }}
           value={input}
           onChange={onInputChange}
           onKeyDown={onKeyDown}
-          placeholder="描述你的測試需求，Enter 送出，Shift+Enter 換行..."
+          placeholder={
+            isCooling
+              ? `AI 額度冷卻中，請稍候 ${cooldownSeconds} 秒...`
+              : "描述你的測試需求，Enter 送出，Shift+Enter 換行..."
+          }
           rows={3}
-          disabled={loading}
+          disabled={loading || isCooling}
         />
         {loading ? (
           <button
@@ -144,6 +168,20 @@ export default function ChatArea({
             }
           >
             ⏹ 停止
+          </button>
+        ) : isCooling ? (
+          <button
+            style={{
+              ...S.sendBtn,
+              background: "#21262d",
+              color: "#8b949e",
+              cursor: "not-allowed",
+              opacity: 0.8,
+              minWidth: 72,
+            }}
+            disabled
+          >
+            ⏳ {cooldownSeconds}s
           </button>
         ) : (
           <button

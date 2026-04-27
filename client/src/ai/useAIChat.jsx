@@ -35,6 +35,7 @@ export default function useAIChat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [streamText, setStreamText] = useState("");
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   const bottomRef = useRef(null);
   const chatAreaRef = useRef(null);
@@ -48,6 +49,7 @@ export default function useAIChat() {
   const activeIdRef = useRef(null);
   // A8: debounce timer ref
   const saveDebounceRef = useRef(null);
+  const cooldownRef = useRef(null);
 
   const activeId = store.activeConversationId;
   const conversations = store.conversations;
@@ -73,6 +75,13 @@ export default function useAIChat() {
     };
   }, [store]);
 
+  // 清除 cooldown interval on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     const el = chatAreaRef.current;
     if (!el) return;
@@ -92,6 +101,21 @@ export default function useAIChat() {
   const scrollToBottomForce = useCallback(() => {
     userScrolledUpRef.current = false;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  const startCooldown = useCallback((secs) => {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    setCooldownSeconds(secs);
+    cooldownRef.current = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(cooldownRef.current);
+          cooldownRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   }, []);
 
   const updateMessages = useCallback((newMsgs, targetId) => {
@@ -234,14 +258,13 @@ export default function useAIChat() {
     streamTextRef.current = "";
     setLoading(false);
     abortControllerRef.current = null;
-    // 移除 inputRef.current?.focus()，統一由 finally 處理
   }, []);
 
   const sendMessage = useCallback(
     async (text) => {
       const currentMessages = messagesRef.current;
       const rawMsg = (text !== undefined ? text : input).trim();
-      if (!rawMsg || loading) return;
+      if (!rawMsg || loading || cooldownSeconds > 0) return;
 
       setInput("");
       if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -263,7 +286,6 @@ export default function useAIChat() {
         .slice(-MAX_HISTORY)
         .map((m) => ({
           role: m.role,
-          // 附加已推薦條件 ID，讓 AI 在「加上/再加」時能累積前一輪推薦
           content: m.role === "assistant" && m.sop_ids?.length
             ? m.content + `\n[已推薦條件ID:${m.sop_ids.join(",")}]`
             : m.content,
@@ -288,7 +310,6 @@ export default function useAIChat() {
           if (done) break;
           fullText += decoder.decode(value, { stream: true });
           streamTextRef.current = fullText;
-          // 用 rAF 節流：每個 animation frame 最多更新一次，避免高頻 chunk 卡住 UI
           if (streamRafRef.current) cancelAnimationFrame(streamRafRef.current);
           streamRafRef.current = requestAnimationFrame(() => {
             const t = streamTextRef.current;
@@ -309,6 +330,12 @@ export default function useAIChat() {
             [...newMessages, { role: "assistant", content: displayText, elapsed, sop_ids }],
             sendingConvId,
           );
+
+          // 解析 429 等待秒數，啟動冷卻鎖
+          const waitMatch = displayText.match(/請稍候\s*(\d+)\s*秒/);
+          if (waitMatch) {
+            startCooldown(parseInt(waitMatch[1]));
+          }
         }
       } catch (err) {
         if (err.name !== "AbortError") {
@@ -324,7 +351,6 @@ export default function useAIChat() {
           );
         }
       } finally {
-        // loading / streamText 一律清除，防止意外 abort 時 loading 卡在 true
         setLoading(false);
         setStreamText("");
         streamTextRef.current = "";
@@ -334,7 +360,7 @@ export default function useAIChat() {
         }
       }
     },
-    [input, loading, updateMessages, scrollToBottomForce],
+    [input, loading, cooldownSeconds, updateMessages, scrollToBottomForce, startCooldown],
   );
 
   const retryInTraditional = useCallback(
@@ -348,7 +374,6 @@ export default function useAIChat() {
       }
       if (!userMsg) return;
       const slicedMessages = messages.slice(0, msgIndex);
-      // 必須先同步更新 ref，sendMessage 讀 messagesRef.current 時才能拿到正確的截斷版本
       messagesRef.current = slicedMessages;
       updateMessages(slicedMessages);
       sendMessage(userMsg);
@@ -367,7 +392,6 @@ export default function useAIChat() {
     inputRef.current?.focus();
   }, [updateMessages]);
 
-  // Enter 送出，Shift+Enter 換行；IME 組字中（isComposing）不送出
   const handleKeyDown = useCallback(
     (e) => {
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -386,6 +410,7 @@ export default function useAIChat() {
     input,
     loading,
     streamText,
+    cooldownSeconds,
     bottomRef,
     chatAreaRef,
     inputRef,
