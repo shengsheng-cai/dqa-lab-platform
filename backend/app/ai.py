@@ -88,7 +88,17 @@ _COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
 
 _FIXTURE_KEYWORDS = ["治具", "庫存", "借出", "逾期", "缺貨", "可借", "缺少"]
 
-_DEVICE_KEYWORDS = ["設備", "溫箱", "CH-", "可用", "空著", "哪台", "排程", "IDLE", "RUNNING"]
+_DEVICE_KEYWORDS = [
+    "設備",
+    "溫箱",
+    "CH-",
+    "可用",
+    "空著",
+    "哪台",
+    "排程",
+    "IDLE",
+    "RUNNING",
+]
 
 _SCHEDULE_KEYWORDS = ["排程", "進行中", "待確認", "哪個案子", "哪個專案", "測試中"]
 
@@ -100,6 +110,7 @@ _schedule_context_cache: dict = {"data": "", "expires_at": None}
 def _query_fixture_context() -> str:
     """查詢治具即時狀態（借出中 + 逾期 + 庫存不足），注入 AI context。結果快取 5 分鐘。"""
     from .models import SessionLocal, Fixture, FixtureLoan
+
     now = _now_utc()
     if _fixture_context_cache["data"] and _fixture_context_cache["expires_at"] > now:
         return _fixture_context_cache["data"]
@@ -161,7 +172,9 @@ def _query_fixture_context() -> str:
                         "shortage": f.shortage,
                         "note": f.note,
                     }
-            sorted_items = sorted(seen.values(), key=lambda x: x["shortage"], reverse=True)
+            sorted_items = sorted(
+                seen.values(), key=lambda x: x["shortage"], reverse=True
+            )
             lines = ["【治具庫存不足】："]
             for item in sorted_items:
                 lines.append(
@@ -183,6 +196,7 @@ def _query_fixture_context() -> str:
 def _query_schedule_context() -> str:
     """查詢進行中與已確認排程，注入 AI context。結果快取 2 分鐘。"""
     from .models import SessionLocal, Schedule, ScheduleStatus
+
     now = _now_utc()
     if _schedule_context_cache["data"] and _schedule_context_cache["expires_at"] > now:
         return _schedule_context_cache["data"]
@@ -190,7 +204,9 @@ def _query_schedule_context() -> str:
     try:
         schedules = (
             db.query(Schedule)
-            .filter(Schedule.status.in_([ScheduleStatus.RUNNING, ScheduleStatus.CONFIRMED]))
+            .filter(
+                Schedule.status.in_([ScheduleStatus.RUNNING, ScheduleStatus.CONFIRMED])
+            )
             .order_by(Schedule.start_time)
             .all()
         )
@@ -219,6 +235,7 @@ def _query_schedule_context() -> str:
 def _query_device_context() -> str:
     """查詢所有設備即時狀態，注入 AI context。結果快取 1 分鐘。"""
     from .models import SessionLocal, DeviceState
+
     now = _now_utc()
     if _device_context_cache["data"] and _device_context_cache["expires_at"] > now:
         return _device_context_cache["data"]
@@ -340,10 +357,12 @@ async def _build_context(msg: str, history: list = []) -> tuple[str, list[str]]:
 
     parts = []
     if hits:
+
         def _hit_line(h):
             sid = h.get("raw", {}).get("sop_id", "")
             prefix = f"[S:{sid}] " if sid else ""
             return f"- {prefix}{h['text']}"
+
         parts.append("\n".join(_hit_line(h) for h in hits))
 
     if any(kw in msg for kw in _FIXTURE_KEYWORDS):
@@ -408,7 +427,9 @@ async def standards_query(req: QueryRequest):
     except httpx.TimeoutException:
         raise HTTPException(status_code=503, detail="AI 服務逾時，請稍後再試")
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=503, detail=f"AI 服務錯誤：{e.response.status_code}")
+        raise HTTPException(
+            status_code=503, detail=f"AI 服務錯誤：{e.response.status_code}"
+        )
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"AI 服務不可用：{e}")
     return QueryResponse(reply=reply)
@@ -441,6 +462,24 @@ async def standards_query_stream(req: QueryRequest):
                     f"{GEMINI_URL}:streamGenerateContent?alt=sse&key={api_key}",
                     json=payload,
                 ) as resp:
+                    if resp.status_code == 429:
+                        try:
+                            err = await resp.aread()
+                            import re
+
+                            match = re.search(r"retry in ([\d.]+)s", err.decode())
+                            wait = (
+                                f"{int(float(match.group(1)))} 秒"
+                                if match
+                                else "一分鐘"
+                            )
+                        except Exception:
+                            wait = "一分鐘"
+                        yield f"\n\n[AI 服務繁忙，請稍候 {wait} 再試]"
+                        return
+                    elif resp.status_code != 200:
+                        yield f"\n\n[AI 服務錯誤：{resp.status_code}]"
+                        return
                     async for line in resp.aiter_lines():
                         if line.startswith("data: "):
                             raw = line[6:].strip()
@@ -468,11 +507,14 @@ async def standards_query_stream(req: QueryRequest):
         # AI 從 [S:xxx] 清單選 ID 輸出 [APPLY:id1,id2]，後端白名單驗證防幻覺
         # Fallback：AI 未輸出 APPLY 但 RAG 精確命中少量條件（≤5）時直接用
         full_text = "".join(collected)
-        apply_match = re.search(r'\[APPLY:([^\]]+)\]', full_text)
+        apply_match = re.search(r"\[APPLY:([^\]]+)\]", full_text)
         if apply_match:
             all_ids = get_all_sop_ids()
-            valid_ids = [i.strip() for i in apply_match.group(1).split(',')
-                         if i.strip() in all_ids]
+            valid_ids = [
+                i.strip()
+                for i in apply_match.group(1).split(",")
+                if i.strip() in all_ids
+            ]
             if valid_ids:
                 yield f"{META_PREFIX}{json.dumps({'sop_ids': valid_ids})}{META_SUFFIX}"
         elif sop_ids and len(sop_ids) <= 5:
