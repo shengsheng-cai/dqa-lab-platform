@@ -228,7 +228,7 @@ TREE = {
                     "name": "OT4 高溫通電測試：+70°C，2h/電壓步驟，三段電壓（通電）",
                     "test_type": "chamber",
                     "version": "EN 50155:2017",
-                    "description": "OT4 高溫通電功能測試（Continuous Operation Checks）。通電狀態，70°C 下依序執行三段電壓：下限×0.7 → 額定 → 上限×1.25，每段停留 2 小時並確認功能正常。升降溫含在總測試時間內，法規參考總時間約 8 小時。對應 SOP 方法驗證報告 Method III（EN 50155:2017）。",
+                    "description": "OT4 高溫通電功能測試（Continuous Operation Checks）。通電狀態，70°C 下依序執行三段電壓：下限×0.7 → 額定 → 上限×1.25，每段停留 2 小時並確認功能正常。升降溫含在總測試時間內，法規參考總時間約 8 小時。對應 SOP 方法驗證報告 Method III（EN 50155:2017）。",  # noqa: E501
                     "high_temperature": 70.0,
                     "low_temperature": None,
                     "target_temperature": 70.0,
@@ -297,7 +297,7 @@ TREE = {
                     "name": "OT4 + ST1 高溫通電測試：+85°C，2h/電壓步驟，三段電壓（通電）",
                     "test_type": "chamber",
                     "version": "EN 50155:2017",
-                    "description": "OT4 ST1 延伸高溫通電功能測試（OT4+15°C = 85°C）。通電狀態，85°C 下依序執行三段電壓：下限×0.7 → 額定 → 上限×1.25，每段停留 2 小時。模擬設備在高溫開機狀態下的嚴苛通電條件。法規參考總時間約 8 小時。",
+                    "description": "OT4 ST1 延伸高溫通電功能測試（OT4+15°C = 85°C）。通電狀態，85°C 下依序執行三段電壓：下限×0.7 → 額定 → 上限×1.25，每段停留 2 小時。模擬設備在高溫開機狀態下的嚴苛通電條件。法規參考總時間約 8 小時。",  # noqa: E501
                     "high_temperature": 85.0,
                     "low_temperature": None,
                     "target_temperature": 85.0,

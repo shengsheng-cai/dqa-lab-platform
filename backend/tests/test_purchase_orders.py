@@ -5,7 +5,6 @@ T-07: purchase_orders 模組純函數與業務邏輯測試
 - arrived 到貨庫存累加邏輯（db fixture）
 """
 import datetime
-import pytest
 from types import SimpleNamespace
 from app.models import Fixture, PurchaseOrder
 from app.purchase_orders import _fmt_dt, _order_to_dict

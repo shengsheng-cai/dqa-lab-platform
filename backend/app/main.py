@@ -3,30 +3,32 @@ from pathlib import Path
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-import os
-import asyncio
-import datetime
-import random
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
-from .sop import router as sop_router, execution_router, DEVICE_IDS
-from .reports import router as reports_router
-from .errors import router as errors_router
-from .ai import router as ai_router
-from .rag import warmup_rag
-from .line import router as line_router
-from .auth import router as auth_router
-from .fixtures import router as fixtures_router
-from .purchase_orders import router as purchase_orders_router
-from .schedules import router as schedules_router, blocked_router as device_blocked_router, auto_advance_schedules
-from .models import SessionLocal, DeviceState
-from .simulator import data_simulator
-from .devices import router as devices_router
-from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
-import httpx as _httpx
-import logging
+import os  # noqa: E402
+import asyncio  # noqa: E402
+import datetime  # noqa: E402
+import random  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import PlainTextResponse  # noqa: E402
+from .sop import router as sop_router, execution_router, DEVICE_IDS  # noqa: E402
+from .reports import router as reports_router  # noqa: E402
+from .errors import router as errors_router  # noqa: E402
+from .ai import router as ai_router  # noqa: E402
+from .rag import warmup_rag  # noqa: E402
+from .line import router as line_router  # noqa: E402
+from .auth import router as auth_router  # noqa: E402
+from .fixtures import router as fixtures_router  # noqa: E402
+from .purchase_orders import router as purchase_orders_router  # noqa: E402
+from .schedules import (  # noqa: E402
+    router as schedules_router, blocked_router as device_blocked_router, auto_advance_schedules,
+)
+from .models import SessionLocal, DeviceState  # noqa: E402
+from .simulator import data_simulator  # noqa: E402
+from .devices import router as devices_router  # noqa: E402
+from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY  # noqa: E402
+import httpx as _httpx  # noqa: E402
+import logging  # noqa: E402
 
 logger = logging.getLogger("app")
 background_tasks = set()
@@ -162,8 +164,8 @@ app.include_router(devices_router)
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
 allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
-from .auth import auth_middleware
-from starlette.middleware.base import BaseHTTPMiddleware
+from .auth import auth_middleware  # noqa: E402
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 
 # 注意：FastAPI middleware 後加先執行（LIFO）
 # auth_middleware 先加 → 後執行；CORSMiddleware 後加 → 先執行
@@ -191,9 +193,9 @@ async def robots_txt():
 # ── 前端靜態檔案（容器化部署時同 origin serve）────────────────────
 # 開發時前端走 Vite dev server（5173），靜態資料夾不存在就 skip；
 # 部署時 Dockerfile 把 client/dist 複製到 /app/static，這段會生效。
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi import HTTPException
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
 
 _static_dir = Path(__file__).parent.parent.parent / "static"
 if _static_dir.exists():

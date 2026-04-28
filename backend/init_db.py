@@ -344,24 +344,29 @@ try:
 
             # CH-01：過去 2h 從 -35°C 升溫至 72.5°C（ramp_to_high → dwell_high）
             temp_ch01 = -35.0 + (i / 59) * 107.5 + 1.2 * math.sin(phase * 6)
-            _device_data.append(DeviceData(device_id="CH-01", timestamp=t,
+            _device_data.append(DeviceData(
+                device_id="CH-01", timestamp=t,
                 temperature=round(temp_ch01, 1),
                 humidity=round(42 + 3 * math.sin(phase * 0.5), 1)))
 
             # CH-02：穩定低溫 -25°C（dwell_low）
             temp_ch02 = -24.8 + 0.4 * math.sin(phase * 2.5)
-            _device_data.append(DeviceData(device_id="CH-02", timestamp=t,
+            _device_data.append(DeviceData(
+                device_id="CH-02", timestamp=t,
                 temperature=round(temp_ch02, 1),
                 humidity=round(62 + 1.5 * math.sin(phase), 1)))
 
             # CH-03/04/05：常溫待機
-            _device_data.append(DeviceData(device_id="CH-03", timestamp=t,
+            _device_data.append(DeviceData(
+                device_id="CH-03", timestamp=t,
                 temperature=round(25.2 + 0.8 * math.sin(phase * 0.7), 1),
                 humidity=round(54.5 + 1.2 * math.sin(phase * 0.5), 1)))
-            _device_data.append(DeviceData(device_id="CH-04", timestamp=t,
+            _device_data.append(DeviceData(
+                device_id="CH-04", timestamp=t,
                 temperature=round(24.8 + 0.6 * math.sin(phase * 0.9), 1),
                 humidity=round(56.1 + 1.0 * math.sin(phase * 0.4), 1)))
-            _device_data.append(DeviceData(device_id="CH-05", timestamp=t,
+            _device_data.append(DeviceData(
+                device_id="CH-05", timestamp=t,
                 temperature=round(25.5 + 0.5 * math.sin(phase * 1.1), 1),
                 humidity=round(53.8 + 0.8 * math.sin(phase * 0.6), 1)))
 

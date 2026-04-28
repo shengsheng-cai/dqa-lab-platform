@@ -11,7 +11,7 @@ from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBloc
 from .line import push_message
 from .utils import _now_utc, _save_device_state, _parse_conditions, parse_iso_utc
 from .auth import require_admin
-from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
+from .constants import AMBIENT_TEMP
 from .sop import DEVICE_IDS
 
 logger = logging.getLogger("app")
@@ -305,7 +305,6 @@ async def emergency_stop(device_id: str, request: Request, _: None = Depends(req
                 logger.warning(f"[{device_id}] kson.stop() 未收到 ACK，仍繼續更新狀態")
 
         operator = device.get("operator", "") or "未填寫"
-        operator_user_id = device.get("operator_user_id")
         sop_name = device.get("running_sop_name", "") or "未知測試"
 
         with SessionLocal() as db:
@@ -328,8 +327,8 @@ async def emergency_stop(device_id: str, request: Request, _: None = Depends(req
             # 更新對應的 SopExecution 記錄，設定 test_ended_at
             execution = db.query(SopExecution).filter(
                 SopExecution.device_id == device_id,
-                SopExecution.test_ended_at == None,
-                SopExecution.test_started_at != None
+                SopExecution.test_ended_at.is_(None),
+                SopExecution.test_started_at.isnot(None)
             ).first()
             if execution:
                 execution.test_ended_at = _now_utc()

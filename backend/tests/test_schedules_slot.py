@@ -3,7 +3,6 @@ T-01: _find_earliest_slot / _auto_assign 整合測試
 使用 in-memory SQLite，直接傳入 db session。
 """
 import datetime
-import pytest
 from unittest.mock import patch
 
 from app.models import Schedule, ScheduleStatus, DeviceBlockedPeriod

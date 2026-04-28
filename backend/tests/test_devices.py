@@ -5,7 +5,6 @@ T-08: devices 模組純函數測試
 """
 import datetime
 import json
-import pytest
 from unittest.mock import patch
 
 from app.devices import _make_description, _calc_estimated_end_at

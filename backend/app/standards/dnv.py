@@ -41,7 +41,7 @@ TREE = {
                     "name": "Class A 濕熱（穩態）：+40°C，93%RH，4 天",
                     "test_type": "chamber",
                     "version": "DNVGL-CG-0339:2015",
-                    "description": "Class A 濕熱：穩態濕熱（非循環），+40°C，93%RH，持續 96 小時（4 天）。依 IEC 60068-2-78 Test Cab 執行，通電工作狀態。",
+                    "description": "Class A 濕熱：穩態濕熱（非循環），+40°C，93%RH，持續 96 小時（4 天）。依 IEC 60068-2-78 Test Cab 執行，通電工作狀態。",  # noqa: E501
                     "high_temperature": 40.0,
                     "low_temperature": None,
                     "target_temperature": 40.0,

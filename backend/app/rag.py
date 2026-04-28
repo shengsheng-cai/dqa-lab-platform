@@ -50,6 +50,7 @@ _QUERY_CACHE_MAX = 64
 
 _genai_client: Optional[genai.Client] = None
 
+
 def _get_client() -> genai.Client:
     global _genai_client
     if _genai_client is None:
@@ -136,7 +137,7 @@ async def _embed(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> np.
     all_vectors = []
 
     for i in range(0, len(texts), BATCH_SIZE):
-        batch = texts[i : i + BATCH_SIZE]
+        batch = texts[i:i + BATCH_SIZE]
         result = await asyncio.to_thread(
             client.models.embed_content,
             model=GEMINI_EMBED_MODEL,

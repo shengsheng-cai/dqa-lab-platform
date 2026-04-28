@@ -5,7 +5,6 @@ T-09: schedules 模組補充測試
 """
 import datetime
 import json
-import pytest
 
 from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan
 from app.schedules import _complete_schedule, _build_running_until

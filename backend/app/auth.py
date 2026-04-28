@@ -4,6 +4,7 @@ import secrets
 import datetime
 import logging
 from typing import Optional
+import bcrypt as _bcrypt
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -35,8 +36,6 @@ router = APIRouter()
 
 
 # ---------- 密碼雜湊 ----------
-import bcrypt as _bcrypt
-
 
 def hash_password(password: str) -> str:
     return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
@@ -67,7 +66,7 @@ def get_token_info(token: str) -> Optional[dict]:
             db.query(User)
             .filter(
                 User.current_token == token,
-                User.is_active == True,
+                User.is_active,
             )
             .first()
         )
@@ -162,7 +161,7 @@ def login(body: LoginRequest, request: Request):
     try:
         user = (
             db.query(User)
-            .filter(User.username == body.username, User.is_active == True)
+            .filter(User.username == body.username, User.is_active)
             .first()
         )
 
@@ -200,7 +199,7 @@ def get_me(request: Request):
         raise HTTPException(status_code=401, detail="未登入或訪客模式")
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+        user = db.query(User).filter(User.id == user_id, User.is_active).first()
         if not user:
             raise HTTPException(status_code=401, detail="使用者不存在或已停用")
         return {
@@ -437,7 +436,7 @@ def _validate_demo_token(provided: str) -> bool:
     try:
         t = db.query(DemoToken).filter(
             DemoToken.token == provided,
-            DemoToken.is_active == True,
+            DemoToken.is_active,
         ).first()
         if not t:
             return False
@@ -461,7 +460,7 @@ def _use_demo_token(provided: str) -> bool:
         # 先驗證 token 是否有效（不遞增 use_count）
         t = db.query(DemoToken).filter(
             DemoToken.token == provided,
-            DemoToken.is_active == True,
+            DemoToken.is_active,
         ).first()
         if not t:
             return False
@@ -476,8 +475,8 @@ def _use_demo_token(provided: str) -> bool:
             db.query(DemoToken)
             .filter(
                 DemoToken.token == provided,
-                DemoToken.is_active == True,
-                (DemoToken.max_uses == None) | (DemoToken.use_count < DemoToken.max_uses)
+                DemoToken.is_active,
+                DemoToken.max_uses.is_(None) | (DemoToken.use_count < DemoToken.max_uses)
             )
             .update({DemoToken.use_count: DemoToken.use_count + 1}, synchronize_session="fetch")
         )

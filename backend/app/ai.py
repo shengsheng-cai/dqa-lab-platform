@@ -122,7 +122,7 @@ def _query_fixture_context() -> str:
         loaned_rows = (
             db.query(FixtureLoan, Fixture)
             .join(Fixture, FixtureLoan.fixture_id == Fixture.id)
-            .filter(FixtureLoan.status == "loaned", FixtureLoan.return_date == None)
+            .filter(FixtureLoan.status == "loaned", FixtureLoan.return_date.is_(None))
             .all()
         )
         if loaned_rows:
@@ -157,7 +157,7 @@ def _query_fixture_context() -> str:
         # 庫存不足
         shortage_items = (
             db.query(Fixture)
-            .filter(Fixture.is_active == True, Fixture.shortage > 0)
+            .filter(Fixture.is_active, Fixture.shortage > 0)
             .order_by(Fixture.shortage.desc())
             .all()
         )

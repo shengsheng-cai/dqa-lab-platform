@@ -10,7 +10,7 @@ ramp_rate：
   ✅ Damp heat：法規規定 3h ± 0.5h 升溫至 40°C，非獨立速率，暫用 1.0
 """
 
-from ._base import steps_single_temp, steps_cycle
+from ._base import steps_single_temp
 
 TREE = {
     "label": "IEC 60945 海事導航與無線電通訊設備",
@@ -65,7 +65,7 @@ TREE = {
                     "name": "濕熱 Test Db variant 1：+40°C，16h，93%RH（通電）",
                     "test_type": "chamber",
                     "version": "IEC 60945:2002",
-                    "description": "濕熱功能測試。+40°C / 93%RH，3h 升溫，持續 10~16 小時，通電工作狀態。依 IEC 60068-2-30 Test Db variant 1 執行。1 cycle。",
+                    "description": "濕熱功能測試。+40°C / 93%RH，3h 升溫，持續 10~16 小時，通電工作狀態。依 IEC 60068-2-30 Test Db variant 1 執行。1 cycle。",  # noqa: E501
                     "high_temperature": 40.0,
                     "low_temperature": None,
                     "target_temperature": 40.0,

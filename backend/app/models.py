@@ -23,7 +23,11 @@ _db_url = os.getenv("DATABASE_URL")
 SQLALCHEMY_DATABASE_URL = _db_url if _db_url else f"sqlite:///{BASE_DIR}/test.db"
 
 _connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
-_pool_kwargs = {"pool_pre_ping": True, "pool_recycle": 300} if not SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {"pool_pre_ping": True}
+_pool_kwargs = (
+    {"pool_pre_ping": True, "pool_recycle": 300}
+    if not SQLALCHEMY_DATABASE_URL.startswith("sqlite")
+    else {"pool_pre_ping": True}
+)
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=_connect_args, **_pool_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -336,17 +340,17 @@ class ErrorLog(Base):
 
 
 class ScheduleStatus(StrEnum):
-    PENDING   = "待審核"
+    PENDING = "待審核"
     CONFIRMED = "已確認"
-    RUNNING   = "進行中"
-    DONE      = "已完成"
+    RUNNING = "進行中"
+    DONE = "已完成"
     CANCELLED = "已取消"
 
 
 class ReturnCondition(StrEnum):
-    NORMAL  = "normal"
+    NORMAL = "normal"
     DAMAGED = "damaged"
-    LOST    = "lost"
+    LOST = "lost"
 
 
 # ---------- 排程申請單 ----------
@@ -410,7 +414,6 @@ class DeviceBlockedPeriod(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=_utcnow
     )
-
 
 
 # ---------- 資料庫初始化 ----------

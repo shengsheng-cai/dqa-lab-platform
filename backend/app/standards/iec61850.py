@@ -92,7 +92,7 @@ TREE = {
                     "name": "Class C1 高溫高濕 Test Cab：40°C，240h，93%RH（Method III）",
                     "test_type": "chamber",
                     "version": "IEC 61850-3 Ed.2:2013",
-                    "description": "C1 等級穩態高溫高濕（Method III）。依 IEC 60068-2-78 Test Cab 執行。40°C / 93%RH / 240 小時，法規明文固定條件，通電工作狀態。",
+                    "description": "C1 等級穩態高溫高濕（Method III）。依 IEC 60068-2-78 Test Cab 執行。40°C / 93%RH / 240 小時，法規明文固定條件，通電工作狀態。",  # noqa: E501
                     "high_temperature": 40.0,
                     "low_temperature": None,
                     "target_temperature": 40.0,
@@ -212,7 +212,7 @@ TREE = {
                     "name": "Class C2 高溫高濕 Test Cab：40°C，240h，93%RH（Method III）",
                     "test_type": "chamber",
                     "version": "IEC 61850-3 Ed.2:2013",
-                    "description": "C2 等級穩態高溫高濕（Method III）。依 IEC 60068-2-78 Test Cab 執行。40°C / 93%RH / 240 小時，法規明文固定條件，通電工作狀態。",
+                    "description": "C2 等級穩態高溫高濕（Method III）。依 IEC 60068-2-78 Test Cab 執行。40°C / 93%RH / 240 小時，法規明文固定條件，通電工作狀態。",  # noqa: E501
                     "high_temperature": 40.0,
                     "low_temperature": None,
                     "target_temperature": 40.0,
@@ -312,7 +312,7 @@ TREE = {
                     "name": "Class C3 高溫高濕 Test Cab：40°C，240h，93%RH（Method III）",
                     "test_type": "chamber",
                     "version": "IEC 61850-3 Ed.2:2013",
-                    "description": "C3 等級穩態高溫高濕（Method III）。依 IEC 60068-2-78 Test Cab 執行。40°C / 93%RH / 240 小時，法規明文固定條件，通電工作狀態。",
+                    "description": "C3 等級穩態高溫高濕（Method III）。依 IEC 60068-2-78 Test Cab 執行。40°C / 93%RH / 240 小時，法規明文固定條件，通電工作狀態。",  # noqa: E501
                     "high_temperature": 40.0,
                     "low_temperature": None,
                     "target_temperature": 40.0,

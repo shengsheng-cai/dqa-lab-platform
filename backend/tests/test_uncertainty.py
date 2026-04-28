@@ -1,9 +1,10 @@
 """量測不確定度模組單元測試"""
 import math
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../"))
 
-from backend.app.uncertainty import calc_temp, calc_humi, TEMP_RESOLUTION, HUMI_RESOLUTION
+from backend.app.uncertainty import calc_temp, calc_humi, TEMP_RESOLUTION, HUMI_RESOLUTION  # noqa: E402
 
 
 def test_uB_formula():
