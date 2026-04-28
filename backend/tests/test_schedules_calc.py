@@ -2,7 +2,6 @@
 T-01: _calc_condition_hours / _calc_total_hours 單元測試
 純計算，不需 DB，用 mock 隔離 get_standard。
 """
-import pytest
 from unittest.mock import patch
 
 from app.schedules import (

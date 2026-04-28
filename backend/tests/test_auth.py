@@ -1,7 +1,6 @@
 """
 T-05: auth 模組純函數測試
 """
-import time
 import pytest
 from app.auth import hash_password, verify_password, _get_tracker, _fail_tracker
 
@@ -65,5 +64,3 @@ def test_different_ips_are_independent():
     tb = _get_tracker("10.0.0.2")
     ta["count"] = 5
     assert tb["count"] == 0
-
-

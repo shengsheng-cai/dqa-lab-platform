@@ -1,18 +1,23 @@
 # SOP 模組：提供標準樹與 SOP 列表、啟動 SOP 測試、取得 SOP 執行紀錄等功能
 
-import asyncio
 import json
 import datetime
+import logging
 import os
 import shutil
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Body, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from .models import SessionLocal, SopTemplate, DeviceState, SopExecution, StepRecord, User, Schedule, ScheduleStatus, FixtureLoan, DeviceBlockedPeriod
+from .models import (
+    SessionLocal, SopTemplate, SopExecution, StepRecord,
+    User, Schedule, ScheduleStatus, FixtureLoan, DeviceBlockedPeriod,
+)
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _save_device_state, _parse_conditions
 from .auth import require_admin
 from .line import push_message
+
+logger = logging.getLogger("sop")
 
 PHOTO_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "photos")
 os.makedirs(PHOTO_UPLOAD_DIR, exist_ok=True)
@@ -23,9 +28,6 @@ execution_router = APIRouter(prefix="/api/sop-executions", tags=["sop-executions
 
 # 定義設備 ID 清單（目前支援的五個設備）
 DEVICE_IDS = ["CH-01", "CH-02", "CH-03", "CH-04", "CH-05"]
-
-import logging
-logger = logging.getLogger("sop")
 
 
 def _validate_start_sop_input(payload: dict, cache: dict) -> tuple:
@@ -234,7 +236,8 @@ def _transfer_reserved_fixtures(device_id: str, now: datetime.datetime):
         with SessionLocal() as db:
             active_schedule = (
                 db.query(Schedule)
-                .filter(Schedule.device_id == device_id, Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]))
+                .filter(Schedule.device_id == device_id,
+                        Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]))
                 .first()
             )
             if active_schedule:
@@ -247,7 +250,10 @@ def _transfer_reserved_fixtures(device_id: str, now: datetime.datetime):
         logger.warning(f"[{device_id}] 治具預約轉借出失敗：{e}")
 
 
-async def auto_start_sop(device_id: str, sop_id: str, cache: dict, locks: dict, operator: str = "排程系統", skip_fixture_transfer: bool = False):
+async def auto_start_sop(
+    device_id: str, sop_id: str, cache: dict, locks: dict,
+    operator: str = "排程系統", skip_fixture_transfer: bool = False,
+):
     """排程到達開始時間時自動啟動 SOP（供 auto_advance_schedules 呼叫）"""
     device = cache.get(device_id)
     if not device:
@@ -349,7 +355,10 @@ class ExecutionResponse(BaseModel):
 
 
 @execution_router.post("/", response_model=ExecutionResponse)
-def create_execution(data: ExecutionCreate, request: Request, background_tasks: BackgroundTasks, _: None = Depends(require_admin)):
+def create_execution(
+    data: ExecutionCreate, request: Request,
+    background_tasks: BackgroundTasks, _: None = Depends(require_admin),
+):
     operator_user_id = getattr(request.state, "user_id", None)
     with SessionLocal() as db:
         execution = SopExecution(

@@ -6,18 +6,19 @@ import datetime
 import json
 import logging
 from typing import Optional, List
-
-logger = logging.getLogger("schedules")
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
-
-from .models import SessionLocal, Schedule, ScheduleStatus, DeviceBlockedPeriod, User, ScheduleFixture, Fixture, FixtureLoan
+from .models import (
+    SessionLocal, Schedule, ScheduleStatus, DeviceBlockedPeriod,
+    User, ScheduleFixture, Fixture, FixtureLoan,
+)
 from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
 from .auth import require_admin
 from .line import push_message
 from .utils import _now_utc, _save_device_state, _parse_conditions, parse_iso_utc
+
+logger = logging.getLogger("schedules")
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])
@@ -34,6 +35,7 @@ def _complete_schedule(db, schedule, now: datetime.datetime) -> None:
         {"status": "returned", "return_date": now},
         synchronize_session=False,
     )
+
 
 INTER_CONDITION_BUFFER_HOURS = 0.5  # 條件間設備穩定緩衝（30 分鐘）
 ACTIVE_STATUSES = [ScheduleStatus.PENDING, ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]
@@ -509,7 +511,6 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
             await asyncio.gather(*tasks)
 
 
-
 # ── Schedules 端點 ─────────────────────────────────────────────────────────
 
 
@@ -693,9 +694,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                 raise HTTPException(status_code=403, detail="只能取消自己的排程")
             if s.status != ScheduleStatus.PENDING:
                 raise HTTPException(status_code=400, detail="只能取消待審核的排程")
-
-        applicant_user_id = s.applicant_user_id
-        project_label = f"{s.project_number} / {s.sample_name}"
 
         if body.note is not None:
             s.note = body.note
@@ -886,7 +884,7 @@ async def confirm_condition(schedule_id: int, request: Request, _: None = Depend
 
         if idx < len(conditions):
             next_sop_id = conditions[idx]
-            proj, sample, dev = schedule.project_number, schedule.sample_name, schedule.device_id
+            dev = schedule.device_id
         else:
             _complete_schedule(db, schedule, now)
             db.commit()

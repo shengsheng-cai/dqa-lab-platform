@@ -1,5 +1,5 @@
 # DQA Lab Digital Twin 控制中心
-.PHONY: dev clean install help logs ngrok test
+.PHONY: dev clean install help logs ngrok test lint
 
 PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else echo python3; fi)
 
@@ -9,6 +9,7 @@ help:
 	@echo "  make install - 安裝後端與前端依賴"
 	@echo "  make dev     - 一鍵啟動所有服務（含 ngrok 自動更新 LINE Webhook）"
 	@echo "  make test    - 執行後端測試"
+	@echo "  make lint    - 執行 PEP 8 檢查（ruff）"
 	@echo "  make clean   - 關閉所有服務並清理殘留程序"
 	@echo "  make logs    - 查看虛擬串口連線日誌"
 	@echo "  make ngrok   - 單獨啟動 ngrok（通常不需要）"
@@ -46,7 +47,13 @@ test:
 	cd backend && ../$(PYTHON) -m pytest
 	@echo "✅ 測試完成。"
 
-# 6. ngrok 單獨啟動（通常不需要，make dev 已包含）
+# 6. PEP 8 檢查
+lint:
+	@echo "🔍 執行 PEP 8 檢查（ruff）..."
+	ruff check backend/
+	@echo "✅ 檢查完成。"
+
+# 7. ngrok 單獨啟動（通常不需要，make dev 已包含）
 ngrok:
 	@echo "🌐 單獨啟動 ngrok..."
 	ngrok http 8000

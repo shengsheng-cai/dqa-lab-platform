@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 import io
 import re
@@ -12,7 +11,6 @@ from .models import (
     Fixture,
     FixtureLoan,
     FixtureInventoryLog,
-    PurchaseOrder,
     User,
     ReturnCondition,
 )
@@ -239,7 +237,7 @@ def list_fixtures(
 ):
     db = SessionLocal()
     try:
-        q = db.query(Fixture).filter(Fixture.is_active == True)
+        q = db.query(Fixture).filter(Fixture.is_active)
         if interface_type:
             q = q.filter(Fixture.interface_type == interface_type)
         if search:
@@ -308,7 +306,7 @@ def get_summary():
         shortage_count = (
             db.query(Fixture)
             .filter(
-                Fixture.is_active == True,
+                Fixture.is_active,
                 Fixture.shortage > 0,
             )
             .count()
@@ -317,7 +315,7 @@ def get_summary():
         replacement_due = (
             db.query(Fixture)
             .filter(
-                Fixture.is_active == True,
+                Fixture.is_active,
                 Fixture.replacement_years.isnot(None),
             )
             .count()
@@ -340,7 +338,7 @@ def get_interface_types():
     try:
         rows = (
             db.query(Fixture.interface_type)
-            .filter(Fixture.is_active == True)
+            .filter(Fixture.is_active)
             .distinct()
             .all()
         )
@@ -356,7 +354,7 @@ def list_users(_: None = Depends(require_admin)):
     try:
         users = (
             db.query(User)
-            .filter(User.is_active == True)
+            .filter(User.is_active)
             .order_by(User.display_name.asc())
             .all()
         )
@@ -433,7 +431,7 @@ def export_fixtures():
     try:
         fixtures = (
             db.query(Fixture)
-            .filter(Fixture.is_active == True)
+            .filter(Fixture.is_active)
             .order_by(Fixture.interface_type)
             .all()
         )
@@ -903,7 +901,7 @@ async def import_fixtures(file: UploadFile = File(...), _: None = Depends(requir
                 .filter(
                     Fixture.interface_type == interface_type,
                     Fixture.form_factor == form_factor,
-                    Fixture.is_active == True,
+                    Fixture.is_active,
                 )
                 .first()
             )
@@ -1058,7 +1056,7 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, _: None = Depends(requi
     try:
         f = (
             db.query(Fixture)
-            .filter(Fixture.id == fixture_id, Fixture.is_active == True)
+            .filter(Fixture.id == fixture_id, Fixture.is_active)
             .first()
         )
         if not f:
@@ -1094,7 +1092,7 @@ def delete_fixture(fixture_id: int, _: None = Depends(require_admin)):
     try:
         f = (
             db.query(Fixture)
-            .filter(Fixture.id == fixture_id, Fixture.is_active == True)
+            .filter(Fixture.id == fixture_id, Fixture.is_active)
             .first()
         )
         if not f:

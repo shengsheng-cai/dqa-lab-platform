@@ -6,7 +6,6 @@ T-04: 三模組連動核心邏輯測試
 """
 import asyncio
 import datetime
-import pytest
 from unittest.mock import patch, MagicMock
 
 from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan

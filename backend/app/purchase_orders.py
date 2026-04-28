@@ -1,5 +1,5 @@
 import datetime
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from .models import SessionLocal, PurchaseOrder, Fixture
@@ -132,7 +132,10 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, _: None = De
             order.status = "arrived"
             order.arrived_at = datetime.datetime.now(datetime.timezone.utc)
             # 累加庫存
-            arrived_qty = body.arrived_quantity if body.arrived_quantity and body.arrived_quantity > 0 else order.quantity
+            arrived_qty = (
+                body.arrived_quantity if body.arrived_quantity and body.arrived_quantity > 0
+                else order.quantity
+            )
             fixture = db.query(Fixture).filter(Fixture.id == order.fixture_id).first()
             if fixture:
                 fixture.total_quantity = (fixture.total_quantity or 0) + arrived_qty

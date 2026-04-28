@@ -474,11 +474,11 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
             ])
         ts = Table(step_data, colWidths=[3*cm, None])
         ts.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#dde8f0")),
-            ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#aaaaaa")),
-            ("LEFTPADDING", (0,0), (-1,-1), 6),
-            ("TOPPADDING", (0,0), (-1,-1), 3),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dde8f0")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#aaaaaa")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]))
         story.append(ts)
     else:
@@ -496,11 +496,13 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
         u_humi = unc.calc_humi(humis, float(humi_target), float(humi_tolerance))
 
     def _unc_table(u: unc.UncertaintyResult, qty_label: str):
-        header = [Paragraph(h, ParagraphStyle("th", fontName=bold_font,
-                                              fontSize=8, leading=12,
-                                              textColor=colors.HexColor("#1a1a1a")))
-                  for h in ["不確定度來源 Source", "類型\nType", "分佈\nDist.",
-                             "標準不確定度\nu(xi)"]]
+        header = [
+            Paragraph(h, ParagraphStyle("th", fontName=bold_font,
+                                        fontSize=8, leading=12,
+                                        textColor=colors.HexColor("#1a1a1a")))
+            for h in ["不確定度來源 Source", "類型\nType", "分佈\nDist.",
+                      "標準不確定度\nu(xi)"]
+        ]
         data = [header]
         stable_note = "穩定段" if u.using_stable_only else "全段"
         data.append([
@@ -510,7 +512,9 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
             Paragraph(f"{u.uA:.4f} {u.unit}", base),
         ])
         data.append([
-            Paragraph(f"感測器解析度 {unc.TEMP_RESOLUTION if u.unit=='°C' else unc.HUMI_RESOLUTION} {u.unit}\nSensor resolution", base),
+            Paragraph(
+                f"感測器解析度 {unc.TEMP_RESOLUTION if u.unit == '°C' else unc.HUMI_RESOLUTION}"
+                f" {u.unit}\nSensor resolution", base),
             Paragraph("B", base),
             Paragraph("矩形 Rect.", base),
             Paragraph(f"{u.uB:.4f} {u.unit}", base),
@@ -529,12 +533,12 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
         ])
         tw = Table(data, colWidths=[6.5*cm, 1.5*cm, 2.5*cm, None])
         tw.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#dde8f0")),
-            ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#aaaaaa")),
-            ("LEFTPADDING", (0,0), (-1,-1), 6),
-            ("TOPPADDING", (0,0), (-1,-1), 3),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
-            ("ROWBACKGROUNDS", (0,1), (-1,-1),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dde8f0")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#aaaaaa")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
              [colors.white, colors.HexColor("#f5f8fb")]),
         ]))
         result_text = (

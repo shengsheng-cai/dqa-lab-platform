@@ -134,7 +134,8 @@ def _advance_sim_phase(
             item.pop("dwell_high_start", None)
             item["dwell_half_fired"] = False
             # 兩溫循環：降至 low_temp；單溫：直接回常溫
-            item["sim_phase"] = "ramp_to_low2" if (p.low_temp is not None and abs(p.high_temp - p.low_temp) > 0.1) else "ramp_to_ambient"
+            is_two_temp = p.low_temp is not None and abs(p.high_temp - p.low_temp) > 0.1
+            item["sim_phase"] = "ramp_to_low2" if is_two_temp else "ramp_to_ambient"
 
     elif sim_phase == "ramp_to_low2":
         new_temp = _move_toward(current_temp, p.low_temp, max_change)
@@ -318,7 +319,6 @@ async def data_simulator(cache: dict, locks: dict):
                 # 測試自然完成（ramp_to_ambient 降溫到 25°C）
                 if item.get("sim_phase") == "done":
                     execution_id = item.get("active_execution_id")
-                    prev_sop_id = item.get("running_sop_id")
                     async with locks[device_id]:
                         item.update({
                             "status": "IDLE",
@@ -344,7 +344,7 @@ async def data_simulator(cache: dict, locks: dict):
                                 with SessionLocal() as db:
                                     db.query(SopExecution).filter(
                                         SopExecution.id == execution_id,
-                                        SopExecution.test_ended_at == None,
+                                        SopExecution.test_ended_at.is_(None),
                                     ).update({"test_ended_at": now}, synchronize_session=False)
                                     db.commit()
                                 break

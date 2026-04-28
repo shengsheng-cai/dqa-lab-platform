@@ -5,7 +5,6 @@ T-06: fixtures 模組純函數測試
 - _fixture_to_out（需要 db fixture）
 """
 import datetime
-import pytest
 from app.models import Fixture, FixtureLoan
 from app.fixtures import _calc_replacement_date, _calc_loan_qty, _fixture_to_out
 
