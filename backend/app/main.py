@@ -3,32 +3,32 @@ from pathlib import Path
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-import os  # noqa: E402
-import asyncio  # noqa: E402
-import datetime  # noqa: E402
-import random  # noqa: E402
-from contextlib import asynccontextmanager  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import PlainTextResponse  # noqa: E402
-from .sop import router as sop_router, execution_router, DEVICE_IDS  # noqa: E402
-from .reports import router as reports_router  # noqa: E402
-from .errors import router as errors_router  # noqa: E402
-from .ai import router as ai_router  # noqa: E402
-from .rag import warmup_rag  # noqa: E402
-from .line import router as line_router  # noqa: E402
-from .auth import router as auth_router  # noqa: E402
-from .fixtures import router as fixtures_router  # noqa: E402
-from .purchase_orders import router as purchase_orders_router  # noqa: E402
-from .schedules import (  # noqa: E402
+import os
+import asyncio
+import datetime
+import random
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
+from .sop import router as sop_router, execution_router, DEVICE_IDS
+from .reports import router as reports_router
+from .errors import router as errors_router
+from .ai import router as ai_router
+from .rag import warmup_rag
+from .line import router as line_router
+from .auth import router as auth_router
+from .fixtures import router as fixtures_router
+from .purchase_orders import router as purchase_orders_router
+from .schedules import (
     router as schedules_router, blocked_router as device_blocked_router, auto_advance_schedules,
 )
-from .models import SessionLocal, DeviceState  # noqa: E402
-from .simulator import data_simulator  # noqa: E402
-from .devices import router as devices_router  # noqa: E402
-from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY  # noqa: E402
-import httpx as _httpx  # noqa: E402
-import logging  # noqa: E402
+from .models import SessionLocal, DeviceState
+from .simulator import data_simulator
+from .devices import router as devices_router
+from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
+import httpx as _httpx
+import logging
 
 logger = logging.getLogger("app")
 background_tasks = set()

@@ -4,7 +4,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../"))
 
-from backend.app.uncertainty import calc_temp, calc_humi, TEMP_RESOLUTION, HUMI_RESOLUTION  # noqa: E402
+from backend.app.uncertainty import calc_temp, calc_humi, TEMP_RESOLUTION, HUMI_RESOLUTION
 
 
 def test_uB_formula():
