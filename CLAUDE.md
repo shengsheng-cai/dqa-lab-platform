@@ -1,4 +1,4 @@
-# 🧬 DQA Lab Digital Twin — AI Agent Context
+# 🧬 DQA Lab Platform — AI Agent Context
 
 給 AI 協作工具閱讀的專案背景與開發規範。
 

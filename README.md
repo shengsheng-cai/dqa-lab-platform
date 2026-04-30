@@ -1,5 +1,5 @@
 ---
-title: DQA Lab Digital Twin
+title: DQA Lab Platform
 emoji: 🌡️
 colorFrom: blue
 colorTo: purple
@@ -10,7 +10,7 @@ license: agpl-3.0
 short_description: Environmental test lab management (FastAPI + React + AI)
 ---
 
-# DQA Lab Digital Twin
+# DQA Lab Platform
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)
