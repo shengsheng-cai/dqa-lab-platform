@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ─────────────────────────────────────────────────────────────
-# DQA Lab Digital Twin — Hugging Face Space 單容器部署
+# DQA Lab Platform — Hugging Face Space 單容器部署
 # - Stage 1: Node 20 build 前端（Vite）→ client/dist/
 # - Stage 2: Python 3.13 + FastAPI runtime，整合前端 dist 為 static
 # HF Space 強制 port 7860、UID 1000（user）、/tmp 可寫

@@ -1,4 +1,4 @@
-# DQA Lab Digital Twin 控制中心
+# DQA Lab Platform 控制中心
 .PHONY: dev clean install help logs ngrok test lint
 
 PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else echo python3; fi)
