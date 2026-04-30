@@ -140,7 +140,7 @@ async def lifespan(app: FastAPI):
 
 _is_prod = os.getenv("ENVIRONMENT") == "production"
 app = FastAPI(
-    title="DQA Lab Digital Twin",
+    title="DQA Lab Platform",
     lifespan=lifespan,
     docs_url=None if _is_prod else "/docs",
     redoc_url=None if _is_prod else "/redoc",

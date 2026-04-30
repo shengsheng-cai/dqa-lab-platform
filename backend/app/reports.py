@@ -19,7 +19,7 @@ from . import uncertainty as unc
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 REPORT_VERSION = "1.0"
-LAB_NAME = "DQA Lab Digital Twin"
+LAB_NAME = "DQA Lab Platform"
 # fix: 限制單次查詢最大筆數，避免長時間測試資料塞爆記憶體
 MAX_DATA_POINTS = 10000
 
@@ -415,7 +415,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     humi_target = sop_data.get("humidity_rh_percent")
 
     # ── 封面 ──────────────────────────────────────────────────────────────────
-    story.append(Paragraph("DQA Lab Digital Twin", h1))
+    story.append(Paragraph("DQA Lab Platform", h1))
     story.append(Paragraph(
         "環境測試報告 Environmental Test Report" if has_cjk_font
         else "Environmental Test Report",

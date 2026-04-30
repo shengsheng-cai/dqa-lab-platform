@@ -37,7 +37,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 - AI advisor (Gemini + RAG) — recommend conditions → one-click scheduling
 - LINE Bot integration for emergency alerts
 
-**[🚀 Live Demo](https://huggingface.co/spaces/sshengsheng/dqa-lab-digital-twin)** · [Demo Video](#demo) · [中文說明如下](#核心功能)
+**[🚀 Live Demo](https://huggingface.co/spaces/sshengsheng/dqa-lab-platform)** · [Demo Video](#demo) · [中文說明如下](#核心功能)
 
 基於 FastAPI + React 的環境測試實驗室數位孿生平台，整合設備模擬引擎、SOP 執行管理、治具借還追蹤與 AI 法規諮詢，目標取代實驗室紙本作業流程。
 

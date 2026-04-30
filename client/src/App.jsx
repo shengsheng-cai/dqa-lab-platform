@@ -146,7 +146,7 @@ function LoginPage({ onLogin }) {
           DQA Lab
         </span>
         <span style={{ color: "#8b949e", fontSize: 13 }}>
-          DQA Lab Digital Twin
+          DQA Lab Platform
         </span>
 
         {backendOffline ? (

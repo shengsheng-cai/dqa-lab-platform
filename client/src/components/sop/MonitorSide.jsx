@@ -24,7 +24,7 @@ const MonitorSide = ({
       {/* Brand + status（嵌入模式隱藏標題）*/}
       {!embedded && (
         <div className="brand-box">
-          <h1 className="main-title">DQA Lab | Digital Twin</h1>
+          <h1 className="main-title">DQA Lab Platform</h1>
           <div className="status-row">
             <span className={`status-dot ${data.status.toLowerCase()}`} />
             <span
