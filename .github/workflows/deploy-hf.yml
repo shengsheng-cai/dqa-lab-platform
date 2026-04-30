@@ -32,5 +32,5 @@ jobs:
           git commit -m "deploy: $(git log -1 --format='%h %s' origin/main)"
 
           git push \
-            "https://user:${HF_TOKEN}@huggingface.co/spaces/sshengsheng/dqa-lab-digital-twin" \
+            "https://user:${HF_TOKEN}@huggingface.co/spaces/sshengsheng/dqa-lab-platform" \
             HEAD:main --force
