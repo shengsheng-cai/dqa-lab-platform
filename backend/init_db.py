@@ -5,6 +5,7 @@
 #   alembic upgrade head
 import json
 import math
+import random
 import datetime
 from app.models import (
     Base, engine, SessionLocal, Fixture, Schedule, SopExecution,
@@ -275,6 +276,21 @@ try:
                 due_date=_now + datetime.timedelta(days=2),
                 status="loaned", schedule_id=_smap["PRJ-2026-005"].id,
             ),
+            # 逾期未還（due_date 已過，status 仍 loaned）
+            FixtureLoan(
+                fixture_id=_fmap["RJHSE-5380"].id, borrower_name="王詠晴",
+                device_id="CH-05", project_name="PRJ-2026-008 工業 IoT 網關模組",
+                quantity=3, loan_date=_now - datetime.timedelta(days=7),
+                due_date=_now - datetime.timedelta(days=2),
+                status="loaned",
+            ),
+            FixtureLoan(
+                fixture_id=_fmap["DM3AT-SF-PEJM5"].id, borrower_name="陳柏宇",
+                device_id="CH-04", project_name="PRJ-2026-002 工業用 RJ-45 Switch",
+                quantity=2, loan_date=_now - datetime.timedelta(days=9),
+                due_date=_now - datetime.timedelta(days=3),
+                status="loaned",
+            ),
             # 已歸還
             FixtureLoan(
                 fixture_id=_fmap["105450-0101"].id, borrower_name="林怡君",
@@ -338,37 +354,46 @@ try:
     # ── 設備時序資料 ──────────────────────────────────────────────────────
     if db.query(DeviceData).count() == 0:
         _device_data = []
-        for i in range(60):
-            t = _now - datetime.timedelta(minutes=(59 - i) * 2)
-            phase = (i / 60) * 2 * math.pi
+        _rng = random.Random(42)
+        _steps = 288  # 24h，每 5 分鐘一筆
+        for i in range(_steps):
+            t = _now - datetime.timedelta(minutes=(_steps - 1 - i) * 5)
+            ratio = i / (_steps - 1)  # 0.0 → 1.0，表示 24h 進度
+            phase = ratio * 2 * math.pi
 
-            # CH-01：過去 2h 從 -35°C 升溫至 72.5°C（ramp_to_high → dwell_high）
-            temp_ch01 = -35.0 + (i / 59) * 107.5 + 1.2 * math.sin(phase * 6)
+            # CH-01：前 22h 從常溫 25°C → 降溫 -35°C → 升溫至 72.5°C（目前在 dwell_high）
+            # 分三段：0~8h 降溫、8~16h 升溫、16~24h 高溫保持
+            if ratio < 8 / 24:
+                r = ratio / (8 / 24)
+                base_ch01 = 25.0 - r * 60.0  # 25 → -35
+            elif ratio < 16 / 24:
+                r = (ratio - 8 / 24) / (8 / 24)
+                base_ch01 = -35.0 + r * 107.5  # -35 → 72.5
+            else:
+                base_ch01 = 72.5 + _rng.gauss(0, 0.3)
+            temp_ch01 = base_ch01 + _rng.gauss(0, 0.4) + 0.6 * math.sin(phase * 8)
+            humi_ch01 = 42 + _rng.gauss(0, 0.5) + 2.5 * math.sin(phase * 0.5)
             _device_data.append(DeviceData(
                 device_id="CH-01", timestamp=t,
                 temperature=round(temp_ch01, 1),
-                humidity=round(42 + 3 * math.sin(phase * 0.5), 1)))
+                humidity=round(max(20, min(90, humi_ch01)), 1)))
 
-            # CH-02：穩定低溫 -25°C（dwell_low）
-            temp_ch02 = -24.8 + 0.4 * math.sin(phase * 2.5)
+            # CH-02：穩定低溫 -25°C（dwell_low），偶有小幅波動
+            temp_ch02 = -24.8 + _rng.gauss(0, 0.25) + 0.3 * math.sin(phase * 3)
+            humi_ch02 = 62 + _rng.gauss(0, 0.4) + 1.2 * math.sin(phase)
             _device_data.append(DeviceData(
                 device_id="CH-02", timestamp=t,
                 temperature=round(temp_ch02, 1),
-                humidity=round(62 + 1.5 * math.sin(phase), 1)))
+                humidity=round(max(30, min(90, humi_ch02)), 1)))
 
-            # CH-03/04/05：常溫待機
-            _device_data.append(DeviceData(
-                device_id="CH-03", timestamp=t,
-                temperature=round(25.2 + 0.8 * math.sin(phase * 0.7), 1),
-                humidity=round(54.5 + 1.2 * math.sin(phase * 0.5), 1)))
-            _device_data.append(DeviceData(
-                device_id="CH-04", timestamp=t,
-                temperature=round(24.8 + 0.6 * math.sin(phase * 0.9), 1),
-                humidity=round(56.1 + 1.0 * math.sin(phase * 0.4), 1)))
-            _device_data.append(DeviceData(
-                device_id="CH-05", timestamp=t,
-                temperature=round(25.5 + 0.5 * math.sin(phase * 1.1), 1),
-                humidity=round(53.8 + 0.8 * math.sin(phase * 0.6), 1)))
+            # CH-03/04/05：常溫待機，加真實感噪音
+            for dev, base_t, base_h in [("CH-03", 25.2, 54.5), ("CH-04", 24.8, 56.1), ("CH-05", 25.5, 53.8)]:
+                t_val = base_t + _rng.gauss(0, 0.2) + 0.5 * math.sin(phase * 0.7 + _rng.uniform(0, 1))
+                h_val = base_h + _rng.gauss(0, 0.3) + 0.8 * math.sin(phase * 0.5)
+                _device_data.append(DeviceData(
+                    device_id=dev, timestamp=t,
+                    temperature=round(t_val, 1),
+                    humidity=round(max(30, min(90, h_val)), 1)))
 
         db.add_all(_device_data)
         db.commit()
