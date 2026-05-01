@@ -107,6 +107,7 @@ htmlcov/
 .dmypy.json
 dmypy.json
 *.iml
+.ruff_cache/
 
 #demo
 *.mov
