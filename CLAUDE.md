@@ -1,6 +1,32 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # 🧬 DQA Lab Platform — AI Agent Context
 
 給 AI 協作工具閱讀的專案背景與開發規範。
+
+---
+
+## 技術棧
+
+| 層 | 技術 |
+|----|------|
+| 後端 | FastAPI + SQLAlchemy 2.0 + SQLite + APScheduler |
+| 前端 | React 19 + Vite 7 + Tailwind 4 + Recharts（目錄：`client/`） |
+| AI | Google Gemini 2.5 Flash-Lite（`google-genai`） |
+| 報告 | ReportLab（PDF）+ pandas + openpyxl（Excel） |
+
+### 後端模組分工（`backend/app/`）
+
+| 檔案 | 職責 |
+|------|------|
+| `main.py` | FastAPI 入口、device state cache、simulator 啟動 |
+| `models.py` | SQLAlchemy models + SessionLocal |
+| `simulator.py` | 溫濕度模擬（**真機版替換點**：換成 `kson_driver.py`） |
+| `schedules.py` | 排程管理 + APScheduler 任務 |
+| `ai.py` + `rag.py` | Gemini 整合 + RAG 向量檢索 |
+| `reports.py` | PDF / CSV 報告生成 |
 
 ---
 
@@ -72,18 +98,21 @@
 ## 常用指令
 
 ```bash
-make install                   # 安裝所有依賴
+cp .env.example .env           # 首次：填入 ADMIN_PASSWORD、GEMINI_API_KEY 等
+make install                   # 安裝所有依賴（pip + npm）
 python backend/init_db.py      # 初始化資料庫（首次）
-make dev                       # 啟動全部服務
+make dev                       # 啟動全部服務（uvicorn:8000 + vite:5173 + ngrok）
 make test                      # 執行後端測試
+make lint                      # ruff 檢查（line-length 120）
 make clean                     # 清理殘留程序
 
 # 資料庫遷移（backend/ 目錄下）
 alembic revision --autogenerate -m "描述"
 alembic upgrade head
 
-# 後端單元測試（或用 make test）
-cd backend && python -m pytest  # 執行全套測試（109 tests）
+# 後端單元測試
+cd backend && python -m pytest                        # 全套（109 tests）
+cd backend && python -m pytest tests/test_auth.py -v  # 單一測試檔
 ```
 
 ---
