@@ -1137,7 +1137,8 @@ const EMPTY_FORM = { device_id: DEVICE_IDS[0], start_time: "", end_time: "", rea
 
 function toLocalInput(isoStr) {
   if (!isoStr) return "";
-  const d = new Date(isoStr);
+  const d = parseUtcDate(isoStr);  // naive UTC → aware UTC → local
+  if (!d) return "";
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
@@ -1167,7 +1168,15 @@ function ManageBlockedPeriodsModal({ onClose, onChanged }) {
 
   function openNew() {
     setEditingId(null);
-    setForm(EMPTY_FORM);
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    setForm({
+      device_id: DEVICE_IDS[0],
+      start_time: fmt(now),
+      end_time: fmt(new Date(now.getTime() + 8 * 3600000)),
+      reason: "",
+    });
     setError("");
     setShowForm(true);
   }

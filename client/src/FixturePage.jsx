@@ -81,9 +81,7 @@ function ReturnButtonGroup({ loanId, onSuccess }) {
         <button
           key={condition}
           onClick={async () => {
-            // window.confirm 刻意保留：async inline onClick 無法接收外部 modal resolve，
-            // 此處僅用於非正常歸還的二次確認，不值得為此提升 state 或新增 modal 元件。
-            if (condition !== "normal" && !window.confirm(`確定標記為「${label}」？此操作無法復原。`)) return;
+            if (!window.confirm(`確定標記為「${label}」歸還？`)) return;
             try {
               await api.post(`/api/fixtures/loans/${loanId}/return`, {
                 return_condition: condition,
