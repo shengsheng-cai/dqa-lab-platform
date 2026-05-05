@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "./api";
 import { useToast } from "./components/Toast";
@@ -668,9 +668,8 @@ function ExecutionList({ active, role }) {
           </thead>
           <tbody>
             {executions.map((ex) => (
-              <>
+              <Fragment key={ex.id}>
                 <tr
-                  key={ex.id}
                   style={{
                     borderBottom:
                       expandedId === ex.id ? "none" : "1px solid #21262d",
@@ -824,7 +823,7 @@ function ExecutionList({ active, role }) {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
