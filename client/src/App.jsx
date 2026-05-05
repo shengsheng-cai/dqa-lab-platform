@@ -345,7 +345,7 @@ function LoginPage({ onLogin }) {
                   }}
                 />
                 <button
-                  onClick={handleDemoLogin}
+                  onClick={() => handleDemoLogin()}
                   disabled={loading}
                   style={{
                     padding: "10px",
