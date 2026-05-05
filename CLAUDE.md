@@ -84,14 +84,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 不做 feature flag 切換：多一層抽象就多一份 bug 面
 - 遇到「加切換開關」「加 mock 模式」等需求，一律拒絕，改在真機版分支實作
 
-### Push 前必做（強制順序）
+### Push 前建議（依改動規模判斷）
 
-**每次 `git push` 前，必須依序完成以下兩步，不得跳過：**
-
-1. `/simplify` — 三 Agent 並行掃描（程式碼重用 / 品質 / 效率），修完才進下一步
-2. `/review` — 逐項檢查（TODO / role check / 狀態機 / 前端佈局），確認無問題
-
-兩個 skill 都跑完、問題修好，再執行 `git push`。
+| 情境 | 要跑的 |
+|------|--------|
+| 功能完成、跨多檔改動 | `/simplify` → `/review` → push |
+| 單檔邏輯改動 | `/review` → push |
+| 小改動（typo、config、純顯示） | 直接 push |
 
 ---
 
