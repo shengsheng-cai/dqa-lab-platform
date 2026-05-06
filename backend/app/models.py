@@ -416,6 +416,20 @@ class DeviceBlockedPeriod(Base):
     )
 
 
+# ---------- 稽核日誌 ----------
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    timestamp: Mapped[datetime.datetime] = mapped_column(DateTime, default=_utcnow)
+    actor: Mapped[str] = mapped_column(String)
+    role: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    action: Mapped[str] = mapped_column(String)
+    entity_type: Mapped[str] = mapped_column(String)
+    entity_id: Mapped[str] = mapped_column(String)
+    detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
 # ---------- 資料庫初始化 ----------
 def ensure_admin_user():
     """Ensure the admin user exists and has the password from ADMIN_PASSWORD env var.

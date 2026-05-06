@@ -131,6 +131,7 @@ cd backend && python -m pytest tests/test_auth.py -v  # 單一測試檔
 | 存取控制 | 2 層（admin/guest）、IP Rate Limiting |
 | LINE Bot | 推播時機：條件完成（等待人員確認）、測試完成、緊急停止（推播給管理者個人） |
 | 感測器 QC 控制圖 | DeviceCard 📊 按鈕開啟 Modal；24h 歷史 + UCL/LCL（mean ± 3σ）+ 異常點標記；溫度/濕度雙圖 |
+| 稽核日誌 | audit_logs 表記錄 who/what/when；排程/治具/設備所有寫入皆埋點；紀錄 Modal 第三 tab 顯示，支援 entity 過濾 + CSV 匯出 |
 
 ### 三模組連動流程
 

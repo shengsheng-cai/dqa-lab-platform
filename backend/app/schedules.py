@@ -17,6 +17,7 @@ from .sop import DEVICE_IDS
 from .auth import require_admin
 from .line import push_message
 from .utils import _now_utc, _save_device_state, _parse_conditions, parse_iso_utc
+from .audit import log_audit
 
 logger = logging.getLogger("schedules")
 
@@ -470,6 +471,8 @@ async def _start_schedule_by_id(schedule_id: int, cache: dict, locks: dict):
             return
         s.status = ScheduleStatus.RUNNING
         s.updated_at = now
+        log_audit(db, "system:scheduler", None, "AUTO_START", "schedule", schedule_id,
+                  f"{s.project_number} / {s.sample_name}")
         db.commit()
         conditions = json.loads(s.conditions) if s.conditions else []
         device_id = s.device_id
@@ -661,6 +664,8 @@ def create_schedule(body: ScheduleCreate, request: Request, _: None = Depends(re
                 fixture_id=fi.fixture_id,
                 quantity=fi.quantity,
             ))
+        log_audit(db, str(user_id or "unknown"), "admin", "CREATE", "schedule", s.id,
+                  f"{s.project_number} / {s.sample_name}")
         db.commit()
         db.refresh(s)
         return _enrich(s, db)
@@ -798,6 +803,16 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                 s.end_time = body.end_time
 
         s.updated_at = datetime.datetime.now(datetime.timezone.utc)
+        if body.status:
+            action_map = {
+                ScheduleStatus.CONFIRMED: "CONFIRM",
+                ScheduleStatus.CANCELLED: "CANCEL",
+                ScheduleStatus.RUNNING: "START",
+                ScheduleStatus.DONE: "DONE",
+            }
+            action = action_map.get(body.status, "UPDATE")
+            log_audit(db, str(user_id or "unknown"), role or "admin", action, "schedule", schedule_id,
+                      f"{s.project_number} / {s.sample_name}")
         db.commit()
         db.refresh(s)
         result = _enrich(s, db)
@@ -840,15 +855,18 @@ async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(
     _cache = getattr(request.app.state, "AICM_CACHE", {})
     _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     _scheduler = getattr(request.app.state, "scheduler", None)
+    user_id = getattr(request.state, "user_id", None)
 
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
             raise HTTPException(status_code=404, detail="找不到排程")
         stop_device_id = s.device_id if s.status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) else None
+        detail = f"{s.project_number} / {s.sample_name}"
         db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == schedule_id).delete(synchronize_session=False)
         db.query(FixtureLoan).filter(FixtureLoan.schedule_id == schedule_id).delete(synchronize_session=False)
         db.delete(s)
+        log_audit(db, str(user_id or "unknown"), "admin", "DELETE", "schedule", schedule_id, detail)
         db.commit()
 
     if _scheduler:
@@ -871,6 +889,7 @@ async def confirm_condition(schedule_id: int, request: Request, _: None = Depend
     cache = getattr(request.app.state, "AICM_CACHE", {})
     locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     now = _now_utc()
+    user_id = getattr(request.state, "user_id", None)
 
     with SessionLocal() as db:
         schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
@@ -885,8 +904,13 @@ async def confirm_condition(schedule_id: int, request: Request, _: None = Depend
         if idx < len(conditions):
             next_sop_id = conditions[idx]
             dev = schedule.device_id
+            log_audit(db, str(user_id or "unknown"), "admin", "CONFIRM_CONDITION", "schedule", schedule_id,
+                      f"條件 {idx}/{len(conditions)}，下一條：{next_sop_id}")
+            db.commit()
         else:
             _complete_schedule(db, schedule, now)
+            log_audit(db, str(user_id or "unknown"), "admin", "COMPLETE", "schedule", schedule_id,
+                      f"{schedule.project_number} / {schedule.sample_name}")
             db.commit()
             asyncio.create_task(push_message(
                 f"✅ 測試完成\n專案：{schedule.project_number} / {schedule.sample_name}\n設備：{schedule.device_id}"

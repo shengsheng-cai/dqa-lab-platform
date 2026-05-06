@@ -62,6 +62,7 @@ https://github.com/user-attachments/assets/0ec611ed-b8d4-46c1-83a0-d75519044b5f
 | 🚨 **LINE Bot 通知** | 條件完成（等待人員確認）、全部完成、緊急停止 — 主動推播給管理者個人 |
 | 👥 **人員管理** | 人員名冊（左）+ 訪客 Token 管理（右）；Token 表支援「隱藏已失效」一鍵過濾 |
 | 🔐 **存取控制** | 管理員登入 + 訪客唯讀模式，bcrypt 密碼雜湊，IP Rate Limiting |
+| 📋 **稽核日誌** | 所有寫入操作（排程 / 治具 / 設備）記錄 who/what/when；紀錄 Modal 內嵌稽核紀錄 tab，支援 entity 過濾與 CSV 匯出（ISO 17025 外部稽核用） |
 
 > ⚠️ **AI 諮詢功能限制**：線上版使用 Gemini 免費方案，每日限制 20 次請求，額度用完後顯示提示並隔日自動恢復。完整 demo 建議以本地端執行。
 > 

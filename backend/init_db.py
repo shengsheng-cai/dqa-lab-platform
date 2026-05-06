@@ -9,7 +9,7 @@ import random
 import datetime
 from app.models import (
     Base, engine, SessionLocal, Fixture, Schedule, SopExecution,
-    DeviceData, DeviceState, ErrorLog, FixtureLoan, ScheduleFixture, ScheduleStatus, _utcnow,
+    DeviceData, DeviceState, ErrorLog, FixtureLoan, ScheduleFixture, ScheduleStatus, AuditLog, _utcnow,
     ensure_admin_user,
 )
 
@@ -350,6 +350,76 @@ try:
         db.add_all(_sf_list)
         db.commit()
         print(f"✅ Demo 排程治具預約 {len(_sf_list)} 筆建立完成！")
+
+    # ── 稽核日誌 ──────────────────────────────────────────────────────────
+    if db.query(AuditLog).count() == 0:
+        _smap3 = {s.project_number: s for s in db.query(Schedule).all()}
+        _fmap3 = {f.model_number: f for f in db.query(Fixture).all()}
+
+        def _ts(days=0, hours=0, minutes=0):
+            return _now - datetime.timedelta(days=days, hours=hours, minutes=minutes)
+
+        _audit_entries = [
+            # ── 歷史已完成排程 ──────────────────────────────
+            AuditLog(timestamp=_ts(days=14, hours=2),  actor="1", role="admin", action="CREATE",    entity_type="schedule", entity_id=str(_smap3["PRJ-2026-009"].id), detail="PRJ-2026-009 / 車用 HDMI 傳輸模組"),
+            AuditLog(timestamp=_ts(days=13, hours=22), actor="1", role="admin", action="CONFIRM",   entity_type="schedule", entity_id=str(_smap3["PRJ-2026-009"].id), detail="PRJ-2026-009 / 車用 HDMI 傳輸模組"),
+            AuditLog(timestamp=_ts(days=14),           actor="system:scheduler", role=None, action="AUTO_START", entity_type="schedule", entity_id=str(_smap3["PRJ-2026-009"].id), detail="PRJ-2026-009 / 車用 HDMI 傳輸模組"),
+            AuditLog(timestamp=_ts(days=11),           actor="1", role="admin", action="COMPLETE",  entity_type="schedule", entity_id=str(_smap3["PRJ-2026-009"].id), detail="PRJ-2026-009 / 車用 HDMI 傳輸模組"),
+
+            AuditLog(timestamp=_ts(days=11),           actor="1", role="admin", action="CREATE",    entity_type="schedule", entity_id=str(_smap3["PRJ-2026-007"].id), detail="PRJ-2026-007 / PCIe x16 顯示卡散熱模組"),
+            AuditLog(timestamp=_ts(days=10, hours=12), actor="1", role="admin", action="CONFIRM",   entity_type="schedule", entity_id=str(_smap3["PRJ-2026-007"].id), detail="PRJ-2026-007 / PCIe x16 顯示卡散熱模組"),
+            AuditLog(timestamp=_ts(days=10),           actor="system:scheduler", role=None, action="AUTO_START", entity_type="schedule", entity_id=str(_smap3["PRJ-2026-007"].id), detail="PRJ-2026-007 / PCIe x16 顯示卡散熱模組"),
+            AuditLog(timestamp=_ts(days=7),            actor="1", role="admin", action="COMPLETE",  entity_type="schedule", entity_id=str(_smap3["PRJ-2026-007"].id), detail="PRJ-2026-007 / PCIe x16 顯示卡散熱模組"),
+
+            AuditLog(timestamp=_ts(days=7),            actor="1", role="admin", action="CREATE",    entity_type="schedule", entity_id=str(_smap3["PRJ-2026-008"].id), detail="PRJ-2026-008 / 工業 IoT 網關模組"),
+            AuditLog(timestamp=_ts(days=6, hours=16),  actor="1", role="admin", action="CONFIRM",   entity_type="schedule", entity_id=str(_smap3["PRJ-2026-008"].id), detail="PRJ-2026-008 / 工業 IoT 網關模組"),
+            AuditLog(timestamp=_ts(days=6),            actor="system:scheduler", role=None, action="AUTO_START", entity_type="schedule", entity_id=str(_smap3["PRJ-2026-008"].id), detail="PRJ-2026-008 / 工業 IoT 網關模組"),
+            AuditLog(timestamp=_ts(days=4),            actor="1", role="admin", action="COMPLETE",  entity_type="schedule", entity_id=str(_smap3["PRJ-2026-008"].id), detail="PRJ-2026-008 / 工業 IoT 網關模組"),
+
+            AuditLog(timestamp=_ts(days=6),            actor="1", role="admin", action="CREATE",    entity_type="schedule", entity_id=str(_smap3["PRJ-2026-001"].id), detail="PRJ-2026-001 / 車載 USB Hub 模組 v2"),
+            AuditLog(timestamp=_ts(days=5, hours=16),  actor="1", role="admin", action="CONFIRM",   entity_type="schedule", entity_id=str(_smap3["PRJ-2026-001"].id), detail="PRJ-2026-001 / 車載 USB Hub 模組 v2"),
+            AuditLog(timestamp=_ts(days=5),            actor="system:scheduler", role=None, action="AUTO_START", entity_type="schedule", entity_id=str(_smap3["PRJ-2026-001"].id), detail="PRJ-2026-001 / 車載 USB Hub 模組 v2"),
+            AuditLog(timestamp=_ts(days=3),            actor="1", role="admin", action="COMPLETE",  entity_type="schedule", entity_id=str(_smap3["PRJ-2026-001"].id), detail="PRJ-2026-001 / 車載 USB Hub 模組 v2"),
+
+            AuditLog(timestamp=_ts(days=3),            actor="1", role="admin", action="CREATE",    entity_type="schedule", entity_id=str(_smap3["PRJ-2026-002"].id), detail="PRJ-2026-002 / 工業用 RJ-45 Switch"),
+            AuditLog(timestamp=_ts(days=2, hours=16),  actor="1", role="admin", action="CONFIRM",   entity_type="schedule", entity_id=str(_smap3["PRJ-2026-002"].id), detail="PRJ-2026-002 / 工業用 RJ-45 Switch"),
+            AuditLog(timestamp=_ts(days=2),            actor="system:scheduler", role=None, action="AUTO_START", entity_type="schedule", entity_id=str(_smap3["PRJ-2026-002"].id), detail="PRJ-2026-002 / 工業用 RJ-45 Switch"),
+            AuditLog(timestamp=_ts(hours=6),           actor="1", role="admin", action="COMPLETE",  entity_type="schedule", entity_id=str(_smap3["PRJ-2026-002"].id), detail="PRJ-2026-002 / 工業用 RJ-45 Switch"),
+
+            # ── 進行中排程 ──────────────────────────────────
+            AuditLog(timestamp=_ts(hours=3),           actor="1", role="admin", action="CREATE",    entity_type="schedule", entity_id=str(_smap3["PRJ-2026-004"].id), detail="PRJ-2026-004 / Wi-Fi 6E M.2 無線模組"),
+            AuditLog(timestamp=_ts(hours=2, minutes=30), actor="1", role="admin", action="CONFIRM", entity_type="schedule", entity_id=str(_smap3["PRJ-2026-004"].id), detail="PRJ-2026-004 / Wi-Fi 6E M.2 無線模組"),
+            AuditLog(timestamp=_ts(hours=2),           actor="system:scheduler", role=None, action="AUTO_START", entity_type="schedule", entity_id=str(_smap3["PRJ-2026-004"].id), detail="PRJ-2026-004 / Wi-Fi 6E M.2 無線模組"),
+
+            AuditLog(timestamp=_ts(hours=5),           actor="1", role="admin", action="CREATE",    entity_type="schedule", entity_id=str(_smap3["PRJ-2026-005"].id), detail="PRJ-2026-005 / 低溫工作 NVMe SSD 模組"),
+            AuditLog(timestamp=_ts(hours=4, minutes=30), actor="1", role="admin", action="CONFIRM", entity_type="schedule", entity_id=str(_smap3["PRJ-2026-005"].id), detail="PRJ-2026-005 / 低溫工作 NVMe SSD 模組"),
+            AuditLog(timestamp=_ts(hours=4),           actor="system:scheduler", role=None, action="AUTO_START", entity_type="schedule", entity_id=str(_smap3["PRJ-2026-005"].id), detail="PRJ-2026-005 / 低溫工作 NVMe SSD 模組"),
+
+            # ── 已確認 / 待審核 ─────────────────────────────
+            AuditLog(timestamp=_ts(hours=8),           actor="1", role="admin", action="CREATE",    entity_type="schedule", entity_id=str(_smap3["PRJ-2026-006"].id), detail="PRJ-2026-006 / 防水連接器 IP67 模組"),
+            AuditLog(timestamp=_ts(hours=2),           actor="1", role="admin", action="CONFIRM",   entity_type="schedule", entity_id=str(_smap3["PRJ-2026-006"].id), detail="PRJ-2026-006 / 防水連接器 IP67 模組"),
+            AuditLog(timestamp=_ts(minutes=30),        actor="1", role="admin", action="CREATE",    entity_type="schedule", entity_id=str(_smap3["PRJ-2026-003"].id), detail="PRJ-2026-003 / PCIe x16 顯示卡擴充板"),
+
+            # ── 治具借出 ────────────────────────────────────
+            AuditLog(timestamp=_ts(hours=2),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["12401610E4#2A"].id), detail=f"USB Type-C Receptacle x2，借用人：林怡君"),
+            AuditLog(timestamp=_ts(hours=4),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["5031760892"].id),   detail=f"M.2 (M-Key) M.2 2280 Socket x1，借用人：陳柏宇"),
+            AuditLog(timestamp=_ts(days=7),   actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["RJHSE-5380"].id),   detail=f"RJ-45 8P8C Jack x3，借用人：王詠晴"),
+            AuditLog(timestamp=_ts(days=9),   actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["DM3AT-SF-PEJM5"].id), detail=f"SD Card microSD Push-Pull x2，借用人：陳柏宇"),
+            AuditLog(timestamp=_ts(days=5),   actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["105450-0101"].id),  detail=f"USB Type-A Standard-A x3，借用人：林怡君"),
+            AuditLog(timestamp=_ts(days=10),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["RJHSE-5380"].id),   detail=f"RJ-45 8P8C Jack x2，借用人：王詠晴"),
+            AuditLog(timestamp=_ts(days=14),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["TX24-30P-6ST"].id), detail=f"HDMI Type-A Receptacle x1，借用人：林怡君"),
+
+            # ── 治具歸還 ────────────────────────────────────
+            AuditLog(timestamp=_ts(days=3),   actor="1", role="admin", action="RETURN", entity_type="fixture", entity_id=str(_fmap3["105450-0101"].id),  detail="loan#5，狀態：正常"),
+            AuditLog(timestamp=_ts(days=7),   actor="1", role="admin", action="RETURN", entity_type="fixture", entity_id=str(_fmap3["RJHSE-5380"].id),   detail="loan#6，狀態：正常"),
+            AuditLog(timestamp=_ts(days=11),  actor="1", role="admin", action="RETURN", entity_type="fixture", entity_id=str(_fmap3["TX24-30P-6ST"].id), detail="loan#7，狀態：正常"),
+
+            # ── 緊急停止（歷史事件） ─────────────────────────
+            AuditLog(timestamp=_ts(days=8),   actor="1", role="admin", action="EMERGENCY_STOP", entity_type="device", entity_id="CH-03", detail="操作人員：陳柏宇，測試：低溫儲存 Test Ab：-40°C，16 小時（非通電）"),
+        ]
+        db.add_all(_audit_entries)
+        db.commit()
+        print(f"✅ Demo 稽核日誌 {len(_audit_entries)} 筆建立完成！")
 
     # ── 設備時序資料 ──────────────────────────────────────────────────────
     if db.query(DeviceData).count() == 0:

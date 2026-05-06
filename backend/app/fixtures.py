@@ -16,6 +16,7 @@ from .models import (
 )
 from .utils import today_utc_window, _now_utc_naive
 from .auth import require_admin
+from .audit import log_audit
 
 try:
     import pandas as pd
@@ -729,16 +730,18 @@ def list_damaged_lost_loans():
 
 
 @router.post("/loans")
-async def create_loan(body: LoanCreate, _: None = Depends(require_admin)):
+async def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_admin)):
+    user_id = getattr(request.state, "user_id", None)
     db = SessionLocal()
     try:
         f = db.query(Fixture).filter(Fixture.id == body.fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
 
-        loaned = _calc_loan_qty(db, f.id, "loaned")
-        reserved = _calc_loan_qty(db, f.id, "reserved")
-        damaged = _calc_loan_qty(db, f.id, "damaged")
+        qty_map = _build_loan_qty_map(db, [f.id])
+        loaned = qty_map.get((f.id, "loaned"), 0)
+        reserved = qty_map.get((f.id, "reserved"), 0)
+        damaged = qty_map.get((f.id, "damaged"), 0)
         available = max(0, f.total_quantity - loaned - reserved - damaged)
         if available < body.quantity:
             raise HTTPException(
@@ -758,6 +761,8 @@ async def create_loan(body: LoanCreate, _: None = Depends(require_admin)):
         )
         db.add(loan)
         f.loan_count += 1
+        log_audit(db, str(user_id or "unknown"), "admin", "LOAN", "fixture", body.fixture_id,
+                  f"{f.interface_type} {f.form_factor} x{body.quantity}，借用人：{body.borrower_name}")
         db.commit()
         db.refresh(loan)
         loan_id = loan.id
@@ -767,7 +772,8 @@ async def create_loan(body: LoanCreate, _: None = Depends(require_admin)):
 
 
 @router.post("/loans/{loan_id}/return")
-def return_loan(loan_id: int, body: ReturnUpdate, _: None = Depends(require_admin)):
+def return_loan(loan_id: int, body: ReturnUpdate, request: Request, _: None = Depends(require_admin)):
+    user_id = getattr(request.state, "user_id", None)
     db = SessionLocal()
     try:
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
@@ -799,6 +805,11 @@ def return_loan(loan_id: int, body: ReturnUpdate, _: None = Depends(require_admi
             if f:
                 f.total_quantity = max(0, f.total_quantity - loan.quantity)
 
+        condition_label = {ReturnCondition.NORMAL: "正常", ReturnCondition.DAMAGED: "損壞", ReturnCondition.LOST: "遺失"}.get(
+            body.return_condition, str(body.return_condition)
+        )
+        log_audit(db, str(user_id or "unknown"), "admin", "RETURN", "fixture", loan.fixture_id,
+                  f"loan#{loan_id}，狀態：{condition_label}")
         db.commit()
         return {"status": "success"}
     finally:

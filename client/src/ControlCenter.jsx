@@ -9,6 +9,7 @@ import UsersPage from "./UsersPage";
 import ErrorLog from "./ErrorLog";
 import RightPanel from "./components/control/RightPanel";
 import SensorQcModal from "./components/control/SensorQcModal";
+import AuditLog from "./components/control/AuditLog";
 import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL, ACTIVE_STATUSES, IDLE_STATUS, FINISHING_STATUS, EMERGENCY_STATUS } from "./constants";
 import { downloadBlob, buildReportFilename } from "./utils/download";
 import { formatLocal } from "./utils/timezone";
@@ -1189,7 +1190,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
             </div>
             {/* 子 Tab bar */}
             <div style={{ display: "flex", padding: "0 12px", borderBottom: "1px solid #30363d", flexShrink: 0, background: "#0d1117" }}>
-              {[{ key: "errors", label: "異常紀錄" }, { key: "executions", label: "執行紀錄" }].map((t) => (
+              {[{ key: "errors", label: "異常紀錄" }, { key: "executions", label: "執行紀錄" }, { key: "audit", label: "稽核紀錄" }].map((t) => (
                 <button
                   key={t.key}
                   onClick={() => setRecordsSubTab(t.key)}
@@ -1211,6 +1212,9 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
               </div>
               <div style={{ display: recordsSubTab === "executions" ? "block" : "none", height: "100%" }}>
                 <ExecutionList active={recordsOpen && recordsSubTab === "executions"} role={role} />
+              </div>
+              <div style={{ display: recordsSubTab === "audit" ? "block" : "none", height: "100%" }}>
+                <AuditLog active={recordsOpen && recordsSubTab === "audit"} />
               </div>
             </div>
           </div>

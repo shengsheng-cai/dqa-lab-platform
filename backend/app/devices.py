@@ -11,6 +11,7 @@ from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBloc
 from .line import push_message
 from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions, parse_iso_utc
 from .auth import require_admin
+from .audit import log_audit
 from .constants import AMBIENT_TEMP
 from .sop import DEVICE_IDS
 
@@ -419,6 +420,9 @@ async def emergency_stop(device_id: str, request: Request, _: None = Depends(req
             if execution:
                 execution.test_ended_at = _now_utc()
 
+            user_id = getattr(request.state, "user_id", None)
+            log_audit(db, str(user_id or "unknown"), "admin", "EMERGENCY_STOP", "device", device_id,
+                      f"操作人員：{operator}，測試：{sop_name}")
             db.commit()
 
         device.update(

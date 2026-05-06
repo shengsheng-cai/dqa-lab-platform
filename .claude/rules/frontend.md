@@ -4,7 +4,7 @@
 
 ```
 App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, UsersPage, ErrorLog, ExecutionList]
-└─ components/ [sop/, ai/, fixture/, control/RightPanel, control/SensorQcModal, control/SensorQcChart]
+└─ components/ [sop/, ai/, fixture/, control/RightPanel, control/SensorQcModal, control/SensorQcChart, control/AuditLog]
 ```
 
 ## ControlCenter 佈局
@@ -16,7 +16,7 @@ App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, UsersPage
   - users → UsersSummaryPanel（角色人數 + 有效 Token 計數）
   - 其他 → DeviceCards（預設）
 - CenterPanel（flex:1）：Tab bar（設備 / 治具 / 排程 / 人員管理）+ 各頁面
-  - 「紀錄」是 LeftPanel `📋 紀錄` 按鈕觸發的 Modal（非 tab），內嵌子 tab bar（異常紀錄 / 執行紀錄）；`recordsOpen` / `recordsSubTab` state 在 ControlCenter 主元件（非 CenterPanel）
+  - 「紀錄」是 LeftPanel `📋 紀錄` 按鈕觸發的 Modal（非 tab），內嵌子 tab bar（異常紀錄 / 執行紀錄 / 稽核紀錄）；`recordsOpen` / `recordsSubTab` state 在 ControlCenter 主元件（非 CenterPanel）
   - 「感測器 QC 控制圖」是 DeviceCard `📊` 按鈕觸發的 Modal；`sensorModalDevice` state（string | null）在 ControlCenter 主元件；`onShowQc` prop 沿 LeftPanel → ScheduleSummaryPanel / DeviceCard 傳遞
 - AI FAB：右下角浮動按鈕，點擊從右側 translateX 滑入 RightPanel（500px）
 
