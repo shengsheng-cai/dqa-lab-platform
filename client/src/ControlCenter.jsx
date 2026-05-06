@@ -8,6 +8,7 @@ import SchedulePage from "./SchedulePage";
 import UsersPage from "./UsersPage";
 import ErrorLog from "./ErrorLog";
 import RightPanel from "./components/control/RightPanel";
+import SensorQcModal from "./components/control/SensorQcModal";
 import { STATUS_CONFIG, DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, parseUtcDate, SIM_PHASE_LABEL, ACTIVE_STATUSES, IDLE_STATUS, FINISHING_STATUS, EMERGENCY_STATUS } from "./constants";
 import { downloadBlob, buildReportFilename } from "./utils/download";
 import { formatLocal } from "./utils/timezone";
@@ -176,7 +177,7 @@ function conditionLabel(schedule, prefix = "") {
   return { idx, total, label: `${prefix}${isLast ? "✅ 確認完成" : `▶ 第 ${idx + 1}/${total} 條件`}` };
 }
 
-function DeviceCard({ device, isSelected, onClick, pendingSchedule, onConfirmCondition }) {
+function DeviceCard({ device, isSelected, onClick, pendingSchedule, onConfirmCondition, onShowQc }) {
   const isBlocked = device.is_blocked && device.status === IDLE_STATUS;
   const cfg = isBlocked ? STATUS_CONFIG.BLOCKED : (STATUS_CONFIG[device.status] || STATUS_CONFIG.OFFLINE);
   const remaining = useCountdown(device.estimated_end_at);
@@ -230,8 +231,19 @@ function DeviceCard({ device, isSelected, onClick, pendingSchedule, onConfirmCon
         <span style={{ fontSize: 11, fontWeight: 700, color: "#cdd9e5" }}>
           {device.device_id}
         </span>
-        <span style={{ fontSize: 9, fontWeight: 600, color: cfg.color }}>
-          {cfg.label}
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {onShowQc && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onShowQc(device.device_id); }}
+              title="感測器 QC 控制圖"
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", fontSize: 12, color: "#58a6ff", lineHeight: 1, opacity: 0.7 }}
+            >
+              📊
+            </button>
+          )}
+          <span style={{ fontSize: 9, fontWeight: 600, color: cfg.color }}>
+            {cfg.label}
+          </span>
         </span>
       </div>
 
@@ -367,7 +379,7 @@ function FixtureSummaryPanel({ fixtureSummary }) {
 
 // ── ScheduleSummaryPanel ──────────────────────────────────────────────────────
 
-function ScheduleSummaryPanel({ devices, pendingByDevice, onConfirmCondition, counts = {} }) {
+function ScheduleSummaryPanel({ devices, pendingByDevice, onConfirmCondition, counts = {}, onShowQc }) {
   const summaryItems = [
     { label: "待審核", value: counts.pending, color: counts.pending > 0 ? "#e3b341" : "#8b949e" },
     { label: "進行中", value: counts.running, color: counts.running > 0 ? "#3fb950" : "#8b949e" },
@@ -387,7 +399,7 @@ function ScheduleSummaryPanel({ devices, pendingByDevice, onConfirmCondition, co
       </div>
       <div style={{ fontSize: 9, color: "#484f58", padding: "4px 16px 4px", letterSpacing: 1, flexShrink: 0 }}>設備可用性</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 8px", overflowY: "auto" }}>
-        {devices.map(d => <DeviceCard key={d.device_id} device={d} isSelected={false} onClick={null} pendingSchedule={pendingByDevice?.[d.device_id]} onConfirmCondition={onConfirmCondition} />)}
+        {devices.map(d => <DeviceCard key={d.device_id} device={d} isSelected={false} onClick={null} pendingSchedule={pendingByDevice?.[d.device_id]} onConfirmCondition={onConfirmCondition} onShowQc={onShowQc} />)}
       </div>
     </div>
   );
@@ -437,7 +449,7 @@ function UsersSummaryPanel() {
 
 // ── LeftPanel ─────────────────────────────────────────────────────────────────
 
-function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary, onOpenRecords, pendingByDevice, onConfirmCondition, scheduleCounts }) {
+function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary, onOpenRecords, pendingByDevice, onConfirmCondition, scheduleCounts, onShowQc }) {
   const title = activeTab === "schedule" ? "本欄：排程概況"
     : activeTab === "fixture" ? "本欄：治具概況"
     : activeTab === "users" ? "本欄：人員概況"
@@ -480,7 +492,7 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixture
         {activeTab === "fixture" ? (
           <FixtureSummaryPanel fixtureSummary={fixtureSummary} />
         ) : activeTab === "schedule" ? (
-          <ScheduleSummaryPanel devices={devices} pendingByDevice={pendingByDevice} onConfirmCondition={onConfirmCondition} counts={scheduleCounts} />
+          <ScheduleSummaryPanel devices={devices} pendingByDevice={pendingByDevice} onConfirmCondition={onConfirmCondition} counts={scheduleCounts} onShowQc={onShowQc} />
         ) : activeTab === "users" ? (
           <UsersSummaryPanel />
         ) : (
@@ -490,6 +502,7 @@ function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixture
               device={d}
               isSelected={d.device_id === selectedDevice}
               onClick={() => onSelectDevice(d.device_id)}
+              onShowQc={onShowQc}
             />
           ))
         )}
@@ -1003,6 +1016,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   const [scheduleInitConds, setScheduleInitConds] = useState(null);
   const [recordsOpen, setRecordsOpen] = useState(false);
   const [recordsSubTab, setRecordsSubTab] = useState("errors");
+  const [sensorModalDevice, setSensorModalDevice] = useState(null);
   const handleInitCondsConsumed = useCallback(() => setScheduleInitConds(null), []);
   const { showToast } = useToast();
   const handleApplySchedule = useCallback((sop_ids) => {
@@ -1121,6 +1135,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           pendingByDevice={pendingByDevice}
           onConfirmCondition={handleConfirmCondition}
           scheduleCounts={scheduleCounts}
+          onShowQc={setSensorModalDevice}
         />
         <CenterPanel
           role={role}
@@ -1200,6 +1215,10 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
             </div>
           </div>
         </div>
+      )}
+
+      {sensorModalDevice && (
+        <SensorQcModal deviceId={sensorModalDevice} onClose={() => setSensorModalDevice(null)} />
       )}
 
       {/* AI FAB — 面板開啟時隱藏 */}

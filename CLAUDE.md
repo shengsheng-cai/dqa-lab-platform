@@ -130,6 +130,7 @@ cd backend && python -m pytest tests/test_auth.py -v  # 單一測試檔
 | 三模組連動 | ✅ AI→排程、排程→治具預約、SOP→治具借出、完成→治具歸還 |
 | 存取控制 | 2 層（admin/guest）、IP Rate Limiting |
 | LINE Bot | 推播時機：條件完成（等待人員確認）、測試完成、緊急停止（推播給管理者個人） |
+| 感測器 QC 控制圖 | DeviceCard 📊 按鈕開啟 Modal；24h 歷史 + UCL/LCL（mean ± 3σ）+ 異常點標記；溫度/濕度雙圖 |
 
 ### 三模組連動流程
 

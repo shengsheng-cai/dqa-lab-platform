@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod, Schedule, ScheduleStatus
 from .line import push_message
-from .utils import _now_utc, _save_device_state, _parse_conditions, parse_iso_utc
+from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions, parse_iso_utc
 from .auth import require_admin
 from .constants import AMBIENT_TEMP
 from .sop import DEVICE_IDS
@@ -20,6 +20,27 @@ router = APIRouter()
 
 
 # ── Helper 函數 ─────────────────────────────────────────────────────────────
+
+
+def _bucket_by_minute(rows):
+    buckets: dict = {}
+    for row in rows:
+        key = row.timestamp.strftime("%Y-%m-%d %H:%M")
+        if key not in buckets:
+            buckets[key] = {"temps": [], "humis": []}
+        if row.temperature is not None:
+            buckets[key]["temps"].append(row.temperature)
+        if row.humidity is not None:
+            buckets[key]["humis"].append(row.humidity)
+    return buckets
+
+
+def _calc_control_limits(vals):
+    if len(vals) < 5:
+        return None, None, None
+    mean = sum(vals) / len(vals)
+    sigma = (sum((v - mean) ** 2 for v in vals) / len(vals)) ** 0.5
+    return round(mean, 2), round(mean + 3 * sigma, 2), round(mean - 3 * sigma, 2)
 
 
 def _get_device(cache: dict, device_id: str) -> dict:
@@ -147,6 +168,26 @@ class DeviceHistoryPoint(BaseModel):
     humidity: Optional[float] = None
 
 
+class SensorDataPoint(BaseModel):
+    time: str
+    temperature: Optional[float] = None
+    humidity: Optional[float] = None
+    temp_anomaly: bool = False
+    humi_anomaly: bool = False
+
+
+class SensorStatsOut(BaseModel):
+    data: list[SensorDataPoint]
+    temp_mean: Optional[float] = None
+    temp_ucl: Optional[float] = None
+    temp_lcl: Optional[float] = None
+    humi_mean: Optional[float] = None
+    humi_ucl: Optional[float] = None
+    humi_lcl: Optional[float] = None
+    anomaly_count: int = 0
+    hours: int = 24
+
+
 # ── 路由 ────────────────────────────────────────────────────────────────────
 
 
@@ -230,34 +271,79 @@ async def get_device_history(device_id: str, request: Request):
     if not rows:
         return []
 
-    buckets: dict = {}
-    for row in rows:
-        minute_key = row.timestamp.strftime("%Y-%m-%d %H:%M")
-        if minute_key not in buckets:
-            buckets[minute_key] = {"temps": [], "humis": []}
-        if row.temperature is not None:
-            buckets[minute_key]["temps"].append(row.temperature)
-        if row.humidity is not None:
-            buckets[minute_key]["humis"].append(row.humidity)
-
+    buckets = _bucket_by_minute(rows)
     result = []
-    for minute_key, data in sorted(buckets.items()):
-        avg_temp = (
-            round(sum(data["temps"]) / len(data["temps"]), 2) if data["temps"] else None
-        )
-        avg_humi = (
-            round(sum(data["humis"]) / len(data["humis"]), 2) if data["humis"] else None
-        )
-        result.append(
-            {
-                "time": minute_key[11:],
-                "full_time": minute_key,
-                "temperature": avg_temp,
-                "humidity": avg_humi,
-            }
-        )
+    for key, data in sorted(buckets.items()):
+        avg_temp = round(sum(data["temps"]) / len(data["temps"]), 2) if data["temps"] else None
+        avg_humi = round(sum(data["humis"]) / len(data["humis"]), 2) if data["humis"] else None
+        result.append({"time": key[11:], "full_time": key, "temperature": avg_temp, "humidity": avg_humi})
 
     return result
+
+
+@router.get("/api/devices/{device_id}/sensor-stats", response_model=SensorStatsOut)
+async def get_sensor_stats(device_id: str, request: Request, hours: int = 24):
+    _get_device(request.app.state.AICM_CACHE, device_id)
+    cutoff = _now_utc_naive() - datetime.timedelta(hours=hours)
+
+    with SessionLocal() as db:
+        rows = (
+            db.query(DeviceData)
+            .filter(DeviceData.device_id == device_id, DeviceData.timestamp >= cutoff)
+            .order_by(DeviceData.timestamp.asc())
+            .all()
+        )
+
+    if not rows:
+        return SensorStatsOut(data=[], anomaly_count=0, hours=hours)
+
+    buckets = _bucket_by_minute(rows)
+    points = []
+    for key in sorted(buckets):
+        d = buckets[key]
+        avg_t = round(sum(d["temps"]) / len(d["temps"]), 2) if d["temps"] else None
+        avg_h = round(sum(d["humis"]) / len(d["humis"]), 2) if d["humis"] else None
+        points.append({"time": key[11:], "temperature": avg_t, "humidity": avg_h})
+
+    temps = [p["temperature"] for p in points if p["temperature"] is not None]
+    humis = [p["humidity"] for p in points if p["humidity"] is not None]
+    temp_mean, temp_ucl, temp_lcl = _calc_control_limits(temps)
+    humi_mean, humi_ucl, humi_lcl = _calc_control_limits(humis)
+
+    data = []
+    anomaly_count = 0
+    for p in points:
+        t_anom = (
+            temp_ucl is not None
+            and p["temperature"] is not None
+            and (p["temperature"] > temp_ucl or p["temperature"] < temp_lcl)
+        )
+        h_anom = (
+            humi_ucl is not None
+            and p["humidity"] is not None
+            and (p["humidity"] > humi_ucl or p["humidity"] < humi_lcl)
+        )
+        if t_anom or h_anom:
+            anomaly_count += 1
+        data.append(SensorDataPoint(
+            time=p["time"],
+            temperature=p["temperature"],
+            humidity=p["humidity"],
+            temp_anomaly=t_anom,
+            humi_anomaly=h_anom,
+        ))
+
+    return SensorStatsOut(
+        data=data,
+        temp_mean=temp_mean,
+        temp_ucl=temp_ucl,
+        temp_lcl=temp_lcl,
+        humi_mean=humi_mean,
+        humi_ucl=humi_ucl,
+        humi_lcl=humi_lcl,
+        anomaly_count=anomaly_count,
+        hours=hours,
+    )
 
 
 @router.get("/api/latest", response_model=DeviceBasicOut)
