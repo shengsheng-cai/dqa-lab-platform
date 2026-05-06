@@ -8,7 +8,8 @@
 | 治具總表/甘特圖 | ✅ | ✅ 唯讀 |
 | AI 諮詢/設備查看 | ✅ | ✅ |
 
-新增 API 端點時，寫入操作一律加 `role != "admin"` 檢查。
+新增 API 端點時，寫入操作一律加 `role != "admin"` 檢查。  
+唯讀感測器端點（如 `GET /api/devices/{id}/sensor-stats`、`GET /api/devices/{id}/history`）不需 role 檢查，guest 可存取。
 
 ## LINE（Push）
 
