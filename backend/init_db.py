@@ -184,11 +184,11 @@ try:
         )
         _exec_running_ch01 = SopExecution(
             sop_id="iec60068_nb_-40_+85_5cycle", device_id="CH-01", operator="林怡君",
-            test_started_at=_now - datetime.timedelta(hours=2),
+            test_started_at=_now,
         )
         _exec_running_ch02 = SopExecution(
             sop_id="iec60068_ab_-25_16h", device_id="CH-02", operator="陳柏宇",
-            test_started_at=_now - datetime.timedelta(hours=4),
+            test_started_at=_now,
         )
         db.add_all([_exec_done_1, _exec_done_2, _exec_done_3, _exec_done_4,
                     _exec_running_ch01, _exec_running_ch02])
@@ -202,22 +202,22 @@ try:
     if db.query(DeviceState).count() == 0:
         db.add_all([
             DeviceState(
-                device_id="CH-01", status="RUNNING", temperature=72.5, humidity=42.0,
-                sim_phase="dwell_high", sim_cycle=2,
+                device_id="CH-01", status="RUNNING", temperature=25.0, humidity=52.0,
+                sim_phase="ramp_to_low", sim_cycle=1,
                 running_sop_id="iec60068_nb_-40_+85_5cycle",
                 running_sop_name="Test Nb 漸進溫度循環：-40°C ↔ +85°C，2°C/min，5 循環",
                 standard_id="iec60068_nb_-40_+85_5cycle",
-                started_at=_now - datetime.timedelta(hours=2),
+                started_at=_now,
                 active_execution_id=_exec_running_ch01_id,
                 updated_at=_now,
             ),
             DeviceState(
-                device_id="CH-02", status="RUNNING", temperature=-24.8, humidity=62.0,
-                sim_phase="dwell_low", sim_cycle=1,
+                device_id="CH-02", status="RUNNING", temperature=25.0, humidity=55.0,
+                sim_phase="ramp_to_low", sim_cycle=1,
                 running_sop_id="iec60068_ab_-25_16h",
                 running_sop_name="低溫儲存 Test Ab：-25°C，16 小時（非通電）",
                 standard_id="iec60068_ab_-25_16h",
-                started_at=_now - datetime.timedelta(hours=4),
+                started_at=_now,
                 active_execution_id=_exec_running_ch02_id,
                 updated_at=_now,
             ),
@@ -425,48 +425,21 @@ try:
     if db.query(DeviceData).count() == 0:
         _device_data = []
         _rng = random.Random(42)
-        _steps = 288  # 24h，每 5 分鐘一筆
+        _steps = 12  # 1h 常溫基線，每 5 分鐘一筆；simulator 啟動後自動累積 live 資料
         for i in range(_steps):
-            t = _now - datetime.timedelta(minutes=(_steps - 1 - i) * 5)
-            ratio = i / (_steps - 1)  # 0.0 → 1.0，表示 24h 進度
-            phase = ratio * 2 * math.pi
-
-            # CH-01：前 22h 從常溫 25°C → 降溫 -35°C → 升溫至 72.5°C（目前在 dwell_high）
-            # 分三段：0~8h 降溫、8~16h 升溫、16~24h 高溫保持
-            if ratio < 8 / 24:
-                r = ratio / (8 / 24)
-                base_ch01 = 25.0 - r * 60.0  # 25 → -35
-            elif ratio < 16 / 24:
-                r = (ratio - 8 / 24) / (8 / 24)
-                base_ch01 = -35.0 + r * 107.5  # -35 → 72.5
-            else:
-                base_ch01 = 72.5 + _rng.gauss(0, 0.3)
-            temp_ch01 = base_ch01 + _rng.gauss(0, 0.4) + 0.6 * math.sin(phase * 8)
-            humi_ch01 = 42 + _rng.gauss(0, 0.5) + 2.5 * math.sin(phase * 0.5)
-            _device_data.append(DeviceData(
-                device_id="CH-01", timestamp=t,
-                temperature=round(temp_ch01, 1),
-                humidity=round(max(20, min(90, humi_ch01)), 1)))
-
-            # CH-02：穩定低溫 -25°C（dwell_low），偶有小幅波動
-            temp_ch02 = -24.8 + _rng.gauss(0, 0.25) + 0.3 * math.sin(phase * 3)
-            humi_ch02 = 62 + _rng.gauss(0, 0.4) + 1.2 * math.sin(phase)
-            _device_data.append(DeviceData(
-                device_id="CH-02", timestamp=t,
-                temperature=round(temp_ch02, 1),
-                humidity=round(max(30, min(90, humi_ch02)), 1)))
-
-            # CH-03/04/05：常溫待機，加真實感噪音
-            for dev, base_t, base_h in [("CH-03", 25.2, 54.5), ("CH-04", 24.8, 56.1), ("CH-05", 25.5, 53.8)]:
-                t_val = base_t + _rng.gauss(0, 0.2) + 0.5 * math.sin(phase * 0.7 + _rng.uniform(0, 1))
-                h_val = base_h + _rng.gauss(0, 0.3) + 0.8 * math.sin(phase * 0.5)
+            t = _now - datetime.timedelta(minutes=(_steps - i) * 5)
+            phase = i / _steps * 2 * math.pi
+            for dev, base_t, base_h in [
+                ("CH-01", 25.0, 52.0), ("CH-02", 25.0, 55.0),
+                ("CH-03", 25.2, 54.5), ("CH-04", 24.8, 56.1), ("CH-05", 25.5, 53.8),
+            ]:
                 _device_data.append(DeviceData(
                     device_id=dev, timestamp=t,
-                    temperature=round(t_val, 1),
-                    humidity=round(max(30, min(90, h_val)), 1)))
-
+                    temperature=round(base_t + _rng.gauss(0, 0.2) + 0.3 * math.sin(phase), 1),
+                    humidity=round(max(30, min(90, base_h + _rng.gauss(0, 0.3))), 1),
+                ))
         db.add_all(_device_data)
         db.commit()
-        print(f"✅ Demo 設備資料 {len(_device_data)} 筆建立完成！")
+        print(f"✅ Demo 設備基線資料 {len(_device_data)} 筆建立完成（simulator 啟動後持續累積）")
 finally:
     db.close()
