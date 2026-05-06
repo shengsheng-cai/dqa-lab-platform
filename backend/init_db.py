@@ -12,6 +12,11 @@ from app.models import (
     DeviceData, DeviceState, ErrorLog, FixtureLoan, ScheduleFixture, ScheduleStatus, AuditLog, _utcnow,
     ensure_admin_user,
 )
+from app.standards import STANDARDS_AND_SOPS
+
+def _sop_json(sop_id):
+    d = STANDARDS_AND_SOPS.get(sop_id, {})
+    return json.dumps(d, ensure_ascii=False)
 
 print("正在建立資料表...")
 Base.metadata.create_all(bind=engine)
@@ -207,6 +212,7 @@ try:
                 running_sop_id="iec60068_nb_-40_+85_5cycle",
                 running_sop_name="Test Nb 漸進溫度循環：-40°C ↔ +85°C，2°C/min，5 循環",
                 standard_id="iec60068_nb_-40_+85_5cycle",
+                active_sop_json=_sop_json("iec60068_nb_-40_+85_5cycle"),
                 started_at=_now,
                 active_execution_id=_exec_running_ch01_id,
                 updated_at=_now,
@@ -217,6 +223,7 @@ try:
                 running_sop_id="iec60068_ab_-25_16h",
                 running_sop_name="低溫儲存 Test Ab：-25°C，16 小時（非通電）",
                 standard_id="iec60068_ab_-25_16h",
+                active_sop_json=_sop_json("iec60068_ab_-25_16h"),
                 started_at=_now,
                 active_execution_id=_exec_running_ch02_id,
                 updated_at=_now,
