@@ -18,3 +18,5 @@ ignore = [
 "backend/app/standards/*.py" = ["E501"]
 "backend/app/ai.py" = ["E501"]
 "backend/app/simulator.py" = ["E501"]
+"backend/init_db.py" = ["E501"]
+"backend/app/fixtures.py" = ["E501"]
