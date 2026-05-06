@@ -401,13 +401,13 @@ try:
             AuditLog(timestamp=_ts(minutes=30),        actor="1", role="admin", action="CREATE",    entity_type="schedule", entity_id=str(_smap3["PRJ-2026-003"].id), detail="PRJ-2026-003 / PCIe x16 顯示卡擴充板"),
 
             # ── 治具借出 ────────────────────────────────────
-            AuditLog(timestamp=_ts(hours=2),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["12401610E4#2A"].id), detail=f"USB Type-C Receptacle x2，借用人：林怡君"),
-            AuditLog(timestamp=_ts(hours=4),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["5031760892"].id),   detail=f"M.2 (M-Key) M.2 2280 Socket x1，借用人：陳柏宇"),
-            AuditLog(timestamp=_ts(days=7),   actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["RJHSE-5380"].id),   detail=f"RJ-45 8P8C Jack x3，借用人：王詠晴"),
-            AuditLog(timestamp=_ts(days=9),   actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["DM3AT-SF-PEJM5"].id), detail=f"SD Card microSD Push-Pull x2，借用人：陳柏宇"),
-            AuditLog(timestamp=_ts(days=5),   actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["105450-0101"].id),  detail=f"USB Type-A Standard-A x3，借用人：林怡君"),
-            AuditLog(timestamp=_ts(days=10),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["RJHSE-5380"].id),   detail=f"RJ-45 8P8C Jack x2，借用人：王詠晴"),
-            AuditLog(timestamp=_ts(days=14),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["TX24-30P-6ST"].id), detail=f"HDMI Type-A Receptacle x1，借用人：林怡君"),
+            AuditLog(timestamp=_ts(hours=2),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["12401610E4#2A"].id), detail="USB Type-C Receptacle x2，借用人：林怡君"),
+            AuditLog(timestamp=_ts(hours=4),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["5031760892"].id),   detail="M.2 (M-Key) M.2 2280 Socket x1，借用人：陳柏宇"),
+            AuditLog(timestamp=_ts(days=7),   actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["RJHSE-5380"].id),   detail="RJ-45 8P8C Jack x3，借用人：王詠晴"),
+            AuditLog(timestamp=_ts(days=9),   actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["DM3AT-SF-PEJM5"].id), detail="SD Card microSD Push-Pull x2，借用人：陳柏宇"),
+            AuditLog(timestamp=_ts(days=5),   actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["105450-0101"].id),  detail="USB Type-A Standard-A x3，借用人：林怡君"),
+            AuditLog(timestamp=_ts(days=10),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["RJHSE-5380"].id),   detail="RJ-45 8P8C Jack x2，借用人：王詠晴"),
+            AuditLog(timestamp=_ts(days=14),  actor="1", role="admin", action="LOAN", entity_type="fixture", entity_id=str(_fmap3["TX24-30P-6ST"].id), detail="HDMI Type-A Receptacle x1，借用人：林怡君"),
 
             # ── 治具歸還 ────────────────────────────────────
             AuditLog(timestamp=_ts(days=3),   actor="1", role="admin", action="RETURN", entity_type="fixture", entity_id=str(_fmap3["105450-0101"].id),  detail="loan#5，狀態：正常"),
