@@ -1254,8 +1254,8 @@ const TABS = [
   { key: "device", label: "設備" },
   { key: "fixture", label: "治具" },
   { key: "schedule", label: "排程" },
-  { key: "maintenance", label: "維護", adminOnly: true },
-  { key: "users", label: "人員管理", adminOnly: true },
+  { key: "maintenance", label: "維護" },
+  { key: "users", label: "人員管理" },
 ];
 
 function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange }) {
@@ -1361,26 +1361,22 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
         >
           <SchedulePage active={activeTab === "schedule"} role={role} userId={userId} initConditions={scheduleInitConds} onInitCondsConsumed={handleInitCondsConsumed} liveDeviceStatuses={Object.fromEntries(devices.map(d => [d.device_id, (d.is_blocked && d.status === IDLE_STATUS) ? "BLOCKED" : d.status]))} />
         </div>
-        {role === "admin" && (
-          <div
-            style={{
-              display: activeTab === "maintenance" ? "block" : "none",
-              height: "100%",
-            }}
-          >
-            <MaintenancePage active={activeTab === "maintenance"} role={role} onCalibrationChange={onCalibrationChange} />
-          </div>
-        )}
-        {role === "admin" && (
-          <div
-            style={{
-              display: activeTab === "users" ? "block" : "none",
-              height: "100%",
-            }}
-          >
-            <UsersPage active={activeTab === "users"} role={role} />
-          </div>
-        )}
+        <div
+          style={{
+            display: activeTab === "maintenance" ? "block" : "none",
+            height: "100%",
+          }}
+        >
+          <MaintenancePage active={activeTab === "maintenance"} role={role} onCalibrationChange={onCalibrationChange} />
+        </div>
+        <div
+          style={{
+            display: activeTab === "users" ? "block" : "none",
+            height: "100%",
+          }}
+        >
+          <UsersPage active={activeTab === "users"} role={role} />
+        </div>
       </div>
     </div>
   );
