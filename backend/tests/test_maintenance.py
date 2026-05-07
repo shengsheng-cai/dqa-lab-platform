@@ -8,6 +8,7 @@ import datetime
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 from fastapi import FastAPI, Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -21,11 +22,11 @@ UTC = datetime.timezone.utc
 # ── Test App Factory ──────────────────────────────────────────────────────────
 
 def _make_app(role: str | None):
-    """建立隔離測試 app：shared-cache in-memory SQLite + role 注入 middleware"""
-    # Use shared cache so the same in-memory DB is accessible from multiple connections/threads
+    """建立隔離測試 app：in-memory SQLite + role 注入 middleware"""
     engine = create_engine(
-        "sqlite:///file::memory:?cache=shared",
-        connect_args={"check_same_thread": False, "uri": True},
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine)
