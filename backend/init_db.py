@@ -10,7 +10,7 @@ import datetime
 from app.models import (
     Base, engine, SessionLocal, Fixture, Schedule, SopExecution,
     DeviceData, DeviceState, ErrorLog, FixtureLoan, ScheduleFixture, ScheduleStatus, AuditLog, _utcnow,
-    ensure_admin_user,
+    ensure_admin_user, DeviceCalibration, DeviceMaintenance,
 )
 from app.standards import STANDARDS_AND_SOPS
 
@@ -427,6 +427,68 @@ try:
         db.add_all(_audit_entries)
         db.commit()
         print(f"✅ Demo 稽核日誌 {len(_audit_entries)} 筆建立完成！")
+
+    # ── 設備校驗紀錄 ──────────────────────────────────────────────────────
+    if db.query(DeviceCalibration).count() == 0:
+        today = _utcnow()
+        _calibrations = [
+            DeviceCalibration(
+                device_id="CH-01", calibration_date=datetime.datetime(2026, 1, 15),
+                next_calibration_date=datetime.datetime(2027, 1, 15), interval_days=365,
+                certificate_number="CAL-2026-001", result="pass", notes="年度校驗通過", created_by="admin",
+            ),
+            DeviceCalibration(
+                device_id="CH-02", calibration_date=datetime.datetime(2025, 5, 22),
+                next_calibration_date=today + datetime.timedelta(days=15), interval_days=365,
+                certificate_number="CAL-2025-002", result="pass", notes="即將到期請安排", created_by="admin",
+            ),
+            DeviceCalibration(
+                device_id="CH-03", calibration_date=datetime.datetime(2025, 3, 7),
+                next_calibration_date=today - datetime.timedelta(days=60), interval_days=365,
+                certificate_number="CAL-2025-003", result="pass", notes="逾期未重新校驗", created_by="admin",
+            ),
+            DeviceCalibration(
+                device_id="CH-04", calibration_date=datetime.datetime(2026, 3, 1),
+                next_calibration_date=datetime.datetime(2027, 3, 1), interval_days=365,
+                certificate_number="CAL-2026-004", result="pass", notes="", created_by="admin",
+            ),
+        ]
+        db.add_all(_calibrations)
+        db.commit()
+        print(f"✅ Demo 設備校驗紀錄 {len(_calibrations)} 筆建立完成！")
+
+    # ── 設備維護紀錄 ──────────────────────────────────────────────────────
+    if db.query(DeviceMaintenance).count() == 0:
+        _maintenances = [
+            DeviceMaintenance(
+                device_id="CH-01", maintenance_date=datetime.datetime(2026, 2, 10),
+                maintenance_type="preventive", description="更換密封條、清潔冷凝器",
+                performed_by="王工程師", next_maintenance_date=datetime.datetime(2026, 8, 10),
+            ),
+            DeviceMaintenance(
+                device_id="CH-02", maintenance_date=datetime.datetime(2026, 1, 20),
+                maintenance_type="inspection", description="例行點檢，無異常",
+                performed_by="李技術員", next_maintenance_date=datetime.datetime(2026, 7, 20),
+            ),
+            DeviceMaintenance(
+                device_id="CH-03", maintenance_date=datetime.datetime(2026, 3, 5),
+                maintenance_type="corrective", description="修復溫控板異常，已更換零件",
+                performed_by="陳工程師", next_maintenance_date=None,
+            ),
+            DeviceMaintenance(
+                device_id="CH-04", maintenance_date=datetime.datetime(2026, 4, 1),
+                maintenance_type="preventive", description="潤滑傳動部件",
+                performed_by="王工程師", next_maintenance_date=datetime.datetime(2026, 10, 1),
+            ),
+            DeviceMaintenance(
+                device_id="CH-05", maintenance_date=datetime.datetime(2026, 2, 28),
+                maintenance_type="inspection", description="例行點檢",
+                performed_by="李技術員", next_maintenance_date=datetime.datetime(2026, 8, 28),
+            ),
+        ]
+        db.add_all(_maintenances)
+        db.commit()
+        print(f"✅ Demo 設備維護紀錄 {len(_maintenances)} 筆建立完成！")
 
     # ── 設備時序資料 ──────────────────────────────────────────────────────
     if db.query(DeviceData).count() == 0:

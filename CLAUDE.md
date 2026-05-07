@@ -27,12 +27,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `schedules.py` | 排程管理 + APScheduler 任務 |
 | `ai.py` + `rag.py` | Gemini 整合 + RAG 向量檢索 |
 | `reports.py` | PDF / CSV 報告生成 |
+| `devices_maintenance.py` | 設備校驗 & 維護排程 CRUD API |
 
 ---
 
 ## 技術規格
 
-### 資料庫（15 張）
+### 資料庫（17 張）
 
 | 表名 | 說明 |
 |------|------|
@@ -51,6 +52,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `purchase_orders` | 治具採購單 |
 | `schedules` | 測試排程（甘特圖資料來源） |
 | `device_blocked_periods` | 設備不可用時段 |
+| `device_calibrations` | 設備校驗紀錄（校驗日期、下次校驗日期、證書號、結果） |
+| `device_maintenances` | 設備維護紀錄（維護日期、類型、說明、執行人員） |
 
 ### 狀態機與模擬
 
@@ -110,7 +113,7 @@ alembic revision --autogenerate -m "描述"
 alembic upgrade head
 
 # 後端單元測試
-cd backend && python -m pytest                        # 全套（116 tests）
+cd backend && python -m pytest                        # 全套（124 tests）
 cd backend && python -m pytest tests/test_auth.py -v  # 單一測試檔
 ```
 
@@ -132,6 +135,7 @@ cd backend && python -m pytest tests/test_auth.py -v  # 單一測試檔
 | LINE Bot | 推播時機：條件完成（等待人員確認）、測試完成、緊急停止（推播給管理者個人） |
 | 感測器 QC 控制圖 | DeviceCard 📊 按鈕開啟 Modal；24h 歷史 + UCL/LCL（mean ± 3σ）+ 異常點標記；溫度/濕度雙圖 |
 | 稽核日誌 | audit_logs 表記錄 who/what/when；排程/治具/設備所有寫入皆埋點；紀錄 Modal 第三 tab 顯示，支援 entity 過濾 + CSV 匯出 |
+| 維護 | device_calibrations + device_maintenances 兩表；CRUD API（admin 寫入）；維護 tab + LeftPanel 校驗狀態摘要（正常/即將到期/逾期/未知）；DeviceCard badge；Alembic migration |
 
 ### 三模組連動流程
 

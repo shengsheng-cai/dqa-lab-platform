@@ -430,6 +430,40 @@ class AuditLog(Base):
     detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
+# ---------- 設備校驗紀錄 ----------
+class DeviceCalibration(Base):
+    __tablename__ = "device_calibrations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    device_id: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    calibration_date: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    next_calibration_date: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    interval_days: Mapped[int] = mapped_column(Integer, default=365)
+    certificate_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    result: Mapped[str] = mapped_column(String(10), nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, default=_utcnow
+    )
+
+
+# ---------- 設備維護紀錄 ----------
+class DeviceMaintenance(Base):
+    __tablename__ = "device_maintenances"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    device_id: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    maintenance_date: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    maintenance_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    performed_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    next_maintenance_date: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, default=_utcnow
+    )
+
+
 # ---------- 資料庫初始化 ----------
 def ensure_admin_user():
     """Ensure the admin user exists and has the password from ADMIN_PASSWORD env var.

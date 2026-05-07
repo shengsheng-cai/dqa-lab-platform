@@ -27,6 +27,7 @@ from .models import SessionLocal, DeviceState
 from .simulator import data_simulator
 from .devices import router as devices_router
 from .audit import router as audit_router
+from .devices_maintenance import router as devices_maintenance_router
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 import httpx as _httpx
 import logging
@@ -161,6 +162,7 @@ app.include_router(schedules_router)
 app.include_router(device_blocked_router)
 app.include_router(devices_router)
 app.include_router(audit_router)
+app.include_router(devices_maintenance_router)
 
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")

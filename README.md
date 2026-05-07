@@ -27,7 +27,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 
 | | |
 |---|---|
-| **116 automated tests** | Device state machine · Schedule calculation · Fixture lifecycle · Three-module integration · SOP validation · Measurement uncertainty |
+| **124 automated tests** | Device state machine · Schedule calculation · Fixture lifecycle · Three-module integration · SOP validation · Measurement uncertainty · Calibration & maintenance CRUD |
 | **GitHub Actions CI/CD** | Push-triggered test gate + auto-deploy to HF Spaces |
 | **RAG + backend validation** | Gemini Flash-Lite with retrieval-augmented generation — AI output validated server-side before DB write |
 | **Three-module integration** | AI → Schedule → Fixture fully automated (reserve → loan → return) |
@@ -57,6 +57,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 | 👥 **人員管理** | 人員名冊（左）+ 訪客 Token 管理（右）；Token 表支援「隱藏已失效」一鍵過濾 |
 | 🔐 **存取控制** | 管理員登入 + 訪客唯讀模式，bcrypt 密碼雜湊，IP Rate Limiting |
 | 📋 **稽核日誌** | 所有寫入操作（排程 / 治具 / 設備）記錄 who/what/when；紀錄 Modal 內嵌稽核紀錄 tab，支援 entity 過濾與 CSV 匯出（ISO 17025 外部稽核用） |
+| 🔧 **維護** | 設備校驗紀錄（日期、證書號、結果）& 維護紀錄（預防性 / 矯正性 / 例行點檢）；左側欄即時顯示各台設備校驗狀態（正常 / 即將到期 / 逾期 / 未知）；DeviceCard badge 警示 |
 
 > ⚠️ **AI 諮詢功能限制**：線上版使用 Gemini 免費方案，每日限制 20 次請求，額度用完後顯示提示並隔日自動恢復。完整 demo 建議以本地端執行。
 > 
@@ -121,7 +122,7 @@ cp .env.example backend/.env
 | **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Flash-Lite）+ 可切換 RAG Embedding（Gemini / sentence-transformers） |
 | **通知** | LINE Messaging API（條件完成 / 測試完成 / 緊急停止推播）|
-| **品質** | pytest 116 tests · GitHub Actions CI/CD · Alembic 版本控制遷移 |
+| **品質** | pytest 124 tests · GitHub Actions CI/CD · Alembic 版本控制遷移 |
 
 ---
 
@@ -151,6 +152,9 @@ AI 推薦條件 → [申請此測試] → 排程確認 → 治具預約
 
 ## 後續規劃
 
+- [ ] WebSocket 即時監控（取代前端 polling）
+- [ ] 預測性維護 AI（感測器歷史異常預警）
+- [ ] 多輪 SOP 生成助手（AI 草擬步驟 → 人員確認存入模板）
 - [ ] RS-485 真實設備通訊（Phase 3）
 
 ---
