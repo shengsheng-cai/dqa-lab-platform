@@ -35,6 +35,9 @@ COPY backend/ ./backend/
 # 前端 build 產物放到 /app/static（由 FastAPI 掛載）
 COPY --from=frontend-build /build/dist ./static/
 
+# Golden snapshot：預先 seed 好的 demo DB，啟動時 copy 到 /tmp
+COPY demo.db /app/demo.db
+
 # 環境變數：
 #  - DATABASE_URL：HF 免費 Space 只有 /tmp 可寫，reboot 會清空（demo 場景可接受）
 #  - PORT：HF 強制 7860
@@ -50,6 +53,7 @@ EXPOSE 7860
 WORKDIR /app/backend
 
 # 啟動流程：
-#   1. init_db.py 建表 + （若有 ADMIN_PASSWORD secret）建 admin 帳號
-#   2. uvicorn 啟動 FastAPI
-CMD ["sh", "-c", "python init_db.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7860}"]
+#   1. copy golden snapshot 到 /tmp（保留 demo 資料，不跑 init_db.py）
+#   2. ensure_admin_user（套用 HF Secret 的 ADMIN_PASSWORD）
+#   3. uvicorn 啟動 FastAPI
+CMD ["sh", "-c", "cp /app/demo.db /tmp/demo.db && python -c 'from app.models import ensure_admin_user; ensure_admin_user()' && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7860}"]

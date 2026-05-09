@@ -27,6 +27,7 @@ ENV/
 *.sqlite
 backend/dqa_lab.db
 backend/test.db
+!demo.db
 
 ### 環境變數與敏感資訊
 .env
