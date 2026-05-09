@@ -33,7 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 技術規格
 
-### 資料庫（17 張）
+### 資料庫（18 張）
 
 | 表名 | 說明 |
 |------|------|
@@ -52,6 +52,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `purchase_orders` | 治具採購單 |
 | `schedules` | 測試排程（甘特圖資料來源） |
 | `device_blocked_periods` | 設備不可用時段 |
+| `audit_logs` | 稽核日誌（who/what/when，所有寫入操作埋點，支援 CSV 匯出） |
 | `device_calibrations` | 設備校驗紀錄（校驗日期、下次校驗日期、證書號、結果） |
 | `device_maintenances` | 設備維護紀錄（維護日期、類型、說明、執行人員） |
 

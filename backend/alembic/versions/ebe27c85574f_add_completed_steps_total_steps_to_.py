@@ -13,9 +13,21 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
-    op.add_column('error_logs', sa.Column('completed_steps', sa.Integer(), nullable=True))
-    op.add_column('error_logs', sa.Column('total_steps', sa.Integer(), nullable=True))
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    cols = {c["name"] for c in inspector.get_columns("error_logs")}
+
+    if "completed_steps" not in cols:
+        op.add_column("error_logs", sa.Column("completed_steps", sa.Integer(), nullable=True))
+    if "total_steps" not in cols:
+        op.add_column("error_logs", sa.Column("total_steps", sa.Integer(), nullable=True))
 
 def downgrade() -> None:
-    op.drop_column('error_logs', 'total_steps')
-    op.drop_column('error_logs', 'completed_steps')
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    cols = {c["name"] for c in inspector.get_columns("error_logs")}
+
+    if "total_steps" in cols:
+        op.drop_column("error_logs", "total_steps")
+    if "completed_steps" in cols:
+        op.drop_column("error_logs", "completed_steps")
