@@ -35,8 +35,8 @@ COPY backend/ ./backend/
 # 前端 build 產物放到 /app/static（由 FastAPI 掛載）
 COPY --from=frontend-build /build/dist ./static/
 
-# Golden snapshot：預先 seed 好的 demo DB，啟動時 copy 到 /tmp
-COPY demo.db /app/demo.db
+# 在 build 時跑 init_db.py，把 demo 資料烤進 image（不需 commit 二進位 DB 檔）
+RUN cd /app/backend && DATABASE_URL=sqlite:////app/demo.db python init_db.py
 
 # 環境變數：
 #  - DATABASE_URL：HF 免費 Space 只有 /tmp 可寫，reboot 會清空（demo 場景可接受）
