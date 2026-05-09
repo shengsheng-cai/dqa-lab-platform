@@ -253,7 +253,7 @@ function DeviceCard({ device, isSelected, onClick, pendingSchedule, onConfirmCon
               📊
             </button>
           )}
-          <span style={{ fontSize: 9, fontWeight: 600, color: cfg.color }}>
+          <span style={{ fontSize: 9, fontWeight: 600, color: cfg.color, whiteSpace: "nowrap" }}>
             {cfg.label}
           </span>
         </span>
@@ -396,7 +396,7 @@ function ScheduleSummaryPanel({ devices, pendingByDevice, onConfirmCondition, co
     { label: "待審核", value: counts.pending, color: counts.pending > 0 ? "#e3b341" : "#8b949e" },
     { label: "進行中", value: counts.running, color: counts.running > 0 ? "#3fb950" : "#8b949e" },
     { label: "已確認", value: counts.confirmed, color: counts.confirmed > 0 ? "#58a6ff" : "#8b949e" },
-    { label: "已完成", value: counts.done, color: counts.done > 0 ? "#57ab5a" : "#8b949e" },
+    { label: "已完成", value: counts.done, color: counts.done > 0 ? "#bc8cff" : "#8b949e" },
   ];
 
   return (

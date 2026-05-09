@@ -15,7 +15,7 @@ const STATUS_COLOR = {
   待審核: { bg: "#30363d", text: "#8b949e", border: "#484f58" },
   已確認: { bg: "#1c3a5e", text: "#79c0ff", border: "#388bfd" },
   進行中: { bg: "#1a3828", text: "#7ee787", border: "#3fb950" },
-  已完成: { bg: "#0d2318", text: "#3fb950", border: "#238636" },
+  已完成: { bg: "#1e1a2e", text: "#bc8cff", border: "#6e40c9" },
   已取消: { bg: "#2d1a1a", text: "#ff7b72", border: "#f85149" },
 };
 
@@ -1529,7 +1529,7 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
     { label: "待審核", value: summary["待審核"], color: "#8b949e", bg: "#21262d", border: "#30363d" },
     { label: "已確認", value: summary["已確認"], color: "#79c0ff", bg: "#1c3a5e", border: "#388bfd" },
     { label: "進行中", value: summary["進行中"], color: "#7ee787", bg: "#1a3828", border: "#3fb950" },
-    { label: "已完成", value: summary["已完成"], color: "#57ab5a", bg: "#0d2318", border: "#238636" },
+    { label: "已完成", value: summary["已完成"], color: "#bc8cff", bg: "#1e1a2e", border: "#6e40c9" },
   ];
 
   return (
