@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "./api";
+import { useDeviceWebSocket } from "./useDeviceWebSocket";
 import { useToast } from "./components/Toast";
 import SOPPage from "./SOPPage";
 import FixturePage from "./FixturePage";
@@ -1390,14 +1391,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   const activeTab = PATH_TO_TAB[pathname] ?? "device";
   const setActiveTab = (key) => navigate(TAB_TO_PATH[key] ?? "/");
 
-  const [devices, setDevices] = useState(
-    DEVICE_IDS.map((id) => ({
-      device_id: id,
-      status: "OFFLINE",
-      temperature: null,
-    })),
-  );
-  const devicesJsonRef = useRef(null);
+  const { devices } = useDeviceWebSocket();
   const [pendingByDevice, setPendingByDevice] = useState({});
   const pendingJsonRef = useRef(null);
   const [fixtureSummary, setFixtureSummary] = useState({});
@@ -1415,25 +1409,6 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
     setScheduleInitConds(sop_ids);
     showToast(`已帶入 ${sop_ids.length} 個條件，請至排程頁面確認`, "info");
   }, [showToast]);
-
-  // 輪詢設備狀態（3s）
-  useEffect(() => {
-    const fetchDevices = async () => {
-      try {
-        const res = await api.get("/api/devices");
-        const json = JSON.stringify(res.data);
-        if (json !== devicesJsonRef.current) {
-          devicesJsonRef.current = json;
-          setDevices(res.data);
-        }
-      } catch (e) {
-        console.error("設備狀態輪詢失敗:", e);
-      }
-    };
-    fetchDevices();
-    const t = setInterval(fetchDevices, POLL_DEVICES_MS);
-    return () => clearInterval(t);
-  }, []);
 
   // 輪詢進行中排程（3s），建 device_id → schedule map
   useEffect(() => {

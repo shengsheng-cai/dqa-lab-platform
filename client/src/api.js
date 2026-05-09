@@ -52,5 +52,10 @@ export function buildAuthHeaders() {
   };
 }
 
+const WS_BASE = import.meta.env.VITE_WS_BASE_URL
+  || (API_BASE === ""
+    ? (window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host
+    : API_BASE.replace(/^http/, "ws"));
+
 export default api;
-export { API_BASE };
+export { API_BASE, WS_BASE };

@@ -192,13 +192,10 @@ class SensorStatsOut(BaseModel):
 # ── 路由 ────────────────────────────────────────────────────────────────────
 
 
-@router.get("/api/devices", response_model=list[DeviceOut])
-async def get_all_devices(request: Request):
-    cache = request.app.state.AICM_CACHE
+def build_device_list(cache: dict) -> list:
     now_dt = _now_utc()
     now = now_dt.strftime("%Y-%m-%dT%H:%M:%S")
 
-    # 查詢目前有哪些設備在不可用時段內，或有排程進行中
     with SessionLocal() as db:
         active_blocks = db.query(DeviceBlockedPeriod).filter(
             DeviceBlockedPeriod.start_time <= now_dt,
@@ -207,7 +204,7 @@ async def get_all_devices(request: Request):
         running_schedules = db.query(Schedule).filter(
             Schedule.status == ScheduleStatus.RUNNING,
         ).all()
-    blocked_devices = {b.device_id: b.reason for b in active_blocks}
+    blocked_devices: dict[str, str] = {b.device_id: b.reason for b in active_blocks}
     for s in running_schedules:
         if s.device_id and s.device_id not in blocked_devices:
             total = len(_parse_conditions(s.conditions))
@@ -240,6 +237,11 @@ async def get_all_devices(request: Request):
         }
         for device_id, item in cache.items()
     ]
+
+
+@router.get("/api/devices", response_model=list[DeviceOut])
+async def get_all_devices(request: Request):
+    return build_device_list(request.app.state.AICM_CACHE)
 
 
 @router.get("/api/devices/{device_id}/history", response_model=list[DeviceHistoryPoint])

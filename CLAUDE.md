@@ -136,6 +136,7 @@ cd backend && python -m pytest tests/test_auth.py -v  # 單一測試檔
 | 感測器 QC 控制圖 | DeviceCard 📊 按鈕開啟 Modal；24h 歷史 + UCL/LCL（mean ± 3σ）+ 異常點標記；溫度/濕度雙圖 |
 | 稽核日誌 | audit_logs 表記錄 who/what/when；排程/治具/設備所有寫入皆埋點；紀錄 Modal 第三 tab 顯示，支援 entity 過濾 + CSV 匯出 |
 | 維護 | device_calibrations + device_maintenances 兩表；CRUD API（admin 寫入）；維護 tab + LeftPanel 校驗狀態摘要（正常/即將到期/逾期/未知）；DeviceCard badge；Alembic migration |
+| WebSocket 即時監控 | `/ws/devices` endpoint + `ConnectionManager` + 1s `broadcast_loop`；前端 `useDeviceWebSocket` hook（指數退避重連）；取代原本 3s HTTP polling；`WS_BASE` 統一由 `api.js` export |
 
 ### 三模組連動流程
 

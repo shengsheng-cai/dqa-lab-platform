@@ -28,6 +28,7 @@ from .simulator import data_simulator
 from .devices import router as devices_router
 from .audit import router as audit_router
 from .devices_maintenance import router as devices_maintenance_router
+from .ws import router as ws_router, broadcast_loop
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 import httpx as _httpx
 import logging
@@ -94,6 +95,10 @@ async def lifespan(app: FastAPI):
     sim_task = asyncio.create_task(data_simulator(cache, app.state.DEVICE_LOCKS))
     background_tasks.add(sim_task)
     sim_task.add_done_callback(background_tasks.discard)
+
+    ws_task = asyncio.create_task(broadcast_loop(cache))
+    background_tasks.add(ws_task)
+    ws_task.add_done_callback(background_tasks.discard)
     logger.info(f"System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
 
     task = asyncio.create_task(warmup_rag())
@@ -163,6 +168,7 @@ app.include_router(device_blocked_router)
 app.include_router(devices_router)
 app.include_router(audit_router)
 app.include_router(devices_maintenance_router)
+app.include_router(ws_router)
 
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
