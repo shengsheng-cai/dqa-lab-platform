@@ -6,7 +6,7 @@ import datetime
 from unittest.mock import patch
 
 from app.models import Schedule, ScheduleStatus, DeviceBlockedPeriod
-from app.schedules import _find_earliest_slot, _auto_assign
+from app.schedule_service import _find_earliest_slot, _auto_assign
 
 UTC = datetime.timezone.utc
 
@@ -121,8 +121,8 @@ _MOCK_STD = {
 
 def test_auto_assign_returns_valid_device(db):
     """auto_assign 回傳合法設備 ID"""
-    from app.schedules import DEVICE_IDS
-    with patch("app.schedules.get_standard", return_value=_MOCK_STD):
+    from app.sop import DEVICE_IDS
+    with patch("app.schedule_service.get_standard", return_value=_MOCK_STD):
         device_id, start, end = _auto_assign(["sop1"], db)
     assert device_id in DEVICE_IDS
     assert end > start
@@ -138,16 +138,16 @@ def test_auto_assign_avoids_busy_device(db):
     ))
     db.commit()
 
-    with patch("app.schedules.get_standard", return_value=_MOCK_STD):
+    with patch("app.schedule_service.get_standard", return_value=_MOCK_STD):
         device_id, start, end = _auto_assign(["sop1"], db)
     assert device_id != "CH-01"
 
 
 def test_auto_assign_end_equals_start_plus_hours(db):
     """end_time = start_time + total_hours（基本時間一致性）"""
-    with patch("app.schedules.get_standard", return_value=_MOCK_STD):
+    with patch("app.schedule_service.get_standard", return_value=_MOCK_STD):
         _, start, end = _auto_assign(["sop1"], db)
         total_hours = (end - start).total_seconds() / 3600
-        from app.schedules import _calc_total_hours
+        from app.schedule_service import _calc_total_hours
         expected = _calc_total_hours(["sop1"])
     assert abs(total_hours - expected) < 0.01
