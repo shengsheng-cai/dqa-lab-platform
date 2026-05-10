@@ -115,5 +115,6 @@ dmypy.json
 git_log.txt
 
 ### Claude Code（只 ignore 個人/機器設定）
+.claude/settings.json
 .claude/settings.local.json
 .playwright-mcp/
