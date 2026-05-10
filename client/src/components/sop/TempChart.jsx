@@ -6,7 +6,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Brush,
   ResponsiveContainer,
 } from "recharts";
 import { generateSP, mergeSpPv, toElapsedMin } from "./generateSP";
@@ -52,14 +51,8 @@ const TempChart = ({ sop, pvData, startedAt }) => {
     );
   }
 
-  // 預設視窗跟著最新 PV 資料走，讓使用者看到目前進度而非 SP 末端
-  let brushEnd = merged.length - 1;
-  if (pvWithMin.length > 0) {
-    const latestMin = pvWithMin[pvWithMin.length - 1].min;
-    const idx = merged.findIndex((p) => p.min > latestMin + 60);
-    brushEnd = idx === -1 ? merged.length - 1 : idx;
-  }
-  const brushStart = Math.max(0, brushEnd - 119);
+  if (merged.length === 0) return null;
+
   const spTemps = spData.map((p) => p.sp_temp);
   const tempMin = Math.min(...spTemps) - 10;
   const tempMax = Math.max(...spTemps) + 10;
@@ -122,16 +115,6 @@ const TempChart = ({ sop, pvData, startedAt }) => {
             if (name === "pv_humi") return [`${v?.toFixed(1)} %RH`, "PV 濕度"];
             return [v, name];
           }}
-        />
-        <Brush
-          dataKey="label"
-          startIndex={brushStart}
-          endIndex={brushEnd}
-          height={16}
-          stroke="#30363d"
-          fill="#0d1117"
-          travellerWidth={5}
-          style={{ fontSize: 8 }}
         />
         <Line
           yAxisId="temp"
