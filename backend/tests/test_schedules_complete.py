@@ -7,7 +7,7 @@ import datetime
 import json
 
 from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan
-from app.schedules import _complete_schedule, _build_running_until
+from app.schedule_service import _complete_schedule, _build_running_until
 
 UTC = datetime.timezone.utc
 
