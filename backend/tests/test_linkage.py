@@ -9,7 +9,7 @@ import datetime
 from unittest.mock import patch, MagicMock
 
 from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan
-from app.schedules import _get_emergency_devices, _get_stuck_devices
+from app.schedule_service import _get_emergency_devices, _get_stuck_devices
 from app.sop import _transfer_reserved_fixtures, auto_start_sop
 
 UTC = datetime.timezone.utc
