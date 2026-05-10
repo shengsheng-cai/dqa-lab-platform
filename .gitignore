@@ -62,7 +62,6 @@ pnpm-lock.yaml
 ### 數位孿生專案特定檔案
 simulator/__pycache__/
 simulator/venv/
-.socat_info.log
 backend/rag_cache.pkl
 
 ### 真機驅動層（不公開，含廠商協定）

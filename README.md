@@ -136,6 +136,7 @@ cp .env.example backend/.env
 FastAPI（後端）
     ├── SQLite（SQLAlchemy 2.0 + Alembic）
     ├── 物理模擬引擎（sim_phase 狀態機，APScheduler 精確排程觸發）
+    ├── schedule_service（業務邏輯層：時長計算、自動選機、排程推進）
     ├── AI 諮詢（Gemini Flash-Lite + RAG Embedding）
     └── LINE Messaging API（Webhook 接收 + push_message 推播）
 ```

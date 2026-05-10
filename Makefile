@@ -1,5 +1,5 @@
 # DQA Lab Platform 控制中心
-.PHONY: dev clean install help logs ngrok test lint
+.PHONY: dev clean install help ngrok test lint
 
 PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else echo python3; fi)
 
@@ -11,7 +11,6 @@ help:
 	@echo "  make test    - 執行後端測試"
 	@echo "  make lint    - 執行 PEP 8 檢查（ruff）"
 	@echo "  make clean   - 關閉所有服務並清理殘留程序"
-	@echo "  make logs    - 查看虛擬串口連線日誌"
 	@echo "  make ngrok   - 單獨啟動 ngrok（通常不需要）"
 
 # 1. 安裝流程
@@ -33,27 +32,22 @@ clean:
 	-@pkill -9 -f "uvicorn" 2>/dev/null
 	-@pkill -9 -f "node.*vite" 2>/dev/null
 	-@pkill -9 -f "ngrok" 2>/dev/null
-	@rm -f .socat_info.log .serial_ports.tmp .backend.log .ngrok.log
+	@rm -f .backend.log .ngrok.log
 	@echo "✨ 清理完成。"
 
-# 4. 日誌追蹤
-logs:
-	@echo "📋 追蹤虛擬串口日誌..."
-	@tail -f .socat_info.log
-
-# 5. 測試
+# 4. 測試
 test:
 	@echo "🧪 執行後端測試..."
 	cd backend && ../$(PYTHON) -m pytest
 	@echo "✅ 測試完成。"
 
-# 6. PEP 8 檢查
+# 5. PEP 8 檢查
 lint:
 	@echo "🔍 執行 PEP 8 檢查（ruff）..."
 	ruff check backend/
 	@echo "✅ 檢查完成。"
 
-# 7. ngrok 單獨啟動（通常不需要，make dev 已包含）
+# 6. ngrok 單獨啟動（通常不需要，make dev 已包含）
 ngrok:
 	@echo "🌐 單獨啟動 ngrok..."
 	ngrok http 8000

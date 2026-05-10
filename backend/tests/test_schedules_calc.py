@@ -4,7 +4,7 @@ T-01: _calc_condition_hours / _calc_total_hours 單元測試
 """
 from unittest.mock import patch
 
-from app.schedules import (
+from app.schedule_service import (
     _calc_condition_hours,
     _calc_total_hours,
     STABILIZATION_HOURS,
@@ -31,7 +31,7 @@ def test_high_temp_only():
         "high_temperature": 85.0,
         "low_temperature": None,
     }
-    with patch("app.schedules.get_standard", return_value=mock_std):
+    with patch("app.schedule_service.get_standard", return_value=mock_std):
         hours = _calc_condition_hours("sop_test")
     expected = (30.0 + 60.0 + 30.0) / 60.0 + STABILIZATION_HOURS
     assert abs(hours - expected) < 0.01
@@ -48,7 +48,7 @@ def test_cold_only_single_point():
         "high_temperature": -10.0,
         "low_temperature": -10.0,  # ramp_hl ≈ 0 → 單點冷測分支
     }
-    with patch("app.schedules.get_standard", return_value=mock_std):
+    with patch("app.schedule_service.get_standard", return_value=mock_std):
         hours = _calc_condition_hours("sop_test")
     ramp = abs(25.0 - (-10.0)) / 5.0
     expected = (ramp + 120.0 + ramp) / 60.0 + STABILIZATION_HOURS
@@ -65,7 +65,7 @@ def test_thermal_cycle_low_high():
         "high_temperature": 85.0,
         "low_temperature": -10.0,
     }
-    with patch("app.schedules.get_standard", return_value=mock_std):
+    with patch("app.schedule_service.get_standard", return_value=mock_std):
         hours = _calc_condition_hours("sop_test")
     r_lo = abs(25.0 - (-10.0)) / 3.0       # 25→-10
     r_hl = abs(85.0 - (-10.0)) / 3.0       # -10→85
@@ -84,7 +84,7 @@ def test_ramp_rate_zero_defaults_to_one():
         "high_temperature": 85.0,
         "low_temperature": None,
     }
-    with patch("app.schedules.get_standard", return_value=mock_std):
+    with patch("app.schedule_service.get_standard", return_value=mock_std):
         hours = _calc_condition_hours("sop_test")
     assert hours > 0
 
@@ -102,7 +102,7 @@ def test_total_hours_single_condition():
         "ramp_rate": 2.0, "dwell_time_hours": 1.0, "cycles": 1,
         "high_temperature": 85.0, "low_temperature": None,
     }
-    with patch("app.schedules.get_standard", return_value=mock_std):
+    with patch("app.schedule_service.get_standard", return_value=mock_std):
         total = _calc_total_hours(["sop1"])
         single = _calc_condition_hours("sop1")
     assert abs(total - single) < 0.01
@@ -114,7 +114,7 @@ def test_total_hours_multi_adds_buffer():
         "ramp_rate": 2.0, "dwell_time_hours": 1.0, "cycles": 1,
         "high_temperature": 85.0, "low_temperature": None,
     }
-    with patch("app.schedules.get_standard", return_value=mock_std):
+    with patch("app.schedule_service.get_standard", return_value=mock_std):
         single = _calc_condition_hours("sop1")
         total = _calc_total_hours(["sop1", "sop2", "sop3"])
     expected = single * 3 + INTER_CONDITION_BUFFER_HOURS * 2

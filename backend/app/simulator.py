@@ -9,7 +9,7 @@ from typing import Optional
 from .models import SessionLocal, DeviceData, SopExecution, Schedule, ScheduleStatus
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc, _save_device_state
-from .schedules import _complete_schedule
+from .schedule_service import _complete_schedule
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 from .line import push_message
 

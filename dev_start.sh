@@ -1,8 +1,6 @@
 #!/bin/bash
 # dev_start.sh
 
-LOG_FILE=".socat_info.log"
-
 cleanup() {
     echo -e "\n\n👋 正在關閉所有開發服務..."
     kill $BACK_PID $CLIENT_PID $NGROK_PID 2>/dev/null

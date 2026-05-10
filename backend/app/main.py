@@ -21,8 +21,9 @@ from .auth import router as auth_router
 from .fixtures import router as fixtures_router
 from .purchase_orders import router as purchase_orders_router
 from .schedules import (
-    router as schedules_router, blocked_router as device_blocked_router, auto_advance_schedules,
+    router as schedules_router, blocked_router as device_blocked_router,
 )
+from .schedule_service import auto_advance_schedules
 from .models import SessionLocal, DeviceState
 from .simulator import data_simulator
 from .devices import router as devices_router
@@ -116,7 +117,7 @@ async def lifespan(app: FastAPI):
     app.state.scheduler = scheduler
 
     # 重啟後重新註冊未來的 CONFIRMED 排程 date job
-    from .schedules import _start_schedule_by_id
+    from .schedule_service import _start_schedule_by_id
     from .models import Schedule, ScheduleStatus
     from .utils import _now_utc_naive
     _now_naive = _now_utc_naive()
