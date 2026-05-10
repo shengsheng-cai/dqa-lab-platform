@@ -25,9 +25,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `models.py` | SQLAlchemy models + SessionLocal |
 | `simulator.py` | 溫濕度模擬（**真機版替換點**：換成 `kson_driver.py`） |
 | `schedules.py` | 排程管理 + APScheduler 任務 |
+| `devices.py` | 設備狀態查詢、緊急停止、感測器歷史/統計 API |
+| `devices_maintenance.py` | 設備校驗 & 維護排程 CRUD API |
+| `fixtures.py` | 治具借還、盤點、採購、Excel 匯入 CRUD API |
+| `purchase_orders.py` | 採購單 CRUD API |
 | `ai.py` + `rag.py` | Gemini 整合 + RAG 向量檢索 |
 | `reports.py` | PDF / CSV 報告生成 |
-| `devices_maintenance.py` | 設備校驗 & 維護排程 CRUD API |
+| `sop.py` | SOP 執行流程、步驟確認、照片上傳 |
+| `auth.py` | 登入、token 驗證、middleware、rate limiting |
+| `audit.py` | 稽核日誌寫入與查詢 API |
+| `ws.py` | WebSocket `/ws/devices` + ConnectionManager + broadcast_loop |
+| `line.py` | LINE push_message 推播 |
+| `utils.py` | 共用工具函式（時間、條件解析、device state 存寫） |
+| `constants.py` | 全域常數（AMBIENT_TEMP/HUMIDITY 等） |
+| `uncertainty.py` | GUM 量測不確定度計算（Type A/B/uc/U） |
+| `errors.py` | 異常紀錄 API |
 
 ---
 
