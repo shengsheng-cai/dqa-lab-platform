@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from .models import (
     SessionLocal, Schedule, ScheduleStatus, DeviceBlockedPeriod,
-    User, ScheduleFixture, Fixture, FixtureLoan,
+    User, ScheduleFixture, FixtureLoan,
 )
 from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
@@ -22,11 +22,10 @@ from .schedule_service import (
     ACTIVE_STATUSES,
     _complete_schedule,
     _calc_condition_hours, _calc_total_hours,
-    _est_end_from_device, _build_running_until,
-    _get_stuck_devices, _get_emergency_devices, _get_condition_names,
-    _get_schedule_fixtures, _build_schedule_fixtures_map, _enrich,
+    _build_running_until,
+    _build_schedule_fixtures_map, _enrich,
     _find_earliest_slot, _auto_assign,
-    _force_normal_stop, _start_schedule_by_id, auto_advance_schedules,
+    _force_normal_stop, _start_schedule_by_id,
 )
 
 logger = logging.getLogger("schedules")
