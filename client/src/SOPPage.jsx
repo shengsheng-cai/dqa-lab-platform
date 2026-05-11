@@ -180,14 +180,22 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
                   /* ignore */
                 }
               }
-              // 只有 EMERGENCY 才清除 activeSop；IDLE 保留讓 Step 5 照片可補充
+              // EMERGENCY 清除；測試自然完成（IDLE + 執行紀錄已存）也清除，跳回選擇畫面
               if (!cur.active_sop_json && p.activeSop && cur.status === "EMERGENCY")
                 restoredSop = null;
+              const completedCleanup =
+                cur.status === "IDLE" && !cur.active_sop_json && p.activeSop && p.savedExecutionId;
+              if (completedCleanup) restoredSop = null;
               const selPatch =
                 restoredSop && !p.selectedStd && cur.active_sop_json
                   ? { _pendingRestoreSopId: restoredSop.sop_id }
                   : {};
-              next[id] = { ...p, activeSop: restoredSop, ...selPatch };
+              next[id] = {
+                ...p,
+                activeSop: restoredSop,
+                ...(completedCleanup ? { savedExecutionId: null, chartHistory: [], chartStartedAt: null } : {}),
+                ...selPatch,
+              };
             });
             return next;
           });
