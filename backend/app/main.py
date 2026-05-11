@@ -54,6 +54,8 @@ async def lifespan(app: FastAPI):
             started_at = s.started_at
             if started_at is not None and started_at.tzinfo is None:
                 started_at = started_at.replace(tzinfo=datetime.timezone.utc)
+            dwell_high_start = s.dwell_high_start.isoformat() if s.dwell_high_start else None
+            dwell_low_start = s.dwell_low_start.isoformat() if s.dwell_low_start else None
             cache[device_id] = {
                 "temperature": s.temperature,
                 "humidity": s.humidity,
@@ -69,8 +71,8 @@ async def lifespan(app: FastAPI):
                 "active_execution_id": s.active_execution_id,
                 "sim_phase": s.sim_phase or "idle",
                 "sim_cycle": s.sim_cycle or 0,
-                "dwell_high_start": s.dwell_high_start.isoformat() if s.dwell_high_start else None,
-                "dwell_low_start": s.dwell_low_start.isoformat() if s.dwell_low_start else None,
+                "dwell_high_start": dwell_high_start,
+                "dwell_low_start": dwell_low_start,
             }
             logger.info(f"[{device_id}] 恢復狀態：{s.status}，溫度：{s.temperature}°C")
         else:
