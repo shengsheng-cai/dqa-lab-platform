@@ -79,7 +79,7 @@ const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin
                       cursor: "help",
                     }}
                   >
-                    ⚡ Auto
+                    ⚡ Auto 自動確認
                   </span>
                 )}
                 {step.optional && (
@@ -93,7 +93,7 @@ const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin
                       borderRadius: 4,
                     }}
                   >
-                    Optional
+                    Optional 選填
                   </span>
                 )}
                 {!unlocked && !isAuto && (

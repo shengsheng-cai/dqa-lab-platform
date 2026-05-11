@@ -10,7 +10,7 @@ import datetime
 from app.models import (
     Base, engine, SessionLocal, Fixture, Schedule, SopExecution,
     DeviceData, DeviceState, ErrorLog, FixtureLoan, ScheduleFixture, ScheduleStatus, AuditLog, _utcnow,
-    ensure_admin_user, DeviceCalibration, DeviceMaintenance,
+    ensure_admin_user, DeviceCalibration, DeviceMaintenance, DeviceBlockedPeriod,
 )
 from app.standards import STANDARDS_AND_SOPS
 
@@ -489,6 +489,19 @@ try:
         db.add_all(_maintenances)
         db.commit()
         print(f"✅ Demo 設備維護紀錄 {len(_maintenances)} 筆建立完成！")
+
+    # ── 設備不可用時段 ────────────────────────────────────────────────────
+    if db.query(DeviceBlockedPeriod).count() == 0:
+        db.add_all([
+            DeviceBlockedPeriod(
+                device_id="CH-05",
+                start_time=_now - datetime.timedelta(days=30),
+                end_time=_now + datetime.timedelta(days=180),
+                reason="設備送廠定期大修，預計 6 個月後歸還",
+            ),
+        ])
+        db.commit()
+        print("✅ Demo 設備不可用時段 1 筆建立完成！")
 
     # ── 設備時序資料 ──────────────────────────────────────────────────────
     if db.query(DeviceData).count() == 0:

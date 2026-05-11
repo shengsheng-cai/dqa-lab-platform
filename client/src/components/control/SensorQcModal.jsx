@@ -122,13 +122,13 @@ const SensorQcModal = ({ deviceId, onClose }) => {
             }}
           >
             <span>溫度 μ = {stats.temp_mean}°C</span>
-            <span style={{ color: "#f85149" }}>UCL = {stats.temp_ucl}°C</span>
-            <span style={{ color: "#f85149" }}>LCL = {stats.temp_lcl}°C</span>
+            <span style={{ color: "#f85149" }}>UCL 上控制限 = {stats.temp_ucl}°C</span>
+            <span style={{ color: "#f85149" }}>LCL 下控制限 = {stats.temp_lcl}°C</span>
             {stats.humi_mean != null && (
               <>
                 <span style={{ marginLeft: 12 }}>濕度 μ = {stats.humi_mean}%</span>
-                <span style={{ color: "#f85149" }}>UCL = {stats.humi_ucl}%</span>
-                <span style={{ color: "#f85149" }}>LCL = {stats.humi_lcl}%</span>
+                <span style={{ color: "#f85149" }}>UCL 上控制限 = {stats.humi_ucl}%</span>
+                <span style={{ color: "#f85149" }}>LCL 下控制限 = {stats.humi_lcl}%</span>
               </>
             )}
             <span style={{ marginLeft: "auto" }}>{stats.data.length} 筆資料（近 {stats.hours}h）</span>
