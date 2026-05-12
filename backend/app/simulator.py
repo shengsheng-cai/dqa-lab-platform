@@ -62,11 +62,23 @@ def _tick_dwell_half(item: dict, elapsed: float, dwell_seconds: float) -> None:
         item["dwell_half_fired"] = True
 
 
+def _accum_dwell_elapsed(
+    dwell_key: str, dwell_start, now, elapsed_seconds: float, dwell_elapsed_times: dict
+) -> float:
+    """首次進入 dwell 時以 wall-clock 播種，後續每 tick 累計 elapsed_seconds（已 cap 10s）。"""
+    if dwell_key not in dwell_elapsed_times:
+        dwell_elapsed_times[dwell_key] = max(0.0, (now - dwell_start).total_seconds())
+    else:
+        dwell_elapsed_times[dwell_key] += elapsed_seconds
+    return dwell_elapsed_times[dwell_key]
+
+
 def _advance_sim_phase(
     device_id: str,
     item: dict,
     now,
     dwell_start_times: dict,
+    dwell_elapsed_times: dict,
     p: _SimParams,
 ) -> float:
     ambient = AMBIENT_TEMP
@@ -127,9 +139,10 @@ def _advance_sim_phase(
         new_temp = p.high_temp
         dwell_key = f"{device_id}_high"
         dwell_start = _restore_dwell_start("high", "dwell_high_start")
-        elapsed = (now - dwell_start).total_seconds()
+        elapsed = _accum_dwell_elapsed(dwell_key, dwell_start, now, p.elapsed_seconds, dwell_elapsed_times)
         _tick_dwell_half(item, elapsed, p.dwell_seconds)
         if elapsed >= p.dwell_seconds:
+            del dwell_elapsed_times[dwell_key]
             dwell_start_times.pop(dwell_key, None)
             item.pop("dwell_high_start", None)
             item["dwell_half_fired"] = False
@@ -148,9 +161,10 @@ def _advance_sim_phase(
         new_temp = p.low_temp
         dwell_key = f"{device_id}_low"
         dwell_start = _restore_dwell_start("low", "dwell_low_start")
-        elapsed = (now - dwell_start).total_seconds()
+        elapsed = _accum_dwell_elapsed(dwell_key, dwell_start, now, p.elapsed_seconds, dwell_elapsed_times)
         _tick_dwell_half(item, elapsed, p.dwell_seconds)
         if elapsed >= p.dwell_seconds:
+            del dwell_elapsed_times[dwell_key]
             dwell_start_times.pop(dwell_key, None)
             item.pop("dwell_low_start", None)
             item["dwell_half_fired"] = False
@@ -167,7 +181,7 @@ def _advance_sim_phase(
 
 
 async def _sim_handle_running(
-    device_id: str, item: dict, now, dwell_start_times: dict, elapsed_seconds: float
+    device_id: str, item: dict, now, dwell_start_times: dict, dwell_elapsed_times: dict, elapsed_seconds: float
 ) -> None:
     standard_id = item.get("standard_id")
     standard = get_standard(standard_id) if standard_id else None
@@ -187,7 +201,7 @@ async def _sim_handle_running(
         target_humi = standard.get("humidity_rh_percent")
 
     new_temp = _advance_sim_phase(
-        device_id, item, now, dwell_start_times,
+        device_id, item, now, dwell_start_times, dwell_elapsed_times,
         _SimParams(
             high_temp=high_temp,
             low_temp=low_temp,
@@ -287,6 +301,7 @@ def _sim_handle_emergency(item: dict, current_temp: float, current_humi: float) 
 async def data_simulator(cache: dict, locks: dict):
     write_counters: dict = {}
     dwell_start_times: dict = {}
+    dwell_elapsed_times: dict = {}
     last_tick: dict = {}
 
     while True:
@@ -315,7 +330,7 @@ async def data_simulator(cache: dict, locks: dict):
             last_tick[device_id] = now
 
             if status == "RUNNING":
-                await _sim_handle_running(device_id, item, now, dwell_start_times, elapsed_seconds)
+                await _sim_handle_running(device_id, item, now, dwell_start_times, dwell_elapsed_times, elapsed_seconds)
                 # 測試自然完成（ramp_to_ambient 降溫到 25°C）
                 if item.get("sim_phase") == "done":
                     execution_id = item.get("active_execution_id")

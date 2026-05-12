@@ -189,11 +189,11 @@ try:
         )
         _exec_running_ch01 = SopExecution(
             sop_id="iec60068_nb_-40_+85_5cycle", device_id="CH-01", operator="林怡君",
-            test_started_at=_now,
+            test_started_at=_now - datetime.timedelta(hours=2, minutes=35),
         )
         _exec_running_ch02 = SopExecution(
             sop_id="iec60068_ab_-25_16h", device_id="CH-02", operator="陳柏宇",
-            test_started_at=_now,
+            test_started_at=_now - datetime.timedelta(hours=8, minutes=50),
         )
         db.add_all([_exec_done_1, _exec_done_2, _exec_done_3, _exec_done_4,
                     _exec_running_ch01, _exec_running_ch02])
@@ -207,24 +207,26 @@ try:
     if db.query(DeviceState).count() == 0:
         db.add_all([
             DeviceState(
-                device_id="CH-01", status="RUNNING", temperature=25.0, humidity=52.0,
-                sim_phase="ramp_to_low", sim_cycle=1,
+                device_id="CH-01", status="RUNNING", temperature=85.0, humidity=52.0,
+                sim_phase="dwell_high", sim_cycle=0,
+                dwell_high_start=_now - datetime.timedelta(hours=1),  # 1h into 2h dwell，demo 開場即見駐留
                 running_sop_id="iec60068_nb_-40_+85_5cycle",
                 running_sop_name="Test Nb 漸進溫度循環：-40°C ↔ +85°C，2°C/min，5 循環",
                 standard_id="iec60068_nb_-40_+85_5cycle",
                 active_sop_json=_sop_json("iec60068_nb_-40_+85_5cycle"),
-                started_at=_now,
+                started_at=_now - datetime.timedelta(hours=2, minutes=35),
                 active_execution_id=_exec_running_ch01_id,
                 updated_at=_now,
             ),
             DeviceState(
-                device_id="CH-02", status="RUNNING", temperature=25.0, humidity=55.0,
-                sim_phase="ramp_to_low", sim_cycle=1,
+                device_id="CH-02", status="RUNNING", temperature=-25.0, humidity=10.0,
+                sim_phase="dwell_high", sim_cycle=0,
+                dwell_high_start=_now - datetime.timedelta(hours=8),  # 8h into 16h dwell
                 running_sop_id="iec60068_ab_-25_16h",
                 running_sop_name="低溫儲存 Test Ab：-25°C，16 小時（非通電）",
                 standard_id="iec60068_ab_-25_16h",
                 active_sop_json=_sop_json("iec60068_ab_-25_16h"),
-                started_at=_now,
+                started_at=_now - datetime.timedelta(hours=8, minutes=50),
                 active_execution_id=_exec_running_ch02_id,
                 updated_at=_now,
             ),

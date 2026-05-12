@@ -81,6 +81,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   const prevSimCycleRef = useRef(0);
   const prevDwellHalfFiredRef = useRef(false);
   const savingExecutionRef = useRef(new Set());
+  const pendingDwellTriggersRef = useRef([]);
 
   const data = allDevices[selectedDevice] || {
     status: "OFFLINE",
@@ -314,6 +315,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
     prevSimPhaseRef.current = simPhase;
     prevSimCycleRef.current = simCycle;
     prevDwellHalfFiredRef.current = dwellHalfFired;
+    pendingDwellTriggersRef.current = [];
   }, [selectedDevice]); // eslint-disable-line
 
   // 載入已執行中設備時，根據當前 sim_phase 恢復自動步驟狀態
@@ -387,13 +389,24 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
     if (!prevPhase.startsWith("ramp") && simPhase.startsWith("ramp_to") && simPhase !== "ramp_to_ambient") {
       autoCheck("first_ramp");
     }
-    // 進入第一個 dwell_high
+    // 進入 dwell 前驗證溫度已達標，未達標則暫存等溫度穩定後再確認
+    const dwellTolerance = curDs.activeSop?.temp_tolerance ?? 3;
+    const dwellCurTemp = allDevices[selectedDevice]?.temperature;
     if (prevPhase !== "dwell_high" && simPhase === "dwell_high") {
-      autoCheck("first_dwell");
+      const targetHigh = curDs.activeSop?.high_temperature;
+      if (targetHigh == null || dwellCurTemp == null || Math.abs(dwellCurTemp - targetHigh) <= dwellTolerance) {
+        autoCheck("first_dwell");
+      } else {
+        pendingDwellTriggersRef.current.push({ trigger: "first_dwell", target: targetHigh, tolerance: dwellTolerance });
+      }
     }
-    // 進入 dwell_low
     if (prevPhase !== "dwell_low" && simPhase === "dwell_low") {
-      autoCheck("second_dwell");
+      const targetLow = curDs.activeSop?.low_temperature;
+      if (targetLow == null || dwellCurTemp == null || Math.abs(dwellCurTemp - targetLow) <= dwellTolerance) {
+        autoCheck("second_dwell");
+      } else {
+        pendingDwellTriggersRef.current.push({ trigger: "second_dwell", target: targetLow, tolerance: dwellTolerance });
+      }
     }
     // 循環過半
     if (simCycle !== prevCycle && simCycle >= Math.ceil(totalCycles / 2)) {
@@ -427,6 +440,38 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
       });
     }
   }, [simPhase, simCycle, dwellHalfFired]); // eslint-disable-line
+
+  // 溫度達標後補發延遲的 dwell auto-trigger（溫度尚未穩定時的 fallback）
+  useEffect(() => {
+    if (!pendingDwellTriggersRef.current.length) return;
+    const curTemp = allDevices[selectedDevice]?.temperature;
+    if (curTemp == null) return;
+    const curDs = deviceStatesRef.current[selectedDevice];
+    if (!curDs?.activeSop || !ACTIVE_STATUSES.includes(allDevices[selectedDevice]?.status)) return;
+
+    const stillPending = [];
+    const pendingChecks = [];
+    let changed = false;
+    for (const { trigger, target, tolerance } of pendingDwellTriggersRef.current) {
+      if (Math.abs(curTemp - target) <= tolerance) {
+        const ids = autoTriggerMapRef.current[trigger] || [];
+        ids.forEach((id) => {
+          if (!curDs.completedSteps[id]) { pendingChecks.push(id); changed = true; }
+        });
+      } else {
+        stillPending.push({ trigger, target, tolerance });
+      }
+    }
+    pendingDwellTriggersRef.current = stillPending;
+    if (changed) {
+      setDeviceStates((prev) => {
+        const prevDs = prev[selectedDevice];
+        const newCompleted = { ...prevDs.completedSteps };
+        pendingChecks.forEach((id) => { newCompleted[id] = true; });
+        return { ...prev, [selectedDevice]: { ...prevDs, completedSteps: newCompleted } };
+      });
+    }
+  }, [allDevices, selectedDevice]); // eslint-disable-line
 
   const startSop = async (confirmedOperator) => {
     if (!testData || starting) return;
