@@ -101,18 +101,6 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     cache = request.app.state.AICM_CACHE
     sop_id, device_id, device = _validate_start_sop_input(payload, cache)
 
-    # 檢查設備是否在不可用時段內
-    now_dt = datetime.datetime.now(datetime.timezone.utc)
-    with SessionLocal() as db:
-        active_block = db.query(DeviceBlockedPeriod).filter(
-            DeviceBlockedPeriod.device_id == device_id,
-            DeviceBlockedPeriod.start_time <= now_dt,
-            DeviceBlockedPeriod.end_time >= now_dt,
-        ).first()
-    if active_block:
-        reason = active_block.reason or "不可用時段"
-        raise HTTPException(status_code=409, detail=f"{device_id} 目前在不可用時段內（{reason}），無法啟動測試")
-
     # 檢查設備是否有排程進行中（IDLE 條件間隙仍不允許手動啟動）
     with SessionLocal() as db:
         running_schedule = db.query(Schedule).filter(

@@ -19,6 +19,18 @@
   - 緊急停止推播：`devices.py`
 - `push_message` 推播給 `LINE_USER_ID`（管理者個人）。
 
+## Async/Sync 慣例
+
+- 路由 handler 若只做 sync DB 查詢，宣告為 `def`（非 `async def`），FastAPI 自動丟進 threadpool
+- 路由 handler 若需要 `asyncio.create_task` / `async with lock` 等 async 原語，才宣告 `async def`
+- `async def` 路由內部禁止直接呼叫 sync blocking I/O（SQLAlchemy session 等），需用 `asyncio.to_thread` 包裝
+
+## Datetime 慣例
+
+- DB 寫入一律用 `_now_utc_naive()`（`utils.py`），保持與 SQLite naive datetime 欄位一致
+- `_now_utc()` 只用於 HTTP response、推播文字等不寫入 DB 的場景
+- `datetime.datetime.now(datetime.timezone.utc)` 禁止出現在 DB 寫入路徑
+
 ## 自動排程邏輯
 
 所有計算邏輯集中在 `schedule_service.py`（service layer），routes 只負責 HTTP 入出。

@@ -29,7 +29,7 @@ jobs:
           git rm --cached docs/ -r --ignore-unmatch --quiet
           git rm --cached backend/rag_cache.pkl --ignore-unmatch --quiet
 
-          git commit -m "deploy: $(git log -1 --format='%h %s' origin/main)"
+          git commit -m "deploy: $(git log -1 --format='%h %s' HEAD)"
 
           git push \
             "https://user:${HF_TOKEN}@huggingface.co/spaces/sshengsheng/dqa-lab-platform" \

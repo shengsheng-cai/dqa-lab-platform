@@ -1,3 +1,7 @@
+[project]
+name = "dqa-lab-digital-twin"
+requires-python = ">=3.13"
+
 [tool.ruff]
 line-length = 120
 exclude = [

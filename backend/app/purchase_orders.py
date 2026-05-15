@@ -1,9 +1,9 @@
-import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from .models import SessionLocal, PurchaseOrder, Fixture
 from .auth import require_admin
+from .utils import _now_utc_naive
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
 
@@ -130,7 +130,7 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, _: None = De
 
         if body.status == "arrived" and order.status != "arrived":
             order.status = "arrived"
-            order.arrived_at = datetime.datetime.now(datetime.timezone.utc)
+            order.arrived_at = _now_utc_naive()
             # 累加庫存
             arrived_qty = (
                 body.arrived_quantity if body.arrived_quantity and body.arrived_quantity > 0

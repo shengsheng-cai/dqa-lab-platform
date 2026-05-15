@@ -64,7 +64,7 @@ async def push_message(text: str):
 
 def _verify_signature(body: bytes, signature: str) -> bool:
     """驗證來自 LINE 的 Webhook 請求簽名"""
-    secret = os.getenv("LINE_CHANNEL_SECRET", "")
+    secret = LINE_CHANNEL_SECRET
     if not secret:
         return True
     hash_ = hmac.new(

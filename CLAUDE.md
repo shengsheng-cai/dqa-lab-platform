@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 層 | 技術 |
 |----|------|
 | 後端 | FastAPI + SQLAlchemy 2.0 + SQLite + APScheduler |
-| 前端 | React 19 + Vite 7 + Tailwind 4 + Recharts（目錄：`client/`） |
+| 前端 | React 19 + Vite 7 + Recharts（目錄：`client/`） |
 | AI | Google Gemini 2.5 Flash-Lite（`google-genai`） |
 | 報告 | ReportLab（PDF）+ pandas + openpyxl（Excel） |
 

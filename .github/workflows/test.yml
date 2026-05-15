@@ -16,6 +16,13 @@ jobs:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
       - run: pip install -r backend/requirements.txt
+      - run: cd client && npm ci
       - run: ruff check backend/
       - run: cd backend && python -m pytest
+      - run: cd client && npm test

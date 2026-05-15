@@ -240,12 +240,12 @@ def build_device_list(cache: dict) -> list:
 
 
 @router.get("/api/devices", response_model=list[DeviceOut])
-async def get_all_devices(request: Request):
+def get_all_devices(request: Request):
     return build_device_list(request.app.state.AICM_CACHE)
 
 
 @router.get("/api/devices/{device_id}/history", response_model=list[DeviceHistoryPoint])
-async def get_device_history(device_id: str, request: Request):
+def get_device_history(device_id: str, request: Request):
     device = _get_device(request.app.state.AICM_CACHE, device_id)
 
     started_at = device.get("started_at")
@@ -285,7 +285,7 @@ async def get_device_history(device_id: str, request: Request):
 
 
 @router.get("/api/devices/{device_id}/sensor-stats", response_model=SensorStatsOut)
-async def get_sensor_stats(device_id: str, request: Request, hours: int = 24):
+def get_sensor_stats(device_id: str, request: Request, hours: int = 24):
     _get_device(request.app.state.AICM_CACHE, device_id)
     cutoff = _now_utc_naive() - datetime.timedelta(hours=hours)
 
@@ -350,7 +350,7 @@ async def get_sensor_stats(device_id: str, request: Request, hours: int = 24):
 
 
 @router.get("/api/latest", response_model=DeviceBasicOut)
-async def get_latest(request: Request):
+def get_latest(request: Request):
     cache = request.app.state.AICM_CACHE
     if not cache or DEVICE_IDS[0] not in cache:
         return {
@@ -409,7 +409,7 @@ async def emergency_stop(device_id: str, request: Request, _: None = Depends(req
                     note=f"操作人員觸發緊急停止（{operator}）",
                     completed_steps=device.get("completed_steps", 0),
                     total_steps=device.get("total_steps", 0),
-                    created_at=_now_utc(),
+                    created_at=_now_utc_naive(),
                 )
             )
 
@@ -420,7 +420,7 @@ async def emergency_stop(device_id: str, request: Request, _: None = Depends(req
                 SopExecution.test_started_at.isnot(None)
             ).first()
             if execution:
-                execution.test_ended_at = _now_utc()
+                execution.test_ended_at = _now_utc_naive()
 
             user_id = getattr(request.state, "user_id", None)
             log_audit(db, str(user_id or "unknown"), "admin", "EMERGENCY_STOP", "device", device_id,

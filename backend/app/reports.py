@@ -623,16 +623,16 @@ def download_pdf_report(execution_id: int):
         sop_data = STANDARDS_AND_SOPS.get(execution.sop_id, {})
         report_no = f"RPT-{execution.created_at.strftime('%Y%m%d')}-{execution_id:03d}"
 
-        pdf_bytes = _build_pdf(
-            execution, steps, device_records, sop_data, report_no, truncated
-        )
+    pdf_bytes = _build_pdf(
+        execution, steps, device_records, sop_data, report_no, truncated
+    )
 
-        filename = f"{report_no}_{execution.sop_id}.pdf"
-        encoded_filename = urllib.parse.quote(filename)
-        return StreamingResponse(
-            iter([pdf_bytes]),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
-            },
-        )
+    filename = f"{report_no}_{execution.sop_id}.pdf"
+    encoded_filename = urllib.parse.quote(filename)
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
+    )

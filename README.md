@@ -28,7 +28,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 
 | | |
 |---|---|
-| **124 automated tests** | Device state machine · Schedule calculation · Fixture lifecycle · Three-module integration · SOP validation · Measurement uncertainty · Calibration & maintenance CRUD |
+| **135 automated tests** | Device state machine · Schedule calculation · Fixture lifecycle · Three-module integration · SOP validation · Measurement uncertainty · Calibration & maintenance CRUD · Frontend utility (Vitest) |
 | **GitHub Actions CI/CD** | Push-triggered test gate + auto-deploy to HF Spaces |
 | **RAG + backend validation** | Gemini Flash-Lite with retrieval-augmented generation — AI output validated server-side before DB write |
 | **Three-module integration** | AI → Schedule → Fixture fully automated (reserve → loan → return) |
@@ -48,7 +48,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 
 | 模組 | 功能摘要 |
 |------|---------|
-| 🖥️ **控制中心** | 多台溫箱即時監控（溫濕度、狀態、倒數計時）；WebSocket server push 1s 推播取代輪詢；左側欄依分頁顯示排程概況 / 治具摘要 / 人員摘要；📊 感測器 QC 控制圖（24h 歷史 + UCL/LCL mean ± 3σ + 異常點標記）|
+| 🖥️ **控制中心** | 多台溫箱即時監控（溫濕度、狀態、倒數計時）；WebSocket server push 1s 推播取代輪詢；左側欄依分頁顯示排程概況 / 治具摘要 / 人員摘要 / 校驗狀態摘要；📊 感測器 QC 控制圖（24h 歷史 + UCL/LCL mean ± 3σ + 異常點標記）|
 | 🔧 **SOP 執行引擎** | 三步驟選法規 → 版本 → 條件，步驟自動確認、admin 手動接管、ISO 17025 報告下載（CSV + PDF） |
 | 📊 **量測不確定度** | GUM 合規自動計算：Type A（穩定段重複測量）＋ Type B（感測器解析度）→ 組合 uc → 擴充 U（k=2, 95%），輸出於 PDF 報告 Section 5 |
 | 🗄️ **治具借還管理** | 借出 / 歸還 / 逾期追蹤、損壞遺失清單、月盤點、採購閉環、Excel 批次匯入；盤點紀錄批次摺疊 / 整批刪除 / 逐條編輯；排程聯動（預約→自動借出→自動歸還） |
@@ -84,7 +84,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 
 ## 快速啟動
 
-**前置需求：** Python 3.13+、Node.js 18+、macOS / Linux / WSL2
+**前置需求：** Python 3.13+、Node.js 20+、macOS / Linux / WSL2
 
 ```bash
 make install                  # 安裝所有依賴
@@ -123,7 +123,7 @@ cp .env.example backend/.env
 | **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Flash-Lite）+ 可切換 RAG Embedding（Gemini / sentence-transformers） |
 | **通知** | LINE Messaging API（條件完成 / 測試完成 / 緊急停止推播）|
-| **品質** | pytest 124 tests · GitHub Actions CI/CD · Alembic 版本控制遷移 |
+| **品質** | pytest 124 tests · Vitest 11 tests · GitHub Actions CI/CD · Alembic 版本控制遷移 |
 
 ---
 

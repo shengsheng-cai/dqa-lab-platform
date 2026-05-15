@@ -16,3 +16,10 @@
 
 - 測試直接對 in-memory SQLite 操作，避免 mock/prod 行為不一致
 - 例外：`SessionLocal` 可用 `patch` 注入 in-memory session（`test_linkage.py` 的做法），DB 本身仍用真實資料
+
+## Frontend 單元測試（Vitest）
+
+- 測試檔放在 `client/src/__tests__/`，命名 `*.test.js`
+- 執行：`cd client && npm test`（`vitest run`）；監看模式：`npm run test:watch`
+- 測試目標：純邏輯的 utility 函式（`errorMessages.js`、`timezone.js`、`download.js`）
+- 不測 React 元件渲染（無 jsdom 設定）；元件正確性透過瀏覽器手動驗證

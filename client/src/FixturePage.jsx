@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import api from "./api";
-const settle = (p) => p.then((r) => r.data).catch((e) => { console.warn("[FixturePage] API fail:", e?.response?.status, e?.config?.url); return null; });
 import { downloadBlob } from "./utils/download";
 import { formatLocal } from "./utils/timezone";
 import { useToast } from "./components/Toast";
 import ImportModal from "./components/fixture/ImportModal";
 import LoanModal from "./components/fixture/LoanModal";
+
+const settle = (p) => p.then((r) => r.data).catch((e) => { console.warn("[FixturePage] API fail:", e?.response?.status, e?.config?.url); return null; });
 import SetKeeperModal from "./components/fixture/SetKeeperModal";
 import ReturnModal from "./components/fixture/ReturnModal";
 import AddEditModal from "./components/fixture/AddEditModal";

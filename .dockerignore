@@ -40,5 +40,4 @@ docs
 # macOS
 .DS_Store
 
-# Phase 3 未啟用代碼的依賴
-~/Downloads/PyKsonLib-*
+backend/uploads/
