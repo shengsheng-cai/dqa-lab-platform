@@ -309,7 +309,9 @@ def _extract_std_from_history(history: list) -> list[str]:
     return match_std_keys(all_text)
 
 
-async def _build_context(msg: str, history: list = []) -> tuple[str, list[str]]:
+async def _build_context(msg: str, history: list = None) -> tuple[str, list[str]]:
+    if history is None:
+        history = []
     matched_stds = match_std_keys(msg)
     if not matched_stds and history:
         matched_stds = _extract_std_from_history(history)

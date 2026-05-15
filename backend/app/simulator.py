@@ -277,7 +277,7 @@ async def _sim_handle_finishing(
             _save_device_state(device_id, item)
         logger.info(f"[{device_id}] 手動停止降溫完成，回待機。")
         if not skip_push:
-            push_text = _try_complete_schedule_for_device(device_id)
+            push_text = await asyncio.to_thread(_try_complete_schedule_for_device, device_id)
             if push_text is None:
                 push_text = f"✅ 測試完成\n設備：{device_id}\n測試：{sop_name}"
             asyncio.create_task(push_message(push_text))
