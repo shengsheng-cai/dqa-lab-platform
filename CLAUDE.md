@@ -114,7 +114,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 常用指令
 
 ```bash
-cp .env.example .env           # 首次：填入 ADMIN_PASSWORD、GEMINI_API_KEY 等
+cp .env.example backend/.env   # 首次：填入 ADMIN_PASSWORD、GEMINI_API_KEY 等
 make install                   # 安裝所有依賴（pip + npm）
 python backend/init_db.py      # 初始化資料庫（首次）
 make dev                       # 啟動全部服務（uvicorn:8000 + vite:5173 + ngrok）
