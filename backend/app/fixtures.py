@@ -418,7 +418,7 @@ def download_template():
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=fixture_template.xlsx"},
+        headers={"Content-Disposition": "attachment; filename=\"fixture_template.xlsx\""},
     )
 
 
@@ -467,7 +467,7 @@ def export_fixtures():
             buf,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={
-                "Content-Disposition": "attachment; filename=fixtures_export.xlsx"
+                "Content-Disposition": "attachment; filename=\"fixtures_export.xlsx\""
             },
         )
     finally:

@@ -85,5 +85,5 @@ def export_audit_logs(_: None = Depends(require_admin)):
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv; charset=utf-8-sig",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
     )

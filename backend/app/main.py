@@ -214,11 +214,15 @@ _static_dir = Path(__file__).parent.parent.parent / "static"
 if _static_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="assets")
 
+    _static_dir_resolved = _static_dir.resolve()
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404)
-        target = _static_dir / full_path
+        target = (_static_dir / full_path).resolve()
+        if not target.is_relative_to(_static_dir_resolved):
+            raise HTTPException(status_code=404)
         if target.is_file():
             return FileResponse(target)
         return FileResponse(_static_dir / "index.html")
