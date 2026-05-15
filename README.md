@@ -105,6 +105,8 @@ make test                     # 執行後端測試
 cp .env.example backend/.env
 ```
 
+Docker / Hugging Face Spaces 部署時不依賴 `backend/.env`，改由平台 Secrets 或環境變數提供相同設定。
+
 **必須設置（可選功能會自動跳過）：**
 - `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com) 免費申請（Embedding + Flash-Lite）；免費方案每日限制 20 次 AI 諮詢請求
 - `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN` — LINE Developers 後台取得（推播功能）
