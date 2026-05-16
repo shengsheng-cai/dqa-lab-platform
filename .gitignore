@@ -118,3 +118,7 @@ git_log.txt
 .claude/settings.json
 .claude/settings.local.json
 .playwright-mcp/
+
+### Codex / 本機 AI agent 工作資料（不公開）
+.codex/
+chat-history/
