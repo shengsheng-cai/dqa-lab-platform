@@ -196,18 +196,23 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   }, [showToast]);
 
   const [scheduleCounts, setScheduleCounts] = useState({ pending: 0, confirmed: 0, running: 0, done: 0 });
+  const scheduleCountsRef = useRef(null);
 
   useEffect(() => {
-    if (role === "guest") return;
     const fetch = () => {
       api.get("/api/schedules").then((res) => {
         const all = res.data;
-        setScheduleCounts({
+        const next = {
           pending: all.filter(s => s.status === "待審核").length,
           confirmed: all.filter(s => s.status === "已確認").length,
           running: all.filter(s => s.status === "進行中").length,
           done: all.filter(s => s.status === "已完成").length,
-        });
+        };
+        const json = JSON.stringify(next);
+        if (json !== scheduleCountsRef.current) {
+          scheduleCountsRef.current = json;
+          setScheduleCounts(next);
+        }
       }).catch(() => {});
     };
     fetch();
@@ -327,7 +332,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
 
       {/* AI 滑入面板 */}
       <div style={{ position: "fixed", top: 0, right: 0, height: "100%", width: 500, zIndex: 199, transform: aiOpen ? "translateX(0)" : "translateX(100%)", transition: "transform .2s ease", background: "#0d1117", borderLeft: "1px solid #30363d", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <RightPanel onClose={() => setAiOpen(false)} onApplySchedule={handleApplySchedule} />
+        <RightPanel role={role} onClose={() => setAiOpen(false)} onApplySchedule={handleApplySchedule} />
       </div>
 
       {role === "guest" && (

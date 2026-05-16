@@ -29,7 +29,7 @@ function pickRandom(n, pool, exclude = []) {
   return shuffled.slice(0, n);
 }
 
-export default function RightPanel({ onClose, onApplySchedule }) {
+export default function RightPanel({ role, onClose, onApplySchedule }) {
   const {
     activeId,
     conversations,
@@ -71,6 +71,7 @@ export default function RightPanel({ onClose, onApplySchedule }) {
   const currentIdx = convIds.indexOf(activeId);
   const activeConv = conversations[activeId];
   const activeTitle = activeConv?.title || "新對話";
+  const canApplySchedule = role === "admin";
 
   const isBlocked = loading || cooldownSeconds > 0;
 
@@ -353,6 +354,7 @@ export default function RightPanel({ onClose, onApplySchedule }) {
             onInputChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onApplySchedule={onApplySchedule}
+            canApplySchedule={canApplySchedule}
             compact
           />
         </div>

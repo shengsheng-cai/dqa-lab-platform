@@ -218,7 +218,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   // 設備為 IDLE 時主動查詢是否有等待確認的排程，並補齊 savedExecutionId
   useEffect(() => {
     if (data.status === IDLE_STATUS) {
-      api.get("/api/schedules?status=RUNNING").then((r) => {
+      api.get("/api/schedules?status=進行中").then((r) => {
         const match = r.data.find((s) => s.device_id === selectedDevice);
         setPendingSchedule(match || null);
       }).catch(() => {});
