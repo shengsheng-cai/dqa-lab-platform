@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import logging
 import datetime
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -19,11 +20,14 @@ from .rag import (
 )
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
+logger = logging.getLogger("ai")
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}"
 META_PREFIX = "\n[META:"
 META_SUFFIX = "]"
+# Gemini RPD hit 時常見 retry 接近一天；超過此值視為「今日額度已用完」提示
+DAILY_QUOTA_WAIT_THRESHOLD_SECONDS = 3600
 
 _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速找到適合的溫箱測試條件。只能用繁體中文回答，禁止簡體中文。
 
@@ -465,17 +469,31 @@ async def standards_query_stream(req: QueryRequest):
                     json=payload,
                 ) as resp:
                     if resp.status_code == 429:
+                        wait_seconds = 60
+                        err_text = ""
                         try:
                             err = await resp.aread()
-                            match = re.search(r"retry in ([\d.]+)s", err.decode())
-                            wait = (
-                                f"{int(float(match.group(1)))} 秒"
-                                if match
-                                else "一分鐘"
-                            )
+                            err_text = err.decode(errors="ignore")
+                            match = re.search(r"retry in ([\d.]+)s", err_text)
+                            if match:
+                                wait_seconds = max(1, int(float(match.group(1))))
                         except Exception:
-                            wait = "一分鐘"
-                        yield f"\n\n[AI 服務繁忙，請稍候 {wait} 再試]"
+                            pass
+
+                        if wait_seconds >= DAILY_QUOTA_WAIT_THRESHOLD_SECONDS:
+                            logger.warning(
+                                "[AI] Gemini quota exhausted (likely daily limit): retry_in=%ss, detail=%s",
+                                wait_seconds,
+                                err_text[:300] if err_text else "n/a",
+                            )
+                            yield "\n\n[AI 今日額度已用完，請明日再試。建議改用本地端執行完整 demo。]"
+                        else:
+                            logger.warning(
+                                "[AI] Gemini rate limited: retry_in=%ss, detail=%s",
+                                wait_seconds,
+                                err_text[:300] if err_text else "n/a",
+                            )
+                            yield f"\n\n[AI 服務繁忙，請稍候 {wait_seconds} 秒再試]"
                         return
                     elif resp.status_code != 200:
                         yield f"\n\n[AI 服務錯誤：{resp.status_code}]"

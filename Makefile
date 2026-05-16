@@ -8,7 +8,7 @@ help:
 	@echo "🛠️  DQA Lab 控制指令："
 	@echo "  make install - 安裝後端與前端依賴"
 	@echo "  make dev     - 一鍵啟動所有服務（含 ngrok 自動更新 LINE Webhook）"
-	@echo "  make test    - 執行後端測試"
+	@echo "  make test    - 執行後端 + 前端測試"
 	@echo "  make lint    - 執行 PEP 8 檢查（ruff）"
 	@echo "  make clean   - 關閉所有服務並清理殘留程序"
 	@echo "  make ngrok   - 單獨啟動 ngrok（通常不需要）"
@@ -39,6 +39,8 @@ clean:
 test:
 	@echo "🧪 執行後端測試..."
 	cd backend && ../$(PYTHON) -m pytest
+	@echo "🧪 執行前端測試..."
+	cd client && npm test
 	@echo "✅ 測試完成。"
 
 # 5. PEP 8 檢查

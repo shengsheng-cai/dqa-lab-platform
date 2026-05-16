@@ -180,7 +180,13 @@ function CollapsibleBubble({ children, contentKey }) {
 }
 
 // ── 單則訊息 ─────────────────────────────────────────────────
-export default function MessageBubble({ m, onRetry, onApplySchedule, isFirstAssistant = true }) {
+export default function MessageBubble({
+  m,
+  onRetry,
+  onApplySchedule,
+  canApplySchedule = true,
+  isFirstAssistant = true,
+}) {
   const [copied, setCopied] = useState(false);
   const simplified = m.role === "assistant" && hasSimplified(m.content);
 
@@ -262,14 +268,20 @@ export default function MessageBubble({ m, onRetry, onApplySchedule, isFirstAssi
             </div>
 
             {m.sop_ids?.length > 0 && onApplySchedule && (
-              <button
-                onClick={() => onApplySchedule(m.sop_ids)}
-                style={S.applyBtn}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#1c3a5e")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              >
-                📅 申請此測試
-              </button>
+              <>
+                <button
+                  onClick={() => onApplySchedule(m.sop_ids)}
+                  disabled={!canApplySchedule}
+                  style={canApplySchedule ? S.applyBtn : S.applyBtnDisabled}
+                  onMouseEnter={canApplySchedule ? (e) => (e.currentTarget.style.background = "#1c3a5e") : undefined}
+                  onMouseLeave={canApplySchedule ? (e) => (e.currentTarget.style.background = "transparent") : undefined}
+                >
+                  📅 申請此測試
+                </button>
+                {!canApplySchedule && (
+                  <div style={S.applyHint}>請管理員登入後申請</div>
+                )}
+              </>
             )}
           </>
         )}
@@ -375,5 +387,24 @@ const S = {
     cursor: "pointer",
     transition: "background .15s",
     marginTop: 8,
+  },
+  applyBtnDisabled: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: "transparent",
+    border: "1px solid #30363d",
+    color: "#6e7681",
+    fontSize: 12,
+    fontWeight: 600,
+    padding: "5px 12px",
+    borderRadius: 6,
+    cursor: "not-allowed",
+    marginTop: 8,
+  },
+  applyHint: {
+    marginTop: 4,
+    fontSize: 11,
+    color: "#8b949e",
   },
 };

@@ -82,6 +82,17 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 
 ---
 
+## 5 分鐘體驗完整流程
+
+1. 點 Live Demo → 訪客模式 → 🚀 一鍵訪客體驗
+2. 左側看 CH-01/CH-02 正在跑（溫度曲線即時更新）
+3. 切換「排程」tab → 看甘特圖與進行中排程
+4. 右下角 🤖 → 問「工業乙太網設備要選哪個測試標準？」
+5. AI 推薦後按「📅 申請此測試」（需管理員登入才能提交）
+6. 切換「治具」tab → 看借出中治具與排程聯動
+
+---
+
 ## 快速啟動
 
 **前置需求：** Python 3.13+、Node.js 20+、macOS / Linux / WSL2

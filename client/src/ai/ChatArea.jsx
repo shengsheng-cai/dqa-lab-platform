@@ -41,6 +41,7 @@ export default function ChatArea({
   onInputChange,
   onKeyDown,
   onApplySchedule,
+  canApplySchedule = true,
   compact = false,
 }) {
   const isCooling = cooldownSeconds > 0;
@@ -116,6 +117,7 @@ export default function ChatArea({
               m={m}
               onRetry={() => onRetry(i)}
               onApplySchedule={onApplySchedule}
+              canApplySchedule={canApplySchedule}
               isFirstAssistant={isFirstAssistant}
             />
           );
