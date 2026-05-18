@@ -1,7 +1,10 @@
 """
 T-05: auth 模組純函數測試
 """
+import time
+
 import pytest
+import app.auth as auth_module
 from app.auth import hash_password, verify_password, _get_tracker, _fail_tracker
 
 
@@ -64,3 +67,36 @@ def test_different_ips_are_independent():
     tb = _get_tracker("10.0.0.2")
     ta["count"] = 5
     assert tb["count"] == 0
+
+
+def test_tracker_evicts_old_non_blocked_entry(monkeypatch):
+    monkeypatch.setattr(auth_module, "_FAIL_TRACKER_MAXSIZE", 3)
+    now = time.time()
+    _fail_tracker.update({
+        "ip-old": {"count": 2, "blocked_until": 0.0, "last_seen": now - 100},
+        "ip-recent": {"count": 1, "blocked_until": 0.0, "last_seen": now - 10},
+        "ip-blocked": {"count": 0, "blocked_until": now + 300, "last_seen": now - 50},
+    })
+
+    _get_tracker("ip-new")
+
+    assert "ip-new" in _fail_tracker
+    assert "ip-old" not in _fail_tracker
+    assert "ip-recent" in _fail_tracker
+    assert "ip-blocked" in _fail_tracker
+
+
+def test_tracker_does_not_evict_active_blocked_when_full(monkeypatch):
+    monkeypatch.setattr(auth_module, "_FAIL_TRACKER_MAXSIZE", 2)
+    now = time.time()
+    _fail_tracker.update({
+        "ip-a": {"count": 0, "blocked_until": now + 600, "last_seen": now - 20},
+        "ip-b": {"count": 0, "blocked_until": now + 900, "last_seen": now - 10},
+    })
+
+    tracker = _get_tracker("ip-new")
+
+    assert set(_fail_tracker.keys()) == {"ip-a", "ip-b"}
+    assert "ip-new" not in _fail_tracker
+    assert tracker["count"] == 0
+    assert tracker["blocked_until"] == 0.0

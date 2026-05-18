@@ -8,6 +8,8 @@ import re
 import asyncio
 import pickle
 import logging
+import hashlib
+import json
 from pathlib import Path
 import numpy as np
 from typing import Optional
@@ -157,22 +159,37 @@ async def warmup_rag():
 
     current_chunks = _build_chunks()
     current_count = len(current_chunks)
+    current_signature = _chunk_signature(current_chunks)
 
     if RAG_CACHE_PATH.exists():
         try:
             with open(RAG_CACHE_PATH, "rb") as f:
                 cached = pickle.load(f)
-            cached_count = len(cached["chunks"])
+            cached_chunks = cached.get("chunks", [])
+            cached_embeddings = cached.get("embeddings")
+            cached_count = len(cached_chunks)
+            cached_signature = cached.get("chunk_signature")
+            if cached_signature is None:
+                cached_signature = _chunk_signature(cached_chunks)
 
-            if cached_count == current_count:
-                _CHUNKS = cached["chunks"]
-                _EMBEDDINGS = cached["embeddings"]
+            if (
+                cached_count == current_count
+                and cached_signature == current_signature
+                and cached_embeddings is not None
+            ):
+                _CHUNKS = cached_chunks
+                _EMBEDDINGS = cached_embeddings
                 logger.info(f"RAG 從快取載入：{len(_CHUNKS)} 個測試條件")
                 return
-            else:
-                logger.warning(
-                    f"RAG 快取條件數量不符（快取 {cached_count} vs 現在 {current_count}），重新向量化"
-                )
+
+            mismatch_reasons = []
+            if cached_count != current_count:
+                mismatch_reasons.append(f"數量不符（快取 {cached_count} vs 現在 {current_count}）")
+            if cached_signature != current_signature:
+                mismatch_reasons.append("內容簽章不符")
+            if cached_embeddings is None:
+                mismatch_reasons.append("缺 embeddings")
+            logger.warning(f"RAG 快取失效（{'；'.join(mismatch_reasons)}），重新向量化")
         except Exception as e:
             logger.warning(f"RAG 快取讀取失敗，重新向量化：{e}")
 
@@ -185,12 +202,34 @@ async def warmup_rag():
         _EMBEDDINGS = _EMBEDDINGS / np.clip(norms, 1e-9, None)
         logger.info(f"RAG 完成：{len(_CHUNKS)} 個測試條件已向量化")
         with open(RAG_CACHE_PATH, "wb") as f:
-            pickle.dump({"chunks": _CHUNKS, "embeddings": _EMBEDDINGS}, f)
+            pickle.dump(
+                {
+                    "chunks": _CHUNKS,
+                    "embeddings": _EMBEDDINGS,
+                    "chunk_signature": current_signature,
+                },
+                f,
+            )
         logger.info(f"RAG 快取已儲存：{RAG_CACHE_PATH}")
     except Exception as e:
         logger.warning(f"RAG 向量化失敗：{e}")
         _CHUNKS = []
         _EMBEDDINGS = None
+
+
+def _chunk_signature(chunks: list[dict]) -> str:
+    canonical = [
+        {
+            "std_key": c.get("std_key"),
+            "ver_key": c.get("ver_key"),
+            "test_key": c.get("test_key"),
+            "text": c.get("text"),
+            "raw": c.get("raw"),
+        }
+        for c in chunks
+    ]
+    blob = json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 async def _embed_query_cached(query: str) -> np.ndarray:

@@ -100,24 +100,31 @@ def revoke_token(token: str):
 
 # ---------- Rate limiting ----------
 def _get_tracker(ip: str) -> dict:
-    if ip not in _fail_tracker:
-        if len(_fail_tracker) >= _FAIL_TRACKER_MAXSIZE:
-            now = time.time()
-            expired = [
-                k
-                for k, v in _fail_tracker.items()
-                if v["blocked_until"] < now and v["count"] == 0
-            ]
-            for k in expired:
-                del _fail_tracker[k]
-            if len(_fail_tracker) >= _FAIL_TRACKER_MAXSIZE:
-                # 按 blocked_until 升序排序，刪除最早到期（最無效）的一半
-                sorted_keys = sorted(
-                    _fail_tracker, key=lambda k: _fail_tracker[k]["blocked_until"]
-                )
-                for k in sorted_keys[: _FAIL_TRACKER_MAXSIZE // 2]:
-                    del _fail_tracker[k]
-        _fail_tracker[ip] = {"count": 0, "blocked_until": 0.0}
+    now = time.time()
+    tracker = _fail_tracker.get(ip)
+    if tracker is not None:
+        tracker["last_seen"] = now
+        return tracker
+
+    if len(_fail_tracker) >= _FAIL_TRACKER_MAXSIZE:
+        # 只淘汰目前「未封鎖中」的項目，避免誤刪仍在封鎖視窗內的 IP。
+        non_blocked = [
+            (k, v.get("last_seen", 0.0))
+            for k, v in _fail_tracker.items()
+            if v.get("blocked_until", 0.0) <= now
+        ]
+        non_blocked.sort(key=lambda item: item[1])
+        for key, _ in non_blocked:
+            _fail_tracker.pop(key, None)
+            if len(_fail_tracker) < _FAIL_TRACKER_MAXSIZE:
+                break
+
+    if len(_fail_tracker) >= _FAIL_TRACKER_MAXSIZE:
+        # 極端情況：全部都是仍在封鎖中的 IP。避免誤刪活躍封鎖，改回傳暫時 tracker。
+        logger.warning("rate limit tracker 已滿且全為封鎖中 IP；新 IP 將暫時不持久追蹤")
+        return {"count": 0, "blocked_until": 0.0, "last_seen": now}
+
+    _fail_tracker[ip] = {"count": 0, "blocked_until": 0.0, "last_seen": now}
     return _fail_tracker[ip]
 
 
