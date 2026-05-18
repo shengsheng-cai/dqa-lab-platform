@@ -71,6 +71,7 @@ async def lifespan(app: FastAPI):
                 "active_execution_id": s.active_execution_id,
                 "sim_phase": s.sim_phase or "idle",
                 "sim_cycle": s.sim_cycle or 0,
+                "dwell_half_fired": s.dwell_half_fired,
                 "dwell_high_start": dwell_high_start,
                 "dwell_low_start": dwell_low_start,
             }
@@ -90,6 +91,7 @@ async def lifespan(app: FastAPI):
                 "operator_user_id": None,
                 "sim_phase": "idle",
                 "sim_cycle": 0,
+                "dwell_half_fired": False,
             }
 
     app.state.AICM_CACHE = cache

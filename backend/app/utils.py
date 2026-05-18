@@ -68,6 +68,7 @@ def _save_device_state(device_id: str, item: dict):
         state.active_execution_id = item.get("active_execution_id")
         state.sim_phase = item.get("sim_phase", "idle")
         state.sim_cycle = item.get("sim_cycle", 0)
+        state.dwell_half_fired = item.get("dwell_half_fired", False)
 
         for field in ("dwell_high_start", "dwell_low_start"):
             val = item.get(field)
