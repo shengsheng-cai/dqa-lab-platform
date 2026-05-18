@@ -16,7 +16,7 @@ from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
 from .auth import require_admin
 from .line import push_message
-from .utils import _now_utc, _parse_conditions
+from .utils import _now_utc_naive, _parse_conditions
 from .audit import log_audit
 from .schedule_service import (
     ACTIVE_STATUSES,
@@ -366,7 +366,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             immediate_start = start_aware <= now_utc
             s.status = ScheduleStatus.RUNNING if immediate_start else ScheduleStatus.CONFIRMED
             fixture_status = "loaned" if immediate_start else "reserved"
-            fixture_loan_date = now_utc if immediate_start else None
+            fixture_loan_date = now_utc.replace(tzinfo=None) if immediate_start else None
             for sf in db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == s.id).all():
                 db.add(FixtureLoan(
                     fixture_id=sf.fixture_id,
@@ -417,7 +417,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             if body.end_time is not None:
                 s.end_time = body.end_time
 
-        s.updated_at = datetime.datetime.now(datetime.timezone.utc)
+        s.updated_at = _now_utc_naive()
         if body.status:
             action_map = {
                 ScheduleStatus.CONFIRMED: "CONFIRM",
@@ -503,7 +503,7 @@ async def confirm_condition(schedule_id: int, request: Request, _: None = Depend
     from .sop import auto_start_sop
     cache = getattr(request.app.state, "AICM_CACHE", {})
     locks = getattr(request.app.state, "DEVICE_LOCKS", {})
-    now = _now_utc()
+    now = _now_utc_naive()
     user_id = getattr(request.state, "user_id", None)
 
     with SessionLocal() as db:
@@ -542,7 +542,7 @@ async def start_schedule(schedule_id: int, request: Request, _: None = Depends(r
     from .sop import auto_start_sop
     cache = getattr(request.app.state, "AICM_CACHE", {})
     locks = getattr(request.app.state, "DEVICE_LOCKS", {})
-    now = _now_utc()
+    now = _now_utc_naive()
 
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()

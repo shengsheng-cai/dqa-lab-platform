@@ -31,8 +31,8 @@ def _now_utc_naive() -> datetime.datetime:
 
 
 def today_utc_window() -> tuple:
-    """回傳 (now, today_start, today_end) — 三者皆為 UTC-aware datetime"""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    """回傳 (now, today_start, today_end) — 三者皆為 naive UTC datetime"""
+    now = _now_utc_naive()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
     return now, today_start, today_end
@@ -53,7 +53,7 @@ def _save_device_state(device_id: str, item: dict):
         state.standard_id = item.get("standard_id")
         state.active_sop_json = item.get("active_sop_json")
         state.completed_steps = item.get("completed_steps", 0)
-        state.updated_at = _now_utc()
+        state.updated_at = _now_utc_naive()
 
         # ✅ 補上 started_at — 修復重啟後圖表與倒數計時失效的問題
         started_at = item.get("started_at")

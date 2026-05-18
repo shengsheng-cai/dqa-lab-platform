@@ -33,7 +33,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def _utcnow() -> datetime.datetime:
-    return datetime.datetime.now(datetime.timezone.utc)
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):

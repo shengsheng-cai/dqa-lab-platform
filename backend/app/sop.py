@@ -134,7 +134,8 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
             if sop:
                 sop_name = sop.name
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now = now_utc.replace(tzinfo=None)
 
     # 檢查不可用時段
     with SessionLocal() as db:
@@ -165,7 +166,7 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
                 "standard_id": sop_id,
                 "active_sop_json": active_sop_json,
                 "completed_steps": 0,
-                "started_at": now,
+                "started_at": now_utc,
                 "total_steps": len(std_data.get("steps", [])),
                 "operator": operator.strip() if operator else "",
                 "operator_user_id": operator_user_id,
@@ -257,7 +258,8 @@ async def auto_start_sop(
         return
 
     sop_name = std_data.get("name", sop_id)
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now = now_utc.replace(tzinfo=None)
     active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
     active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
 
@@ -276,7 +278,7 @@ async def auto_start_sop(
             "standard_id": sop_id,
             "active_sop_json": active_sop_json,
             "completed_steps": 0,
-            "started_at": now,
+            "started_at": now_utc,
             "total_steps": len(std_data.get("steps", [])),
             "operator": operator,
             "operator_user_id": None,

@@ -48,7 +48,9 @@ def verify_password(password: str, hashed: str) -> bool:
 # ---------- Token（存 DB，重啟不失效）----------
 def create_token(user: User, db) -> str:
     token = secrets.token_hex(32)
-    expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+    expires = datetime.datetime.now(datetime.timezone.utc).replace(
+        tzinfo=None
+    ) + datetime.timedelta(
         seconds=TOKEN_TTL
     )
     user.current_token = token
@@ -374,7 +376,9 @@ def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(
     try:
         expires_at = None
         if req.expires_days:
-            expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=req.expires_days)
+            expires_at = datetime.datetime.now(datetime.timezone.utc).replace(
+                tzinfo=None
+            ) + datetime.timedelta(days=req.expires_days)
         token_str = _gen_demo_token()
         # 確保唯一
         while db.query(DemoToken).filter(DemoToken.token == token_str).first():
