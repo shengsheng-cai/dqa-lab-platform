@@ -1112,14 +1112,14 @@ def delete_fixture(fixture_id: int, _: None = Depends(require_admin)):
             db.query(FixtureLoan)
             .filter(
                 FixtureLoan.fixture_id == fixture_id,
-                FixtureLoan.status == "loaned",
+                FixtureLoan.status.in_(["loaned", "reserved"]),
             )
             .count()
         )
         if active_loans > 0:
             raise HTTPException(
                 status_code=400,
-                detail=f"此治具有 {active_loans} 筆借出未歸還，無法刪除",
+                detail=f"此治具有 {active_loans} 筆借出/預約未結束，無法刪除",
             )
         f.is_active = False
         db.commit()

@@ -9,7 +9,11 @@ import datetime
 from unittest.mock import patch, MagicMock
 
 from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan
-from app.schedule_service import _get_emergency_devices, _get_stuck_devices
+from app.schedule_service import (
+    _force_normal_stop,
+    _get_emergency_devices,
+    _get_stuck_devices,
+)
 from app.sop import _transfer_reserved_fixtures, auto_start_sop
 
 UTC = datetime.timezone.utc
@@ -72,6 +76,20 @@ def test_stuck_devices_overdue_less_than_1h_not_stuck():
     """剛過不到 1h → 不算卡機"""
     cache = {"CH-01": {"status": "RUNNING", "estimated_end_at": _past(0.5).isoformat()}}
     assert _get_stuck_devices(cache) == set()
+
+
+def test_force_normal_stop_sets_skip_push():
+    cache = {"CH-01": {"status": "RUNNING"}}
+    locks = {"CH-01": asyncio.Lock()}
+
+    with patch("app.schedule_service._save_device_state") as mock_save:
+        _run_async(_force_normal_stop("CH-01", cache, locks))
+
+    device = cache["CH-01"]
+    assert device["status"] == "FINISHING"
+    assert device["sim_phase"] == "ramp_to_ambient"
+    assert device["skip_push"] is True
+    mock_save.assert_called_once_with("CH-01", device)
 
 
 # ── _transfer_reserved_fixtures ────────────────────────────────────────────

@@ -340,6 +340,7 @@ async def _force_normal_stop(device_id: str, cache: dict, locks: dict):
             "running_sop_name": "排程取消，降溫收尾中...",
             "sim_phase": "ramp_to_ambient",
             "sim_cycle": 0,
+            "skip_push": True,
         })
         _save_device_state(device_id, device)
 
