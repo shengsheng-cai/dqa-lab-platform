@@ -108,8 +108,13 @@ dmypy.json
 *.iml
 .ruff_cache/
 
-#demo
+#demo（大二進位不進版控，README 不引用）
 *.mov
+*.mp4
+docs/demo.mp4
+
+### 領域附件（企業報告模板，非程式依賴，不公開）
+docs/templates/
 
 #changlog
 git_log.txt
