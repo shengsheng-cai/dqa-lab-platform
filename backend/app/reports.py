@@ -15,6 +15,7 @@ from .models import SessionLocal, SopExecution, StepRecord, DeviceData
 from .standards import STANDARDS_AND_SOPS
 from .sop import DEVICE_IDS
 from . import uncertainty as unc
+from .utils import _now_utc
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -92,7 +93,7 @@ def download_csv_report(execution_id: int):
         _row(
             output,
             "產生日期 Issue Date:",
-            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            _now_utc().strftime("%Y-%m-%d %H:%M:%S UTC"),
         )
         _row(output, "執行記錄 ID:", execution_id)
 
@@ -428,7 +429,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     story.append(Paragraph("1. 報告識別  Report Identification", h2))
     story.append(kv_table([
         ["報告編號 Report No.", report_no],
-        ["產生日期 Issue Date", datetime.datetime.now().strftime("%Y-%m-%d %H:%M")],
+        ["產生日期 Issue Date", _now_utc().strftime("%Y-%m-%d %H:%M UTC")],
         ["執行記錄 Execution ID", str(execution.id)],
     ]))
 

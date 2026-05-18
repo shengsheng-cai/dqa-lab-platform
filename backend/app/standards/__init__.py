@@ -40,7 +40,7 @@ ramp_rate 說明：
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from . import iec60068, en50155, iec61850, iec60945, dnv
 
@@ -102,24 +102,6 @@ def get_standard(sop_id: str) -> Dict[str, Any]:
 def get_ramp_rate(sop_id: str) -> float:
     std = get_standard(sop_id)
     return std.get("ramp_rate", 1.0)
-
-
-def get_all_standards() -> list:
-    return list(STANDARDS_AND_SOPS.keys())
-
-
-def get_sop_by_standard(sop_id: str) -> Optional[Dict[str, Any]]:
-    std = get_standard(sop_id)
-    if not std:
-        return None
-    return {
-        "sop_id": std["sop_id"],
-        "name": std["name"],
-        "test_type": std["test_type"],
-        "version": std["version"],
-        "description": std.get("description", ""),
-        "steps": std.get("steps", []),
-    }
 
 
 def get_standard_tree() -> Dict[str, Any]:

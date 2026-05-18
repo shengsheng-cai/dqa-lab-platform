@@ -71,6 +71,7 @@ class FixtureOut(BaseModel):
     shortage: int
     available_quantity: int
     loaned_quantity: int
+    reserved_quantity: int
     damaged_quantity: int
     usage_frequency: Optional[int]
     replacement_years: Optional[str]

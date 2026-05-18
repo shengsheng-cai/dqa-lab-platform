@@ -147,50 +147,6 @@ function Badge({ status }) {
   );
 }
 
-function SummaryCards({ summary }) {
-  const cards = [
-    { label: "借出中", value: summary.total_loaned, color: "#58a6ff" },
-    { label: "今日到期", value: summary.due_today, color: "#f0a500" },
-    { label: "逾期未還", value: summary.overdue, color: "#f85149" },
-    { label: "庫存不足", value: summary.shortage_count, color: "#f85149" },
-  ];
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(4,1fr)",
-        gap: 10,
-        marginBottom: 16,
-      }}
-    >
-      {cards.map((c) => (
-        <div
-          key={c.label}
-          style={{
-            background: "#161b22",
-            border: "1px solid #30363d",
-            borderRadius: 8,
-            padding: "12px 16px",
-          }}
-        >
-          <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 4 }}>
-            {c.label}
-          </div>
-          <div
-            style={{
-              fontSize: 24,
-              fontWeight: 700,
-              color: c.value > 0 ? c.color : "#cdd9e5",
-            }}
-          >
-            {c.value ?? "—"}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function FixturePage({ active, role }) {
   const { showToast } = useToast();
   const [fixtures, setFixtures] = useState([]);
@@ -497,20 +453,6 @@ export default function FixturePage({ active, role }) {
                 🔍 開始月盤點
               </button>
             )}
-            <input
-              type="text"
-              placeholder="🔍 按介面/型態搜尋..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                padding: "7px 10px",
-                borderRadius: 6,
-                border: "1px solid #30363d",
-                background: "#161b22",
-                color: "#cdd9e5",
-                fontSize: 13,
-              }}
-            />
             <select
               value={filterInterface}
               onChange={(e) => setFilterInterface(e.target.value)}
@@ -1670,4 +1612,3 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
     </>
   );
 }
-
