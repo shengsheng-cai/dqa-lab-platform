@@ -86,4 +86,5 @@ async def ws_devices(ws: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(ws)
     except Exception:
+        logger.exception("[WS] ws_devices unexpected error")
         manager.disconnect(ws)

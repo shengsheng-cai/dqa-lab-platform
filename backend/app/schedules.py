@@ -381,13 +381,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                     schedule_id=s.id,
                 ))
 
-            def _fmt(dt):
-                if dt is None:
-                    return "—"
-                if dt.tzinfo:
-                    dt = dt.astimezone(datetime.timezone(datetime.timedelta(hours=8)))
-                return dt.strftime("%m/%d %H:%M")
-
         elif body.status in (ScheduleStatus.CANCELLED, ScheduleStatus.RUNNING, ScheduleStatus.DONE):
             original_status = s.status  # 保存改變前的狀態
             s.status = body.status

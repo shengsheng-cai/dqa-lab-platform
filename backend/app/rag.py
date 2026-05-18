@@ -332,12 +332,3 @@ def filter_chunks_by_hints(chunks: list[dict], hints: dict) -> list[dict]:
             continue
         results.append(c)
     return results
-
-
-async def retrieve_filtered(
-    query: str, hints: dict, top_k: int = 30, min_results: int = 2
-) -> list[dict]:
-    """向量搜尋後依 hints 篩選；若結果不足 min_results 則回退至未篩選結果。"""
-    raw_hits = await retrieve(query, top_k=top_k)
-    filtered = filter_chunks_by_hints(raw_hits, hints)
-    return filtered if len(filtered) >= min_results else raw_hits
