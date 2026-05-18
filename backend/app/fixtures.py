@@ -757,7 +757,7 @@ async def create_loan(body: LoanCreate, request: Request, _: None = Depends(requ
             quantity=body.quantity,
             due_date=body.due_date,
             status="loaned",
-            loan_date=datetime.datetime.now(datetime.timezone.utc),
+            loan_date=_now_utc_naive(),
         )
         db.add(loan)
         f.loan_count += 1
@@ -786,12 +786,12 @@ def return_loan(loan_id: int, body: ReturnUpdate, request: Request, _: None = De
             try:
                 d = datetime.date.fromisoformat(body.returned_at)
                 loan.return_date = datetime.datetime(
-                    d.year, d.month, d.day, tzinfo=datetime.timezone.utc
+                    d.year, d.month, d.day
                 )
             except ValueError:
-                loan.return_date = datetime.datetime.now(datetime.timezone.utc)
+                loan.return_date = _now_utc_naive()
         else:
-            loan.return_date = datetime.datetime.now(datetime.timezone.utc)
+            loan.return_date = _now_utc_naive()
         loan.return_condition = body.return_condition
         loan.keeper_note = body.keeper_note
 

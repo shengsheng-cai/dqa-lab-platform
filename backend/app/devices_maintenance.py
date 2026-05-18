@@ -17,6 +17,14 @@ router = APIRouter(tags=["maintenance"])
 # ── Pydantic Schemas ─────────────────────────────────────────────────────────
 
 
+def _to_naive_utc(dt: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+
 class CalibrationCreate(BaseModel):
     calibration_date: datetime.datetime
     next_calibration_date: datetime.datetime
@@ -100,8 +108,8 @@ def create_calibration(device_id: str, body: CalibrationCreate, _: None = Depend
     with SessionLocal() as db:
         cal = DeviceCalibration(
             device_id=device_id,
-            calibration_date=body.calibration_date,
-            next_calibration_date=body.next_calibration_date,
+            calibration_date=_to_naive_utc(body.calibration_date),
+            next_calibration_date=_to_naive_utc(body.next_calibration_date),
             interval_days=body.interval_days,
             certificate_number=body.certificate_number,
             result=body.result,
@@ -130,6 +138,8 @@ def update_calibration(
         if not cal:
             raise HTTPException(status_code=404, detail="校驗紀錄不存在")
         for field, value in body.model_dump(exclude_none=True).items():
+            if field in ("calibration_date", "next_calibration_date"):
+                value = _to_naive_utc(value)
             setattr(cal, field, value)
         db.commit()
         db.refresh(cal)
@@ -174,11 +184,11 @@ def create_maintenance(device_id: str, body: MaintenanceCreate, _: None = Depend
     with SessionLocal() as db:
         maint = DeviceMaintenance(
             device_id=device_id,
-            maintenance_date=body.maintenance_date,
+            maintenance_date=_to_naive_utc(body.maintenance_date),
             maintenance_type=body.maintenance_type,
             description=body.description,
             performed_by=body.performed_by,
-            next_maintenance_date=body.next_maintenance_date,
+            next_maintenance_date=_to_naive_utc(body.next_maintenance_date),
         )
         db.add(maint)
         db.commit()
@@ -202,6 +212,8 @@ def update_maintenance(
         if not maint:
             raise HTTPException(status_code=404, detail="維護紀錄不存在")
         for field, value in body.model_dump(exclude_none=True).items():
+            if field in ("maintenance_date", "next_maintenance_date"):
+                value = _to_naive_utc(value)
             setattr(maint, field, value)
         db.commit()
         db.refresh(maint)
