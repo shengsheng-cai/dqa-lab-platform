@@ -404,7 +404,7 @@ function App() {
   const handleLogout = async () => {
     const token = localStorage.getItem("user_token");
     if (token) {
-      try { await api.post("/api/auth/logout"); } catch (_) {}
+      try { await api.post("/api/auth/logout"); } catch { /* ignore */ }
     }
     clearSession();
     setAuthed(false);

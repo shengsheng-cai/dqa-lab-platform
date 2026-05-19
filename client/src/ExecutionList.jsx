@@ -33,7 +33,8 @@ export default function ExecutionList({ active, role }) {
     try {
       const prefix = `${ex.device_id}_${ex.sop_id || "report"}`;
       await downloadBlob(`/api/reports/${format}/${ex.id}`, buildReportFilename(prefix, ex.id, format));
-    } catch (_) {
+    } catch {
+      /* ignore */
     } finally {
       setDownloading((prev) => ({ ...prev, [format]: null }));
     }

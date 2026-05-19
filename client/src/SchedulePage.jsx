@@ -318,7 +318,7 @@ function ConditionPicker({ standardsTree, selected, onChange, initialStd, initia
 
       {/* 測試條件列 */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {Object.entries(tests).map(([key, t]) => {
+        {Object.values(tests).map((t) => {
           const checked = selected.includes(t.sop_id);
           return (
             <label
@@ -665,9 +665,8 @@ function NewScheduleModal({ standardsTree, sopIdMap, initialConditions, onClose,
 
 // ── 排程詳情 / 審核 Modal ───────────────────────────────────────────────────
 
-function ScheduleDetailModal({ schedule, role, userId, deviceStatuses = {}, onClose, onUpdated, onDeleted, onRefresh }) {
+function ScheduleDetailModal({ schedule, role, deviceStatuses = {}, onClose, onUpdated, onDeleted, onRefresh }) {
   const { showToast } = useToast();
-  const [status, setStatus] = useState(schedule.status);
   const [deviceId, setDeviceId] = useState(schedule.device_id || "");
   const [note, setNote] = useState(schedule.note || "");
   const [saving, setSaving] = useState(false);
@@ -1436,7 +1435,6 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
   const [standardsTree, setStandardsTree] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastRefreshed, setLastRefreshed] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [showNewModal, setShowNewModal] = useState(false);
   const [pendingInitConds, setPendingInitConds] = useState(null);
@@ -1491,7 +1489,6 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
       setBlockedPeriods(ganttRes.data.blocked_periods);
       if (ganttRes.data.device_statuses) setDeviceStatuses(ganttRes.data.device_statuses);
       if (treeRes) setStandardsTree(treeRes.data);
-      setLastRefreshed(new Date());
     } catch (e) {
       console.error("排程資料載入失敗", e);
     } finally {

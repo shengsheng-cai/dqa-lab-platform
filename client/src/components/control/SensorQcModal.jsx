@@ -15,7 +15,7 @@ const SensorQcModal = ({ deviceId, onClose }) => {
     api
       .get(`/api/devices/${deviceId}/sensor-stats`, { signal: controller.signal })
       .then((r) => setStats(r.data))
-      .catch((e) => { if (!controller.signal.aborted) setError("載入失敗"); })
+      .catch(() => { if (!controller.signal.aborted) setError("載入失敗"); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [deviceId]);

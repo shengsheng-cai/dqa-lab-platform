@@ -835,7 +835,6 @@ export default function FixturePage({ active, role }) {
       {activeTab === "purchase" && (
         <PurchaseTab
           orders={purchaseOrders}
-          fixtures={fixtures}
           canOperate={canOperate}
           role={role}
           onRefresh={fetchAll}
@@ -1412,7 +1411,7 @@ const PO_STATUS = {
   cancelled: { label: "已取消", color: "#8b949e", bg: "#21262d" },
 };
 
-function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
+function PurchaseTab({ orders, canOperate, role, onRefresh, onNew }) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [deletePOTarget, setDeletePOTarget] = useState(null);
