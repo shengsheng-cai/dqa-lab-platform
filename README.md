@@ -101,7 +101,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 make install                  # 安裝所有依賴
 venv/bin/python backend/init_db.py  # 初始化資料庫（首次執行）
 make dev                      # 啟動全部服務
-make test                     # 執行後端測試
+make test                     # 執行後端 + 前端測試
 ```
 
 | 服務 | 網址 |
