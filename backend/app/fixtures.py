@@ -237,8 +237,7 @@ def list_fixtures(
     status: Optional[str] = None,
     search: Optional[str] = None,
 ):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         q = db.query(Fixture).filter(Fixture.is_active)
         if interface_type:
             q = q.filter(Fixture.interface_type == interface_type)
@@ -268,14 +267,11 @@ def list_fixtures(
                     continue
             result.append(data)
         return result
-    finally:
-        db.close()
 
 
 @router.get("/summary")
 def get_summary():
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         now, today_start, today_end = today_utc_window()
 
         from sqlalchemy import func as _func
@@ -330,14 +326,11 @@ def get_summary():
             "shortage_count": shortage_count,
             "replacement_due": replacement_due,
         }
-    finally:
-        db.close()
 
 
 @router.get("/interface-types")
 def get_interface_types():
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         rows = (
             db.query(Fixture.interface_type)
             .filter(Fixture.is_active)
@@ -345,15 +338,12 @@ def get_interface_types():
             .all()
         )
         return sorted([r[0] for r in rows if r[0]])
-    finally:
-        db.close()
 
 
 @router.get("/users")
 def list_users(_: None = Depends(require_admin)):
     """回傳使用者清單（供借出登記下拉選單用，admin only）"""
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         users = (
             db.query(User)
             .filter(User.is_active)
@@ -363,8 +353,6 @@ def list_users(_: None = Depends(require_admin)):
         return [
             {"id": u.id, "display_name": u.display_name, "role": u.role} for u in users
         ]
-    finally:
-        db.close()
 
 
 @router.get("/template")
@@ -429,8 +417,7 @@ def export_fixtures():
     if pd is None:
         raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
 
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         fixtures = (
             db.query(Fixture)
             .filter(Fixture.is_active)
@@ -471,14 +458,11 @@ def export_fixtures():
                 "Content-Disposition": "attachment; filename=\"fixtures_export.xlsx\""
             },
         )
-    finally:
-        db.close()
 
 
 @router.patch("/inventory-logs/{log_id}")
 def patch_inventory_log(log_id: int, actual_quantity: int, _: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         log = (
             db.query(FixtureInventoryLog)
             .filter(FixtureInventoryLog.id == log_id)
@@ -498,14 +482,11 @@ def patch_inventory_log(log_id: int, actual_quantity: int, _: None = Depends(req
             "counted_quantity": log.counted_quantity,
             "difference": log.difference,
         }
-    finally:
-        db.close()
 
 
 @router.delete("/inventory-logs/{log_id}")
 def delete_inventory_log(log_id: int, _: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         log = (
             db.query(FixtureInventoryLog)
             .filter(FixtureInventoryLog.id == log_id)
@@ -516,16 +497,13 @@ def delete_inventory_log(log_id: int, _: None = Depends(require_admin)):
         db.delete(log)
         db.commit()
         return {"status": "deleted"}
-    finally:
-        db.close()
 
 
 @router.post("/inventory-logs")
 def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
     user = getattr(request.state, "user", None)
     counted_by = user.get("username") if user else None
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
@@ -553,8 +531,6 @@ def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request
             "counted_at": log.counted_at.isoformat() if log.counted_at else None,
             "counted_by": log.counted_by,
         }
-    finally:
-        db.close()
 
 
 @router.get("/inventory-logs")
@@ -618,8 +594,7 @@ def _fetch_fixtures_map(db, loans) -> dict:
 
 @router.get("/loans/active")
 def list_active_loans():
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         loans = (
             db.query(FixtureLoan)
             .filter(FixtureLoan.status.in_(["loaned", "reserved"]))
@@ -647,14 +622,11 @@ def list_active_loans():
             }
             for loan in loans
         ]
-    finally:
-        db.close()
 
 
 @router.get("/loans/overdue")
 def list_overdue_loans():
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         now_naive = _now_utc_naive()
         loans = (
             db.query(FixtureLoan)
@@ -686,15 +658,12 @@ def list_overdue_loans():
             }
             for loan in loans
         ]
-    finally:
-        db.close()
 
 
 @router.get("/loans/damaged")
 def list_damaged_lost_loans():
     """損壞或遺失的治具紀錄"""
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         loans = (
             db.query(FixtureLoan)
             .filter(FixtureLoan.status.in_(["damaged", "lost"]))
@@ -726,15 +695,12 @@ def list_damaged_lost_loans():
             }
             for loan in loans
         ]
-    finally:
-        db.close()
 
 
 @router.post("/loans")
 async def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_admin)):
     user_id = getattr(request.state, "user_id", None)
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == body.fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
@@ -768,15 +734,12 @@ async def create_loan(body: LoanCreate, request: Request, _: None = Depends(requ
         db.refresh(loan)
         loan_id = loan.id
         return {"status": "success", "loan_id": loan_id}
-    finally:
-        db.close()
 
 
 @router.post("/loans/{loan_id}/return")
 def return_loan(loan_id: int, body: ReturnUpdate, request: Request, _: None = Depends(require_admin)):
     user_id = getattr(request.state, "user_id", None)
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
         if not loan:
             raise HTTPException(status_code=404, detail="借出紀錄不存在")
@@ -813,14 +776,11 @@ def return_loan(loan_id: int, body: ReturnUpdate, request: Request, _: None = De
                   f"loan#{loan_id}，狀態：{condition_label}")
         db.commit()
         return {"status": "success"}
-    finally:
-        db.close()
 
 
 @router.post("/loans/{loan_id}/extend")
 def extend_loan(loan_id: int, body: ExtensionRequest, _: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
         if not loan:
             raise HTTPException(status_code=404, detail="借出紀錄不存在")
@@ -831,8 +791,6 @@ def extend_loan(loan_id: int, body: ExtensionRequest, _: None = Depends(require_
         loan.extension_note = (loan.extension_note or "") + "\n" + note
         db.commit()
         return {"status": "success"}
-    finally:
-        db.close()
 
 
 # ---------- Excel 匯入 ----------
@@ -857,7 +815,6 @@ async def import_fixtures(file: UploadFile = File(...), _: None = Depends(requir
                 col_map[field] = normalized_cols[key]
                 break
 
-    db = SessionLocal()
     imported = 0
     updated = 0
     skipped = 0
@@ -899,66 +856,65 @@ async def import_fixtures(file: UploadFile = File(...), _: None = Depends(requir
         except (KeyError, ValueError, TypeError):
             return None
 
-    try:
-        for _, row in df.iterrows():
-            interface_type = safe_str(row, "interface_type") or ""
-            form_factor = safe_str(row, "form_factor") or ""
+    with SessionLocal() as db:
+        try:
+            for _, row in df.iterrows():
+                interface_type = safe_str(row, "interface_type") or ""
+                form_factor = safe_str(row, "form_factor") or ""
 
-            if not interface_type or not form_factor:
-                skipped += 1
-                continue
+                if not interface_type or not form_factor:
+                    skipped += 1
+                    continue
 
-            existing = (
-                db.query(Fixture)
-                .filter(
-                    Fixture.interface_type == interface_type,
-                    Fixture.form_factor == form_factor,
-                    Fixture.is_active,
-                )
-                .first()
-            )
-
-            fields = dict(
-                priority=safe_int(row, "priority"),
-                size=safe_str(row, "size"),
-                purpose=safe_str(row, "purpose"),
-                estimated_usage=safe_float(row, "estimated_usage"),
-                total_quantity=safe_int(row, "total_quantity", 0),
-                shortage=safe_int(row, "shortage", 0),
-                usage_frequency=safe_int(row, "usage_frequency"),
-                replacement_years=safe_str(row, "replacement_years"),
-                note=safe_str(row, "note"),
-                keeper_name=safe_str(row, "keeper_name"),
-                deputy_name=safe_str(row, "deputy_name"),
-                vendor=safe_str(row, "vendor"),
-                model_number=safe_str(row, "model_number"),
-                unit_price=safe_float(row, "unit_price"),
-            )
-
-            if existing:
-                for k, v in fields.items():
-                    setattr(existing, k, v)
-                updated += 1
-            else:
-                db.add(
-                    Fixture(
-                        interface_type=interface_type, form_factor=form_factor, **fields
+                existing = (
+                    db.query(Fixture)
+                    .filter(
+                        Fixture.interface_type == interface_type,
+                        Fixture.form_factor == form_factor,
+                        Fixture.is_active,
                     )
+                    .first()
                 )
-                imported += 1
 
-        db.commit()
-        return {
-            "status": "success",
-            "imported": imported,
-            "updated": updated,
-            "skipped": skipped,
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+                fields = dict(
+                    priority=safe_int(row, "priority"),
+                    size=safe_str(row, "size"),
+                    purpose=safe_str(row, "purpose"),
+                    estimated_usage=safe_float(row, "estimated_usage"),
+                    total_quantity=safe_int(row, "total_quantity", 0),
+                    shortage=safe_int(row, "shortage", 0),
+                    usage_frequency=safe_int(row, "usage_frequency"),
+                    replacement_years=safe_str(row, "replacement_years"),
+                    note=safe_str(row, "note"),
+                    keeper_name=safe_str(row, "keeper_name"),
+                    deputy_name=safe_str(row, "deputy_name"),
+                    vendor=safe_str(row, "vendor"),
+                    model_number=safe_str(row, "model_number"),
+                    unit_price=safe_float(row, "unit_price"),
+                )
+
+                if existing:
+                    for k, v in fields.items():
+                        setattr(existing, k, v)
+                    updated += 1
+                else:
+                    db.add(
+                        Fixture(
+                            interface_type=interface_type, form_factor=form_factor, **fields
+                        )
+                    )
+                    imported += 1
+
+            db.commit()
+            return {
+                "status": "success",
+                "imported": imported,
+                "updated": updated,
+                "skipped": skipped,
+            }
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------- 設定保管人 ----------
@@ -967,8 +923,7 @@ async def import_fixtures(file: UploadFile = File(...), _: None = Depends(requir
 @router.patch("/{fixture_id}/keeper")
 def set_keeper(fixture_id: int, body: SetKeeperBody, _: None = Depends(require_admin)):
     """設定治具的系統保管人（admin only）"""
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
@@ -985,8 +940,6 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, _: None = Depends(require_a
 
         db.commit()
         return {"status": "success"}
-    finally:
-        db.close()
 
 
 # ---------- 月盤點 ----------
@@ -997,8 +950,7 @@ def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _:
     user = getattr(request.state, "user", None)
     counted_by = user.get("username") if user else None
 
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
@@ -1022,8 +974,6 @@ def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _:
             "actual": actual_quantity,
             "diff": diff,
         }
-    finally:
-        db.close()
 
 
 # ---------- 新增治具 ----------
@@ -1031,8 +981,7 @@ def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _:
 
 @router.post("/")
 def create_fixture(body: FixtureUpsert, _: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         f = Fixture(
             interface_type=body.interface_type,
             form_factor=body.form_factor,
@@ -1055,8 +1004,6 @@ def create_fixture(body: FixtureUpsert, _: None = Depends(require_admin)):
         db.refresh(f)
         loan_map = _build_loan_qty_map(db, [f.id])
         return _fixture_to_out(db, f, loan_map)
-    finally:
-        db.close()
 
 
 # ---------- 編輯治具 ----------
@@ -1064,8 +1011,7 @@ def create_fixture(body: FixtureUpsert, _: None = Depends(require_admin)):
 
 @router.patch("/{fixture_id}")
 def update_fixture(fixture_id: int, body: FixtureUpsert, _: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         f = (
             db.query(Fixture)
             .filter(Fixture.id == fixture_id, Fixture.is_active)
@@ -1091,8 +1037,6 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, _: None = Depends(requi
         db.commit()
         loan_map = _build_loan_qty_map(db, [f.id])
         return _fixture_to_out(db, f, loan_map)
-    finally:
-        db.close()
 
 
 # ---------- 刪除治具（軟刪除）----------
@@ -1100,8 +1044,7 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, _: None = Depends(requi
 
 @router.delete("/{fixture_id}")
 def delete_fixture(fixture_id: int, _: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         f = (
             db.query(Fixture)
             .filter(Fixture.id == fixture_id, Fixture.is_active)
@@ -1125,5 +1068,3 @@ def delete_fixture(fixture_id: int, _: None = Depends(require_admin)):
         f.is_active = False
         db.commit()
         return {"status": "success"}
-    finally:
-        db.close()

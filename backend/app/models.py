@@ -482,8 +482,7 @@ def ensure_admin_user():
 
     hashed = _bcrypt.hashpw(admin_password.encode(), _bcrypt.gensalt()).decode()
 
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         user = db.query(User).filter(User.username == "admin").first()
         if user:
             user.hashed_password = hashed
@@ -502,8 +501,6 @@ def ensure_admin_user():
             )
             db.commit()
             logger.info("Admin 帳號建立完成")
-    finally:
-        db.close()
 
 
 def init_db():

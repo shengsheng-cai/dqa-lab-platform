@@ -118,83 +118,81 @@ def _query_fixture_context() -> str:
     now = _now_utc()
     if _fixture_context_cache["data"] and _fixture_context_cache["expires_at"] > now:
         return _fixture_context_cache["data"]
-    db = SessionLocal()
     try:
-        parts = []
+        with SessionLocal() as db:
+            parts = []
 
-        # 借出中（含逾期標記）
-        loaned_rows = (
-            db.query(FixtureLoan, Fixture)
-            .join(Fixture, FixtureLoan.fixture_id == Fixture.id)
-            .filter(FixtureLoan.status == "loaned", FixtureLoan.return_date.is_(None))
-            .all()
-        )
-        if loaned_rows:
-            # key -> {qty, overdue_qty, earliest_due}
-            loaned: dict[str, dict] = {}
-            for loan, fix in loaned_rows:
-                key = f"{fix.interface_type} {fix.form_factor or ''}".strip()
-                if key not in loaned:
-                    loaned[key] = {"qty": 0, "overdue": 0, "earliest_due": None}
-                loaned[key]["qty"] += loan.quantity
-                due = loan.due_date
-                if due:
-                    if due.tzinfo is None:
-                        due = due.replace(tzinfo=datetime.timezone.utc)
-                    if due < now:
-                        loaned[key]["overdue"] += loan.quantity
-                    prev = loaned[key]["earliest_due"]
-                    if prev is None or due < prev:
-                        loaned[key]["earliest_due"] = due
-            lines = ["【治具借出狀態】目前借出中的治具："]
-            for desc, info in sorted(loaned.items()):
-                due_str = ""
-                if info["overdue"]:
-                    due_str = f"（⚠️ 逾期 {info['overdue']} 件）"
-                elif info["earliest_due"]:
-                    due_str = f"（應還日：{info['earliest_due'].strftime('%Y-%m-%d')}）"
-                lines.append(f"- {desc}：借出 {info['qty']} 件{due_str}")
-            parts.append("\n".join(lines))
-        else:
-            parts.append("【治具借出狀態】目前無借出中的治具。")
-
-        # 庫存不足
-        shortage_items = (
-            db.query(Fixture)
-            .filter(Fixture.is_active, Fixture.shortage > 0)
-            .order_by(Fixture.shortage.desc())
-            .all()
-        )
-        if shortage_items:
-            seen: dict[tuple, dict] = {}
-            for f in shortage_items:
-                key = (f.interface_type, (f.form_factor or "").strip())
-                if key not in seen or f.shortage > seen[key]["shortage"]:
-                    seen[key] = {
-                        "desc": f"{f.interface_type} {f.form_factor or ''}".strip(),
-                        "total": f.total_quantity,
-                        "shortage": f.shortage,
-                        "note": f.note,
-                    }
-            sorted_items = sorted(
-                seen.values(), key=lambda x: x["shortage"], reverse=True
+            # 借出中（含逾期標記）
+            loaned_rows = (
+                db.query(FixtureLoan, Fixture)
+                .join(Fixture, FixtureLoan.fixture_id == Fixture.id)
+                .filter(FixtureLoan.status == "loaned", FixtureLoan.return_date.is_(None))
+                .all()
             )
-            lines = ["【治具庫存不足】："]
-            for item in sorted_items:
-                lines.append(
-                    f"- {item['desc']}：庫存 {item['total']} 件，缺 {item['shortage']} 件"
-                    + (f"（備註：{item['note']}）" if item["note"] else "")
-                )
-            parts.append("\n".join(lines))
+            if loaned_rows:
+                # key -> {qty, overdue_qty, earliest_due}
+                loaned: dict[str, dict] = {}
+                for loan, fix in loaned_rows:
+                    key = f"{fix.interface_type} {fix.form_factor or ''}".strip()
+                    if key not in loaned:
+                        loaned[key] = {"qty": 0, "overdue": 0, "earliest_due": None}
+                    loaned[key]["qty"] += loan.quantity
+                    due = loan.due_date
+                    if due:
+                        if due.tzinfo is None:
+                            due = due.replace(tzinfo=datetime.timezone.utc)
+                        if due < now:
+                            loaned[key]["overdue"] += loan.quantity
+                        prev = loaned[key]["earliest_due"]
+                        if prev is None or due < prev:
+                            loaned[key]["earliest_due"] = due
+                lines = ["【治具借出狀態】目前借出中的治具："]
+                for desc, info in sorted(loaned.items()):
+                    due_str = ""
+                    if info["overdue"]:
+                        due_str = f"（⚠️ 逾期 {info['overdue']} 件）"
+                    elif info["earliest_due"]:
+                        due_str = f"（應還日：{info['earliest_due'].strftime('%Y-%m-%d')}）"
+                    lines.append(f"- {desc}：借出 {info['qty']} 件{due_str}")
+                parts.append("\n".join(lines))
+            else:
+                parts.append("【治具借出狀態】目前無借出中的治具。")
 
-        result = "\n\n".join(parts)
-        _fixture_context_cache["data"] = result
-        _fixture_context_cache["expires_at"] = now + datetime.timedelta(minutes=5)
-        return result
+            # 庫存不足
+            shortage_items = (
+                db.query(Fixture)
+                .filter(Fixture.is_active, Fixture.shortage > 0)
+                .order_by(Fixture.shortage.desc())
+                .all()
+            )
+            if shortage_items:
+                seen: dict[tuple, dict] = {}
+                for f in shortage_items:
+                    key = (f.interface_type, (f.form_factor or "").strip())
+                    if key not in seen or f.shortage > seen[key]["shortage"]:
+                        seen[key] = {
+                            "desc": f"{f.interface_type} {f.form_factor or ''}".strip(),
+                            "total": f.total_quantity,
+                            "shortage": f.shortage,
+                            "note": f.note,
+                        }
+                sorted_items = sorted(
+                    seen.values(), key=lambda x: x["shortage"], reverse=True
+                )
+                lines = ["【治具庫存不足】："]
+                for item in sorted_items:
+                    lines.append(
+                        f"- {item['desc']}：庫存 {item['total']} 件，缺 {item['shortage']} 件"
+                        + (f"（備註：{item['note']}）" if item["note"] else "")
+                    )
+                parts.append("\n".join(lines))
+
+            result = "\n\n".join(parts)
+            _fixture_context_cache["data"] = result
+            _fixture_context_cache["expires_at"] = now + datetime.timedelta(minutes=5)
+            return result
     except Exception:
         return ""
-    finally:
-        db.close()
 
 
 def _query_schedule_context() -> str:
@@ -204,36 +202,34 @@ def _query_schedule_context() -> str:
     now = _now_utc()
     if _schedule_context_cache["data"] and _schedule_context_cache["expires_at"] > now:
         return _schedule_context_cache["data"]
-    db = SessionLocal()
     try:
-        schedules = (
-            db.query(Schedule)
-            .filter(
-                Schedule.status.in_([ScheduleStatus.RUNNING, ScheduleStatus.CONFIRMED])
+        with SessionLocal() as db:
+            schedules = (
+                db.query(Schedule)
+                .filter(
+                    Schedule.status.in_([ScheduleStatus.RUNNING, ScheduleStatus.CONFIRMED])
+                )
+                .order_by(Schedule.start_time)
+                .all()
             )
-            .order_by(Schedule.start_time)
-            .all()
-        )
-        if not schedules:
-            result = "【排程狀態】目前無進行中或已確認的排程。"
+            if not schedules:
+                result = "【排程狀態】目前無進行中或已確認的排程。"
+                _schedule_context_cache["data"] = result
+                _schedule_context_cache["expires_at"] = now + datetime.timedelta(minutes=2)
+                return result
+            lines = ["【排程狀態】進行中 / 已確認的排程："]
+            for s in schedules:
+                device = s.device_id or "未分配"
+                lines.append(
+                    f"- [{s.status}] #{s.id} {s.project_number}｜{s.sample_name}"
+                    f"｜設備：{device}｜標準：{s.standard}"
+                )
+            result = "\n".join(lines)
             _schedule_context_cache["data"] = result
             _schedule_context_cache["expires_at"] = now + datetime.timedelta(minutes=2)
             return result
-        lines = ["【排程狀態】進行中 / 已確認的排程："]
-        for s in schedules:
-            device = s.device_id or "未分配"
-            lines.append(
-                f"- [{s.status}] #{s.id} {s.project_number}｜{s.sample_name}"
-                f"｜設備：{device}｜標準：{s.standard}"
-            )
-        result = "\n".join(lines)
-        _schedule_context_cache["data"] = result
-        _schedule_context_cache["expires_at"] = now + datetime.timedelta(minutes=2)
-        return result
     except Exception:
         return ""
-    finally:
-        db.close()
 
 
 def _query_device_context() -> str:
@@ -243,28 +239,26 @@ def _query_device_context() -> str:
     now = _now_utc()
     if _device_context_cache["data"] and _device_context_cache["expires_at"] > now:
         return _device_context_cache["data"]
-    db = SessionLocal()
     try:
-        devices = db.query(DeviceState).order_by(DeviceState.device_id).all()
-        if not devices:
-            return ""
-        lines = ["【設備狀態】："]
-        for d in devices:
-            if d.status == "IDLE":
-                lines.append(f"- {d.device_id}：空閒可用（IDLE）")
-            elif d.status in ("RUNNING", "PAUSED", "FINISHING"):
-                sop = f"，執行中：{d.running_sop_name}" if d.running_sop_name else ""
-                lines.append(f"- {d.device_id}：{d.status}{sop}")
-            else:
-                lines.append(f"- {d.device_id}：{d.status}")
-        result = "\n".join(lines)
-        _device_context_cache["data"] = result
-        _device_context_cache["expires_at"] = now + datetime.timedelta(minutes=1)
-        return result
+        with SessionLocal() as db:
+            devices = db.query(DeviceState).order_by(DeviceState.device_id).all()
+            if not devices:
+                return ""
+            lines = ["【設備狀態】："]
+            for d in devices:
+                if d.status == "IDLE":
+                    lines.append(f"- {d.device_id}：空閒可用（IDLE）")
+                elif d.status in ("RUNNING", "PAUSED", "FINISHING"):
+                    sop = f"，執行中：{d.running_sop_name}" if d.running_sop_name else ""
+                    lines.append(f"- {d.device_id}：{d.status}{sop}")
+                else:
+                    lines.append(f"- {d.device_id}：{d.status}")
+            result = "\n".join(lines)
+            _device_context_cache["data"] = result
+            _device_context_cache["expires_at"] = now + datetime.timedelta(minutes=1)
+            return result
     except Exception:
         return ""
-    finally:
-        db.close()
 
 
 _TEST_TYPE_HINTS = {
