@@ -62,8 +62,7 @@ def create_token(user: User, db) -> str:
 def get_token_info(token: str) -> Optional[dict]:
     if not token:
         return None
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         user = (
             db.query(User)
             .filter(
@@ -82,20 +81,15 @@ def get_token_info(token: str) -> Optional[dict]:
         if expires < datetime.datetime.now(datetime.timezone.utc):
             return None
         return {"user_id": user.id, "role": user.role}
-    finally:
-        db.close()
 
 
 def revoke_token(token: str):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         user = db.query(User).filter(User.current_token == token).first()
         if user:
             user.current_token = None
             user.token_expires_at = None
             db.commit()
-    finally:
-        db.close()
 
 
 # ---------- Rate limiting ----------
@@ -166,8 +160,7 @@ def login(body: LoginRequest, request: Request):
             status_code=429, content={"detail": f"太多次錯誤，請 {remaining} 秒後再試"}
         )
 
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         user = (
             db.query(User)
             .filter(User.username == body.username, User.is_active)
@@ -189,8 +182,6 @@ def login(body: LoginRequest, request: Request):
         return LoginResponse(
             token=token, role=user.role, display_name=user.display_name, user_id=user.id
         )
-    finally:
-        db.close()
 
 
 @router.post("/api/auth/logout")
@@ -206,8 +197,7 @@ def get_me(request: Request):
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
         raise HTTPException(status_code=401, detail="未登入或訪客模式")
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         user = db.query(User).filter(User.id == user_id, User.is_active).first()
         if not user:
             raise HTTPException(status_code=401, detail="使用者不存在或已停用")
@@ -216,8 +206,6 @@ def get_me(request: Request):
             "display_name": user.display_name,
             "role": user.role,
         }
-    finally:
-        db.close()
 
 
 # ---------- 使用者管理（admin only）----------
@@ -241,8 +229,7 @@ class UserUpdateBody(BaseModel):
 
 @router.get("/api/auth/users", response_model=list[UserOut])
 def list_users(_: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         users = db.query(User).order_by(User.created_at.asc()).all()
         return [
             {
@@ -254,16 +241,13 @@ def list_users(_: None = Depends(require_admin)):
             }
             for u in users
         ]
-    finally:
-        db.close()
 
 
 @router.post("/api/auth/users", status_code=201, response_model=UserMeResponse)
 def create_user(body: UserCreateBody, _: None = Depends(require_admin)):
     if not body.role or not body.role.strip():
         raise HTTPException(status_code=400, detail="角色不能為空")
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         # username 自動產生，這類使用者不需要登入
         username = f"user_{secrets.token_hex(4)}"
         # 密碼設隨機雜湊，無法用於登入
@@ -278,14 +262,11 @@ def create_user(body: UserCreateBody, _: None = Depends(require_admin)):
         db.commit()
         db.refresh(user)
         return {"id": user.id, "display_name": user.display_name, "role": user.role}
-    finally:
-        db.close()
 
 
 @router.patch("/api/auth/users/{user_id}")
 def update_user(user_id: int, body: UserUpdateBody, _: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="使用者不存在")
@@ -300,16 +281,13 @@ def update_user(user_id: int, body: UserUpdateBody, _: None = Depends(require_ad
             user.is_active = body.is_active
         db.commit()
         return {"ok": True}
-    finally:
-        db.close()
 
 
 @router.delete("/api/auth/users/{user_id}")
 def delete_user(user_id: int, request: Request, _: None = Depends(require_admin)):
     # 取得當前登入者 ID，不允許刪除自己
     current_token = request.headers.get("X-User-Token", "")
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         current = db.query(User).filter(User.current_token == current_token).first()
         if current and current.id == user_id:
             raise HTTPException(status_code=400, detail="無法刪除自己的帳號")
@@ -319,8 +297,6 @@ def delete_user(user_id: int, request: Request, _: None = Depends(require_admin)
         db.delete(user)
         db.commit()
         return {"ok": True}
-    finally:
-        db.close()
 
 
 @router.get("/api/auth/guest-hint")
@@ -348,8 +324,7 @@ class DemoTokenCreate(BaseModel):
 
 @router.get("/api/auth/demo-tokens")
 def list_demo_tokens(_: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         rows = db.query(DemoToken).order_by(DemoToken.created_at.desc()).all()
         now = datetime.datetime.now(datetime.timezone.utc)
         result = []
@@ -373,14 +348,11 @@ def list_demo_tokens(_: None = Depends(require_admin)):
                 "created_at": t.created_at.isoformat(),
             })
         return result
-    finally:
-        db.close()
 
 
 @router.post("/api/auth/demo-tokens")
 def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         expires_at = None
         if req.expires_days:
             expires_at = datetime.datetime.now(datetime.timezone.utc).replace(
@@ -409,95 +381,83 @@ def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(
             "use_count": 0,
             "is_active": True,
         }
-    finally:
-        db.close()
 
 
 @router.delete("/api/auth/demo-tokens/{token_id}")
 def delete_demo_token(token_id: int, _: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         t = db.query(DemoToken).filter(DemoToken.id == token_id).first()
         if not t:
             raise HTTPException(status_code=404, detail="Token 不存在")
         db.delete(t)
         db.commit()
         return {"ok": True}
-    finally:
-        db.close()
 
 
 @router.patch("/api/auth/demo-tokens/{token_id}/toggle")
 def toggle_demo_token(token_id: int, _: None = Depends(require_admin)):
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         t = db.query(DemoToken).filter(DemoToken.id == token_id).first()
         if not t:
             raise HTTPException(status_code=404, detail="Token 不存在")
         t.is_active = not t.is_active
         db.commit()
         return {"id": t.id, "is_active": t.is_active}
-    finally:
-        db.close()
 
 
 def _validate_demo_token(provided: str) -> bool:
     """驗證訪客 token 是否有效（不遞增 use_count，供 middleware 每次 request 呼叫）。"""
-    db = SessionLocal()
     try:
-        t = db.query(DemoToken).filter(
-            DemoToken.token == provided,
-            DemoToken.is_active,
-        ).first()
-        if not t:
-            return False
-        now = datetime.datetime.now(datetime.timezone.utc)
-        if t.expires_at and t.expires_at.replace(tzinfo=datetime.timezone.utc) < now:
-            return False
-        if t.max_uses is not None and t.use_count >= t.max_uses:
-            return False
-        return True
+        with SessionLocal() as db:
+            t = db.query(DemoToken).filter(
+                DemoToken.token == provided,
+                DemoToken.is_active,
+            ).first()
+            if not t:
+                return False
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if t.expires_at and t.expires_at.replace(tzinfo=datetime.timezone.utc) < now:
+                return False
+            if t.max_uses is not None and t.use_count >= t.max_uses:
+                return False
+            return True
     except Exception:
         logger.exception("_check_demo_token 驗證失敗")
         return False
-    finally:
-        db.close()
 
 
 def _use_demo_token(provided: str) -> bool:
     """驗證訪客 token 並遞增 use_count（僅在登入時呼叫一次）。"""
-    db = SessionLocal()
     try:
-        # 先驗證 token 是否有效（不遞增 use_count）
-        t = db.query(DemoToken).filter(
-            DemoToken.token == provided,
-            DemoToken.is_active,
-        ).first()
-        if not t:
-            return False
-        now = datetime.datetime.now(datetime.timezone.utc)
-        if t.expires_at and t.expires_at.replace(tzinfo=datetime.timezone.utc) < now:
-            return False
-        if t.max_uses is not None and t.use_count >= t.max_uses:
-            return False
-
-        # SQL-level atomic update，確保 use_count 遞增的原子性
-        updated = (
-            db.query(DemoToken)
-            .filter(
+        with SessionLocal() as db:
+            # 先驗證 token 是否有效（不遞增 use_count）
+            t = db.query(DemoToken).filter(
                 DemoToken.token == provided,
                 DemoToken.is_active,
-                DemoToken.max_uses.is_(None) | (DemoToken.use_count < DemoToken.max_uses)
+            ).first()
+            if not t:
+                return False
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if t.expires_at and t.expires_at.replace(tzinfo=datetime.timezone.utc) < now:
+                return False
+            if t.max_uses is not None and t.use_count >= t.max_uses:
+                return False
+
+            # SQL-level atomic update，確保 use_count 遞增的原子性
+            updated = (
+                db.query(DemoToken)
+                .filter(
+                    DemoToken.token == provided,
+                    DemoToken.is_active,
+                    DemoToken.max_uses.is_(None) | (DemoToken.use_count < DemoToken.max_uses)
+                )
+                .update({DemoToken.use_count: DemoToken.use_count + 1}, synchronize_session="fetch")
             )
-            .update({DemoToken.use_count: DemoToken.use_count + 1}, synchronize_session="fetch")
-        )
-        db.commit()
-        return updated > 0
+            db.commit()
+            return updated > 0
     except Exception:
         logger.exception("_use_demo_token 更新失敗")
         return False
-    finally:
-        db.close()
 
 
 # ---------- 訪客登入端點 ----------
