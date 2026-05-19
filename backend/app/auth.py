@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from .models import SessionLocal, User, DemoToken
+from .utils import _now_utc_naive
 
 logger = logging.getLogger("auth")
 
@@ -48,11 +49,7 @@ def verify_password(password: str, hashed: str) -> bool:
 # ---------- Token（存 DB，重啟不失效）----------
 def create_token(user: User, db) -> str:
     token = secrets.token_hex(32)
-    expires = datetime.datetime.now(datetime.timezone.utc).replace(
-        tzinfo=None
-    ) + datetime.timedelta(
-        seconds=TOKEN_TTL
-    )
+    expires = _now_utc_naive() + datetime.timedelta(seconds=TOKEN_TTL)
     user.current_token = token
     user.token_expires_at = expires
     db.commit()
@@ -355,9 +352,7 @@ def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(
     with SessionLocal() as db:
         expires_at = None
         if req.expires_days:
-            expires_at = datetime.datetime.now(datetime.timezone.utc).replace(
-                tzinfo=None
-            ) + datetime.timedelta(days=req.expires_days)
+            expires_at = _now_utc_naive() + datetime.timedelta(days=req.expires_days)
         token_str = _gen_demo_token()
         # 確保唯一
         while db.query(DemoToken).filter(DemoToken.token == token_str).first():
@@ -422,7 +417,7 @@ def _validate_demo_token(provided: str) -> bool:
                 return False
             return True
     except Exception:
-        logger.exception("_check_demo_token 驗證失敗")
+        logger.exception("_validate_demo_token 驗證失敗")
         return False
 
 

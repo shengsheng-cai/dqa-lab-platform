@@ -40,6 +40,11 @@ def _row(output: io.BytesIO, label: str, value):
     _write(output, f"  {label:<30}{value}")
 
 
+def _resolve_target_high(sop_data: dict):
+    v = sop_data.get("high_temperature")
+    return v if v is not None else sop_data.get("target_temperature")
+
+
 def _fmt_dt(dt) -> str:
     if dt is None:
         return "N/A"
@@ -72,9 +77,7 @@ def download_csv_report(execution_id: int):
         temp_avg = round(sum(temps) / len(temps), 2) if temps else "N/A"
         humi_avg = round(sum(humis) / len(humis), 1) if humis else "N/A"
 
-        target_high = sop_data.get("high_temperature") or sop_data.get(
-            "target_temperature"
-        )
+        target_high = _resolve_target_high(sop_data)
         target_low = sop_data.get("low_temperature")
 
         output = io.BytesIO()
@@ -109,8 +112,8 @@ def download_csv_report(execution_id: int):
         # 3. 測試條件（§7.8.3.1 a）
         _section(output, "3. 測試條件  Test Conditions")
         _row(output, "測試標準 Standard:", execution.sop_id)
-        _row(output, "目標高溫 Target High (C):", target_high or "N/A")
-        _row(output, "目標低溫 Target Low (C):", target_low or "N/A")
+        _row(output, "目標高溫 Target High (C):", target_high if target_high is not None else "N/A")
+        _row(output, "目標低溫 Target Low (C):", target_low if target_low is not None else "N/A")
         _row(output, "升降溫速率 Ramp Rate (C/min):", sop_data.get("ramp_rate", "N/A"))
         _row(
             output, "停留時間 Dwell Time (h):", sop_data.get("dwell_time_hours", "N/A")
@@ -156,7 +159,7 @@ def download_csv_report(execution_id: int):
             output,
             "溫度容差範圍 Temp Limit (C):",
             f"{round(target_high - temp_tolerance, 1)} ~ {round(target_high + temp_tolerance, 1)}"
-            if target_high
+            if target_high is not None
             else "N/A",
         )
         _row(output, "量測不確定度 Uncertainty:", "待儀器校正證書確認")
@@ -411,7 +414,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     humis = [r.humidity for r in device_records if r.humidity is not None]
     temp_tolerance = sop_data.get("temp_tolerance", 2.0)
     humi_tolerance = sop_data.get("humi_tolerance", 3.0)
-    target_high = sop_data.get("high_temperature") or sop_data.get("target_temperature")
+    target_high = _resolve_target_high(sop_data)
     target_low = sop_data.get("low_temperature")
     humi_target = sop_data.get("humidity_rh_percent")
 
@@ -446,8 +449,8 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     # ── 3. 測試條件 ───────────────────────────────────────────────────────────
     story.append(Paragraph("3. 測試條件  Test Conditions", h2))
     story.append(kv_table([
-        ["目標高溫 Target High", f"{target_high} °C" if target_high else "N/A"],
-        ["目標低溫 Target Low", f"{target_low} °C" if target_low else "N/A"],
+        ["目標高溫 Target High", f"{target_high} °C" if target_high is not None else "N/A"],
+        ["目標低溫 Target Low", f"{target_low} °C" if target_low is not None else "N/A"],
         ["升降溫速率 Ramp Rate", f"{sop_data.get('ramp_rate', 'N/A')} °C/min"],
         ["停留時間 Dwell Time", f"{sop_data.get('dwell_time_hours', 'N/A')} h"],
         ["循環次數 Cycles", str(sop_data.get("cycles", "N/A"))],

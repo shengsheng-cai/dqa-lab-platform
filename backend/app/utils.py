@@ -30,6 +30,17 @@ def _now_utc_naive() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 
+def _to_naive_utc(dt: Optional[datetime.datetime | str]) -> Optional[datetime.datetime]:
+    """將任意 datetime（aware/naive/ISO str）統一轉為 naive UTC，None 原樣回傳。"""
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        dt = parse_iso_utc(dt)
+    if dt.tzinfo is not None:
+        return dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def today_utc_window() -> tuple:
     """回傳 (now, today_start, today_end) — 三者皆為 naive UTC datetime"""
     now = _now_utc_naive()

@@ -153,6 +153,21 @@ async def _embed(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> np.
     return np.array(all_vectors, dtype=np.float32)
 
 
+def _chunk_signature(chunks: list[dict]) -> str:
+    canonical = [
+        {
+            "std_key": c.get("std_key"),
+            "ver_key": c.get("ver_key"),
+            "test_key": c.get("test_key"),
+            "text": c.get("text"),
+            "raw": c.get("raw"),
+        }
+        for c in chunks
+    ]
+    blob = json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
 async def warmup_rag():
     """啟動時呼叫：優先讀取本地快取，chunk 數量不一致時自動重建。"""
     global _CHUNKS, _EMBEDDINGS
@@ -215,21 +230,6 @@ async def warmup_rag():
         logger.warning(f"RAG 向量化失敗：{e}")
         _CHUNKS = []
         _EMBEDDINGS = None
-
-
-def _chunk_signature(chunks: list[dict]) -> str:
-    canonical = [
-        {
-            "std_key": c.get("std_key"),
-            "ver_key": c.get("ver_key"),
-            "test_key": c.get("test_key"),
-            "text": c.get("text"),
-            "raw": c.get("raw"),
-        }
-        for c in chunks
-    ]
-    blob = json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 async def _embed_query_cached(query: str) -> np.ndarray:

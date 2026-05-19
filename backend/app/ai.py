@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import asyncio
 import logging
 import datetime
 import httpx
@@ -366,17 +367,17 @@ async def _build_context(msg: str, history: list = None) -> tuple[str, list[str]
         parts.append("\n".join(_hit_line(h) for h in hits))
 
     if any(kw in msg for kw in _FIXTURE_KEYWORDS):
-        fixture_ctx = _query_fixture_context()
+        fixture_ctx = await asyncio.to_thread(_query_fixture_context)
         if fixture_ctx:
             parts.append(fixture_ctx)
 
     if any(kw in msg for kw in _DEVICE_KEYWORDS):
-        device_ctx = _query_device_context()
+        device_ctx = await asyncio.to_thread(_query_device_context)
         if device_ctx:
             parts.append(device_ctx)
 
     if any(kw in msg for kw in _SCHEDULE_KEYWORDS):
-        schedule_ctx = _query_schedule_context()
+        schedule_ctx = await asyncio.to_thread(_query_schedule_context)
         if schedule_ctx:
             parts.append(schedule_ctx)
 
