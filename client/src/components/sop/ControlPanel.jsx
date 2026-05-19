@@ -1,5 +1,12 @@
 import React from "react";
-import { STATUS_CONFIG, ACTIVE_STATUSES, FINISHING_STATUS, OFFLINE_STATUS, EMERGENCY_STATUS } from "../../constants";
+import {
+  STATUS_CONFIG,
+  ACTIVE_STATUSES,
+  FINISHING_STATUS,
+  OFFLINE_STATUS,
+  EMERGENCY_STATUS,
+  IDLE_STATUS,
+} from "../../constants";
 
 const ControlPanel = ({
   selectedDevice,
@@ -15,6 +22,7 @@ const ControlPanel = ({
   const isEmergency = data.status === EMERGENCY_STATUS;
   const isFinishing = data.status === FINISHING_STATUS;
   const canStop = ACTIVE_STATUSES.includes(data.status) || isEmergency;
+  const showIdleGuide = data.status === IDLE_STATUS && !isBlocked && !isOffline && !isEmergency && !isFinishing;
 
   return (
     <section
@@ -57,6 +65,28 @@ const ControlPanel = ({
               ? "🚨 緊急停止已觸發，請確認設備安全後，點下方按鈕觸發自動降溫。"
               : data.description}
       </p>
+      {showIdleGuide && (
+        <div
+          style={{
+            marginTop: 8,
+            border: "1px solid #30363d",
+            borderRadius: 6,
+            padding: "8px 10px",
+            background: "#0f1724",
+          }}
+        >
+          <div style={{ fontSize: 11, color: "#58a6ff", fontWeight: 700, marginBottom: 4 }}>
+            起始引導
+          </div>
+          <div style={{ fontSize: 11, color: "#8b949e", lineHeight: 1.5 }}>
+            1. 在下方選擇法規、版本與測試條件
+            <br />
+            2. 確認條件後，完成安全確認清單
+            <br />
+            3. 點擊「確認啟動」開始測試
+          </div>
+        </div>
+      )}
 
       {isBlocked ? null : <div className="btn-group-row">
         {!isFinishing && (

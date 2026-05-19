@@ -390,18 +390,30 @@ export default function FixturePage({ active, role }) {
         <div style={{ flex: 1 }} />
         {canOperate && (
           <>
-            <button
-              onClick={() => downloadBlob("/api/fixtures/export", "fixtures_export.xlsx")}
-              style={{ padding: "5px 12px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 12 }}
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value === "export") {
+                  downloadBlob("/api/fixtures/export", "fixtures_export.xlsx");
+                } else if (e.target.value === "import") {
+                  setShowImportModal(true);
+                }
+                e.target.value = "";
+              }}
+              style={{
+                padding: "5px 10px",
+                borderRadius: 6,
+                background: "#161b22",
+                color: "#8b949e",
+                border: "1px solid #30363d",
+                cursor: "pointer",
+                fontSize: 12,
+              }}
             >
-              匯出 Excel
-            </button>
-            <button
-              onClick={() => setShowImportModal(true)}
-              style={{ padding: "5px 12px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 12 }}
-            >
-              匯入 Excel
-            </button>
+              <option value="" disabled>Excel 操作</option>
+              <option value="export">匯出 Excel</option>
+              <option value="import">匯入 Excel</option>
+            </select>
             <button
               onClick={() => setEditTarget(false)}
               style={{ padding: "5px 12px", borderRadius: 6, background: "transparent", color: "#58a6ff", border: "1px solid #58a6ff44", cursor: "pointer", fontSize: 12 }}

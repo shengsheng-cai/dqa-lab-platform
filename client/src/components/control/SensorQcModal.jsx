@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import api from "../../api.js";
 import SensorQcChart from "./SensorQcChart";
 
-const SensorQcModal = ({ deviceId, onClose }) => {
+const SensorQcModal = ({ deviceId, onClose, onViewDeviceStatus }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -107,7 +107,12 @@ const SensorQcModal = ({ deviceId, onClose }) => {
               {error}
             </div>
           )}
-          {!loading && !error && <SensorQcChart stats={stats} />}
+          {!loading && !error && (
+            <SensorQcChart
+              stats={stats}
+              onViewDeviceStatus={onViewDeviceStatus}
+            />
+          )}
         </div>
 
         {/* Footer stats */}
