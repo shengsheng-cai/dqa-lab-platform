@@ -6,7 +6,7 @@ colorTo: purple
 sdk: docker
 app_port: 7860
 pinned: false
-license: agpl-3.0
+license: mit
 datasets: []
 short_description: Environmental test lab management (FastAPI + React + AI)
 ---
@@ -21,7 +21,7 @@ short_description: Environmental test lab management (FastAPI + React + AI)
 ![APScheduler](https://img.shields.io/badge/APScheduler-Precision%20Scheduling-FF6B35)
 ![LINE](https://img.shields.io/badge/LINE-Bot%20Alerts-00C300?logo=line&logoColor=white)
 ![ISO 17025](https://img.shields.io/badge/ISO%2017025-GUM%20Uncertainty-blueviolet)
-![License](https://img.shields.io/badge/License-AGPL--3.0-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
 
 **Environmental test lab management platform** built with FastAPI + React.  
 Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-assisted scheduling for temperature/humidity chambers.
@@ -177,12 +177,12 @@ AI 推薦條件 → [申請此測試] → 排程確認 → 治具預約
 
 本專案目前為個人作品集專案，暫不接受外部 PR。
 
-若有問題或功能建議，歡迎開 Issue 討論。商業合作或授權需求請透過 GitHub 聯絡作者。
+若有問題或功能建議，歡迎開 Issue 討論。商業合作請透過 GitHub 聯絡作者。
 
 ---
 
 ## 授權
 
-[AGPL-3.0 License](./LICENSE)
+[MIT License](./LICENSE)
 
-本專案採用 AGPL-3.0 授權。若需商業授權，請聯絡作者。
+本專案採用 MIT 授權。
