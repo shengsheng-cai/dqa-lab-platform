@@ -118,7 +118,7 @@ cp .env.example backend/.env   # 首次：填入 ADMIN_PASSWORD、GEMINI_API_KEY
 make install                   # 安裝所有依賴（pip + npm）
 venv/bin/python backend/init_db.py  # 初始化資料庫（首次）
 make dev                       # 啟動全部服務（uvicorn:8000 + vite:5173 + ngrok）
-make test                      # 執行後端測試
+make test                      # 執行後端 + 前端測試
 make lint                      # ruff 檢查（line-length 120）
 make clean                     # 清理殘留程序
 
