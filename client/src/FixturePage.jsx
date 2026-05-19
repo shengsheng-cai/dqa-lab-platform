@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import api from "./api";
 import { downloadBlob } from "./utils/download";
-import { formatLocal } from "./utils/timezone";
+import { formatLocal, parseUTC, parseDateOnlyLocal } from "./utils/timezone";
 import { useToast } from "./components/Toast";
 import ImportModal from "./components/fixture/ImportModal";
 import LoanModal from "./components/fixture/LoanModal";
@@ -627,7 +627,10 @@ export default function FixturePage({ active, role }) {
                           if (!f.estimated_replacement_date) return <span style={{ color: "#484f58" }}>—</span>;
                           const today = new Date();
                           today.setHours(0, 0, 0, 0);
-                          const due = new Date(f.estimated_replacement_date);
+                          const due = parseDateOnlyLocal(f.estimated_replacement_date);
+                          if (!due || Number.isNaN(due.getTime())) {
+                            return <span style={{ color: "#8b949e" }}>{f.estimated_replacement_date}</span>;
+                          }
                           const daysLeft = Math.ceil((due - today) / 86400000);
                           const color = daysLeft < 0 ? "#f85149" : daysLeft <= 30 ? "#f0a500" : "#8b949e";
                           return <span style={{ color, fontWeight: daysLeft <= 30 ? 600 : 400 }}>{f.estimated_replacement_date}</span>;
@@ -760,8 +763,8 @@ export default function FixturePage({ active, role }) {
                 </tr>
               ) : (
                 activeLoans.map((loan) => {
-                  const isOverdue =
-                    loan.due_date && new Date(loan.due_date) < new Date();
+                  const dueDate = loan.due_date ? parseUTC(loan.due_date) : null;
+                  const isOverdue = Boolean(dueDate) && !Number.isNaN(dueDate.getTime()) && dueDate < new Date();
                   return (
                     <tr key={loan.id}>
                       <td style={tdStyle}>

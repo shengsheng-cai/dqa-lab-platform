@@ -20,12 +20,30 @@ export function parseUTC(dateStr) {
   if (dateStr instanceof Date) return dateStr;
   try {
     // 檢查是否已有時區資訊
-    const hasTimezone = /[Z+\-]\d{2}:?\d{2}$/.test(dateStr);
+    const hasTimezone = /Z$|[+-]\d{2}:?\d{2}$/.test(dateStr);
     const safeStr = hasTimezone ? dateStr : dateStr + "Z";
     return new Date(safeStr);
   } catch {
     return null;
   }
+}
+
+/**
+ * 將 YYYY-MM-DD 日期字串解析為「本地時區 00:00」Date。
+ * 其他格式回退到 parseUTC。
+ *
+ * @param {string|Date} dateStr
+ * @returns {Date|null}
+ */
+export function parseDateOnlyLocal(dateStr) {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date) return dateStr;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!m) return parseUTC(dateStr);
+  const y = Number(m[1]);
+  const mon = Number(m[2]);
+  const d = Number(m[3]);
+  return new Date(y, mon - 1, d, 0, 0, 0, 0);
 }
 
 /**

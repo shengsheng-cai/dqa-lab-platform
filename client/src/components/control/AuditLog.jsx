@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import api from "../../api.js";
 import { downloadBlob } from "../../utils/download.js";
+import { parseUtcDate } from "../../constants";
 
 const ACTION_LABELS = {
   CREATE: "申請排程",
@@ -31,6 +32,17 @@ const ACTION_COLORS = {
 };
 
 const ENTITY_LABELS = { schedule: "排程", fixture: "治具", device: "設備" };
+
+function fmtAuditTime(ts) {
+  const d = parseUtcDate(ts);
+  if (!d || Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function AuditLog({ active }) {
   const [logs, setLogs] = useState([]);
@@ -105,7 +117,7 @@ export default function AuditLog({ active }) {
               {filtered.map((log) => (
                 <tr key={log.id} style={{ borderBottom: "1px solid #161b22" }}>
                   <td style={{ padding: "5px 8px", color: "#8b949e", whiteSpace: "nowrap" }}>
-                    {new Date(log.timestamp + "Z").toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                    {fmtAuditTime(log.timestamp)}
                   </td>
                   <td style={{ padding: "5px 8px", color: "#cdd9e5" }}>
                     {log.actor === "system:scheduler" ? <span style={{ color: "#484f58" }}>系統</span> : `#${log.actor}`}
