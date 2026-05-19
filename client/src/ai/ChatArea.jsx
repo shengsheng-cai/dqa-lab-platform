@@ -1,13 +1,17 @@
 // 對話區域（包含對話列表、輸入框及控制按鈕）
 
 import { useState, useEffect, useRef } from "react";
-import MessageBubble, { DISCLAIMER, renderMarkdown } from "./MessageBubble";
+import MessageBubble from "./MessageBubble";
+import MarkdownRenderer from "./MarkdownRenderer";
+import { DISCLAIMER } from "./messageBubbleConstants";
 
 function StreamingBubble({ streamText }) {
   const [elapsed, setElapsed] = useState(0);
-  const startRef = useRef(Date.now());
+  const startRef = useRef(0);
   useEffect(() => {
     startRef.current = Date.now();
+    // 掛載時重置計時器顯示；每次掛載一次性同步 setState
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setElapsed(0);
     const timer = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
@@ -17,7 +21,7 @@ function StreamingBubble({ streamText }) {
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
       <div style={{ ...S.aiBubble, borderColor: "#58a6ff" }}>
-        {renderMarkdown(streamText)}
+        <MarkdownRenderer text={streamText} />
         <span style={S.cursor}>▍</span>
         <span style={S.streamElapsed}>⏱ {elapsed}s</span>
       </div>

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import api from "../../api";
-import { useToast } from "../Toast";
+import { useToast } from "../useToast";
 import DatePicker from "./DatePicker";
-import ModalShell, { inputStyle } from "./ModalShell";
+import ModalShell from "./ModalShell";
+import { inputStyle } from "./modalStyles";
 
 const CONDITIONS = [
   ["normal", "正常"],

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "./api";
 import { DEVICE_IDS } from "./constants";
-import { useToast } from "./components/Toast";
+import { useToast } from "./components/useToast";
 
 const MAINTENANCE_TYPE_LABEL = {
   preventive: "預防性",

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import api from "../../api";
-import { useToast } from "../Toast";
+import { useToast } from "../useToast";
 import ModalShell from "./ModalShell";
 
 function getStatus(f) {

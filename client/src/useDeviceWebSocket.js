@@ -19,6 +19,7 @@ export function useDeviceWebSocket() {
   const retryDelay = useRef(1000);
   const unmounted = useRef(false);
   const lastJsonRef = useRef(null);
+  const connectRef = useRef(null);
 
   const connect = useCallback(() => {
     if (unmounted.current) return;
@@ -48,7 +49,7 @@ export function useDeviceWebSocket() {
       if (!unmounted.current) {
         const delay = retryDelay.current;
         retryDelay.current = Math.min(delay * 2, 30000);
-        setTimeout(connect, delay);
+        setTimeout(() => connectRef.current?.(), delay);
       }
     };
 
@@ -58,6 +59,7 @@ export function useDeviceWebSocket() {
   }, []);
 
   useEffect(() => {
+    connectRef.current = connect;
     unmounted.current = false;
     connect();
     return () => {

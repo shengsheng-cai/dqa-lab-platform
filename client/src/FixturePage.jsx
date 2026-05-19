@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import api from "./api";
 import { downloadBlob } from "./utils/download";
 import { formatLocal, parseUTC, parseDateOnlyLocal } from "./utils/timezone";
-import { useToast } from "./components/Toast";
+import { useToast } from "./components/useToast";
 import ImportModal from "./components/fixture/ImportModal";
 import LoanModal from "./components/fixture/LoanModal";
 
@@ -934,6 +934,8 @@ function OverdueList({ canOperate, onRefresh }) {
       .finally(() => setLoading(false));
   };
 
+  // 掛載時取資料；refresh 內 setLoading 為標準 loading flag，掛載一次性同步 setState
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { refresh(); }, []);
 
   const thStyle = {

@@ -8,11 +8,14 @@ import {
   EMERGENCY_STATUS,
   SIM_PHASE_LABEL,
 } from "../../constants";
+import { conditionLabel } from "./deviceCardUtils";
 
 function useCountdown(estimatedEndAt) {
   const [remaining, setRemaining] = useState(null);
   useEffect(() => {
     if (!estimatedEndAt) {
+      // estimatedEndAt 清空時重置倒數；受 if 守衛、一次性同步 setState
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRemaining(null);
       return;
     }
@@ -36,13 +39,6 @@ function fmtRemaining(secs) {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
-export function conditionLabel(schedule, prefix = "") {
-  const idx = schedule.current_condition_index ?? 0;
-  const total = (schedule.conditions || []).length;
-  const isLast = idx >= total;
-  return { idx, total, label: `${prefix}${isLast ? "✅ 確認完成" : `▶ 第 ${idx + 1}/${total} 條件`}` };
 }
 
 export default function DeviceCard({ device, isSelected, onClick, pendingSchedule, onConfirmCondition, onShowQc, calibrationStatus }) {

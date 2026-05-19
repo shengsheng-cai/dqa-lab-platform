@@ -59,6 +59,8 @@ export default function AuditLog({ active }) {
   }, []);
 
   useEffect(() => {
+    // load 為 async fetch（await 後才 setState），非串接 render，誤報
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (active) load();
   }, [active, load]);
 

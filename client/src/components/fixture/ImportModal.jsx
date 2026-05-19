@@ -1,7 +1,7 @@
 import { useState } from "react";
 import api from "../../api";
 import { downloadBlob } from "../../utils/download";
-import { useToast } from "../Toast";
+import { useToast } from "../useToast";
 import ModalShell from "./ModalShell";
 
 export default function ImportModal({ onClose, onSuccess }) {
