@@ -80,11 +80,29 @@ function ChartSection({ data, dataKey, anomalyKey, label, unit, color, mean, ucl
   );
 }
 
-const SensorQcChart = ({ stats }) => {
+const SensorQcChart = ({ stats, onViewDeviceStatus }) => {
   if (!stats || !stats.data || stats.data.length === 0) {
     return (
-      <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "#484f58", fontSize: 12 }}>
-        最近 24 小時無感測器資料
+      <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+          <div style={{ color: "#484f58", fontSize: 12 }}>最近 24 小時無感測器資料</div>
+          {onViewDeviceStatus && (
+            <button
+              onClick={onViewDeviceStatus}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid #30363d",
+                background: "#161b22",
+                color: "#8b949e",
+                cursor: "pointer",
+                fontSize: 12,
+              }}
+            >
+              查看設備狀態
+            </button>
+          )}
+        </div>
       </div>
     );
   }

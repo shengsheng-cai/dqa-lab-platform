@@ -319,7 +319,15 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       )}
 
       {sensorModalDevice && (
-        <SensorQcModal deviceId={sensorModalDevice} onClose={() => setSensorModalDevice(null)} />
+        <SensorQcModal
+          deviceId={sensorModalDevice}
+          onClose={() => setSensorModalDevice(null)}
+          onViewDeviceStatus={() => {
+            setSelectedDevice(sensorModalDevice);
+            setActiveTab("device");
+            setSensorModalDevice(null);
+          }}
+        />
       )}
 
       {/* AI FAB — 面板開啟時隱藏 */}
