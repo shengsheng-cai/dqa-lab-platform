@@ -21,7 +21,7 @@ function parseStreamingResponse(fullText) {
   let displayText = fullText.replace(META_REGEX, (_, jsonStr) => {
     try {
       metadata = JSON.parse(jsonStr);
-    } catch {}
+    } catch { /* ignore */ }
     return "";
   });
   displayText = displayText.replace(APPLY_REGEX, "");

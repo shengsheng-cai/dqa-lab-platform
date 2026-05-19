@@ -107,21 +107,15 @@ export default function ChatArea({
           </div>
         )}
 
-        {messages.map((m, i) => {
-          const isFirstAssistant =
-            m.role === "assistant" &&
-            messages.slice(0, i).every((msg) => msg.role !== "assistant");
-          return (
-            <MessageBubble
-              key={`${m.role}-${i}-${m.content.slice(0, 8)}`}
-              m={m}
-              onRetry={() => onRetry(i)}
-              onApplySchedule={onApplySchedule}
-              canApplySchedule={canApplySchedule}
-              isFirstAssistant={isFirstAssistant}
-            />
-          );
-        })}
+        {messages.map((m, i) => (
+          <MessageBubble
+            key={`${m.role}-${i}-${m.content.slice(0, 8)}`}
+            m={m}
+            onRetry={() => onRetry(i)}
+            onApplySchedule={onApplySchedule}
+            canApplySchedule={canApplySchedule}
+          />
+        ))}
 
         {loading && streamText && <StreamingBubble streamText={streamText} />}
 

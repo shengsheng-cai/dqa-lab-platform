@@ -40,14 +40,14 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
     try {
       const res = await api.get(`/api/devices/${selectedDevice}/calibrations`);
       setCalibrations(res.data);
-    } catch (_) {}
+    } catch { /* ignore */ }
   }, [selectedDevice]);
 
   const fetchMaintenances = useCallback(async () => {
     try {
       const res = await api.get(`/api/devices/${selectedDevice}/maintenances`);
       setMaintenances(res.data);
-    } catch (_) {}
+    } catch { /* ignore */ }
   }, [selectedDevice]);
 
   useEffect(() => {

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "./api";
 import { useToast } from "./components/Toast";
-import { parseUtcDate } from "./constants";
 
 const ROLE_LABELS = { admin: "管理者" };
 const ROLE_COLORS = { admin: "#f85149" };
@@ -258,7 +257,7 @@ function DemoTokenSection({ active }) {
     try {
       const res = await api.get("/api/auth/demo-tokens");
       setTokens(res.data);
-    } catch (_) {}
+    } catch { /* ignore */ }
   }, [active]);
 
   useEffect(() => { fetchTokens(); }, [fetchTokens]);
@@ -305,7 +304,7 @@ function DemoTokenSection({ active }) {
     try {
       await api.delete(`/api/auth/demo-tokens/${id}`);
       fetchTokens();
-    } catch (_) {}
+    } catch { /* ignore */ }
   };
 
   const fmtDate = (iso) => {

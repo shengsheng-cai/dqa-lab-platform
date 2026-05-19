@@ -185,7 +185,6 @@ export default function MessageBubble({
   onRetry,
   onApplySchedule,
   canApplySchedule = true,
-  isFirstAssistant = true,
 }) {
   const [copied, setCopied] = useState(false);
   const simplified = m.role === "assistant" && hasSimplified(m.content);

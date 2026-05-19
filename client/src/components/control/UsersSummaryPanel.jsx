@@ -18,7 +18,7 @@ export default function UsersSummaryPanel() {
           admin: users.filter(u => u.role === "admin" && u.is_active).length,
           validTokens: tokens.filter(t => t.is_active && !t.expired && !t.used_up).length,
         });
-      } catch (_) {}
+      } catch { /* ignore */ }
     };
     fetch();
     const t = setInterval(fetch, POLL_GENERAL_MS);

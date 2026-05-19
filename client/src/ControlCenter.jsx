@@ -176,7 +176,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           pendingJsonRef.current = json;
           setPendingByDevice(map);
         }
-      } catch (_) {}
+      } catch { /* ignore */ }
     };
     fetch();
     const t = setInterval(fetch, POLL_DEVICES_MS);
@@ -231,7 +231,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       try {
         const res = await api.get("/api/fixtures/summary");
         setFixtureSummary(res.data);
-      } catch (_) {}
+      } catch { /* ignore */ }
     };
     fetchSummary();
     const t = setInterval(fetchSummary, POLL_FIXTURE_MS);
@@ -243,7 +243,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
     try {
       const res = await api.get("/api/maintenance/calibration-status");
       setCalibrationStatusMap(res.data);
-    } catch (_) {}
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {

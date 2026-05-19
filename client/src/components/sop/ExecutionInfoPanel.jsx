@@ -3,12 +3,6 @@ import { generateSP } from "./generateSP";
 import { parseUtcDate } from "../../constants";
 import { formatLocal } from "../../utils/timezone";
 
-function fmtMin(min) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h > 0 ? `${h}h${String(m).padStart(2, "0")}m` : `${m}m`;
-}
-
 // 執行中資訊面板（左側欄，顯示 Pgm / Step / Free Time / Cycle / Now Time / End Time）
 const ExecutionInfoPanel = ({ sop, startedAt, simCycle, doneCnt }) => {
   const [now, setNow] = useState(new Date());
