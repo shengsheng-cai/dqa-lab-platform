@@ -60,10 +60,11 @@ function GanttChart({ schedules, blockedPeriods, rangeStart, rangeEnd, onClickSc
   // 建立日期 header 刻度
   const dayTicks = [];
   let cursor = new Date(rangeStart);
-  cursor.setUTCHours(0, 0, 0, 0);
+  cursor.setHours(0, 0, 0, 0);
   while (cursor.getTime() < rangeEnd) {
     dayTicks.push(new Date(cursor));
-    cursor = new Date(cursor.getTime() + 86400000);
+    cursor.setDate(cursor.getDate() + 1);
+    cursor.setHours(0, 0, 0, 0);
   }
 
   function toPx(dt) {

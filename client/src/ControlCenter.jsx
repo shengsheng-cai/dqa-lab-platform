@@ -105,7 +105,12 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
       {/* Tab content（display:none 保留狀態）*/}
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
         <div style={{ display: activeTab === "device" ? "block" : "none", height: "100%" }}>
-          <SOPPage active={activeTab === "device"} externalDevice={selectedDevice} onOpenExecutions={onOpenExecutions} />
+          <SOPPage
+            active={activeTab === "device"}
+            externalDevice={selectedDevice}
+            onOpenExecutions={onOpenExecutions}
+            liveDevices={devices}
+          />
         </div>
         <div style={{ display: activeTab === "fixture" ? "block" : "none", height: "100%" }}>
           <FixturePage active={activeTab === "fixture"} role={role} />

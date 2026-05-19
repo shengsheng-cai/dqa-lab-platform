@@ -44,7 +44,7 @@ function restoreSelectionFromSopId(sopId, standardTree) {
 }
 
 
-const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
+const SOPPage = ({ active = true, externalDevice, onOpenExecutions, liveDevices = [] }) => {
   const { showToast } = useToast();
   const [selectedDevice, setSelectedDevice] = useState(externalDevice || DEVICE_IDS[0]);
   const [pendingSchedule, setPendingSchedule] = useState(null);
@@ -74,6 +74,13 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
   const [photoUploading, setPhotoUploading] = useState(null);
   const role = localStorage.getItem("user_role") || "guest";
   const isAdmin = role === "admin";
+  const liveDeviceMap = useMemo(() => {
+    const map = {};
+    liveDevices.forEach((d) => {
+      if (d?.device_id) map[d.device_id] = d;
+    });
+    return map;
+  }, [liveDevices]);
 
   const historyFetchingRef = useRef(null);
   const lastHistoryMinuteRef = useRef(-1);
@@ -156,64 +163,61 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!active) return;
-    const poll = () => {
-      api
-        .get("/api/devices")
-        .then((r) => {
-          const map = {};
-          r.data.forEach((d) => {
-            map[d.device_id] = d;
-          });
-          setAllDevices(map);
-          setDeviceStates((prev) => {
-            const next = { ...prev };
-            DEVICE_IDS.forEach((id) => {
-              const cur = map[id];
-              if (!cur) return;
-              const p = prev[id];
-              let restoredSop = p.activeSop;
-              if (!restoredSop && cur.active_sop_json) {
-                try {
-                  restoredSop = JSON.parse(cur.active_sop_json);
-                } catch {
-                  /* ignore */
-                }
-              }
-              // EMERGENCY 清除；測試自然完成（IDLE + 執行紀錄已存）也清除，跳回選擇畫面
-              if (!cur.active_sop_json && p.activeSop && cur.status === "EMERGENCY")
-                restoredSop = null;
-              const completedCleanup =
-                cur.status === "IDLE" && !cur.active_sop_json && p.activeSop && p.savedExecutionId;
-              if (completedCleanup) restoredSop = null;
-              const selPatch =
-                restoredSop && !p.selectedStd && cur.active_sop_json
-                  ? { _pendingRestoreSopId: restoredSop.sop_id }
-                  : {};
-              next[id] = {
-                ...p,
-                activeSop: restoredSop,
-                ...(completedCleanup ? { savedExecutionId: null, chartHistory: [], chartStartedAt: null } : {}),
-                ...selPatch,
-              };
-            });
-            return next;
-          });
-          const now = new Date();
-          const min = now.getHours() * 60 + now.getMinutes();
-          if (now.getSeconds() < 10 && min !== lastHistoryMinuteRef.current) {
-            lastHistoryMinuteRef.current = min;
-            if (map[selectedDevice]?.started_at)
-              fetchHistory(selectedDevice, map[selectedDevice].started_at);
+  const syncDeviceSnapshot = useCallback((map) => {
+    setAllDevices(map);
+    setDeviceStates((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      DEVICE_IDS.forEach((id) => {
+        const cur = map[id];
+        if (!cur) return;
+        const p = prev[id];
+        let restoredSop = p.activeSop;
+        if (!restoredSop && cur.active_sop_json) {
+          try {
+            restoredSop = JSON.parse(cur.active_sop_json);
+          } catch {
+            /* ignore */
           }
-        })
-        .catch(() => {});
-    };
-    poll();
-    const t = setInterval(poll, 3000);
-    return () => clearInterval(t);
-  }, [selectedDevice, active, fetchHistory]);
+        }
+        // EMERGENCY 清除；測試自然完成（IDLE + 執行紀錄已存）也清除，跳回選擇畫面
+        if (!cur.active_sop_json && p.activeSop && cur.status === "EMERGENCY")
+          restoredSop = null;
+        const completedCleanup =
+          cur.status === "IDLE" && !cur.active_sop_json && p.activeSop && p.savedExecutionId;
+        if (completedCleanup) restoredSop = null;
+        const selPatch =
+          restoredSop && !p.selectedStd && cur.active_sop_json
+            ? { _pendingRestoreSopId: restoredSop.sop_id }
+            : {};
+        if (restoredSop === p.activeSop && !completedCleanup && Object.keys(selPatch).length === 0)
+          return;
+        changed = true;
+        next[id] = {
+          ...p,
+          activeSop: restoredSop,
+          ...(completedCleanup ? { savedExecutionId: null, chartHistory: [], chartStartedAt: null } : {}),
+          ...selPatch,
+        };
+      });
+      return changed ? next : prev;
+    });
+
+    const now = new Date();
+    const min = now.getHours() * 60 + now.getMinutes();
+    if (now.getSeconds() < 5 && min !== lastHistoryMinuteRef.current) {
+      lastHistoryMinuteRef.current = min;
+      if (map[selectedDevice]?.started_at) {
+        fetchHistory(selectedDevice, map[selectedDevice].started_at);
+      }
+    }
+  }, [selectedDevice, fetchHistory]);
+
+  // SOPPage 不再自行 poll；ControlCenter 持有 WebSocket 生命週期
+  useEffect(() => {
+    if (!active || liveDevices.length === 0) return;
+    syncDeviceSnapshot(liveDeviceMap);
+  }, [active, liveDevices, liveDeviceMap, syncDeviceSnapshot]);
 
   // 設備為 IDLE 時主動查詢是否有等待確認的排程，並補齊 savedExecutionId
   useEffect(() => {
@@ -717,6 +721,8 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
           {!isActive && !isFinishing && pendingSchedule && (() => {
             const conds = pendingSchedule.conditions || [];
             const idx = pendingSchedule.current_condition_index ?? 0;
+            const shownIdx =
+              conds.length === 0 ? 0 : Math.min(Math.max(idx, 1), conds.length);
             const isLast = idx >= conds.length;
             const label = isLast
               ? "✅ 確認全部完成"
@@ -730,7 +736,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions }) => {
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div>
                     <div style={{ color: "#f0a500", fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
-                      ⚠️ 條件 {idx}/{conds.length} 已完成，等待確認
+                      ⚠️ 條件 {shownIdx}/{conds.length} 已完成，等待確認
                     </div>
                     <div style={{ color: "#8b949e", fontSize: 12, marginBottom: 4 }}>
                       {pendingSchedule.project_number} / {pendingSchedule.sample_name}
