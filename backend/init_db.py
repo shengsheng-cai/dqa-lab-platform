@@ -138,9 +138,9 @@ with SessionLocal() as db:
             running_sop_name="Test Nb 漸進溫度循環：-40°C ↔ +85°C，2°C/min，5 循環",
             standard_id="iec60068_nb_-40_+85_5cycle",
             active_sop_json=_sop_json("iec60068_nb_-40_+85_5cycle"),
-            sim_phase="dwell_high", sim_cycle=1,
+            sim_phase="dwell_high", sim_cycle=0,
             started_at=_dt(hours=2),
-            dwell_high_start=_dt(minutes=25),
+            dwell_high_start=_dt(minutes=24),
             active_execution_id=ex1.id,
         ),
         DeviceState(
@@ -149,9 +149,9 @@ with SessionLocal() as db:
             running_sop_name="Test Nb 漸進溫度循環：-25°C ↔ +70°C，2°C/min，3 循環",
             standard_id="iec60068_nb_-25_+70_3cycle",
             active_sop_json=_sop_json("iec60068_nb_-25_+70_3cycle"),
-            sim_phase="dwell_low", sim_cycle=1,
-            started_at=_dt(hours=3),
-            dwell_low_start=_dt(minutes=30),
+            sim_phase="dwell_low", sim_cycle=0,
+            started_at=_dt(hours=5),
+            dwell_low_start=_dt(minutes=59),
             active_execution_id=ex2.id,
         ),
         DeviceState(device_id="CH-03", status="IDLE", temperature=25.0, humidity=55.0),
@@ -161,8 +161,8 @@ with SessionLocal() as db:
 
     # ── 5. Device Data（波形正確對齊 sim_phase）────────────────────
     # 每筆間隔 2 分鐘，共 60 筆 = 120 分鐘歷史
-    # CH-01 dwell_high 85°C：ramp 25→-40（15pt）→ ramp -40→85（32pt）→ dwell 85（13pt）
-    # CH-02 dwell_low -25°C：dwell 70（10pt）→ ramp 70→-25（35pt）→ dwell -25（15pt）
+    # CH-01（started_at 約 2h）：ramp 25→-40（17pt）→ ramp -40→85（31pt）→ dwell 85（12pt）
+    # CH-02（started_at 約 5h，當前 dwell_low）：dwell 70（7pt）→ ramp 70→-25（24pt）→ dwell -25（29pt）
     INTERVAL = 2  # minutes
 
     def _linspace(start: float, end: float, n: int) -> list[float]:
@@ -173,8 +173,8 @@ with SessionLocal() as db:
     def _dwell(temp: float, n: int, jitter: float = 0.3) -> list[float]:
         return [round(temp + random.uniform(-jitter, jitter), 1) for _ in range(n)]
 
-    ch01_temps = _linspace(25.0, -40.0, 15) + _linspace(-40.0, 85.0, 32) + _dwell(85.0, 13)
-    ch02_temps = _dwell(70.0, 10) + _linspace(70.0, -25.0, 35) + _dwell(-25.0, 15)
+    ch01_temps = _linspace(25.0, -40.0, 17) + _linspace(-40.0, 85.0, 31) + _dwell(85.0, 12)
+    ch02_temps = _dwell(70.0, 7) + _linspace(70.0, -25.0, 24) + _dwell(-25.0, 29)
 
     records = []
     total = len(ch01_temps)  # 60
