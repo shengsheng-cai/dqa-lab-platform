@@ -127,8 +127,8 @@ alembic revision --autogenerate -m "描述"
 alembic upgrade head
 
 # 後端單元測試
-cd backend && python -m pytest                        # 全套（129 tests）
-cd backend && python -m pytest tests/test_auth.py -v  # 單一測試檔
+cd backend && ../venv/bin/python -m pytest                        # 全套（129 tests）
+cd backend && ../venv/bin/python -m pytest tests/test_auth.py -v  # 單一測試檔
 ```
 
 ---
