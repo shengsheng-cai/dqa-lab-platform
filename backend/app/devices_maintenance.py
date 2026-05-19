@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
 from .models import SessionLocal, DeviceCalibration, DeviceMaintenance
 from .auth import require_admin
-from .utils import _now_utc_naive
+from .utils import _now_utc_naive, _to_naive_utc
 from .constants import DEVICE_IDS
 
 router = APIRouter(tags=["maintenance"])
@@ -16,13 +16,6 @@ router = APIRouter(tags=["maintenance"])
 
 # ── Pydantic Schemas ─────────────────────────────────────────────────────────
 
-
-def _to_naive_utc(dt: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt
-    return dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
 
 class CalibrationCreate(BaseModel):

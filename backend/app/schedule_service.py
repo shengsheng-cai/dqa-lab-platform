@@ -16,7 +16,7 @@ from .models import (
 )
 from .standards import get_standard
 from .sop import DEVICE_IDS
-from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions, parse_iso_utc
+from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions, parse_iso_utc, _to_naive_utc
 from .audit import log_audit
 
 logger = logging.getLogger("schedule_service")
@@ -245,12 +245,12 @@ def _find_earliest_slot(
     db,
     running_until: Optional[dict] = None,
 ) -> datetime.datetime:
-    """找出指定設備的最早可用開始時間（aware UTC）"""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    """找出指定設備的最早可用開始時間（naive UTC，供 DB 寫入）。"""
+    now = _now_utc_naive()
 
     candidate_start = now
     if running_until and device_id in running_until:
-        live_end = running_until[device_id]
+        live_end = _to_naive_utc(running_until[device_id])
         if live_end and live_end > candidate_start:
             candidate_start = live_end
 
@@ -265,9 +265,9 @@ def _find_earliest_slot(
     )
 
     for s in existing:
-        end = s.end_time
-        if end.tzinfo is None:
-            end = end.replace(tzinfo=datetime.timezone.utc)
+        end = _to_naive_utc(s.end_time)
+        if end is None:
+            continue
         if end > candidate_start:
             candidate_start = end
 
@@ -285,9 +285,9 @@ def _find_earliest_slot(
         )
         if not blocked:
             break
-        b_end = blocked.end_time
-        if b_end.tzinfo is None:
-            b_end = b_end.replace(tzinfo=datetime.timezone.utc)
+        b_end = _to_naive_utc(blocked.end_time)
+        if b_end is None:
+            continue
         candidate_start = b_end
 
     return candidate_start

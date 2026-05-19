@@ -25,9 +25,9 @@ def _future(hours: float) -> datetime.datetime:
 
 def test_empty_db_returns_now(db):
     """空 DB：最早可用時間 ≈ now"""
-    before = datetime.datetime.now(UTC)
+    before = _naive(datetime.datetime.now(UTC))
     result = _find_earliest_slot("CH-01", 2.0, db)
-    after = datetime.datetime.now(UTC)
+    after = _naive(datetime.datetime.now(UTC))
     assert before <= result <= after + datetime.timedelta(seconds=1)
 
 
@@ -46,7 +46,7 @@ def test_after_confirmed_schedule(db):
     db.commit()
 
     result = _find_earliest_slot("CH-01", 2.0, db)
-    assert result >= future_end - datetime.timedelta(seconds=1)
+    assert result >= _naive(future_end - datetime.timedelta(seconds=1))
 
 
 def test_ignores_cancelled_schedule(db):
@@ -62,9 +62,9 @@ def test_ignores_cancelled_schedule(db):
     db.add(s)
     db.commit()
 
-    before = datetime.datetime.now(UTC)
+    before = _naive(datetime.datetime.now(UTC))
     result = _find_earliest_slot("CH-01", 2.0, db)
-    after = datetime.datetime.now(UTC)
+    after = _naive(datetime.datetime.now(UTC))
     # 已取消不算衝突 → 回傳 now
     assert before <= result <= after + datetime.timedelta(seconds=1)
 
@@ -81,7 +81,7 @@ def test_skips_blocked_period(db):
     db.commit()
 
     result = _find_earliest_slot("CH-01", 2.0, db)
-    assert result >= block_end - datetime.timedelta(seconds=1)
+    assert result >= _naive(block_end - datetime.timedelta(seconds=1))
 
 
 def test_running_until_respected(db):
@@ -90,7 +90,7 @@ def test_running_until_respected(db):
     running_until = {"CH-01": live_end}
 
     result = _find_earliest_slot("CH-01", 2.0, db, running_until=running_until)
-    assert result >= live_end - datetime.timedelta(seconds=1)
+    assert result >= _naive(live_end - datetime.timedelta(seconds=1))
 
 
 def test_chained_schedules(db):
@@ -108,7 +108,7 @@ def test_chained_schedules(db):
     db.commit()
 
     result = _find_earliest_slot("CH-01", 1.0, db)
-    assert result >= _future(9) - datetime.timedelta(seconds=1)
+    assert result >= _naive(_future(9) - datetime.timedelta(seconds=1))
 
 
 # ── _auto_assign ───────────────────────────────────────────────────────────

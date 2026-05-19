@@ -116,7 +116,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 cp .env.example backend/.env   # 首次：填入 ADMIN_PASSWORD、GEMINI_API_KEY 等
 make install                   # 安裝所有依賴（pip + npm）
-python backend/init_db.py      # 初始化資料庫（首次）
+venv/bin/python backend/init_db.py  # 初始化資料庫（首次）
 make dev                       # 啟動全部服務（uvicorn:8000 + vite:5173 + ngrok）
 make test                      # 執行後端測試
 make lint                      # ruff 檢查（line-length 120）
@@ -127,7 +127,7 @@ alembic revision --autogenerate -m "描述"
 alembic upgrade head
 
 # 後端單元測試
-cd backend && python -m pytest                        # 全套（124 tests）
+cd backend && python -m pytest                        # 全套（129 tests）
 cd backend && python -m pytest tests/test_auth.py -v  # 單一測試檔
 ```
 

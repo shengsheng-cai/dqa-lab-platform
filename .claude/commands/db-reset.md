@@ -5,5 +5,5 @@
 步驟：
 1. 先確認我真的要重置（回覆「確認」才繼續）
 2. 用中文說明即將執行的指令
-3. 執行：`python backend/init_db.py`
+3. 執行：`venv/bin/python backend/init_db.py`
 4. 確認初始化成功，列出建立的 table 數量
