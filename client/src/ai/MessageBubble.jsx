@@ -1,8 +1,8 @@
 // client/src/ai/MessageBubble.jsx
 import { useState, useRef, useEffect } from "react";
-
-export const DISCLAIMER =
-  "⚠️ 本建議僅供初步評估參考，實際測試條件與判定標準請以原始法規文件為準，並由授權工程師確認。";
+import MarkdownRenderer from "./MarkdownRenderer";
+import { cleanText } from "./markdownUtils";
+import { DISCLAIMER } from "./messageBubbleConstants";
 
 const COLLAPSE_HEIGHT = 300;
 
@@ -59,91 +59,9 @@ const SIMPLIFIED_ONLY = new Set([
   "载",
 ]);
 
-export const hasSimplified = (text) =>
+const hasSimplified = (text) =>
   [...text].some((c) => SIMPLIFIED_ONLY.has(c));
 
-export const cleanText = (text) =>
-  text
-    .replace(/```[\w]*\n?/g, "")
-    .replace(/```/g, "")
-    .trim();
-
-// ── Markdown 渲染 ─────────────────────────────────────────────
-function inlineMarkdown(text) {
-  const parts = [];
-  const regex = /(\*\*(.+?)\*\*|`(.+?)`)/g;
-  let last = 0,
-    match,
-    idx = 0;
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > last) parts.push(text.slice(last, match.index));
-    if (match[2])
-      parts.push(
-        <strong key={idx++} style={{ color: "#cdd9e5" }}>
-          {match[2]}
-        </strong>,
-      );
-    else if (match[3])
-      parts.push(
-        <code key={idx++} style={S.inlineCode}>
-          {match[3]}
-        </code>,
-      );
-    last = match.index + match[0].length;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return parts;
-}
-
-export function renderMarkdown(rawText) {
-  const text = cleanText(rawText);
-  const lines = text.split("\n");
-  const elements = [];
-  lines.forEach((line, i) => {
-    if (line.startsWith("### "))
-      elements.push(
-        <h3 key={i} style={S.h3}>
-          {line.slice(4)}
-        </h3>,
-      );
-    else if (line.startsWith("## "))
-      elements.push(
-        <h2 key={i} style={S.h2}>
-          {line.slice(3)}
-        </h2>,
-      );
-    else if (line.startsWith("# "))
-      elements.push(
-        <h1 key={i} style={S.h1}>
-          {line.slice(2)}
-        </h1>,
-      );
-    else if (line.startsWith("- ") || line.startsWith("* "))
-      elements.push(
-        <div key={i} style={S.listItem}>
-          <span style={S.bullet}>▸</span>
-          <span>{inlineMarkdown(line.slice(2))}</span>
-        </div>,
-      );
-    else if (/^\d+[\.\、]\s*/.test(line)) {
-      const m = line.match(/^(\d+)[\.、]\s*(.*)$/);
-      elements.push(
-        <div key={i} style={S.listItem}>
-          <span style={S.numBullet}>{m[1]}.</span>
-          <span>{inlineMarkdown(m[2])}</span>
-        </div>,
-      );
-    } else if (line.trim() === "")
-      elements.push(<div key={i} style={{ height: 8 }} />);
-    else
-      elements.push(
-        <p key={i} style={S.p}>
-          {inlineMarkdown(line)}
-        </p>,
-      );
-  });
-  return elements;
-}
 
 // ── 可折疊泡泡 ───────────────────────────────────────────────
 function CollapsibleBubble({ children, contentKey }) {
@@ -226,7 +144,7 @@ export default function MessageBubble({
         <div style={m.role === "user" ? S.userBubble : S.aiBubble}>
           {m.role === "assistant" ? (
             <CollapsibleBubble contentKey={m.content}>
-              {renderMarkdown(m.content)}
+              <MarkdownRenderer text={m.content} />
             </CollapsibleBubble>
           ) : (
             <p style={{ margin: 0 }}>{m.content}</p>

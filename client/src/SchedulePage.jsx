@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api from "./api";
-import { useToast } from "./components/Toast";
+import { useToast } from "./components/useToast";
 import { DEVICE_IDS, parseUtcDate } from "./constants";
 import ConfirmModal from "./components/ConfirmModal";
 
@@ -264,9 +264,11 @@ function ConditionPicker({ standardsTree, selected, onChange, initialStd, initia
   useEffect(() => {
     if (activeStd && standardsTree[activeStd]) {
       const vers = Object.keys(standardsTree[activeStd].versions);
+      // 首次有版本資料時補預設選取；!activeVer 守衛確保最多跑一次，可接受的同步 setState
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (vers.length > 0 && !activeVer) setActiveVer(vers[0]);
     }
-  }, [activeStd, standardsTree]);
+  }, [activeStd, standardsTree, activeVer]);
 
   const tests = activeStd && activeVer && standardsTree[activeStd]?.versions?.[activeVer]?.tests || {};
 
@@ -1504,6 +1506,8 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
 
   useEffect(() => {
     if (active) fetchAll();
+    // fetchAll 刻意不入 deps：只在 active 切換時重抓，避免 identity 變動造成重複請求
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   const canOperate = role === "admin";

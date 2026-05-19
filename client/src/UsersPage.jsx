@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "./api";
-import { useToast } from "./components/Toast";
+import { useToast } from "./components/useToast";
 
 const ROLE_LABELS = { admin: "管理者" };
 const ROLE_COLORS = { admin: "#f85149" };

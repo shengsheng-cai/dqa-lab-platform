@@ -28,10 +28,12 @@ const SafetyChecklist = ({
   // modal 開啟時自動 focus 輸入框，並帶入已有的 operator
   useEffect(() => {
     if (showModal) {
+      // modal 開啟時同步既有 operator 至輸入框；僅在 showModal 翻 true 時一次性同步 setState
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setModalOperator(operator || "");
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [showModal, operator]); // eslint-disable-line
+  }, [showModal, operator]);
 
   const handleLaunchClick = () => {
     setShowModal(true);

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "./api";
 import { useDeviceWebSocket } from "./useDeviceWebSocket";
-import { useToast } from "./components/Toast";
+import { useToast } from "./components/useToast";
 import SOPPage from "./SOPPage";
 import FixturePage from "./FixturePage";
 import SchedulePage from "./SchedulePage";
@@ -14,7 +14,7 @@ import RightPanel from "./components/control/RightPanel";
 import SensorQcModal from "./components/control/SensorQcModal";
 import AuditLog from "./components/control/AuditLog";
 import TopBar from "./components/control/TopBar";
-import { conditionLabel } from "./components/control/DeviceCard";
+import { conditionLabel } from "./components/control/deviceCardUtils";
 import TabBadge from "./components/control/TabBadge";
 import LeftPanel from "./components/control/LeftPanel";
 import { DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, IDLE_STATUS } from "./constants";
@@ -142,7 +142,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const activeTab = PATH_TO_TAB[pathname] ?? "device";
-  const setActiveTab = (key) => navigate(TAB_TO_PATH[key] ?? "/");
+  const setActiveTab = useCallback((key) => navigate(TAB_TO_PATH[key] ?? "/"), [navigate]);
 
   const { devices } = useDeviceWebSocket();
   const [pendingByDevice, setPendingByDevice] = useState({});
@@ -162,7 +162,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
     setActiveTab("schedule");
     setScheduleInitConds(sop_ids);
     showToast(`已帶入 ${sop_ids.length} 個條件，請至排程頁面確認`, "info");
-  }, [showToast]);
+  }, [showToast, setActiveTab]);
 
   // 輪詢進行中排程（3s），建 device_id → schedule map
   useEffect(() => {
@@ -247,6 +247,8 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   }, []);
 
   useEffect(() => {
+    // fetchCalStatus 為 async（await 後才 setState），非串接 render，誤報
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCalStatus();
     const t = setInterval(fetchCalStatus, 60000);
     return () => clearInterval(t);

@@ -3,7 +3,7 @@ import api from "./api";
 import { POLL_GENERAL_MS } from "./constants";
 import { downloadBlob, buildReportFilename } from "./utils/download";
 import { formatLocal } from "./utils/timezone";
-import { useToast } from "./components/Toast";
+import { useToast } from "./components/useToast";
 
 function fmtDatetime(str) {
   if (!str) return "—";

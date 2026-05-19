@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api from "./api";
-import { useToast } from "./components/Toast";
+import { useToast } from "./components/useToast";
 import MonitorSide from "./components/sop/MonitorSide";
 import ControlPanel from "./components/sop/ControlPanel";
 import ConditionCard from "./components/sop/ConditionCard";
@@ -475,7 +475,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, liveDevices 
         return { ...prev, [selectedDevice]: { ...prevDs, completedSteps: newCompleted } };
       });
     }
-  }, [allDevices, selectedDevice]); // eslint-disable-line
+  }, [allDevices, selectedDevice]);
 
   const startSop = async (confirmedOperator) => {
     if (!testData || starting) return;

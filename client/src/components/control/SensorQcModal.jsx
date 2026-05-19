@@ -10,6 +10,8 @@ const SensorQcModal = ({ deviceId, onClose }) => {
   useEffect(() => {
     if (!deviceId) return;
     const controller = new AbortController();
+    // 開啟/切換 deviceId 時初始化載入狀態；deviceId 變更時一次性同步 setState，AbortController 保護
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
     api

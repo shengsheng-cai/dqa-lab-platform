@@ -1,5 +1,5 @@
 // client/src/ai/useAIChat.jsx
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   loadChats,
   saveChats,
@@ -54,7 +54,10 @@ export default function useAIChat() {
   const activeId = store.activeConversationId;
   const conversations = store.conversations;
   const projectGroups = store.projectGroups;
-  const messages = conversations[activeId]?.messages ?? [];
+  const messages = useMemo(
+    () => conversations[activeId]?.messages ?? [],
+    [conversations, activeId],
+  );
   const messagesRef = useRef(messages);
   useEffect(() => {
     messagesRef.current = messages;

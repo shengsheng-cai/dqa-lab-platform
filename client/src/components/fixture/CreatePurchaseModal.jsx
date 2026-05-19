@@ -1,7 +1,8 @@
 import { useState } from "react";
 import api from "../../api";
-import { useToast } from "../Toast";
-import ModalShell, { inputStyle } from "./ModalShell";
+import { useToast } from "../useToast";
+import ModalShell from "./ModalShell";
+import { inputStyle } from "./modalStyles";
 
 export default function CreatePurchaseModal({ fixtures, preFill, onClose, onSubmit }) {
   const { showToast } = useToast();
