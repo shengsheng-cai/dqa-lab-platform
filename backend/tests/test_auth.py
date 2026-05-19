@@ -86,7 +86,7 @@ def test_tracker_evicts_old_non_blocked_entry(monkeypatch):
     assert "ip-blocked" in _fail_tracker
 
 
-def test_tracker_does_not_evict_active_blocked_when_full(monkeypatch):
+def test_tracker_evicts_blocked_entry_when_full(monkeypatch):
     monkeypatch.setattr(auth_module, "_FAIL_TRACKER_MAXSIZE", 2)
     now = time.time()
     _fail_tracker.update({
@@ -96,7 +96,7 @@ def test_tracker_does_not_evict_active_blocked_when_full(monkeypatch):
 
     tracker = _get_tracker("ip-new")
 
-    assert set(_fail_tracker.keys()) == {"ip-a", "ip-b"}
-    assert "ip-new" not in _fail_tracker
+    assert set(_fail_tracker.keys()) == {"ip-b", "ip-new"}
     assert tracker["count"] == 0
     assert tracker["blocked_until"] == 0.0
+    assert tracker is _fail_tracker["ip-new"]

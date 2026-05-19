@@ -111,9 +111,14 @@ def _get_tracker(ip: str) -> dict:
                 break
 
     if len(_fail_tracker) >= _FAIL_TRACKER_MAXSIZE:
-        # 極端情況：全部都是仍在封鎖中的 IP。避免誤刪活躍封鎖，改回傳暫時 tracker。
-        logger.warning("rate limit tracker 已滿且全為封鎖中 IP；新 IP 將暫時不持久追蹤")
-        return {"count": 0, "blocked_until": 0.0, "last_seen": now}
+        # 極端情況：全部都是封鎖中 IP。淘汰最接近解封的一筆，確保新 IP 可被持久追蹤。
+        blocked = sorted(
+            ((k, v.get("blocked_until", 0.0), v.get("last_seen", 0.0)) for k, v in _fail_tracker.items()),
+            key=lambda item: (item[1], item[2]),
+        )
+        evicted_key = blocked[0][0]
+        _fail_tracker.pop(evicted_key, None)
+        logger.warning("rate limit tracker 已滿；淘汰封鎖中 IP %s 以追蹤新來源", evicted_key)
 
     _fail_tracker[ip] = {"count": 0, "blocked_until": 0.0, "last_seen": now}
     return _fail_tracker[ip]
