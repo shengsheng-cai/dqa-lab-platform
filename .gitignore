@@ -52,6 +52,7 @@ client/dist/
 client/dist-ssr/
 client/.vite/
 client/.eslintcache
+static/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

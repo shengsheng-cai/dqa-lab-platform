@@ -100,8 +100,8 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 
 ```bash
 make install                  # 安裝所有依賴
-venv/bin/python backend/init_db.py  # 初始化資料庫（首次執行）
-make dev                      # 啟動全部服務
+venv/bin/python backend/init_db.py  # 重建並重灌 demo 資料（會清空既有資料）
+make dev                      # 啟動全部服務（含 HF 本地預覽）
 make test                     # 執行後端 + 前端測試
 ```
 
@@ -109,7 +109,14 @@ make test                     # 執行後端 + 前端測試
 |------|------|
 | 前端 | http://localhost:5173 |
 | 後端 API | http://localhost:8000 |
+| HF 本地預覽 | http://localhost:7861 |
 | API 文件 | http://localhost:8000/docs |
+
+`make dev` 會同時啟動：
+- 一般開發模式（`5173` 前端 + `8000` 後端）
+- HF 類環境本地預覽（`7861`，使用 `/tmp/dqa-hf-preview.db`，由 `backend/init_db.py` 重新 seed）
+
+HF 本地預覽登入帳密預設跟 `backend/.env` 相同（`ADMIN_PASSWORD` / `DEMO_PASSWORD`），若未設定則 fallback 為 `hf_preview_admin` / `hf_preview_guest`。
 
 複製專案根目錄的 `.env.example` 為 `backend/.env`（後端啟動時讀取）：
 

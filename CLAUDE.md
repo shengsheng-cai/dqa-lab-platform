@@ -116,8 +116,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 cp .env.example backend/.env   # 首次：填入 ADMIN_PASSWORD、GEMINI_API_KEY 等
 make install                   # 安裝所有依賴（pip + npm）
-venv/bin/python backend/init_db.py  # 初始化資料庫（首次）
-make dev                       # 啟動全部服務（uvicorn:8000 + vite:5173 + ngrok）
+venv/bin/python backend/init_db.py  # 重建並重灌 demo 資料（會清空既有資料）
+make dev                       # 啟動全部服務（uvicorn:8000 + vite:5173 + hf-preview:7861 + ngrok）
 make test                      # 執行後端 + 前端測試
 make lint                      # ruff 檢查（line-length 120）
 make clean                     # 清理殘留程序

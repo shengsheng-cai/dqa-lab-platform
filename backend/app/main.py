@@ -272,7 +272,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
 
-_static_dir = Path(__file__).parent.parent.parent / "static"
+_static_dir = Path(v) if (v := os.environ.get("STATIC_DIR")) else Path(__file__).parent.parent.parent / "static"
 if _static_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="assets")
 
