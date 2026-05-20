@@ -21,17 +21,19 @@ from app.models import (
     Schedule, SopExecution,
 )
 from app.sop import STANDARDS_AND_SOPS
+from app.utils import _now_utc_naive
 
 random.seed(42)  # 固定 seed，波形可重現
 
 
 def _dt(**kw) -> datetime.datetime:
-    return datetime.datetime.utcnow() - datetime.timedelta(**kw)
+    return _now_utc_naive() - datetime.timedelta(**kw)
 
 
-print("正在建立資料表...")
+print("正在重建資料表...")
+Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
-print("✅ 資料表建立完成！")
+print("✅ 資料表重建完成！")
 
 ensure_admin_user()
 print("✅ Admin 帳號就緒！")
@@ -74,7 +76,7 @@ with SessionLocal() as db:
         project_number="PRJ-2025-091", sample_name="EN50155 軌道車輛環境測試",
         applicant_name="林工", device_id="CH-02", standard="EN 50155",
         conditions=json.dumps(["iec60068_nb_-25_+70_3cycle"]),
-        start_time=_dt(hours=3), end_time=_dt(hours=-7),
+        start_time=_dt(hours=2, minutes=50), end_time=_dt(hours=-7),
         status="進行中", current_condition_index=0,
     )
     sch3 = Schedule(
@@ -114,7 +116,7 @@ with SessionLocal() as db:
     )
     ex2 = SopExecution(
         sop_id="iec60068_nb_-25_+70_3cycle", device_id="CH-02",
-        operator="林工", test_started_at=_dt(hours=3),
+        operator="林工", test_started_at=_dt(hours=4, minutes=26),
     )
     ex3 = SopExecution(
         sop_id="en50155_2017_ot3_high", device_id="CH-04",
@@ -150,8 +152,7 @@ with SessionLocal() as db:
             standard_id="iec60068_nb_-25_+70_3cycle",
             active_sop_json=_sop_json("iec60068_nb_-25_+70_3cycle"),
             sim_phase="dwell_low", sim_cycle=0,
-            # CH-02 改為「從起始階段剛開始跑」：先降溫到 -25 後，剛進入低溫停留
-            started_at=_dt(minutes=50),
+            started_at=_dt(hours=4, minutes=26),
             dwell_low_start=_dt(minutes=24),
             active_execution_id=ex2.id,
         ),
@@ -161,9 +162,10 @@ with SessionLocal() as db:
     ])
 
     # ── 5. Device Data（波形正確對齊 sim_phase）────────────────────
-    # 每筆間隔 2 分鐘，共 60 筆 = 120 分鐘歷史
-    # CH-01（started_at 約 2h）：ramp 25→-40（17pt）→ ramp -40→85（31pt）→ dwell 85（12pt）
-    # CH-02（started_at 約 50m，當前 dwell_low）：ambient（35pt）→ ramp 25→-25（13pt）→ dwell -25（12pt）
+    # 每筆間隔 2 分鐘；不同設備依相位需求生成不同長度的歷史軌跡
+    # CH-01（dwell_high @85°C）：ramp 25→-40（17pt）→ ramp -40→85（31pt）→ dwell 85（12pt）
+    # CH-02（dwell_low @-25°C）：ramp 25→-25（13pt）→ ramp -25→70（24pt）→ dwell 70（60pt）
+    #                           → ramp 70→-25（24pt）→ dwell -25（12pt）= 133pt × 2min = 266min
     INTERVAL = 2  # minutes
 
     def _linspace(start: float, end: float, n: int) -> list[float]:
@@ -175,21 +177,27 @@ with SessionLocal() as db:
         return [round(temp + random.uniform(-jitter, jitter), 1) for _ in range(n)]
 
     ch01_temps = _linspace(25.0, -40.0, 17) + _linspace(-40.0, 85.0, 31) + _dwell(85.0, 12)
-    ch02_temps = _dwell(25.0, 35, jitter=0.4) + _linspace(25.0, -25.0, 13) + _dwell(-25.0, 12)
+    ch02_temps = (
+        _linspace(25.0, -25.0, 13) +  # ramp_to_low:  50°C / 2°C/min = 25min ≈ 13pt
+        _linspace(-25.0, 70.0, 24) +  # ramp_to_high: 95°C / 2°C/min = 48min ≈ 24pt
+        _dwell(70.0, 60) +            # dwell_high:   120min（對齊標準）
+        _linspace(70.0, -25.0, 24) +  # ramp_to_low2: 95°C / 2°C/min = 48min ≈ 24pt
+        _dwell(-25.0, 12)             # dwell_low:    24min ← current
+    )
 
     records = []
-    total = len(ch01_temps)  # 60
+    _ts_now = _now_utc_naive()
     for i, temp in enumerate(ch01_temps):
-        ts = datetime.datetime.utcnow() - datetime.timedelta(minutes=INTERVAL * (total - i))
         records.append(DeviceData(
-            device_id="CH-01", timestamp=ts,
+            device_id="CH-01",
+            timestamp=_ts_now - datetime.timedelta(minutes=INTERVAL * (len(ch01_temps) - i)),
             temperature=temp,
             humidity=round(50.0 + random.uniform(-2.0, 2.0), 1),
         ))
     for i, temp in enumerate(ch02_temps):
-        ts = datetime.datetime.utcnow() - datetime.timedelta(minutes=INTERVAL * (total - i))
         records.append(DeviceData(
-            device_id="CH-02", timestamp=ts,
+            device_id="CH-02",
+            timestamp=_ts_now - datetime.timedelta(minutes=INTERVAL * (len(ch02_temps) - i)),
             temperature=temp,
             humidity=round(52.0 + random.uniform(-2.0, 2.0), 1),
         ))

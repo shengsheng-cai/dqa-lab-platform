@@ -7,7 +7,7 @@ PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else ech
 help:
 	@echo "🛠️  DQA Lab 控制指令："
 	@echo "  make install - 安裝後端與前端依賴"
-	@echo "  make dev     - 一鍵啟動所有服務（含 ngrok 自動更新 LINE Webhook）"
+	@echo "  make dev     - 一鍵啟動所有服務（含 HF 本地預覽 + ngrok 自動更新 LINE Webhook）"
 	@echo "  make test    - 執行後端 + 前端測試"
 	@echo "  make lint    - 執行 PEP 8 檢查（ruff）"
 	@echo "  make clean   - 關閉所有服務並清理殘留程序"
@@ -32,7 +32,7 @@ clean:
 	-@pkill -9 -f "uvicorn" 2>/dev/null
 	-@pkill -9 -f "node.*vite" 2>/dev/null
 	-@pkill -9 -f "ngrok" 2>/dev/null
-	@rm -f .backend.log .ngrok.log
+	@rm -f .backend.log .frontend.log .ngrok.log .hf-preview.log
 	@echo "✨ 清理完成。"
 
 # 4. 測試

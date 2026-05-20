@@ -256,6 +256,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   }, [fetchCalStatus]);
 
   useEffect(() => {
+    if (role !== "admin") return;
     let cancelled = false;
     api.get("/api/runtime-info")
       .then((res) => {
@@ -265,7 +266,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, []);
+  }, [role]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
