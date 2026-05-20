@@ -150,8 +150,9 @@ with SessionLocal() as db:
             standard_id="iec60068_nb_-25_+70_3cycle",
             active_sop_json=_sop_json("iec60068_nb_-25_+70_3cycle"),
             sim_phase="dwell_low", sim_cycle=0,
-            started_at=_dt(hours=5),
-            dwell_low_start=_dt(minutes=59),
+            # CH-02 改為「從起始階段剛開始跑」：先降溫到 -25 後，剛進入低溫停留
+            started_at=_dt(minutes=50),
+            dwell_low_start=_dt(minutes=24),
             active_execution_id=ex2.id,
         ),
         DeviceState(device_id="CH-03", status="IDLE", temperature=25.0, humidity=55.0),
@@ -162,7 +163,7 @@ with SessionLocal() as db:
     # ── 5. Device Data（波形正確對齊 sim_phase）────────────────────
     # 每筆間隔 2 分鐘，共 60 筆 = 120 分鐘歷史
     # CH-01（started_at 約 2h）：ramp 25→-40（17pt）→ ramp -40→85（31pt）→ dwell 85（12pt）
-    # CH-02（started_at 約 5h，當前 dwell_low）：dwell 70（7pt）→ ramp 70→-25（24pt）→ dwell -25（29pt）
+    # CH-02（started_at 約 50m，當前 dwell_low）：ambient（35pt）→ ramp 25→-25（13pt）→ dwell -25（12pt）
     INTERVAL = 2  # minutes
 
     def _linspace(start: float, end: float, n: int) -> list[float]:
@@ -174,7 +175,7 @@ with SessionLocal() as db:
         return [round(temp + random.uniform(-jitter, jitter), 1) for _ in range(n)]
 
     ch01_temps = _linspace(25.0, -40.0, 17) + _linspace(-40.0, 85.0, 31) + _dwell(85.0, 12)
-    ch02_temps = _dwell(70.0, 7) + _linspace(70.0, -25.0, 24) + _dwell(-25.0, 29)
+    ch02_temps = _dwell(25.0, 35, jitter=0.4) + _linspace(25.0, -25.0, 13) + _dwell(-25.0, 12)
 
     records = []
     total = len(ch01_temps)  # 60
