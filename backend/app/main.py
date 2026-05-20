@@ -8,7 +8,7 @@ import asyncio
 import datetime
 import random
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from .sop import router as sop_router, execution_router, DEVICE_IDS
@@ -17,14 +17,14 @@ from .errors import router as errors_router
 from .ai import router as ai_router
 from .rag import warmup_rag
 from .line import router as line_router
-from .auth import router as auth_router
+from .auth import router as auth_router, require_admin
 from .fixtures import router as fixtures_router
 from .purchase_orders import router as purchase_orders_router
 from .schedules import (
     router as schedules_router, blocked_router as device_blocked_router,
 )
 from .schedule_service import auto_advance_schedules
-from .models import SessionLocal, DeviceState
+from .models import SessionLocal, DeviceState, SQLALCHEMY_DATABASE_URL
 from .simulator import data_simulator
 from .devices import router as devices_router
 from .audit import router as audit_router
@@ -38,9 +38,63 @@ logger = logging.getLogger("app")
 background_tasks = set()
 
 
+def _has_env(name: str) -> bool:
+    return bool(os.getenv(name, "").strip())
+
+
+def _is_ephemeral_sqlite(url: str) -> bool:
+    lower = url.lower()
+    return lower.startswith("sqlite") and (":memory:" in lower or "/tmp/" in lower)
+
+
+def _build_runtime_info() -> dict:
+    is_hf_space = bool(os.getenv("SPACE_ID") or os.getenv("HF_SPACE_ID"))
+    capabilities = {
+        "ai_enabled": _has_env("GEMINI_API_KEY"),
+        "line_push_enabled": _has_env("LINE_CHANNEL_ACCESS_TOKEN") and _has_env("LINE_USER_ID"),
+        "admin_password_configured": _has_env("ADMIN_PASSWORD"),
+        "persistent_db": not _is_ephemeral_sqlite(SQLALCHEMY_DATABASE_URL),
+    }
+
+    warnings = []
+    checks = [
+        (
+            "admin_password_missing",
+            not capabilities["admin_password_configured"],
+            "ADMIN_PASSWORD 未設定，管理者密碼不會在啟動時自動同步。",
+        ),
+        ("ai_disabled", not capabilities["ai_enabled"], "AI 諮詢未啟用（缺 GEMINI_API_KEY）。"),
+        (
+            "line_push_disabled",
+            not capabilities["line_push_enabled"],
+            "LINE 推播未啟用（缺 LINE_CHANNEL_ACCESS_TOKEN 或 LINE_USER_ID）。",
+        ),
+        (
+            "sqlite_ephemeral",
+            not capabilities["persistent_db"],
+            "目前資料庫為暫存（SQLite /tmp 或 in-memory），服務重啟後會清空。",
+        ),
+    ]
+    for code, enabled, message in checks:
+        if enabled:
+            warnings.append({"code": code, "message": message})
+
+    return {
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "platform": {"hf_space": is_hf_space},
+        "capabilities": capabilities,
+        "warnings": warnings,
+    }
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from .models import init_db
+
+    runtime_info = _build_runtime_info()
+    app.state.runtime_info = runtime_info
+    for item in runtime_info["warnings"]:
+        logger.warning("[startup-check] %s", item["message"])
 
     init_db()
 
@@ -198,6 +252,12 @@ app.add_middleware(
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/runtime-info")
+def runtime_info(request: Request, _: None = Depends(require_admin)):
+    info = getattr(app.state, "runtime_info", None) or _build_runtime_info()
+    return info
 
 
 @app.get("/robots.txt", include_in_schema=False)

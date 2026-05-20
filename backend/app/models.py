@@ -19,8 +19,31 @@ from typing import Optional
 logger = logging.getLogger("models")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _normalize_database_url(raw_url: str | None) -> str:
+    """Resolve relative SQLite paths to BASE_DIR-anchored absolute paths to avoid cwd-dependent duplicates."""
+    if not raw_url:
+        return f"sqlite:///{os.path.join(BASE_DIR, 'aicm.db')}"
+
+    if raw_url in {"sqlite://", "sqlite:///:memory:"}:
+        return raw_url
+
+    if raw_url.startswith("sqlite:////"):
+        return raw_url
+
+    if raw_url.startswith("sqlite:///"):
+        rel_path = raw_url[len("sqlite:///"):]
+        if rel_path.startswith("./"):
+            rel_path = rel_path[2:]
+        abs_path = os.path.abspath(os.path.join(BASE_DIR, rel_path))
+        return f"sqlite:///{abs_path}"
+
+    return raw_url
+
+
 _db_url = os.getenv("DATABASE_URL")
-SQLALCHEMY_DATABASE_URL = _db_url if _db_url else f"sqlite:///{BASE_DIR}/test.db"
+SQLALCHEMY_DATABASE_URL = _normalize_database_url(_db_url)
 
 _connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
 _pool_kwargs = (

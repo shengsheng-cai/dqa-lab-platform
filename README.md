@@ -61,6 +61,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 | 🔧 **維護** | 設備校驗紀錄（日期、證書號、結果）& 維護紀錄（預防性 / 矯正性 / 例行點檢）；左側欄即時顯示各台設備校驗狀態（正常 / 即將到期 / 逾期 / 未知）；DeviceCard badge 警示 |
 
 > ⚠️ **AI 諮詢功能限制**：線上版使用 Gemini 免費方案，每日限制 20 次請求，額度用完後顯示提示並隔日自動恢復。完整 demo 建議以本地端執行。
+> ⚠️ **Live Demo（HF Spaces）限制**：資料庫使用 `/tmp/demo.db`（重啟會清空）；若未設定 LINE secrets，推播通知功能不啟用。
 > 
 <img src="docs/line-1.png" width="260"> <img src="docs/line-2.png" width="260"> <img src="docs/line-3.png" width="260">
 

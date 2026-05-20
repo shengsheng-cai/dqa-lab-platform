@@ -155,6 +155,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
   const [recordsSubTab, setRecordsSubTab] = useState("errors");
   const [sensorModalDevice, setSensorModalDevice] = useState(null);
   const [calibrationStatusMap, setCalibrationStatusMap] = useState({});
+  const [runtimeWarnings, setRuntimeWarnings] = useState([]);
   const handleInitCondsConsumed = useCallback(() => setScheduleInitConds(null), []);
   const { showToast } = useToast();
 
@@ -254,9 +255,29 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
     return () => clearInterval(t);
   }, [fetchCalStatus]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/api/runtime-info")
+      .then((res) => {
+        if (cancelled) return;
+        const next = Array.isArray(res.data?.warnings) ? res.data.warnings : [];
+        setRuntimeWarnings(next);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       <TopBar devices={devices} fixtureSummary={fixtureSummary} displayName={displayName} role={role} onLogout={onLogout} />
+      {runtimeWarnings.length > 0 && (
+        <div style={{ flexShrink: 0, padding: "7px 12px", borderBottom: "1px solid #f0a500", background: "#1a1500", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ color: "#f0a500", fontSize: 11, fontWeight: 700 }}>⚠ 環境告警</span>
+          {runtimeWarnings.map((item) => (
+            <span key={item.code} style={{ color: "#e6edf3", fontSize: 11 }}>{item.message}</span>
+          ))}
+        </div>
+      )}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <LeftPanel
           devices={devices}
