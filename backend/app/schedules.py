@@ -16,7 +16,7 @@ from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
 from .auth import require_admin
 from .line import push_message
-from .utils import _now_utc_naive, _parse_conditions
+from .utils import _now_utc, _now_utc_naive, _parse_conditions
 from .audit import log_audit
 from .schedule_service import (
     ACTIVE_STATUSES,
@@ -361,12 +361,12 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             s.confirmed_by = user_id
 
             # 若 start_time ≤ now 代表立即啟動，直接存為進行中；否則存為已確認等 date job
-            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            now_utc = _now_utc()
             start_aware = start if start.tzinfo else start.replace(tzinfo=datetime.timezone.utc)
             immediate_start = start_aware <= now_utc
             s.status = ScheduleStatus.RUNNING if immediate_start else ScheduleStatus.CONFIRMED
             fixture_status = "loaned" if immediate_start else "reserved"
-            fixture_loan_date = now_utc.replace(tzinfo=None) if immediate_start else None
+            fixture_loan_date = _now_utc_naive() if immediate_start else None
             for sf in db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == s.id).all():
                 db.add(FixtureLoan(
                     fixture_id=sf.fixture_id,

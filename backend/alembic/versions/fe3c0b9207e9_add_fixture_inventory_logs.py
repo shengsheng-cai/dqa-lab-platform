@@ -19,10 +19,28 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # fixture_inventory_logs was already created via init_db.py
-    # Add missing indexes (created in models but not in previous migrations)
+    # fixture_inventory_logs may not exist on empty DB migration path.
+    # Create table defensively, then align indexes.
     bind = op.get_bind()
     insp = sa.inspect(bind)
+    tables = set(insp.get_table_names())
+
+    if "fixture_inventory_logs" not in tables:
+        op.create_table(
+            "fixture_inventory_logs",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("fixture_id", sa.Integer(), nullable=False),
+            sa.Column("previous_quantity", sa.Integer(), nullable=False),
+            sa.Column("counted_quantity", sa.Integer(), nullable=False),
+            sa.Column("difference", sa.Integer(), nullable=False),
+            sa.Column("counted_at", sa.DateTime(), nullable=False),
+            sa.Column("counted_by", sa.String(), nullable=True),
+            sa.ForeignKeyConstraint(["fixture_id"], ["fixtures.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index("ix_fixture_inventory_logs_id", "fixture_inventory_logs", ["id"], unique=False)
+        op.create_index("ix_fixture_inventory_logs_fixture_id", "fixture_inventory_logs", ["fixture_id"], unique=False)
+        insp = sa.inspect(bind)
 
     fixture_loan_indexes = [i['name'] for i in insp.get_indexes('fixture_loans')]
     if 'ix_fixture_loans_due_date' not in fixture_loan_indexes:
@@ -64,3 +82,11 @@ def downgrade() -> None:
         op.drop_index('ix_fixture_loans_status', table_name='fixture_loans')
     if 'ix_fixture_loans_due_date' in fixture_loan_indexes:
         op.drop_index('ix_fixture_loans_due_date', table_name='fixture_loans')
+
+    if "fixture_inventory_logs" in insp.get_table_names():
+        fixture_inventory_indexes = [i["name"] for i in insp.get_indexes("fixture_inventory_logs")]
+        if "ix_fixture_inventory_logs_fixture_id" in fixture_inventory_indexes:
+            op.drop_index("ix_fixture_inventory_logs_fixture_id", table_name="fixture_inventory_logs")
+        if "ix_fixture_inventory_logs_id" in fixture_inventory_indexes:
+            op.drop_index("ix_fixture_inventory_logs_id", table_name="fixture_inventory_logs")
+        op.drop_table("fixture_inventory_logs")

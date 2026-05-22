@@ -33,7 +33,7 @@ SKIP_PATHS = {
 MAX_ATTEMPTS = 5
 BLOCK_SECONDS = 600
 
-router = APIRouter()
+router = APIRouter(tags=["auth"])
 
 
 # ---------- 密碼雜湊 ----------

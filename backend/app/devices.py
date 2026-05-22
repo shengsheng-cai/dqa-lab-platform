@@ -17,7 +17,7 @@ from .sop import DEVICE_IDS
 
 logger = logging.getLogger("app")
 
-router = APIRouter()
+router = APIRouter(tags=["devices"])
 
 
 # ── Helper 函數 ─────────────────────────────────────────────────────────────
@@ -470,7 +470,7 @@ _VALID_PHASES = {
 }
 
 
-@router.post("/api/devices/{device_id}/set-phase")
+@router.post("/api/devices/{device_id}/set-phase", include_in_schema=False)
 async def set_phase(device_id: str, payload: SetPhasePayload, request: Request, _: None = Depends(require_admin)):
     """管理員手動跳相位（用於 demo / 手動接管）"""
     cache = request.app.state.AICM_CACHE
@@ -486,7 +486,7 @@ async def set_phase(device_id: str, payload: SetPhasePayload, request: Request, 
     return {"status": "success", "sim_phase": payload.phase}
 
 
-@router.post("/api/devices/{device_id}/progress")
+@router.post("/api/devices/{device_id}/progress", include_in_schema=False)
 async def update_progress(device_id: str, payload: ProgressPayload, request: Request, _: None = Depends(require_admin)):
     cache = request.app.state.AICM_CACHE
     locks = request.app.state.DEVICE_LOCKS

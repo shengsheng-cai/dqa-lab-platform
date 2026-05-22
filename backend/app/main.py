@@ -215,6 +215,36 @@ app = FastAPI(
 
 app.include_router(sop_router, prefix="/api/sop", tags=["sop"])
 app.include_router(execution_router)
+
+
+def _custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+    schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+    schema.setdefault("components", {})["securitySchemes"] = {
+        "AdminToken": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-User-Token",
+            "description": "管理員 token（POST /api/auth/login 取得）",
+        },
+        "GuestPassword": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-Demo-Password",
+            "description": "訪客密碼（DEMO_PASSWORD 環境變數）",
+        },
+    }
+    for path_item in schema.get("paths", {}).values():
+        for operation in path_item.values():
+            if isinstance(operation, dict):
+                operation.setdefault("security", [{"AdminToken": []}, {"GuestPassword": []}])
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = _custom_openapi
 app.include_router(reports_router)
 app.include_router(errors_router)
 app.include_router(ai_router)

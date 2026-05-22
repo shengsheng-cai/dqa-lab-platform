@@ -1,5 +1,6 @@
 # SOP 模組：提供標準樹與 SOP 列表、啟動 SOP 測試、取得 SOP 執行紀錄等功能
 
+import asyncio
 import json
 import datetime
 import logging
@@ -13,7 +14,7 @@ from .models import (
     User, Schedule, ScheduleStatus, FixtureLoan, DeviceBlockedPeriod,
 )
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
-from .utils import _save_device_state, _parse_conditions
+from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions
 from .auth import require_admin
 from .line import push_message
 
@@ -102,14 +103,23 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     sop_id, device_id, device = _validate_start_sop_input(payload, cache)
 
     # 檢查設備是否有排程進行中（IDLE 條件間隙仍不允許手動啟動）
-    with SessionLocal() as db:
-        running_schedule = db.query(Schedule).filter(
-            Schedule.device_id == device_id,
-            Schedule.status == ScheduleStatus.RUNNING,
-        ).first()
+    def _query_running_schedule() -> Optional[dict]:
+        with SessionLocal() as db:
+            row = db.query(Schedule).filter(
+                Schedule.device_id == device_id,
+                Schedule.status == ScheduleStatus.RUNNING,
+            ).first()
+            if not row:
+                return None
+            return {
+                "conditions": row.conditions,
+                "current_condition_index": row.current_condition_index,
+            }
+
+    running_schedule = await asyncio.to_thread(_query_running_schedule)
     if running_schedule:
-        total = len(_parse_conditions(running_schedule.conditions))
-        idx = (running_schedule.current_condition_index or 0) + 1
+        total = len(_parse_conditions(running_schedule["conditions"]))
+        idx = (running_schedule["current_condition_index"] or 0) + 1
         raise HTTPException(
             status_code=409,
             detail=f"{device_id} 正在執行排程（第 {idx}/{total} 條件），請透過排程頁面操作"
@@ -117,11 +127,17 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
 
     # 若前端未填 operator，從登入帳號自動帶入顯示名稱
     if not operator and operator_user_id:
-        try:
+        def _query_operator_display_name() -> Optional[str]:
             with SessionLocal() as db:
                 u = db.query(User).filter(User.id == operator_user_id).first()
-                if u:
-                    operator = u.display_name or ""
+                if not u:
+                    return None
+                return u.display_name or ""
+
+        try:
+            display_name = await asyncio.to_thread(_query_operator_display_name)
+            if display_name:
+                operator = display_name
         except Exception:
             pass
 
@@ -129,26 +145,35 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     sop_name = std_data.get("name", sop_id)
 
     if sop_name == sop_id:
+        def _query_template_name() -> Optional[str]:
+            with SessionLocal() as db:
+                sop = db.query(SopTemplate).filter(SopTemplate.sop_id == sop_id).first()
+                if not sop:
+                    return None
+                return sop.name
+
+        template_name = await asyncio.to_thread(_query_template_name)
+        if template_name:
+            sop_name = template_name
+
+    now_utc = _now_utc()
+    now = _now_utc_naive()
+
+    def _query_blocked_reason() -> Optional[str]:
         with SessionLocal() as db:
-            sop = db.query(SopTemplate).filter(SopTemplate.sop_id == sop_id).first()
-            if sop:
-                sop_name = sop.name
+            blocked = db.query(DeviceBlockedPeriod).filter(
+                DeviceBlockedPeriod.device_id == device_id,
+                DeviceBlockedPeriod.start_time <= now,
+                DeviceBlockedPeriod.end_time > now,
+            ).first()
+            return blocked.reason if blocked else None
 
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
-    now = now_utc.replace(tzinfo=None)
-
-    # 檢查不可用時段
-    with SessionLocal() as db:
-        blocked = db.query(DeviceBlockedPeriod).filter(
-            DeviceBlockedPeriod.device_id == device_id,
-            DeviceBlockedPeriod.start_time <= now,
-            DeviceBlockedPeriod.end_time > now,
-        ).first()
-        if blocked:
-            raise HTTPException(
-                status_code=409,
-                detail=f"{device_id} 目前在不可用時段（{blocked.reason or '已設定封鎖'}），無法啟動測試。"
-            )
+    blocked_reason = await asyncio.to_thread(_query_blocked_reason)
+    if blocked_reason is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{device_id} 目前在不可用時段（{blocked_reason or '已設定封鎖'}），無法啟動測試。"
+        )
 
     active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
     active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
@@ -177,43 +202,55 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
         _save_device_state(device_id, device)
 
     # 建 SopExecution + 寫 active_execution_id（與 auto_start_sop 對齊，讓 simulator 完成時能寫 test_ended_at）
-    for _attempt in range(3):
-        try:
-            with SessionLocal() as db:
-                execution = SopExecution(
-                    sop_id=sop_id,
-                    device_id=device_id,
-                    operator=device["operator"],
-                    operator_user_id=operator_user_id,
-                    test_started_at=now,
-                )
-                db.add(execution)
-                db.flush()
-                execution_id = execution.id
-                db.commit()
-            async with request.app.state.DEVICE_LOCKS[device_id]:
-                device["active_execution_id"] = execution_id
-                _save_device_state(device_id, device)
-            break
-        except Exception as e:
-            logger.error(f"[{device_id}] 建立 SopExecution 失敗（第{_attempt+1}次）：{e}")
+    def _create_execution_id() -> Optional[int]:
+        for _attempt in range(3):
+            try:
+                with SessionLocal() as db:
+                    execution = SopExecution(
+                        sop_id=sop_id,
+                        device_id=device_id,
+                        operator=device["operator"],
+                        operator_user_id=operator_user_id,
+                        test_started_at=now,
+                    )
+                    db.add(execution)
+                    db.flush()
+                    eid = execution.id
+                    db.commit()
+                    return eid
+            except Exception as e:
+                logger.error(f"[{device_id}] 建立 SopExecution 失敗（第{_attempt+1}次）：{e}")
+        return None
+
+    execution_id = await asyncio.to_thread(_create_execution_id)
+    if execution_id is not None:
+        async with request.app.state.DEVICE_LOCKS[device_id]:
+            device["active_execution_id"] = execution_id
+            _save_device_state(device_id, device)
 
     # 同步排程狀態：CONFIRMED → RUNNING（管理者從排程頁看到的永遠是設備真實狀態）
-    try:
-        with SessionLocal() as db:
-            confirmed_schedule = db.query(Schedule).filter(
-                Schedule.device_id == device_id,
-                Schedule.status == ScheduleStatus.CONFIRMED,
-            ).first()
-            if confirmed_schedule:
+    def _sync_confirmed_schedule_to_running() -> Optional[int]:
+        try:
+            with SessionLocal() as db:
+                confirmed_schedule = db.query(Schedule).filter(
+                    Schedule.device_id == device_id,
+                    Schedule.status == ScheduleStatus.CONFIRMED,
+                ).first()
+                if not confirmed_schedule:
+                    return None
                 confirmed_schedule.status = ScheduleStatus.RUNNING
                 confirmed_schedule.updated_at = now
                 db.commit()
-                logger.info(f"[{device_id}] 排程 {confirmed_schedule.id} CONFIRMED → RUNNING（手動啟動觸發）")
-    except Exception as e:
-        logger.warning(f"[{device_id}] 同步排程狀態失敗：{e}")
+                return confirmed_schedule.id
+        except Exception as e:
+            logger.warning(f"[{device_id}] 同步排程狀態失敗：{e}")
+        return None
 
-    _transfer_reserved_fixtures(device_id, now)
+    confirmed_schedule_id = await asyncio.to_thread(_sync_confirmed_schedule_to_running)
+    if confirmed_schedule_id:
+        logger.info(f"[{device_id}] 排程 {confirmed_schedule_id} CONFIRMED → RUNNING（手動啟動觸發）")
+
+    await asyncio.to_thread(_transfer_reserved_fixtures, device_id, now)
     logger.info(f"[{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}")
 
     return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
@@ -258,8 +295,8 @@ async def auto_start_sop(
         return
 
     sop_name = std_data.get("name", sop_id)
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
-    now = now_utc.replace(tzinfo=None)
+    now_utc = _now_utc()
+    now = _now_utc_naive()
     active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
     active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
 
@@ -451,7 +488,7 @@ def get_execution(execution_id: int):
 
 
 @execution_router.post("/{execution_id}/photos")
-async def upload_execution_photo(
+def upload_execution_photo(
     execution_id: int,
     photo_type: str = Form(...),  # "before" | "after"
     file: UploadFile = File(...),

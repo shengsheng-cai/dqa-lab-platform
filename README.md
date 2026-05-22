@@ -60,10 +60,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 | 📋 **稽核日誌** | 所有寫入操作（排程 / 治具 / 設備）記錄 who/what/when；紀錄 Modal 內嵌稽核紀錄 tab，支援 entity 過濾與 CSV 匯出（ISO 17025 外部稽核用） |
 | 🔧 **維護** | 設備校驗紀錄（日期、證書號、結果）& 維護紀錄（預防性 / 矯正性 / 例行點檢）；左側欄即時顯示各台設備校驗狀態（正常 / 即將到期 / 逾期 / 未知）；DeviceCard badge 警示 |
 
-> ⚠️ **AI 諮詢功能限制**：線上版使用 Gemini 免費方案，每日限制 20 次請求，額度用完後顯示提示並隔日自動恢復。完整 demo 建議以本地端執行。
-> ⚠️ **Live Demo（HF Spaces）限制**：資料庫使用 `/tmp/demo.db`（重啟會清空）；若未設定 LINE secrets，推播通知功能不啟用。
-> 
-<img src="docs/line-1.png" width="260"> <img src="docs/line-2.png" width="260"> <img src="docs/line-3.png" width="260">
+<img src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-1.png" width="260"> <img src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-2.png" width="260"> <img src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-3.png" width="260">
 
 ---
 
@@ -129,6 +126,9 @@ Docker / Hugging Face Spaces 部署時不依賴 `backend/.env`，改由平台 Se
 **必須設置（可選功能會自動跳過）：**
 - `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com) 免費申請（Embedding + Flash-Lite）；免費方案每日限制 20 次 AI 諮詢請求
 - `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN` — LINE Developers 後台取得（推播功能）
+
+> ⚠️ **AI 諮詢功能限制**：線上版使用 Gemini 免費方案，每日限制 20 次請求，額度用完後顯示提示並隔日自動恢復。完整 demo 建議以本地端執行。
+> ⚠️ **Live Demo（HF Spaces）限制**：資料庫使用 `/tmp/demo.db`（重啟會清空）；若未設定 LINE secrets，推播通知功能不啟用。
 
 **可選（RAG 對比測試）：**
 - `RAG_EMBED_PROVIDER=gemini`（預設）或 `sentence_transformers`

@@ -90,8 +90,6 @@ function LoginPage({ onLogin }) {
         const data = await res.json();
         setError(data.detail || "Token 無效");
       } else {
-        // 原子性批量更新 localStorage（Tier 1-4 時序修復）
-        // 先清除所有舊會話相關鍵，再統一設定訪客會話，避免中間狀態被讀取
         const keysToRemove = [
           "user_token",
           "user_id",
@@ -101,12 +99,10 @@ function LoginPage({ onLogin }) {
         ];
         keysToRemove.forEach(k => localStorage.removeItem(k));
 
-        // 批量設定訪客會話
         localStorage.setItem("demo_password", token);
         localStorage.setItem("demo_login_at", Date.now().toString());
         localStorage.setItem("user_role", "guest");
 
-        // 延遲至下個事件循環，確保 localStorage 寫入完成
         Promise.resolve().then(onLogin);
       }
     } catch {

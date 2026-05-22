@@ -292,7 +292,7 @@ with SessionLocal() as db:
             fixture_id=f4.id, borrower_name="張工",
             project_name="維修備料",
             quantity=1, loan_date=_dt(days=5), due_date=_dt(days=2),
-            status="overdue",
+            status="loaned",
         ),
     ])
 
