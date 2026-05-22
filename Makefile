@@ -16,7 +16,7 @@ help:
 # 1. 安裝流程
 install:
 	@echo "📦 正在安裝後端依賴 (Python)..."
-	pip install -r backend/requirements.txt
+	$(PYTHON) -m pip install -r backend/requirements.txt
 	@echo "📦 正在安裝前端依賴 (Node.js)..."
 	cd client && npm install
 	@echo "✅ 所有依賴已就緒！"
@@ -46,7 +46,7 @@ test:
 # 5. PEP 8 檢查
 lint:
 	@echo "🔍 執行 PEP 8 檢查（ruff）..."
-	ruff check backend/
+	$(PYTHON) -m ruff check backend/
 	@echo "✅ 檢查完成。"
 
 # 6. ngrok 單獨啟動（通常不需要，make dev 已包含）

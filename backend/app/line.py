@@ -291,7 +291,7 @@ def _dispatch_command(text: str, cache: Dict[str, Any]) -> List[Dict]:
 # ── Webhook ─────────────────────────────────────────────────────
 
 
-@router.post("/webhook")
+@router.post("/webhook", include_in_schema=False)
 async def webhook(request: Request, background_tasks: BackgroundTasks):
     body = await request.body()
     signature = request.headers.get("X-Line-Signature", "")
