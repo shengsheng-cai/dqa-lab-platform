@@ -4,6 +4,7 @@ import json
 import asyncio
 import logging
 import datetime
+import time
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -29,6 +30,37 @@ META_PREFIX = "\n[META:"
 META_SUFFIX = "]"
 # Gemini RPD hit 時常見 retry 接近一天；超過此值視為「今日額度已用完」提示
 DAILY_QUOTA_WAIT_THRESHOLD_SECONDS = 3600
+SLOW_AI_CALL_MS = 10000
+SLOW_AI_STREAM_MS = 30000
+_AI_ERROR_OUTCOMES = {
+    "timeout",
+    "http_error",
+    "quota_exhausted",
+    "rate_limited",
+    "unavailable",
+    "stream_error",
+}
+_AI_OUTCOMES = _AI_ERROR_OUTCOMES | {"success", "cancelled"}
+
+
+def _log_ai_call(endpoint: str, outcome: str, start: float, status_code: int | None = None):
+    if outcome not in _AI_OUTCOMES:
+        outcome = "unavailable"
+
+    duration_ms = (time.perf_counter() - start) * 1000
+    msg = "ai_call endpoint=%s outcome=%s duration_ms=%.1f model=%s"
+    args = (endpoint, outcome, duration_ms, GEMINI_MODEL)
+    if status_code is not None:
+        msg += " status_code=%s"
+        args += (status_code,)
+
+    threshold = SLOW_AI_STREAM_MS if "stream" in endpoint else SLOW_AI_CALL_MS
+    if outcome in _AI_ERROR_OUTCOMES:
+        logger.error(msg, *args)
+    elif duration_ms > threshold:
+        logger.warning(msg, *args)
+    else:
+        logger.info(msg, *args)
 
 _SYSTEM_PROMPT = """你是工業環境測試顧問，幫助實驗室人員快速找到適合的溫箱測試條件。只能用繁體中文回答，禁止簡體中文。
 
@@ -414,9 +446,9 @@ async def standards_query(req: QueryRequest):
     messages.append({"role": "user", "content": req.message})
 
     payload = _build_gemini_payload(messages, system_content)
-    api_key = _get_api_key()
-
+    start = time.perf_counter()
     try:
+        api_key = _get_api_key()
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
                 f"{GEMINI_URL}:generateContent?key={api_key}",
@@ -425,14 +457,18 @@ async def standards_query(req: QueryRequest):
             resp.raise_for_status()
             data = resp.json()
         reply = data["candidates"][0]["content"]["parts"][0]["text"]
+        _log_ai_call("standards-query", "success", start, resp.status_code)
     except httpx.TimeoutException:
+        _log_ai_call("standards-query", "timeout", start)
         raise HTTPException(status_code=503, detail="AI 服務逾時，請稍後再試")
     except httpx.HTTPStatusError as e:
+        _log_ai_call("standards-query", "http_error", start, e.response.status_code)
         raise HTTPException(
             status_code=503, detail=f"AI 服務錯誤：{e.response.status_code}"
         )
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"AI 服務不可用：{e}")
+    except Exception:
+        _log_ai_call("standards-query", "unavailable", start)
+        raise HTTPException(status_code=503, detail="AI 服務不可用，請稍後再試")
     return QueryResponse(reply=reply)
 
 
@@ -450,9 +486,17 @@ async def standards_query_stream(req: QueryRequest):
     messages.append({"role": "user", "content": req.message})
 
     payload = _build_gemini_payload(messages, system_content)
-    api_key = _get_api_key()
+    api_key_start = time.perf_counter()
+    try:
+        api_key = _get_api_key()
+    except Exception:
+        _log_ai_call("standards-query-stream", "unavailable", api_key_start)
+        raise
 
     async def generate():
+        start = time.perf_counter()
+        outcome = "unavailable"
+        status_code = None
         collected = []
         try:
             async with httpx.AsyncClient(
@@ -463,6 +507,7 @@ async def standards_query_stream(req: QueryRequest):
                     f"{GEMINI_URL}:streamGenerateContent?alt=sse&key={api_key}",
                     json=payload,
                 ) as resp:
+                    status_code = resp.status_code
                     if resp.status_code == 429:
                         wait_seconds = 60
                         err_text = ""
@@ -476,21 +521,14 @@ async def standards_query_stream(req: QueryRequest):
                             pass
 
                         if wait_seconds >= DAILY_QUOTA_WAIT_THRESHOLD_SECONDS:
-                            logger.warning(
-                                "[AI] Gemini quota exhausted (likely daily limit): retry_in=%ss, detail=%s",
-                                wait_seconds,
-                                err_text[:300] if err_text else "n/a",
-                            )
+                            outcome = "quota_exhausted"
                             yield "\n\n[AI 今日額度已用完，請明日再試。建議改用本地端執行完整 demo。]"
                         else:
-                            logger.warning(
-                                "[AI] Gemini rate limited: retry_in=%ss, detail=%s",
-                                wait_seconds,
-                                err_text[:300] if err_text else "n/a",
-                            )
+                            outcome = "rate_limited"
                             yield f"\n\n[AI 服務繁忙，請稍候 {wait_seconds} 秒再試]"
                         return
                     elif resp.status_code != 200:
+                        outcome = "http_error"
                         yield f"\n\n[AI 服務錯誤：{resp.status_code}]"
                         return
                     async for line in resp.aiter_lines():
@@ -511,11 +549,19 @@ async def standards_query_stream(req: QueryRequest):
                                     yield token
                             except Exception:
                                 pass
+                    outcome = "success"
         except httpx.TimeoutException:
+            outcome = "timeout"
             yield "\n\n[AI 服務逾時，請稍後再試]"
-            return
-        except Exception as e:
-            yield f"\n\n[AI 服務不可用：{e}]"
+        except asyncio.CancelledError:
+            outcome = "cancelled"
+            raise
+        except Exception:
+            outcome = "stream_error"
+            yield "\n\n[AI 服務不可用，請稍後再試]"
+        finally:
+            _log_ai_call("standards-query-stream", outcome, start, status_code)
+        if outcome != "success":
             return
         # AI 從 [S:xxx] 清單選 ID 輸出 [APPLY:id1,id2]，後端白名單驗證防幻覺
         # Fallback：AI 未輸出或驗證全失敗時，取 RAG 命中的前 5 個

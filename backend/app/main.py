@@ -7,6 +7,7 @@ import os
 import asyncio
 import datetime
 import random
+import time
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,6 +37,30 @@ import logging
 
 logger = logging.getLogger("app")
 background_tasks = set()
+SLOW_REQUEST_MS = 2000
+
+
+async def observability_middleware(request: Request, call_next):
+    path = request.url.path
+    if not (path.startswith("/api/") or path == "/health"):
+        return await call_next(request)
+
+    start = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        duration_ms = (time.perf_counter() - start) * 1000
+        msg = "api_request method=%s path=%s status=%s duration_ms=%.1f"
+        args = (request.method, path, status_code, duration_ms)
+        if status_code >= 500:
+            logger.error(msg, *args)
+        elif duration_ms > SLOW_REQUEST_MS:
+            logger.warning(msg, *args)
+        else:
+            logger.info(msg, *args)
 
 
 def _has_env(name: str) -> bool:
@@ -267,9 +292,10 @@ from .auth import auth_middleware  # noqa: E402
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 
 # 注意：FastAPI middleware 後加先執行（LIFO）
-# auth_middleware 先加 → 後執行；CORSMiddleware 後加 → 先執行
+# 實際順序：CORSMiddleware → observability_middleware → auth_middleware → routes
 # 確保 auth 回傳 401 時，CORS headers 已經由 CORSMiddleware 附加
 app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
+app.add_middleware(BaseHTTPMiddleware, dispatch=observability_middleware)
 
 app.add_middleware(
     CORSMiddleware,
