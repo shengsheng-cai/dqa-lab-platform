@@ -333,8 +333,10 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
         <ManageBlockedPeriodsModal
           onClose={() => setShowBlockModal(false)}
           onChanged={async () => {
-            const res = await api.get("/api/schedules/gantt");
-            setBlockedPeriods(res.data.blocked_periods ?? []);
+            try {
+              const res = await api.get("/api/schedules/gantt");
+              setBlockedPeriods(res.data.blocked_periods ?? []);
+            } catch { /* gantt 刷新失敗不影響 modal 操作結果 */ }
           }}
         />
       )}
