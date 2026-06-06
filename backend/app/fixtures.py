@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import io
 import re
@@ -698,7 +699,7 @@ def list_damaged_lost_loans():
 
 
 @router.post("/loans")
-async def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_admin)):
+def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_admin)):
     user_id = getattr(request.state, "user_id", None)
     with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == body.fixture_id).first()
@@ -796,29 +797,7 @@ def extend_loan(loan_id: int, body: ExtensionRequest, _: None = Depends(require_
 # ---------- Excel 匯入 ----------
 
 
-@router.post("/import")
-async def import_fixtures(file: UploadFile = File(...), _: None = Depends(require_admin)):
-    """從 Excel 匯入治具資料（admin only）"""
-    if pd is None:
-        raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
-
-    contents = await file.read()
-    df = pd.read_excel(io.BytesIO(contents), header=0)
-
-    # 將 DataFrame 欄標題正規化（去空白、小寫）後建立對應 dict
-    col_map = {}  # field_name -> actual_df_column
-    normalized_cols = {str(c).strip().lower(): c for c in df.columns}
-    for field, aliases in COLUMN_ALIASES.items():
-        for alias in aliases:
-            key = alias.strip().lower()
-            if key in normalized_cols:
-                col_map[field] = normalized_cols[key]
-                break
-
-    imported = 0
-    updated = 0
-    skipped = 0
-
+def _run_import_db(df, col_map):
     def safe_str(row, field):
         col = col_map.get(field)
         if col is None:
@@ -855,6 +834,10 @@ async def import_fixtures(file: UploadFile = File(...), _: None = Depends(requir
             return float(val)
         except (KeyError, ValueError, TypeError):
             return None
+
+    imported = 0
+    updated = 0
+    skipped = 0
 
     with SessionLocal() as db:
         try:
@@ -915,6 +898,27 @@ async def import_fixtures(file: UploadFile = File(...), _: None = Depends(requir
         except Exception as e:
             db.rollback()
             raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/import")
+async def import_fixtures(file: UploadFile = File(...), _: None = Depends(require_admin)):
+    """從 Excel 匯入治具資料（admin only）"""
+    if pd is None:
+        raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
+
+    contents = await file.read()
+    df = pd.read_excel(io.BytesIO(contents), header=0)
+
+    col_map = {}
+    normalized_cols = {str(c).strip().lower(): c for c in df.columns}
+    for field, aliases in COLUMN_ALIASES.items():
+        for alias in aliases:
+            key = alias.strip().lower()
+            if key in normalized_cols:
+                col_map[field] = normalized_cols[key]
+                break
+
+    return await asyncio.to_thread(_run_import_db, df, col_map)
 
 
 # ---------- 設定保管人 ----------

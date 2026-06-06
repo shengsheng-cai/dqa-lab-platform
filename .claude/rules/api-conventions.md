@@ -25,6 +25,25 @@
 - 路由 handler 若需要 `asyncio.create_task` / `async with lock` 等 async 原語，才宣告 `async def`
 - `async def` 路由內部禁止直接呼叫 sync blocking I/O（SQLAlchemy session 等），需用 `asyncio.to_thread` 包裝
 
+### 正確 pattern（`async def` + DB 寫入）
+
+```python
+# 1. 將 DB 邏輯提取到 sync helper，命名慣例 _<動詞>_db(...)
+def _do_something_db(param1, param2):
+    with SessionLocal() as db:
+        ...
+        db.commit()
+        return result  # 可 raise HTTPException，會被 to_thread 正確傳播
+
+# 2. async 路由用 asyncio.to_thread 呼叫
+async def my_route(...):
+    result = await asyncio.to_thread(_do_something_db, param1, param2)
+    asyncio.create_task(push_message(...))  # async 原語留在路由
+    return result
+```
+
+實作參考：`sop.py`、`schedules.py`（`_patch_schedule_db` 等）、`devices.py`（`_emergency_stop_db`）、`fixtures.py`（`_run_import_db`）
+
 ## Datetime 慣例
 
 - DB 寫入一律用 `_now_utc_naive()`（`utils.py`），保持與 SQLite naive datetime 欄位一致

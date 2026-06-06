@@ -286,29 +286,18 @@ def create_schedule(body: ScheduleCreate, request: Request, _: None = Depends(re
         return _enrich(s, db)
 
 
-@router.patch("/{schedule_id}", response_model=ScheduleOut)
-async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request):
-    """
-    更新排程（admin only）。
-    status=已確認 時若無指定設備，自動排程。
-    """
-    role = getattr(request.state, "user_role", None)
-    user_id = getattr(request.state, "user_id", None)
-
-    # 非 admin 只允許取消自己的待審核排程
-    if role != "admin":
-        if body.status != ScheduleStatus.CANCELLED:
-            raise HTTPException(status_code=403, detail="僅管理者可審核排程")
-        # 後續在讀取 schedule 後再驗證擁有權，這裡先通過
-
-    cancelled_device_id = None  # 取消排程時若設備正在跑，記錄 device_id 供後面停止
+def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, cache: dict):
+    cancelled_device_id = None
+    immediate_start = None
+    conditions = None
+    device_id = None
+    start_aware = None
 
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
             raise HTTPException(status_code=404, detail="找不到排程")
 
-        # 非 admin 取消：只能取消自己的待審核排程
         if role != "admin":
             if s.applicant_user_id != user_id:
                 raise HTTPException(status_code=403, detail="只能取消自己的排程")
@@ -324,9 +313,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             if s.status != ScheduleStatus.PENDING:
                 raise HTTPException(status_code=409, detail=f"排程已是「{s.status}」，無法重複確認")
             conditions = _parse_conditions(s.conditions)
-            cache = getattr(request.app.state, "AICM_CACHE", {})
             running_until = _build_running_until(cache)
-            # 若管理人指定設備 + 手動時間 → 直接套用；只指定設備 → 自動算時間；否則全自動
             if body.device_id and body.start_time and body.end_time:
                 device_id = body.device_id
                 start = body.start_time
@@ -360,7 +347,6 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
             s.end_time = end
             s.confirmed_by = user_id
 
-            # 若 start_time ≤ now 代表立即啟動，直接存為進行中；否則存為已確認等 date job
             now_utc = _now_utc()
             start_aware = start if start.tzinfo else start.replace(tzinfo=datetime.timezone.utc)
             immediate_start = start_aware <= now_utc
@@ -382,7 +368,7 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                 ))
 
         elif body.status in (ScheduleStatus.CANCELLED, ScheduleStatus.RUNNING, ScheduleStatus.DONE):
-            original_status = s.status  # 保存改變前的狀態
+            original_status = s.status
             s.status = body.status
             if body.device_id:
                 s.device_id = body.device_id
@@ -392,17 +378,14 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                 s.end_time = body.end_time
 
             if body.status == ScheduleStatus.CANCELLED:
-                # 清除此排程的 reserved 治具預約
                 db.query(FixtureLoan).filter(
                     FixtureLoan.schedule_id == schedule_id,
                     FixtureLoan.status == "reserved",
                 ).delete(synchronize_session=False)
-                # 若排程已在執行中（CONFIRMED/RUNNING），記錄 device_id 供後面停止設備
                 if original_status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) and s.device_id:
                     cancelled_device_id = s.device_id
 
         else:
-            # 純欄位更新（不改狀態）
             if body.device_id is not None:
                 s.device_id = body.device_id
             if body.start_time is not None:
@@ -425,21 +408,45 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
         db.refresh(s)
         result = _enrich(s, db)
 
+    return {
+        "result": result,
+        "immediate_start": immediate_start,
+        "conditions": conditions,
+        "device_id": device_id,
+        "start_aware": start_aware,
+        "cancelled_device_id": cancelled_device_id,
+    }
+
+
+@router.patch("/{schedule_id}", response_model=ScheduleOut)
+async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request):
+    """
+    更新排程（admin only）。
+    status=已確認 時若無指定設備，自動排程。
+    """
+    role = getattr(request.state, "user_role", None)
+    user_id = getattr(request.state, "user_id", None)
+
+    # 非 admin 只允許取消自己的待審核排程
+    if role != "admin":
+        if body.status != ScheduleStatus.CANCELLED:
+            raise HTTPException(status_code=403, detail="僅管理者可審核排程")
+
     _cache = getattr(request.app.state, "AICM_CACHE", {})
     _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     _scheduler = getattr(request.app.state, "scheduler", None)
 
+    out = await asyncio.to_thread(_patch_schedule_db, schedule_id, body, role, user_id, _cache)
+
     if body.status == ScheduleStatus.CONFIRMED:
-        if immediate_start and conditions and device_id:
-            # 立即啟動：狀態已在 DB session 中存為 RUNNING，直接啟動 SOP
+        if out["immediate_start"] and out["conditions"] and out["device_id"]:
             from .sop import auto_start_sop
-            await auto_start_sop(device_id, conditions[0], _cache, _locks, skip_fixture_transfer=True)
-        elif _scheduler and not immediate_start:
-            # 未來時間：加精確 date job
+            await auto_start_sop(out["device_id"], out["conditions"][0], _cache, _locks, skip_fixture_transfer=True)
+        elif _scheduler and not out["immediate_start"]:
             _scheduler.add_job(
                 _start_schedule_by_id,
                 trigger="date",
-                run_date=start_aware,
+                run_date=out["start_aware"],
                 kwargs={"schedule_id": schedule_id, "cache": _cache, "locks": _locks},
                 id=f"sched_{schedule_id}",
                 replace_existing=True,
@@ -451,20 +458,13 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
                 _scheduler.remove_job(f"sched_{schedule_id}")
             except Exception:
                 pass
-        # 若設備正在執行此排程，改為正常收尾
-        if cancelled_device_id:
-            await _force_normal_stop(cancelled_device_id, _cache, _locks)
+        if out["cancelled_device_id"]:
+            await _force_normal_stop(out["cancelled_device_id"], _cache, _locks)
 
-    return result
+    return out["result"]
 
 
-@router.delete("/{schedule_id}")
-async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(require_admin)):
-    _cache = getattr(request.app.state, "AICM_CACHE", {})
-    _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
-    _scheduler = getattr(request.app.state, "scheduler", None)
-    user_id = getattr(request.state, "user_id", None)
-
+def _delete_schedule_db(schedule_id: int, user_id):
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
@@ -476,6 +476,17 @@ async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(
         db.delete(s)
         log_audit(db, str(user_id or "unknown"), "admin", "DELETE", "schedule", schedule_id, detail)
         db.commit()
+    return stop_device_id
+
+
+@router.delete("/{schedule_id}")
+async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(require_admin)):
+    _cache = getattr(request.app.state, "AICM_CACHE", {})
+    _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
+    _scheduler = getattr(request.app.state, "scheduler", None)
+    user_id = getattr(request.state, "user_id", None)
+
+    stop_device_id = await asyncio.to_thread(_delete_schedule_db, schedule_id, user_id)
 
     if _scheduler:
         try:
@@ -491,14 +502,7 @@ async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(
 # ── 條件確認端點 ──────────────────────────────────────────────────────────────
 
 
-@router.post("/{schedule_id}/confirm-condition")
-async def confirm_condition(schedule_id: int, request: Request, _: None = Depends(require_admin)):
-    from .sop import auto_start_sop
-    cache = getattr(request.app.state, "AICM_CACHE", {})
-    locks = getattr(request.app.state, "DEVICE_LOCKS", {})
-    now = _now_utc_naive()
-    user_id = getattr(request.state, "user_id", None)
-
+def _confirm_condition_db(schedule_id: int, now, user_id):
     with SessionLocal() as db:
         schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not schedule:
@@ -515,28 +519,38 @@ async def confirm_condition(schedule_id: int, request: Request, _: None = Depend
             log_audit(db, str(user_id or "unknown"), "admin", "CONFIRM_CONDITION", "schedule", schedule_id,
                       f"條件 {idx}/{len(conditions)}，下一條：{next_sop_id}")
             db.commit()
+            return {"completed": False, "next_sop_id": next_sop_id, "dev": dev, "push_msg": None}
         else:
             _complete_schedule(db, schedule, now)
             log_audit(db, str(user_id or "unknown"), "admin", "COMPLETE", "schedule", schedule_id,
                       f"{schedule.project_number} / {schedule.sample_name}")
             db.commit()
-            asyncio.create_task(push_message(
-                f"✅ 測試完成\n專案：{schedule.project_number} / {schedule.sample_name}\n設備：{schedule.device_id}"
-            ))
-            return {"status": "completed"}
+            return {
+                "completed": True,
+                "next_sop_id": None,
+                "dev": None,
+                "push_msg": f"✅ 測試完成\n專案：{schedule.project_number} / {schedule.sample_name}\n設備：{schedule.device_id}",
+            }
 
-    asyncio.create_task(auto_start_sop(dev, next_sop_id, cache, locks, skip_fixture_transfer=True))
-    return {"status": "started", "sop_id": next_sop_id}
 
-
-@router.post("/{schedule_id}/start")
-async def start_schedule(schedule_id: int, request: Request, _: None = Depends(require_admin)):
-    """手動立即啟動「已確認」排程（補救 APScheduler 漏掉的情況）。"""
+@router.post("/{schedule_id}/confirm-condition")
+async def confirm_condition(schedule_id: int, request: Request, _: None = Depends(require_admin)):
     from .sop import auto_start_sop
     cache = getattr(request.app.state, "AICM_CACHE", {})
     locks = getattr(request.app.state, "DEVICE_LOCKS", {})
-    now = _now_utc_naive()
+    user_id = getattr(request.state, "user_id", None)
 
+    result = await asyncio.to_thread(_confirm_condition_db, schedule_id, _now_utc_naive(), user_id)
+
+    if result["completed"]:
+        asyncio.create_task(push_message(result["push_msg"]))
+        return {"status": "completed"}
+
+    asyncio.create_task(auto_start_sop(result["dev"], result["next_sop_id"], cache, locks, skip_fixture_transfer=True))
+    return {"status": "started", "sop_id": result["next_sop_id"]}
+
+
+def _start_schedule_db(schedule_id: int, now):
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
@@ -546,8 +560,17 @@ async def start_schedule(schedule_id: int, request: Request, _: None = Depends(r
         s.status = ScheduleStatus.RUNNING
         s.updated_at = now
         db.commit()
-        conditions = _parse_conditions(s.conditions)
-        device_id = s.device_id
+        return _parse_conditions(s.conditions), s.device_id
+
+
+@router.post("/{schedule_id}/start")
+async def start_schedule(schedule_id: int, request: Request, _: None = Depends(require_admin)):
+    """手動立即啟動「已確認」排程（補救 APScheduler 漏掉的情況）。"""
+    from .sop import auto_start_sop
+    cache = getattr(request.app.state, "AICM_CACHE", {})
+    locks = getattr(request.app.state, "DEVICE_LOCKS", {})
+
+    conditions, device_id = await asyncio.to_thread(_start_schedule_db, schedule_id, _now_utc_naive())
 
     sop_id = conditions[0] if conditions else None
     if sop_id and device_id:
