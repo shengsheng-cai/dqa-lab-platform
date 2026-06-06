@@ -128,7 +128,7 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
   return (
     <>
     <ScheduleModalShell title="申請排程" width={680} maxHeight="88vh" onClose={handleClose}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 20px 20px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 20px 20px", overflowY: "auto" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <LabelInput label="專案號碼 *" value={form.project_number}
               onChange={(v) => setForm((f) => ({ ...f, project_number: v }))} placeholder="e.g. P-2026-001" />

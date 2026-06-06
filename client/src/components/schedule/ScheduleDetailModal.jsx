@@ -206,7 +206,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
 
   return (
     <>
-    <ScheduleModalShell title="排程詳情" width={540} maxHeight="88vh" flex onClose={onClose}>
+    <ScheduleModalShell title="排程詳情" width={540} maxHeight="88vh" onClose={onClose}>
       <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{

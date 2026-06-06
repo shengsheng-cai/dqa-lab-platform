@@ -112,7 +112,7 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
   }
 
   return (
-    <ScheduleModalShell title="管理設備不可用時段" width={560} maxHeight="80vh" flex onClose={onClose}>
+    <ScheduleModalShell title="管理設備不可用時段" width={560} maxHeight="80vh" onClose={onClose}>
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px" }}>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
             <button onClick={openNew} style={primaryBtn}>+ 新增</button>

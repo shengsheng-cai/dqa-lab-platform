@@ -1,15 +1,15 @@
 import { overlayStyle, modalStyle, modalHeader, closeBtn } from "./scheduleUtils";
 
-export default function ScheduleModalShell({ title, width = 540, maxHeight, flex = false, onClose, children }) {
+export default function ScheduleModalShell({ title, width = 540, maxHeight, onClose, children }) {
   return (
     <div style={overlayStyle} onClick={onClose}>
       <div
         style={{
           ...modalStyle,
           width,
+          display: "flex",
+          flexDirection: "column",
           ...(maxHeight && { maxHeight }),
-          ...(flex && { display: "flex", flexDirection: "column" }),
-          ...(maxHeight && !flex && { overflowY: "auto" }),
         }}
         onClick={(e) => e.stopPropagation()}
       >
