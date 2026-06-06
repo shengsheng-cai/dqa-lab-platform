@@ -3,9 +3,9 @@ import api from "../../api";
 import { useToast } from "../useToast";
 import ConfirmModal from "../ConfirmModal";
 import { DEVICE_IDS } from "../../constants";
+import ScheduleModalShell from "./ScheduleModalShell";
 import {
   fmtDt, fmtHours, STATUS_COLOR,
-  overlayStyle, modalStyle, modalHeader, closeBtn,
   inputStyle, labelStyle, primaryBtn, cancelBtn,
 } from "./scheduleUtils";
 
@@ -18,16 +18,32 @@ function InfoRow({ label, value, muted }) {
   );
 }
 
+const SUCCESS_BANNER = { background: "#1a3828", border: "1px solid #3fb950", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#7ee787", fontWeight: 600 };
+
+function ResultScreen({ title, message, fields, onClose }) {
+  return (
+    <ScheduleModalShell title={title} width={540} onClose={onClose}>
+      <div style={{ padding: "20px 24px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={SUCCESS_BANNER}>{message}</div>
+        {fields.map(({ label, value }) => <InfoRow key={label} label={label} value={value} />)}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+          <button onClick={onClose} style={primaryBtn}>關閉</button>
+        </div>
+      </div>
+    </ScheduleModalShell>
+  );
+}
+
 export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {}, onClose, onUpdated, onDeleted, onRefresh }) {
   const { showToast } = useToast();
   const [deviceId, setDeviceId] = useState(schedule.device_id || "");
   const [note, setNote] = useState(schedule.note || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [cancelReason, setCancelReason] = useState(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const [previewState, setPreviewState] = useState({ data: null, loading: false, updatedAt: null });
-  const [confirmedResult, setConfirmedResult] = useState(null);
-  const [completedResult, setCompletedResult] = useState(false);
+  const [resultScreen, setResultScreen] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const canEdit = role === "admin";
   const isPending = schedule.status === "待審核";
@@ -41,7 +57,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
       .get("/api/schedules/preview", { params: { conditions, device_id: deviceId || undefined } })
       .then((r) => setPreviewState({ data: r.data, loading: false, updatedAt: new Date() }))
       .catch(() => setPreviewState(s => ({ ...s, data: null, loading: false })));
-  }, [deviceId, isPending, schedule.conditions]);
+  }, [deviceId, isPending, schedule.conditions?.join(",")]);
 
   useEffect(() => {
     fetchPreview();
@@ -56,7 +72,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
       const res = await api.patch(`/api/schedules/${schedule.id}`, payload);
       showToast("排程已確認", "success");
       onUpdated(res.data);
-      setConfirmedResult(res.data);
+      setResultScreen({ type: "confirmed", data: res.data });
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
       showToast(e.response?.data?.detail || "操作失敗", "error", 4000, e.response?.data?.hint);
@@ -66,7 +82,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
   }
 
   async function cancel() {
-    if (cancelReason === null) { setCancelReason(""); return; }
+    if (!cancelOpen) { setCancelOpen(true); return; }
     setSaving(true);
     try {
       const res = await api.patch(`/api/schedules/${schedule.id}`, {
@@ -107,7 +123,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
       if (res.data.status === "completed") {
         showToast("排程全部條件完成！", "success");
         onUpdated({ ...schedule, status: "已完成" });
-        setCompletedResult(true);
+        setResultScreen({ type: "completed" });
       } else {
         showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
         onUpdated({ ...schedule });
@@ -154,70 +170,44 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
 
   const color = STATUS_COLOR[schedule.status] || STATUS_COLOR["待審核"];
 
-  if (completedResult) {
+  if (resultScreen?.type === "completed") {
     const total = (schedule.conditions || []).length;
     return (
-      <div style={overlayStyle} onClick={onClose}>
-        <div style={{ ...modalStyle, width: 540 }} onClick={(e) => e.stopPropagation()}>
-          <div style={modalHeader}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>測試完成</span>
-            <button onClick={onClose} style={closeBtn}>✕</button>
-          </div>
-          <div style={{ padding: "20px 24px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ background: "#1a3828", border: "1px solid #3fb950", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#7ee787", fontWeight: 600 }}>
-              ✅ 全部 {total} 個條件已完成，排程結束
-            </div>
-            <InfoRow label="專案" value={`${schedule.project_number} / ${schedule.sample_name}`} />
-            <InfoRow label="設備" value={schedule.device_id || "—"} />
-            <InfoRow label="條件數" value={`${total} 個`} />
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-              <button onClick={onClose} style={primaryBtn}>關閉</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ResultScreen
+        title="測試完成"
+        message={`✅ 全部 ${total} 個條件已完成，排程結束`}
+        fields={[
+          { label: "專案", value: `${schedule.project_number} / ${schedule.sample_name}` },
+          { label: "設備", value: schedule.device_id || "—" },
+          { label: "條件數", value: `${total} 個` },
+        ]}
+        onClose={onClose}
+      />
     );
   }
 
-  if (confirmedResult) {
+  if (resultScreen?.type === "confirmed") {
+    const r = resultScreen.data;
     return (
-      <div style={overlayStyle} onClick={onClose}>
-        <div style={{ ...modalStyle, width: 540 }} onClick={(e) => e.stopPropagation()}>
-          <div style={modalHeader}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>排程已確認</span>
-            <button onClick={onClose} style={closeBtn}>✕</button>
-          </div>
-          <div style={{ padding: "20px 24px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{
-              background: "#1a3828", border: "1px solid #3fb950", borderRadius: 8,
-              padding: "12px 16px", fontSize: 13, color: "#7ee787", fontWeight: 600,
-            }}>
-              排程確認成功，以下為最終分配結果：
-            </div>
-            <InfoRow label="專案" value={`${confirmedResult.project_number} / ${confirmedResult.sample_name}`} />
-            <InfoRow label="指定設備" value={confirmedResult.device_id || "—"} />
-            <InfoRow label="開始時間" value={fmtDt(confirmedResult.start_time)} />
-            <InfoRow label="結束時間" value={fmtDt(confirmedResult.end_time)} />
-            <InfoRow label="預估時長" value={fmtHours(confirmedResult.total_hours)} />
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-              <button onClick={onClose} style={primaryBtn}>關閉</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ResultScreen
+        title="排程已確認"
+        message="排程確認成功，以下為最終分配結果："
+        fields={[
+          { label: "專案", value: `${r.project_number} / ${r.sample_name}` },
+          { label: "指定設備", value: r.device_id || "—" },
+          { label: "開始時間", value: fmtDt(r.start_time) },
+          { label: "結束時間", value: fmtDt(r.end_time) },
+          { label: "預估時長", value: fmtHours(r.total_hours) },
+        ]}
+        onClose={onClose}
+      />
     );
   }
 
   return (
     <>
-    <div style={overlayStyle} onClick={onClose}>
-      <div style={{ ...modalStyle, width: 540, maxHeight: "88vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
-        <div style={modalHeader}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>排程詳情</span>
-          <button onClick={onClose} style={closeBtn}>✕</button>
-        </div>
-
-        <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", flex: 1 }}>
+    <ScheduleModalShell title="排程詳情" width={540} maxHeight="88vh" flex onClose={onClose}>
+      <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{
               padding: "3px 10px", borderRadius: 12, fontSize: 12, fontWeight: 700,
@@ -339,7 +329,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                 </div>
               )}
 
-              {cancelReason !== null && (
+              {cancelOpen && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {schedule.status === "進行中" && (
                     <div style={{ fontSize: 12, color: "#f85149", background: "#2d0f0f", border: "1px solid #f85149", borderRadius: 6, padding: "8px 10px", fontWeight: 600 }}>
@@ -366,12 +356,12 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                   </button>
                 )}
                 {schedule.status !== "已取消" && schedule.status !== "已完成" && (
-                  <button onClick={cancel} disabled={saving} style={cancelReason !== null ? { ...cancelBtn, color: "#f85149", borderColor: "#f85149" } : cancelBtn}>
-                    {cancelReason !== null ? (saving ? "取消中..." : "確認取消排程") : "取消排程"}
+                  <button onClick={cancel} disabled={saving} style={cancelOpen ? { ...cancelBtn, color: "#f85149", borderColor: "#f85149" } : cancelBtn}>
+                    {cancelOpen ? (saving ? "取消中..." : "確認取消排程") : "取消排程"}
                   </button>
                 )}
-                {cancelReason !== null && (
-                  <button onClick={() => setCancelReason(null)} style={cancelBtn}>
+                {cancelOpen && (
+                  <button onClick={() => { setCancelOpen(false); setCancelReason(""); }} style={cancelBtn}>
                     返回
                   </button>
                 )}
@@ -404,9 +394,8 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
               </div>
             </>
           )}
-        </div>
       </div>
-    </div>
+    </ScheduleModalShell>
     {showDeleteConfirm && (
       <ConfirmModal
         title="刪除排程"

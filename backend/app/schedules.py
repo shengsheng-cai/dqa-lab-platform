@@ -529,7 +529,10 @@ def _confirm_condition_db(schedule_id: int, now, user_id):
                 "completed": True,
                 "next_sop_id": None,
                 "dev": None,
-                "push_msg": f"✅ 測試完成\n專案：{schedule.project_number} / {schedule.sample_name}\n設備：{schedule.device_id}",
+                "push_msg": (
+                    f"✅ 測試完成\n專案：{schedule.project_number} / {schedule.sample_name}"
+                    f"\n設備：{schedule.device_id}"
+                ),
             }
 
 

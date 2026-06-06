@@ -3,9 +3,9 @@ import api from "../../api";
 import { useToast } from "../useToast";
 import ConfirmModal from "../ConfirmModal";
 import ConditionPicker from "./ConditionPicker";
+import ScheduleModalShell from "./ScheduleModalShell";
 import {
   fmtDt, fmtHours, BUFFER_TIME_HOURS,
-  overlayStyle, modalStyle, modalHeader, closeBtn,
   inputStyle, labelStyle, primaryBtn, cancelBtn,
 } from "./scheduleUtils";
 
@@ -52,17 +52,14 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
-  const [allFixtures, setAllFixtures] = useState([]);
-  const [fixturesError, setFixturesError] = useState(false);
-  const [fixturesLoaded, setFixturesLoaded] = useState(false);
+  const [fixtures, setFixtures] = useState({ status: "loading", data: [] });
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const loadFixtures = () => {
-    setFixturesError(false);
-    setFixturesLoaded(false);
+    setFixtures({ status: "loading", data: [] });
     api.get("/api/fixtures/")
-      .then((r) => { setAllFixtures(Array.isArray(r.data) ? r.data : []); setFixturesLoaded(true); })
-      .catch((e) => { console.error("[fixtures]", e?.response?.status, e?.message); setFixturesError(true); setFixturesLoaded(true); });
+      .then((r) => setFixtures({ status: "ok", data: Array.isArray(r.data) ? r.data : [] }))
+      .catch((e) => { console.error("[fixtures]", e?.response?.status, e?.message); setFixtures({ status: "error", data: [] }); });
   };
 
   useEffect(() => { loadFixtures(); }, []);
@@ -130,15 +127,8 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
 
   return (
     <>
-    <div style={overlayStyle} onClick={handleClose}>
-      <div style={{ ...modalStyle, width: 680, maxHeight: "88vh", overflowY: "auto" }}
-        onClick={(e) => e.stopPropagation()}>
-        <div style={modalHeader}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>申請排程</span>
-          <button onClick={handleClose} style={closeBtn}>✕</button>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 20px 20px" }}>
+    <ScheduleModalShell title="申請排程" width={680} maxHeight="88vh" onClose={handleClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 20px 20px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <LabelInput label="專案號碼 *" value={form.project_number}
               onChange={(v) => setForm((f) => ({ ...f, project_number: v }))} placeholder="e.g. P-2026-001" />
@@ -235,16 +225,16 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
               background: "#161b22", borderRadius: 6, border: "1px solid #30363d",
               maxHeight: 180, overflowY: "auto",
             }}>
-              {fixturesError ? (
+              {fixtures.status === "error" ? (
                 <div style={{ padding: "10px 12px", fontSize: 12, color: "#f85149", display: "flex", alignItems: "center", gap: 8 }}>
                   治具資料載入失敗
                   <button onClick={loadFixtures} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#21262d", border: "1px solid #30363d", color: "#cdd9e5", cursor: "pointer" }}>重試</button>
                 </div>
-              ) : !fixturesLoaded ? (
+              ) : fixtures.status === "loading" ? (
                 <div style={{ padding: "10px 12px", fontSize: 12, color: "#8b949e" }}>載入中…</div>
-              ) : allFixtures.length === 0 ? (
+              ) : fixtures.data.length === 0 ? (
                 <div style={{ padding: "10px 12px", fontSize: 12, color: "#8b949e" }}>無治具資料</div>
-              ) : allFixtures.map((f) => {
+              ) : fixtures.data.map((f) => {
                 const sel = form.fixtures.find((x) => x.fixture_id === f.id);
                 const checked = !!sel;
                 const qty = sel?.quantity ?? 1;
@@ -312,9 +302,8 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
               {saving ? "送出中..." : "送出申請"}
             </button>
           </div>
-        </div>
       </div>
-    </div>
+    </ScheduleModalShell>
     {showCloseConfirm && (
       <ConfirmModal
         title="確認關閉"
