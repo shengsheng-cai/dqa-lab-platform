@@ -373,6 +373,36 @@ def get_latest(request: Request):
     }
 
 
+def _emergency_stop_db(device_id: str, device: dict, user_id):
+    operator = device.get("operator", "") or "未填寫"
+    sop_name = device.get("running_sop_name", "") or "未知測試"
+    with SessionLocal() as db:
+        db.add(
+            ErrorLog(
+                device_id=device_id,
+                error_type="EMERGENCY",
+                sop_id=device.get("running_sop_id"),
+                sop_name=device.get("running_sop_name"),
+                temperature=device.get("temperature"),
+                humidity=device.get("humidity"),
+                note=f"操作人員觸發緊急停止（{operator}）",
+                completed_steps=device.get("completed_steps", 0),
+                total_steps=device.get("total_steps", 0),
+                created_at=_now_utc_naive(),
+            )
+        )
+        execution = db.query(SopExecution).filter(
+            SopExecution.device_id == device_id,
+            SopExecution.test_ended_at.is_(None),
+            SopExecution.test_started_at.isnot(None)
+        ).first()
+        if execution:
+            execution.test_ended_at = _now_utc_naive()
+        log_audit(db, str(user_id or "unknown"), "admin", "EMERGENCY_STOP", "device", device_id,
+                  f"操作人員：{operator}，測試：{sop_name}")
+        db.commit()
+
+
 @router.post("/api/stop/{device_id}/emergency")
 async def emergency_stop(device_id: str, request: Request, _: None = Depends(require_admin)):
     cache = request.app.state.AICM_CACHE
@@ -395,37 +425,9 @@ async def emergency_stop(device_id: str, request: Request, _: None = Depends(req
 
         operator = device.get("operator", "") or "未填寫"
         sop_name = device.get("running_sop_name", "") or "未知測試"
+        user_id = getattr(request.state, "user_id", None)
 
-        with SessionLocal() as db:
-            # 記錄緊急停止事件
-            db.add(
-                ErrorLog(
-                    device_id=device_id,
-                    error_type="EMERGENCY",
-                    sop_id=device.get("running_sop_id"),
-                    sop_name=device.get("running_sop_name"),
-                    temperature=device.get("temperature"),
-                    humidity=device.get("humidity"),
-                    note=f"操作人員觸發緊急停止（{operator}）",
-                    completed_steps=device.get("completed_steps", 0),
-                    total_steps=device.get("total_steps", 0),
-                    created_at=_now_utc_naive(),
-                )
-            )
-
-            # 更新對應的 SopExecution 記錄，設定 test_ended_at
-            execution = db.query(SopExecution).filter(
-                SopExecution.device_id == device_id,
-                SopExecution.test_ended_at.is_(None),
-                SopExecution.test_started_at.isnot(None)
-            ).first()
-            if execution:
-                execution.test_ended_at = _now_utc_naive()
-
-            user_id = getattr(request.state, "user_id", None)
-            log_audit(db, str(user_id or "unknown"), "admin", "EMERGENCY_STOP", "device", device_id,
-                      f"操作人員：{operator}，測試：{sop_name}")
-            db.commit()
+        await asyncio.to_thread(_emergency_stop_db, device_id, device, user_id)
 
         device.update(
             {
