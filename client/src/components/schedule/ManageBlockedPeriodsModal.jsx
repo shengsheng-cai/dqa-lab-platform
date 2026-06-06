@@ -3,9 +3,9 @@ import api from "../../api";
 import { useToast } from "../useToast";
 import { DEVICE_IDS } from "../../constants";
 import DateTimePicker from "./DateTimePicker";
+import ScheduleModalShell from "./ScheduleModalShell";
 import {
   fmtDt, toLocalInput,
-  overlayStyle, modalStyle, modalHeader, closeBtn,
   inputStyle, labelStyle, primaryBtn, cancelBtn,
 } from "./scheduleUtils";
 
@@ -88,8 +88,7 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
       }
       setShowForm(false);
       setEditingId(null);
-      await fetchList();
-      onChanged();
+      await Promise.all([fetchList(), onChanged()]);
     } catch (e) {
       const msg = e.response?.data?.detail || "操作失敗";
       setError(msg);
@@ -104,8 +103,7 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
     try {
       await api.delete(`/api/device-blocked-periods/${id}`);
       showToast("已刪除", "success");
-      await fetchList();
-      onChanged();
+      await Promise.all([fetchList(), onChanged()]);
     } catch (e) {
       showToast(e.response?.data?.detail || "刪除失敗", "error", 4000, e.response?.data?.hint);
     } finally {
@@ -114,15 +112,8 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
   }
 
   return (
-    <div style={overlayStyle} onClick={onClose}>
-      <div style={{ ...modalStyle, width: 560, maxHeight: "80vh", display: "flex", flexDirection: "column" }}
-        onClick={(e) => e.stopPropagation()}>
-        <div style={{ ...modalHeader, borderRadius: "10px 10px 0 0" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>管理設備不可用時段</span>
-          <button onClick={onClose} style={closeBtn}>✕</button>
-        </div>
-
-        <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px" }}>
+    <ScheduleModalShell title="管理設備不可用時段" width={560} maxHeight="80vh" flex onClose={onClose}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px" }}>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
             <button onClick={openNew} style={primaryBtn}>+ 新增</button>
           </div>
@@ -163,9 +154,9 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
               </tbody>
             </table>
           )}
-        </div>
+      </div>
 
-        {showForm && (
+      {showForm && (
           <div style={{ borderTop: "1px solid #30363d", padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#cdd9e5", marginBottom: 2 }}>
               {editingId !== null ? "編輯時段" : "新增時段"}
@@ -211,7 +202,6 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </ScheduleModalShell>
   );
 }

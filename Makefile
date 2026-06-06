@@ -1,5 +1,5 @@
 # DQA Lab Platform 控制中心
-.PHONY: dev clean install help ngrok test lint
+.PHONY: dev clean install help ngrok test lint test-e2e
 
 PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else echo python3; fi)
 
@@ -43,7 +43,19 @@ test:
 	cd client && npm test
 	@echo "✅ 測試完成。"
 
-# 5. PEP 8 檢查
+# 5. E2E UI 測試（playwright，需先 make dev）
+# 用法：make test-e2e SCRIPT=/tmp/my_test.mjs
+test-e2e:
+	@if [ -z "$(SCRIPT)" ]; then echo "❌ 請指定腳本：make test-e2e SCRIPT=/tmp/xxx.mjs"; exit 1; fi
+	@echo "🎭 執行 E2E 測試：$(SCRIPT)"
+	@PW=$$(ls -d $(HOME)/.npm/_npx/*/node_modules/playwright 2>/dev/null | head -1); \
+	if [ -z "$$PW" ]; then echo "❌ Playwright not in npx cache. Run: npx playwright --version"; exit 1; fi; \
+	PLAYWRIGHT_PATH=$$PW \
+	ADMIN_PASSWORD=$$(grep -m1 'ADMIN_PASSWORD' backend/.env 2>/dev/null | cut -d= -f2-) \
+	node $(SCRIPT)
+	@echo "✅ E2E 測試完成。"
+
+# 6. PEP 8 檢查
 lint:
 	@echo "🔍 執行 PEP 8 檢查（ruff）..."
 	$(PYTHON) -m ruff check backend/
