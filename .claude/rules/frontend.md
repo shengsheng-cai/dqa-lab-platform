@@ -4,13 +4,14 @@
 
 ```
 App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, MaintenancePage, UsersPage, ErrorLog, ExecutionList]
+├─ ai/         [ChatArea, MessageBubble, useAIChat, aiStorage]   ← src/ai/（非 components/）
 └─ components/
-   ├─ sop/    [ConditionCard, ControlPanel, ExecutionInfoPanel, ExecutionPanel, MonitorSide, SafetyChecklist, SelectGroup, StepList, TempChart]
-   ├─ ai/     [ChatArea, MessageBubble, useAIChat, aiStorage]
-   ├─ fixture/ [AddEditModal, CreatePurchaseModal, DatePicker, ImportModal, LoanModal, ModalShell, ReturnModal, SetKeeperModal, StocktakeModal]
-   └─ control/ [RightPanel, SensorQcModal, SensorQcChart, AuditLog,
-                TopBar, DeviceCard, TabBadge, LeftPanel,
-                FixtureSummaryPanel, ScheduleSummaryPanel, UsersSummaryPanel, CalibrationSummaryPanel]
+   ├─ sop/     [ConditionCard, ConditionPicker, ControlPanel, ExecutionInfoPanel, ExecutionPanel, MonitorSide, SafetyChecklist, SelectGroup, StepList, TempChart, generateSP]
+   ├─ schedule/ [DateTimePicker, GanttChart, ManageBlockedPeriodsModal, NewScheduleModal, ScheduleDetailModal, ScheduleModalShell, scheduleUtils]
+   ├─ fixture/  [AddEditModal, CreatePurchaseModal, DatePicker, ImportModal, LoanModal, ModalShell, ReturnModal, SetKeeperModal, StocktakeModal, modalStyles]
+   └─ control/  [RightPanel, SensorQcModal, SensorQcChart, AuditLog,
+                 TopBar, DeviceCard, deviceCardUtils, TabBadge, LeftPanel,
+                 FixtureSummaryPanel, ScheduleSummaryPanel, UsersSummaryPanel, CalibrationSummaryPanel]
 ```
 
 `MaintenancePage` 和 `ExecutionList` 定義在 `src/` 根目錄，由 `ControlCenter.jsx` import。  

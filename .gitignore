@@ -1,7 +1,4 @@
-### Continue 插件相關（務必加入）
-.continue/
-
-### Python 相關
+### Python
 __pycache__/
 *.py[cod]
 *.so
@@ -17,25 +14,27 @@ venv/
 env/
 ENV/
 .venv
-.env
-.env.*
-!.env.example
-
-### 資料庫（不追蹤本地測試數據）
-*.db
-*.sqlite3
-*.sqlite
-backend/dqa_lab.db
-backend/test.db
 
 ### 環境變數與敏感資訊
 .env
+.env.*
 *.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.*.local
+!.env.example
+
+### 資料庫
+*.db
+*.sqlite3
+*.sqlite
+
+### 前端（Node/Vite）
+node_modules/
+client/dist/
+client/dist-ssr/
+client/.vite/
+client/.eslintcache
+static/
+yarn.lock
+pnpm-lock.yaml
 
 ### 本地開發文檔（不公開）
 docs/private/
@@ -45,51 +44,13 @@ dqa-lab-platform.pptx
 .local/
 CLAUDE.local.md
 
-### 前端（Node/Vite）
-node_modules/
-client/node_modules/
-client/dist/
-client/dist-ssr/
-client/.vite/
-client/.eslintcache
-static/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-yarn.lock
-pnpm-lock.yaml
-
-### 數位孿生專案特定檔案
-simulator/__pycache__/
-simulator/venv/
-backend/rag_cache.pkl
-
 ### 真機驅動層（不公開，含廠商協定）
 backend/app/kson_driver.py
 
-### IDE、編輯器與系統
-.vscode/
-.idea/
-*.swp
-*.swo
-*.swn
-*~
-.DS_Store
-**/.DS_Store
-Thumbs.db
-.AppleDouble
-.LSOverride
-
-### 臨時檔案
-*.tmp
-*.bak
-*.pid
-*.seed
-*.pid.lock
-*.log
-*.log.*
-*.info
+### RAG 快取 / 模擬器工作目錄
+backend/rag_cache.pkl
+simulator/__pycache__/
+simulator/venv/
 
 ### 測試與覆蓋率
 test_*.py
@@ -102,6 +63,28 @@ htmlcov/
 .tox/
 .hypothesis/
 
+### IDE、編輯器與作業系統
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+**/.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+### 臨時檔案與日誌
+*.tmp
+*.bak
+*.pid
+*.seed
+*.pid.lock
+*.log
+*.log.*
+*.info
+
 ### 其他開發工具
 .mypy_cache/
 .dmypy.json
@@ -109,22 +92,20 @@ dmypy.json
 *.iml
 .ruff_cache/
 
-#demo（大二進位不進版控，README 不引用）
+### 大型媒體（demo 用，不進版控）
 *.mov
 *.mp4
-docs/demo.mp4
 
-### 領域附件（企業報告模板，非程式依賴，不公開）
+### 領域附件（報告模板，不公開）
 docs/templates/
 
-#changlog
-git_log.txt
-
-### Claude Code（只 ignore 個人/機器設定）
+### AI 工具設定
+.continue/
 .claude/settings.json
 .claude/settings.local.json
 .playwright-mcp/
-
-### Codex / 本機 AI agent 工作資料（不公開）
 .codex/
 chat-history/
+
+### 雜項
+git_log.txt
