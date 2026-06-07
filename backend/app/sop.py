@@ -25,7 +25,7 @@ os.makedirs(PHOTO_UPLOAD_DIR, exist_ok=True)
 
 # 導出 API 路由器
 router = APIRouter()
-execution_router = APIRouter(prefix="/api/sop-executions", tags=["sop-executions"])
+execution_router = APIRouter(prefix="/api/sop-executions", tags=["sop"])
 
 # 定義設備 ID 清單（目前支援的五個設備）
 DEVICE_IDS = ["CH-01", "CH-02", "CH-03", "CH-04", "CH-05"]
