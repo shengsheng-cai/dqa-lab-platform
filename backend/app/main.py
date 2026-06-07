@@ -242,11 +242,28 @@ app.include_router(sop_router, prefix="/api/sop", tags=["sop"])
 app.include_router(execution_router)
 
 
+_openapi_tags = [
+    {"name": "auth", "description": "登入、Token 管理"},
+    {"name": "devices", "description": "設備狀態查詢、緊急停止、感測器歷史"},
+    {"name": "maintenance", "description": "設備校驗 & 維護紀錄"},
+    {"name": "schedules", "description": "測試排程 CRUD、不可用時段管理"},
+    {"name": "sop", "description": "法規條件選擇、SOP 啟動、步驟確認、照片上傳、執行紀錄"},
+    {"name": "reports", "description": "PDF / CSV 報告下載"},
+    {"name": "fixtures", "description": "治具借還、盤點、採購、Excel 匯入"},
+    {"name": "purchase-orders", "description": "治具採購單"},
+    {"name": "ai", "description": "AI 法規諮詢（Gemini + RAG）"},
+    {"name": "audit", "description": "稽核日誌"},
+    {"name": "errors", "description": "設備異常紀錄"},
+    {"name": "line", "description": "LINE Bot Webhook"},
+    {"name": "ws", "description": "WebSocket 即時推播"},
+]
+
+
 def _custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
     from fastapi.openapi.utils import get_openapi
-    schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+    schema = get_openapi(title=app.title, version=app.version, routes=app.routes, tags=_openapi_tags)
     schema.setdefault("components", {})["securitySchemes"] = {
         "AdminToken": {
             "type": "apiKey",
@@ -282,7 +299,7 @@ app.include_router(device_blocked_router)
 app.include_router(devices_router)
 app.include_router(audit_router)
 app.include_router(devices_maintenance_router)
-app.include_router(ws_router)
+app.include_router(ws_router, tags=["ws"])
 
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
@@ -305,12 +322,12 @@ app.add_middleware(
 )
 
 
-@app.get("/health")
+@app.get("/health", include_in_schema=False)
 async def health():
     return {"status": "ok"}
 
 
-@app.get("/api/runtime-info")
+@app.get("/api/runtime-info", include_in_schema=False)
 def runtime_info(request: Request, _: None = Depends(require_admin)):
     info = getattr(app.state, "runtime_info", None) or _build_runtime_info()
     return info
