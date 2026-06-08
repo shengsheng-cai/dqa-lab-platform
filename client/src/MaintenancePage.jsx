@@ -27,10 +27,10 @@ function FieldRow({ label, value, onChange, placeholder }) {
 export default function MaintenancePage({ active, role, onCalibrationChange }) {
   const { showToast } = useToast();
   const [selectedDevice, setSelectedDevice] = useState("CH-01");
-  const [subTab, setSubTab] = useState("calibrations");
   const [calibrations, setCalibrations] = useState([]);
   const [maintenances, setMaintenances] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState("calibrations");
   const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
@@ -56,19 +56,21 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
     fetchMaintenances();
   }, [active, selectedDevice, fetchCalibrations, fetchMaintenances]);
 
-  const openCreate = () => {
+  const openCreate = (type) => {
+    setModalType(type);
     setEditItem(null);
-    setForm(subTab === "calibrations"
+    setForm(type === "calibrations"
       ? { calibration_date: "", next_calibration_date: "", interval_days: 365, certificate_number: "", result: "pass", notes: "", created_by: "admin" }
       : { maintenance_date: "", maintenance_type: "preventive", description: "", performed_by: "", next_maintenance_date: "" }
     );
     setShowModal(true);
   };
 
-  const openEdit = (item) => {
+  const openEdit = (item, type) => {
+    setModalType(type);
     setEditItem(item);
     const fmt = (v) => v ? v.replace("T", " ").slice(0, 16) : "";
-    if (subTab === "calibrations") {
+    if (type === "calibrations") {
       setForm({ calibration_date: fmt(item.calibration_date), next_calibration_date: fmt(item.next_calibration_date), interval_days: item.interval_days, certificate_number: item.certificate_number || "", result: item.result, notes: item.notes || "", created_by: item.created_by });
     } else {
       setForm({ maintenance_date: fmt(item.maintenance_date), maintenance_type: item.maintenance_type, description: item.description, performed_by: item.performed_by, next_maintenance_date: fmt(item.next_maintenance_date) });
@@ -92,7 +94,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
   };
 
   const handleSave = async () => {
-    const dateFields = subTab === "calibrations"
+    const dateFields = modalType === "calibrations"
       ? [["calibration_date", "校驗日期"], ["next_calibration_date", "下次校驗日期"]]
       : [["maintenance_date", "維護日期"]];
     for (const [field, label] of dateFields) {
@@ -104,26 +106,26 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
     setSaving(true);
     try {
       const payload = { ...form };
-      const isoFields = subTab === "calibrations"
+      const isoFields = modalType === "calibrations"
         ? ["calibration_date", "next_calibration_date"]
         : ["maintenance_date", "next_maintenance_date"];
       for (const f of isoFields) {
         if (payload[f]) payload[f] = toIso(payload[f]);
         else payload[f] = null;
       }
-      if (subTab === "calibrations") payload.interval_days = parseInt(payload.interval_days) || 365;
+      if (modalType === "calibrations") payload.interval_days = parseInt(payload.interval_days) || 365;
 
       if (editItem) {
-        if (subTab === "calibrations") await api.put(`/api/devices/${selectedDevice}/calibrations/${editItem.id}`, payload);
+        if (modalType === "calibrations") await api.put(`/api/devices/${selectedDevice}/calibrations/${editItem.id}`, payload);
         else await api.put(`/api/devices/${selectedDevice}/maintenances/${editItem.id}`, payload);
         showToast("更新成功", "success");
       } else {
-        if (subTab === "calibrations") await api.post(`/api/devices/${selectedDevice}/calibrations`, payload);
+        if (modalType === "calibrations") await api.post(`/api/devices/${selectedDevice}/calibrations`, payload);
         else await api.post(`/api/devices/${selectedDevice}/maintenances`, payload);
         showToast("新增成功", "success");
       }
       setShowModal(false);
-      if (subTab === "calibrations") fetchCalibrations(); else fetchMaintenances();
+      if (modalType === "calibrations") fetchCalibrations(); else fetchMaintenances();
       onCalibrationChange?.();
     } catch (e) {
       showToast(e.response?.data?.detail || "操作失敗", "error");
@@ -132,14 +134,14 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id, type) => {
     if (!window.confirm("確定刪除？")) return;
     setDeleting(id);
     try {
-      if (subTab === "calibrations") await api.delete(`/api/devices/${selectedDevice}/calibrations/${id}`);
+      if (type === "calibrations") await api.delete(`/api/devices/${selectedDevice}/calibrations/${id}`);
       else await api.delete(`/api/devices/${selectedDevice}/maintenances/${id}`);
       showToast("已刪除", "success");
-      if (subTab === "calibrations") fetchCalibrations(); else fetchMaintenances();
+      if (type === "calibrations") fetchCalibrations(); else fetchMaintenances();
       onCalibrationChange?.();
     } catch (e) {
       showToast(e.response?.data?.detail || "刪除失敗", "error");
@@ -151,88 +153,97 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
   const fmtDt = (v) => v ? v.replace("T", " ").slice(0, 16) : "—";
   const thS = { padding: "6px 10px", textAlign: "left", color: "#8b949e", fontWeight: 600, fontSize: 11, borderBottom: "1px solid #30363d" };
   const tdS = { padding: "6px 10px", fontSize: 11, color: "#cdd9e5", borderBottom: "1px solid #21262d" };
+  const sectionHeader = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0 6px" };
+  const sectionTitle = { fontSize: 12, fontWeight: 700, color: "#8b949e", letterSpacing: 1 };
+  const addBtn = { padding: "3px 10px", fontSize: 11, borderRadius: 5, cursor: "pointer", background: "#1f6feb22", border: "1px solid #1f6feb", color: "#58a6ff" };
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#0d1117", color: "#cdd9e5", overflow: "hidden" }}>
+      {/* 設備切換 */}
       <div style={{ display: "flex", gap: 6, padding: "10px 16px", flexShrink: 0, borderBottom: "1px solid #30363d" }}>
         {DEVICE_IDS.map(id => (
           <button key={id} onClick={() => setSelectedDevice(id)} style={{ padding: "4px 10px", fontSize: 12, borderRadius: 5, cursor: "pointer", background: selectedDevice === id ? "#1f6feb" : "#21262d", border: `1px solid ${selectedDevice === id ? "#1f6feb" : "#30363d"}`, color: selectedDevice === id ? "#fff" : "#8b949e", fontWeight: selectedDevice === id ? 700 : 400 }}>{id}</button>
         ))}
       </div>
 
-      <div style={{ display: "flex", padding: "0 16px", borderBottom: "1px solid #30363d", flexShrink: 0, background: "#0d1117" }}>
-        {[{ key: "calibrations", label: "校驗紀錄" }, { key: "maintenances", label: "維護紀錄" }].map(t => (
-          <button key={t.key} onClick={() => setSubTab(t.key)} style={{ padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: subTab === t.key ? "2px solid #58a6ff" : "2px solid transparent", color: subTab === t.key ? "#cdd9e5" : "#8b949e" }}>{t.label}</button>
-        ))}
-        {role === "admin" && (
-          <button onClick={openCreate} style={{ marginLeft: "auto", padding: "4px 12px", fontSize: 11, borderRadius: 5, cursor: "pointer", background: "#1f6feb22", border: "1px solid #1f6feb", color: "#58a6ff" }}>+ 新增</button>
-        )}
-      </div>
+      {/* 內容區：左右兩欄 */}
+      <div style={{ flex: 1, display: "flex", gap: 0, overflow: "hidden" }}>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
-        {subTab === "calibrations" ? (
-          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10 }}>
+        {/* 左：校驗紀錄 */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px", borderRight: "1px solid #30363d" }}>
+          <div style={sectionHeader}>
+            <span style={sectionTitle}>校驗紀錄</span>
+            {role === "admin" && <button onClick={() => openCreate("calibrations")} style={addBtn}>+ 新增</button>}
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr>{["校驗日期", "下次校驗日期", "間隔(天)", "證書號", "結果", "備註", ...(role === "admin" ? ["操作"] : [])].map(h => <th key={h} style={thS}>{h}</th>)}</tr>
+              <tr>{["校驗日期", "下次校驗日期", "間隔", "證書號", "結果", ...(role === "admin" ? ["操作"] : [])].map(h => <th key={h} style={thS}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {calibrations.length === 0 ? (
-                <tr><td colSpan={7} style={{ ...tdS, color: "#484f58", textAlign: "center", padding: "20px 0" }}>尚無校驗紀錄</td></tr>
+                <tr><td colSpan={6} style={{ ...tdS, color: "#484f58", textAlign: "center", padding: "16px 0" }}>尚無校驗紀錄</td></tr>
               ) : calibrations.map(c => (
                 <tr key={c.id}>
                   <td style={tdS}>{fmtDt(c.calibration_date)}</td>
                   <td style={tdS}>{fmtDt(c.next_calibration_date)}</td>
-                  <td style={tdS}>{c.interval_days}</td>
-                  <td style={tdS}>{c.certificate_number || "—"}</td>
+                  <td style={tdS}>{c.interval_days}天</td>
+                  <td style={{ ...tdS, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.certificate_number || "—"}</td>
                   <td style={tdS}>
                     <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 8, fontWeight: 700, background: c.result === "pass" ? "#0f2318" : "#2d0f0f", color: c.result === "pass" ? "#3fb950" : "#f85149", border: `1px solid ${c.result === "pass" ? "#2d5a3a" : "#5a2d2d"}` }}>{c.result === "pass" ? "通過" : "不通過"}</span>
                   </td>
-                  <td style={{ ...tdS, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.notes || "—"}</td>
                   {role === "admin" && (
                     <td style={tdS}>
-                      <button onClick={() => openEdit(c)} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#21262d", border: "1px solid #30363d", color: "#8b949e", cursor: "pointer" }}>編輯</button>
-                      <button onClick={() => handleDelete(c.id)} disabled={deleting === c.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#2d0f0f", border: "1px solid #5a2d2d", color: "#f85149", cursor: "pointer" }}>刪除</button>
+                      <button onClick={() => openEdit(c, "calibrations")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#21262d", border: "1px solid #30363d", color: "#8b949e", cursor: "pointer" }}>編輯</button>
+                      <button onClick={() => handleDelete(c.id, "calibrations")} disabled={deleting === c.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#2d0f0f", border: "1px solid #5a2d2d", color: "#f85149", cursor: "pointer" }}>刪除</button>
                     </td>
                   )}
                 </tr>
               ))}
             </tbody>
           </table>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10 }}>
+        </div>
+
+        {/* 右：維護紀錄 */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
+          <div style={sectionHeader}>
+            <span style={sectionTitle}>維護紀錄</span>
+            {role === "admin" && <button onClick={() => openCreate("maintenances")} style={addBtn}>+ 新增</button>}
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>{["維護日期", "類型", "說明", "執行人員", "下次維護日期", ...(role === "admin" ? ["操作"] : [])].map(h => <th key={h} style={thS}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {maintenances.length === 0 ? (
-                <tr><td colSpan={6} style={{ ...tdS, color: "#484f58", textAlign: "center", padding: "20px 0" }}>尚無維護紀錄</td></tr>
+                <tr><td colSpan={6} style={{ ...tdS, color: "#484f58", textAlign: "center", padding: "16px 0" }}>尚無維護紀錄</td></tr>
               ) : maintenances.map(m => (
                 <tr key={m.id}>
                   <td style={tdS}>{fmtDt(m.maintenance_date)}</td>
                   <td style={tdS}>{MAINTENANCE_TYPE_LABEL[m.maintenance_type] || m.maintenance_type}</td>
-                  <td style={{ ...tdS, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.description}</td>
+                  <td style={{ ...tdS, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.description}</td>
                   <td style={tdS}>{m.performed_by}</td>
                   <td style={tdS}>{m.next_maintenance_date ? fmtDt(m.next_maintenance_date) : "—"}</td>
                   {role === "admin" && (
                     <td style={tdS}>
-                      <button onClick={() => openEdit(m)} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#21262d", border: "1px solid #30363d", color: "#8b949e", cursor: "pointer" }}>編輯</button>
-                      <button onClick={() => handleDelete(m.id)} disabled={deleting === m.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#2d0f0f", border: "1px solid #5a2d2d", color: "#f85149", cursor: "pointer" }}>刪除</button>
+                      <button onClick={() => openEdit(m, "maintenances")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#21262d", border: "1px solid #30363d", color: "#8b949e", cursor: "pointer" }}>編輯</button>
+                      <button onClick={() => handleDelete(m.id, "maintenances")} disabled={deleting === m.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#2d0f0f", border: "1px solid #5a2d2d", color: "#f85149", cursor: "pointer" }}>刪除</button>
                     </td>
                   )}
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
+        </div>
       </div>
 
+      {/* Modal */}
       {showModal && (
         <div onClick={() => setShowModal(false)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.6)" }}>
           <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(480px, 92vw)", background: "#161b22", border: "1px solid #30363d", borderRadius: 10, padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#cdd9e5" }}>
-              {editItem ? "編輯" : "新增"}{subTab === "calibrations" ? "校驗紀錄" : "維護紀錄"} — {selectedDevice}
+              {editItem ? "編輯" : "新增"}{modalType === "calibrations" ? "校驗紀錄" : "維護紀錄"} — {selectedDevice}
             </div>
-            {subTab === "calibrations" ? (
+            {modalType === "calibrations" ? (
               <>
                 <FieldRow label="校驗日期 *" value={form.calibration_date} onChange={v => setForm(f => ({ ...f, calibration_date: v }))} placeholder="YYYY-MM-DD HH:MM" />
                 <FieldRow label="下次校驗日期 *" value={form.next_calibration_date} onChange={v => setForm(f => ({ ...f, next_calibration_date: v }))} placeholder="YYYY-MM-DD HH:MM" />
