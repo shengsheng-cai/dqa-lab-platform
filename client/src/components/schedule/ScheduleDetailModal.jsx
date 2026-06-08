@@ -8,17 +8,18 @@ import {
   fmtDt, fmtHours, STATUS_COLOR,
   inputStyle, labelStyle, primaryBtn, cancelBtn,
 } from "./scheduleUtils";
+import { C } from "../../styles/theme";
 
 function InfoRow({ label, value, muted }) {
   return (
     <div style={{ display: "flex", gap: 8, fontSize: 13 }}>
-      <span style={{ color: "#8b949e", minWidth: 80, flexShrink: 0 }}>{label}</span>
-      <span style={{ color: muted ? "#6e7681" : "#cdd9e5", wordBreak: "break-word", fontStyle: muted ? "italic" : "normal" }}>{value}</span>
+      <span style={{ color: C.textMuted, minWidth: 80, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: muted ? C.textFaint : C.textPrimary, wordBreak: "break-word", fontStyle: muted ? "italic" : "normal" }}>{value}</span>
     </div>
   );
 }
 
-const SUCCESS_BANNER = { background: "#1a3828", border: "1px solid #3fb950", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#7ee787", fontWeight: 600 };
+const SUCCESS_BANNER = { background: C.successBgDeep, border: `1px solid ${C.success}`, borderRadius: 8, padding: "12px 16px", fontSize: 13, color: C.successText, fontWeight: 600 };
 
 function ResultScreen({ title, message, fields, onClose }) {
   return (
@@ -213,7 +214,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
               padding: "3px 10px", borderRadius: 12, fontSize: 12, fontWeight: 700,
               background: color.bg, color: color.text, border: `1px solid ${color.border}`,
             }}>{schedule.status}</span>
-            <span style={{ fontSize: 13, color: "#cdd9e5", fontWeight: 700 }}>
+            <span style={{ fontSize: 13, color: C.textPrimary, fontWeight: 700 }}>
               {schedule.project_number} / {schedule.sample_name}
             </span>
           </div>
@@ -221,15 +222,15 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
           <InfoRow label="申請人" value={schedule.applicant_name || "—"} />
           <InfoRow label="法規標準" value={schedule.standard} />
           <div style={{ display: "flex", gap: 8, fontSize: 13 }}>
-            <span style={{ color: "#8b949e", minWidth: 80, flexShrink: 0 }}>測試條件</span>
+            <span style={{ color: C.textMuted, minWidth: 80, flexShrink: 0 }}>測試條件</span>
             <div style={{ flex: 1, maxHeight: 200, overflowY: "auto" }}>
               {(schedule.condition_names || schedule.conditions || []).length > 0
                 ? (schedule.condition_names || schedule.conditions).map((c, i) => (
-                    <div key={i} style={{ color: "#cdd9e5", lineHeight: 1.6, paddingBottom: 2 }}>
+                    <div key={i} style={{ color: C.textPrimary, lineHeight: 1.6, paddingBottom: 2 }}>
                       {i + 1}. {c}
                     </div>
                   ))
-                : <span style={{ color: "#cdd9e5" }}>—</span>}
+                : <span style={{ color: C.textPrimary }}>—</span>}
             </div>
           </div>
           {schedule.fixtures?.length > 0 && (
@@ -269,7 +270,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
 
           {isPending && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 11, color: "#484f58" }}>
+              <span style={{ fontSize: 11, color: C.textDim }}>
                 {previewState.updatedAt
                   ? `預覽計算於 ${previewState.updatedAt.getHours().toString().padStart(2,"0")}:${previewState.updatedAt.getMinutes().toString().padStart(2,"0")}:${previewState.updatedAt.getSeconds().toString().padStart(2,"0")}，確認前建議刷新`
                   : "預覽計算中..."}
@@ -288,7 +289,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
 
           {canEdit && (
             <>
-              <hr style={{ border: "none", borderTop: "1px solid #21262d", margin: "4px 0" }} />
+              <hr style={{ border: "none", borderTop: `1px solid ${C.surfaceHover}`, margin: "4px 0" }} />
 
               {schedule.status === "待審核" && (
                 <div>
@@ -324,7 +325,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
               </div>
 
               {schedule.rejection_note && (
-                <div style={{ padding: "8px 10px", borderRadius: 6, background: "#2d1a1a", border: "1px solid #f85149", fontSize: 12, color: "#ff7b72" }}>
+                <div style={{ padding: "8px 10px", borderRadius: 6, background: C.errorBg, border: `1px solid ${C.error}`, fontSize: 12, color: C.errorLight }}>
                   <span style={{ fontWeight: 600 }}>取消原因：</span>{schedule.rejection_note}
                 </div>
               )}
@@ -332,31 +333,31 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
               {cancelOpen && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {schedule.status === "進行中" && (
-                    <div style={{ fontSize: 12, color: "#f85149", background: "#2d0f0f", border: "1px solid #f85149", borderRadius: 6, padding: "8px 10px", fontWeight: 600 }}>
+                    <div style={{ fontSize: 12, color: C.error, background: C.errorBg, border: `1px solid ${C.error}`, borderRadius: 6, padding: "8px 10px", fontWeight: 600 }}>
                       ⚠️ {schedule.device_id} 正在執行測試中，取消將強制停止目前的溫度循環
                     </div>
                   )}
-                  <div style={{ fontSize: 12, color: "#f85149" }}>請填寫取消原因（選填），再次點擊確認取消</div>
+                  <div style={{ fontSize: 12, color: C.error }}>請填寫取消原因（選填），再次點擊確認取消</div>
                   <textarea
                     value={cancelReason}
                     onChange={(e) => setCancelReason(e.target.value)}
                     rows={2}
                     placeholder="例：測試需求變更、設備衝突..."
-                    style={{ ...inputStyle, resize: "vertical", borderColor: "#f85149" }}
+                    style={{ ...inputStyle, resize: "vertical", borderColor: C.error }}
                   />
                 </div>
               )}
 
-              {error && <div style={{ color: "#f85149", fontSize: 13 }}>{error}</div>}
+              {error && <div style={{ color: C.error, fontSize: 13 }}>{error}</div>}
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
                 {role === "admin" && (schedule.status === "已取消" || schedule.status === "已完成") && (
-                  <button onClick={del} style={{ ...cancelBtn, color: "#f85149", borderColor: "#f85149" }}>
+                  <button onClick={del} style={{ ...cancelBtn, color: C.error, borderColor: C.errorDark }}>
                     刪除
                   </button>
                 )}
                 {schedule.status !== "已取消" && schedule.status !== "已完成" && (
-                  <button onClick={cancel} disabled={saving} style={cancelOpen ? { ...cancelBtn, color: "#f85149", borderColor: "#f85149" } : cancelBtn}>
+                  <button onClick={cancel} disabled={saving} style={cancelOpen ? { ...cancelBtn, color: C.error, borderColor: C.errorDark } : cancelBtn}>
                     {cancelOpen ? (saving ? "取消中..." : "確認取消排程") : "取消排程"}
                   </button>
                 )}
@@ -371,7 +372,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                   </button>
                 )}
                 {schedule.status === "已確認" && (
-                  <button onClick={startNow} disabled={saving} style={{ ...primaryBtn, background: "#1f6feb" }}>
+                  <button onClick={startNow} disabled={saving} style={{ ...primaryBtn, background: C.accentDark }}>
                     {saving ? "啟動中..." : "▶ 立即開始"}
                   </button>
                 )}
@@ -381,7 +382,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                   const isLast = idx >= conds.length;
                   const label = isLast ? "✅ 確認完成" : `▶ 開始第 ${idx + 1} 條件（共 ${conds.length}）`;
                   return (
-                    <button onClick={confirmCondition} disabled={saving} style={{ ...primaryBtn, background: isLast ? "#238636" : "#1f6feb" }}>
+                    <button onClick={confirmCondition} disabled={saving} style={{ ...primaryBtn, background: isLast ? C.successDark : C.accentDark }}>
                       {saving ? "處理中..." : label}
                     </button>
                   );

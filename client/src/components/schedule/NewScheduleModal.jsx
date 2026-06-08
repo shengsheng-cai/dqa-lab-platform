@@ -8,6 +8,7 @@ import {
   fmtDt, fmtHours, BUFFER_TIME_HOURS,
   inputStyle, labelStyle, primaryBtn, cancelBtn,
 } from "./scheduleUtils";
+import { C } from "../../styles/theme";
 
 function LabelInput({ label, value, onChange, placeholder }) {
   return (
@@ -150,10 +151,10 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
           {form.conditions.length > 0 && (
             <>
             <div style={{
-              background: "#161b22", borderRadius: 6, padding: "10px 12px",
-              border: "1px solid #30363d",
+              background: C.surface, borderRadius: 6, padding: "10px 12px",
+              border: `1px solid ${C.border}`,
             }}>
-              <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 6 }}>已選條件（依序執行，可拖曳排序）</div>
+              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 6 }}>已選條件（依序執行，可拖曳排序）</div>
               {form.conditions.map((sop_id, i) => {
                 const t = findStd(sop_id);
                 const isOver = dragOverIndex === i && dragIndex !== i;
@@ -176,43 +177,43 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
                     style={{
                       display: "flex", alignItems: "center", gap: 8, marginBottom: 4,
                       borderRadius: 4, padding: "2px 0",
-                      borderTop: isOver ? "2px solid #58a6ff" : "2px solid transparent",
+                      borderTop: isOver ? `2px solid ${C.accent}` : "2px solid transparent",
                       opacity: dragIndex === i ? 0.4 : 1,
                       transition: "opacity .15s",
                     }}
                   >
-                    <span style={{ fontSize: 14, color: "#484f58", cursor: "grab", userSelect: "none" }}>⠿</span>
-                    <span style={{ fontSize: 11, color: "#484f58", width: 18 }}>{i + 1}.</span>
-                    <span style={{ fontSize: 12, color: "#cdd9e5", flex: 1 }}>{t?.name || sop_id}</span>
-                    <span style={{ fontSize: 11, color: "#3fb950" }}>≈ {t?.estimated_hours}h</span>
+                    <span style={{ fontSize: 14, color: C.textDim, cursor: "grab", userSelect: "none" }}>⠿</span>
+                    <span style={{ fontSize: 11, color: C.textDim, width: 18 }}>{i + 1}.</span>
+                    <span style={{ fontSize: 12, color: C.textPrimary, flex: 1 }}>{t?.name || sop_id}</span>
+                    <span style={{ fontSize: 11, color: C.success }}>≈ {t?.estimated_hours}h</span>
                     <button
                       onClick={() => setForm((f) => ({ ...f, conditions: f.conditions.filter((s) => s !== sop_id) }))}
-                      style={{ background: "none", border: "none", color: "#f85149", cursor: "pointer", fontSize: 12 }}
+                      style={{ background: "none", border: "none", color: C.error, cursor: "pointer", fontSize: 12 }}
                     >✕</button>
                   </div>
                 );
               })}
-              <div style={{ borderTop: "1px solid #21262d", marginTop: 6, paddingTop: 6, fontSize: 12, color: "#8b949e" }}>
-                預估總時長：<span style={{ color: "#e3b341", fontWeight: 700 }}>{fmtHours(totalHours)}</span>
+              <div style={{ borderTop: `1px solid ${C.surfaceHover}`, marginTop: 6, paddingTop: 6, fontSize: 12, color: C.textMuted }}>
+                預估總時長：<span style={{ color: C.warningAlt, fontWeight: 700 }}>{fmtHours(totalHours)}</span>
                 <span style={{ fontSize: 10, marginLeft: 6 }}>（含 {Math.max(0, form.conditions.length - 1)} × 30min 緩衝）</span>
               </div>
             </div>
 
             {previewing ? (
-              <div style={{ background: "#161b22", borderRadius: 6, padding: "10px 12px", border: "1px solid #30363d", color: "#8b949e", fontSize: 12 }}>
+              <div style={{ background: C.surface, borderRadius: 6, padding: "10px 12px", border: `1px solid ${C.border}`, color: C.textMuted, fontSize: 12 }}>
                 ⏳ 計算預估時間中...
               </div>
             ) : preview ? (
               <div style={{
-                background: "#1a2d1a", borderRadius: 6, padding: "10px 12px",
-                border: "1px solid #3fb950", borderLeft: "3px solid #3fb950",
+                background: C.successBgMid, borderRadius: 6, padding: "10px 12px",
+                border: `1px solid ${C.success}`, borderLeft: `3px solid ${C.success}`,
               }}>
-                <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 6 }}>📋 預估時間（待管理員分配設備）</div>
-                <div style={{ fontSize: 12, color: "#cdd9e5", marginBottom: 4 }}>
-                  🕐 預計開始：<span style={{ color: "#79c0ff" }}>{fmtDt(preview.start_time)}</span>
+                <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 6 }}>📋 預估時間（待管理員分配設備）</div>
+                <div style={{ fontSize: 12, color: C.textPrimary, marginBottom: 4 }}>
+                  🕐 預計開始：<span style={{ color: C.accentLight }}>{fmtDt(preview.start_time)}</span>
                 </div>
-                <div style={{ fontSize: 12, color: "#cdd9e5" }}>
-                  🏁 預計結束：<span style={{ color: "#79c0ff" }}>{fmtDt(preview.end_time)}</span>
+                <div style={{ fontSize: 12, color: C.textPrimary }}>
+                  🏁 預計結束：<span style={{ color: C.accentLight }}>{fmtDt(preview.end_time)}</span>
                 </div>
               </div>
             ) : null}
@@ -222,18 +223,18 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
           <div>
             <div style={labelStyle}>治具需求（選填）</div>
             <div style={{
-              background: "#161b22", borderRadius: 6, border: "1px solid #30363d",
+              background: C.surface, borderRadius: 6, border: `1px solid ${C.border}`,
               maxHeight: 180, overflowY: "auto",
             }}>
               {fixtures.status === "error" ? (
-                <div style={{ padding: "10px 12px", fontSize: 12, color: "#f85149", display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ padding: "10px 12px", fontSize: 12, color: C.error, display: "flex", alignItems: "center", gap: 8 }}>
                   治具資料載入失敗
-                  <button onClick={loadFixtures} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#21262d", border: "1px solid #30363d", color: "#cdd9e5", cursor: "pointer" }}>重試</button>
+                  <button onClick={loadFixtures} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: C.surfaceHover, border: `1px solid ${C.border}`, color: C.textPrimary, cursor: "pointer" }}>重試</button>
                 </div>
               ) : fixtures.status === "loading" ? (
-                <div style={{ padding: "10px 12px", fontSize: 12, color: "#8b949e" }}>載入中…</div>
+                <div style={{ padding: "10px 12px", fontSize: 12, color: C.textMuted }}>載入中…</div>
               ) : fixtures.data.length === 0 ? (
-                <div style={{ padding: "10px 12px", fontSize: 12, color: "#8b949e" }}>無治具資料</div>
+                <div style={{ padding: "10px 12px", fontSize: 12, color: C.textMuted }}>無治具資料</div>
               ) : fixtures.data.map((f) => {
                 const sel = form.fixtures.find((x) => x.fixture_id === f.id);
                 const checked = !!sel;
@@ -241,7 +242,7 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
                 return (
                   <div key={f.id} style={{
                     display: "flex", alignItems: "center", gap: 8,
-                    padding: "6px 12px", borderBottom: "1px solid #21262d",
+                    padding: "6px 12px", borderBottom: `1px solid ${C.surfaceHover}`,
                   }}>
                     <input
                       type="checkbox"
@@ -253,12 +254,12 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
                           setForm((prev) => ({ ...prev, fixtures: prev.fixtures.filter((x) => x.fixture_id !== f.id) }));
                         }
                       }}
-                      style={{ cursor: "pointer", accentColor: "#388bfd" }}
+                      style={{ cursor: "pointer", accentColor: C.accentLink }}
                     />
-                    <span style={{ fontSize: 12, color: "#cdd9e5", flex: 1 }}>
+                    <span style={{ fontSize: 12, color: C.textPrimary, flex: 1 }}>
                       {f.interface_type} {f.form_factor}{f.size ? ` ${f.size}` : ""}
                     </span>
-                    <span style={{ fontSize: 11, color: f.available_quantity > 0 ? "#3fb950" : "#f85149" }}>
+                    <span style={{ fontSize: 11, color: f.available_quantity > 0 ? C.success : C.error }}>
                       可借 {f.available_quantity}
                     </span>
                     {checked && (
@@ -276,7 +277,7 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
                         }}
                         style={{
                           width: 48, padding: "2px 6px", borderRadius: 4, fontSize: 12,
-                          background: "#0d1117", border: "1px solid #30363d", color: "#cdd9e5",
+                          background: C.bg, border: `1px solid ${C.border}`, color: C.textPrimary,
                         }}
                       />
                     )}
@@ -285,7 +286,7 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
               })}
             </div>
             {form.fixtures.length > 0 && (
-              <div style={{ fontSize: 11, color: "#76e3ea", marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: C.reserved, marginTop: 4 }}>
                 已選 {form.fixtures.length} 種治具，確認後自動預約
               </div>
             )}
@@ -294,7 +295,7 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
           <LabelInput label="備註" value={form.note}
             onChange={(v) => setForm((f) => ({ ...f, note: v }))} placeholder="可選" />
 
-          {error && <div style={{ color: "#f85149", fontSize: 13 }}>{error}</div>}
+          {error && <div style={{ color: C.error, fontSize: 13 }}>{error}</div>}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
             <button onClick={handleClose} style={cancelBtn}>取消</button>
