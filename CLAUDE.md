@@ -105,9 +105,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 情境 | 要跑的 |
 |------|--------|
-| 功能完成、跨多檔改動 | `/simplify` → `/review` → push |
-| 單檔邏輯改動 | `/review` → push |
+| 功能完成、跨多檔改動 | `/simplify` → `/review` → `/code-review` → push |
+| 單檔邏輯改動 | `/review` → `/code-review` → push |
 | 小改動（typo、config、純顯示） | 直接 push |
+
+> `/review` 管品質（reuse / simplify / efficiency / altitude）；`/code-review` 管正確性（bug / 邏輯 / 安全）。兩者互補，不互代。
 
 ---
 

@@ -32,6 +32,15 @@ App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, Maintenan
   - 「感測器 QC 控制圖」是 DeviceCard `📊` 按鈕觸發的 Modal；`sensorModalDevice` state（string | null）在 ControlCenter 主元件；`onShowQc` prop 沿 LeftPanel → ScheduleSummaryPanel / DeviceCard 傳遞
 - AI FAB：右下角浮動按鈕，點擊從右側 translateX 滑入 RightPanel（500px）
 
+## FixturePage 佈局
+
+- **2 個 tab**：治具總表 / 記錄（admin only）
+- **治具總表**：庫存列表；「借出」欄數字 > 0 時可點擊展開子列，顯示借用人 / 到期日 / 逾期標示 / 歸還操作（`expandedFixtureId` state）
+- **記錄 tab**：
+  - 上方 sub-tab 切換：損壞／遺失（`DamagedList`）/ 盤點紀錄（`InventoryLogTab`）
+  - 下方固定區塊：採購清單（`PurchaseTab`），帶分隔線與「採購清單」標題
+- **不**另設借出中、逾期、採購、損壞等獨立 tab；借出資訊整合在總表展開列，採購整合在記錄 tab
+
 ## SchedulePage 佈局
 
 - Header：無（badge 已移至 LeftPanel ScheduleSummaryPanel）

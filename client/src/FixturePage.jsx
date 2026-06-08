@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import api from "./api";
 import { downloadBlob } from "./utils/download";
 import { formatLocal, parseUTC, parseDateOnlyLocal } from "./utils/timezone";
@@ -14,7 +14,7 @@ import StocktakeModal from "./components/fixture/StocktakeModal";
 import CreatePurchaseModal from "./components/fixture/CreatePurchaseModal";
 import ConfirmModal from "./components/ConfirmModal";
 import { C } from "./styles/theme";
-import { thStyle, tdStyle, btnPrimary, btnDanger, inputBase } from "./styles/common";
+import { thStyle, tdStyle, btnPrimary, btnDanger } from "./styles/common";
 
 function ResizableTh({ children, defaultWidth, style, onClick }) {
   const [width, setWidth] = useState(defaultWidth || null);
@@ -152,18 +152,14 @@ function Badge({ status }) {
 export default function FixturePage({ active, role }) {
   const { showToast } = useToast();
   const [fixtures, setFixtures] = useState([]);
-  const [summary, setSummary] = useState({
-    total_loaned: 0,
-    due_today: 0,
-    overdue: 0,
-    shortage_count: 0,
-  });
   const [activeLoans, setActiveLoans] = useState([]);
   const [search, setSearch] = useState("");
   const [filterInterface, setFilterInterface] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [interfaceTypes, setInterfaceTypes] = useState([]);
   const [activeTab, setActiveTab] = useState("inventory");
+  const [expandedFixtureId, setExpandedFixtureId] = useState(null);
+  const [recordsSubTab, setRecordsSubTab] = useState("damaged");
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [returnTarget, setReturnTarget] = useState(null);
@@ -198,15 +194,13 @@ export default function FixturePage({ active, role }) {
     if (!active) return;
     setLoading(true);
     try {
-      const [fixtures, summary, loans, types, orders] = await Promise.all([
+      const [fixtures, loans, types, orders] = await Promise.all([
         settle(api.get("/api/fixtures/")),
-        settle(api.get("/api/fixtures/summary")),
         settle(api.get("/api/fixtures/loans/active")),
         settle(api.get("/api/fixtures/interface-types")),
         settle(api.get("/api/purchase-orders/")),
       ]);
       if (fixtures) setFixtures(fixtures);
-      if (summary) setSummary(summary);
       if (loans) setActiveLoans(loans);
       if (types) setInterfaceTypes(types);
       if (orders) setPurchaseOrders(orders);
@@ -296,81 +290,9 @@ export default function FixturePage({ active, role }) {
         >
           治具總表
         </button>
-        <button style={tabStyle("loans")} onClick={() => setActiveTab("loans")}>
-          借出中
-          {activeLoans.length > 0 && (
-            <span
-              style={{
-                marginLeft: 4,
-                background: `${C.accent}22`,
-                color: C.accent,
-                borderRadius: 10,
-                padding: "0 6px",
-                fontSize: 11,
-              }}
-            >
-              {activeLoans.length}
-            </span>
-          )}
-        </button>
         {canOperate && (
-          <button
-            style={tabStyle("overdue")}
-            onClick={() => setActiveTab("overdue")}
-          >
-            逾期未還
-            {summary.overdue > 0 && (
-              <span
-                style={{
-                  marginLeft: 4,
-                  background: `${C.error}22`,
-                  color: C.error,
-                  borderRadius: 10,
-                  padding: "0 6px",
-                  fontSize: 11,
-                }}
-              >
-                {summary.overdue}
-              </span>
-            )}
-          </button>
-        )}
-        {canOperate && (
-          <button
-            style={tabStyle("purchase")}
-            onClick={() => setActiveTab("purchase")}
-          >
-            採購清單
-            {purchaseOrders.filter((o) => o.status === "pending").length > 0 && (
-              <span
-                style={{
-                  marginLeft: 4,
-                  background: `${C.warning}22`,
-                  color: C.warning,
-                  borderRadius: 10,
-                  padding: "0 6px",
-                  fontSize: 11,
-                }}
-              >
-                {purchaseOrders.filter((o) => o.status === "pending").length}
-              </span>
-            )}
-          </button>
-        )}
-        {canOperate && (
-          <button
-            style={tabStyle("damaged")}
-            onClick={() => setActiveTab("damaged")}
-          >
-            損壞／遺失
-          </button>
-        )}
-        {canOperate && (
-          <button
-            style={tabStyle("inv_log")}
-            onClick={() => setActiveTab("inv_log")}
-          >
-            盤點紀錄
+          <button style={tabStyle("records")} onClick={() => setActiveTab("records")}>
+            記錄
           </button>
         )}
         <div style={{ flex: 1 }} />
@@ -539,7 +461,7 @@ export default function FixturePage({ active, role }) {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={canOperate ? 13 : 12}
+                      colSpan={canOperate ? 14 : 13}
                       style={{ ...tdStyle, textAlign: "center", color: C.textMuted }}
                     >
                       載入中...
@@ -548,7 +470,7 @@ export default function FixturePage({ active, role }) {
                 ) : sorted.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={canOperate ? 13 : 12}
+                      colSpan={canOperate ? 14 : 13}
                       style={{ ...tdStyle, textAlign: "center", color: C.textMuted }}
                     >
                       無符合資料
@@ -560,9 +482,11 @@ export default function FixturePage({ active, role }) {
                     const parsedVal = parseInt(editVal);
                     const isDiff = editVal !== undefined && editVal !== "" &&
                       !isNaN(parsedVal) && parsedVal !== f.total_quantity;
+                    const isExpanded = expandedFixtureId === f.id;
+                    const fixtureLoans = isExpanded ? activeLoans.filter((l) => l.fixture_id === f.id) : [];
                     return (
+                    <Fragment key={f.id}>
                     <tr
-                      key={f.id}
                       style={{ transition: "background .1s" }}
                       onMouseEnter={(e) =>
                         (e.currentTarget.style.background = C.surface)
@@ -583,9 +507,16 @@ export default function FixturePage({ active, role }) {
                         style={{
                           ...tdStyle,
                           color: f.loaned_quantity > 0 ? C.warning : C.textMuted,
+                          cursor: f.loaned_quantity > 0 ? "pointer" : "default",
                         }}
+                        onClick={() => f.loaned_quantity > 0 && setExpandedFixtureId(isExpanded ? null : f.id)}
                       >
-                        {f.loaned_quantity}
+                        {f.loaned_quantity > 0 ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                            {f.loaned_quantity}
+                            <span style={{ fontSize: 9, color: C.textDim }}>{isExpanded ? "▲" : "▼"}</span>
+                          </span>
+                        ) : f.loaned_quantity}
                       </td>
                       <td
                         style={{
@@ -713,6 +644,47 @@ export default function FixturePage({ active, role }) {
                         </td>
                       )}
                     </tr>
+                    {isExpanded && fixtureLoans.length > 0 && (
+                      <tr key={`${f.id}-loans`}>
+                        <td colSpan={canOperate ? 14 : 13} style={{ padding: 0, background: C.surfaceAlt, borderBottom: `1px solid ${C.border}` }}>
+                          <div style={{ padding: "8px 16px 12px 32px" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                              <thead>
+                                <tr>
+                                  {["借用人","專案","數量","借出日","到期日"].map((h) => (
+                                    <th key={h} style={{ ...thStyle, fontSize: 11 }}>{h}</th>
+                                  ))}
+                                  {canOperate && <th style={{ ...thStyle, fontSize: 11 }}>操作</th>}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(() => {
+                                  const now = new Date();
+                                  return fixtureLoans.map((loan) => {
+                                  const dueDate = loan.due_date ? parseUTC(loan.due_date) : null;
+                                  const isOverdue = Boolean(dueDate) && !Number.isNaN(dueDate.getTime()) && dueDate < now;
+                                  return (
+                                    <tr key={loan.id}>
+                                      <td style={{ ...tdStyle, fontSize: 12, color: isOverdue ? C.error : C.textPrimary, fontWeight: isOverdue ? 600 : 400 }}>{loan.borrower_name}</td>
+                                      <td style={{ ...tdStyle, fontSize: 12, color: C.textMuted }}>{loan.project_name || "—"}</td>
+                                      <td style={{ ...tdStyle, fontSize: 12 }}>{loan.quantity}</td>
+                                      <td style={{ ...tdStyle, fontSize: 12, color: C.textMuted }}>{loan.loan_date ? formatLocal(loan.loan_date, "date") : "—"}</td>
+                                      <td style={{ ...tdStyle, fontSize: 12, color: isOverdue ? C.error : C.textMuted }}>
+                                        {loan.due_date ? formatLocal(loan.due_date, "date") : "—"}
+                                        {isOverdue && <span style={{ marginLeft: 4, fontSize: 10 }}>逾期{loan.overdue_days > 0 ? ` ${loan.overdue_days}天` : ""}</span>}
+                                      </td>
+                                      {canOperate && <td style={{ ...tdStyle, fontSize: 12 }}><ReturnButtonGroup loanId={loan.id} onSuccess={fetchAll} /></td>}
+                                    </tr>
+                                  );
+                                  });
+                                })()}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                     );
                   })
                 )}
@@ -722,122 +694,28 @@ export default function FixturePage({ active, role }) {
         </>
       )}
 
-      {activeTab === "loans" && (
-        <div
-          style={{
-            background: C.surface,
-            border: `1px solid ${C.border}`,
-            borderRadius: 8,
-            overflow: "hidden",
-          }}
-        >
-          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-            <thead>
-              <tr style={{ background: C.surfaceHover }}>
-                <ResizableTh style={thStyle}>治具</ResizableTh>
-                <ResizableTh style={thStyle}>借用人</ResizableTh>
-                <ResizableTh style={thStyle}>綁定設備</ResizableTh>
-                <ResizableTh style={thStyle}>專案</ResizableTh>
-                <ResizableTh style={thStyle}>數量</ResizableTh>
-                <ResizableTh style={thStyle}>借出日</ResizableTh>
-                <ResizableTh style={thStyle}>到期日</ResizableTh>
-                <ResizableTh style={thStyle}>狀態</ResizableTh>
-                {canOperate && <ResizableTh style={{ ...thStyle, width: 210 }}>操作</ResizableTh>}
-              </tr>
-            </thead>
-            <tbody>
-              {activeLoans.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={canOperate ? 9 : 8}
-                    style={{
-                      ...tdStyle,
-                      textAlign: "center",
-                      color: C.textMuted,
-                    }}
-                  >
-                    目前無借出紀錄
-                  </td>
-                </tr>
-              ) : (
-                activeLoans.map((loan) => {
-                  const dueDate = loan.due_date ? parseUTC(loan.due_date) : null;
-                  const isOverdue = Boolean(dueDate) && !Number.isNaN(dueDate.getTime()) && dueDate < new Date();
-                  return (
-                    <tr key={loan.id}>
-                      <td style={tdStyle}>
-                        {loan.fixture_interface} — {loan.fixture_form_factor}
-                      </td>
-                      <td style={tdStyle}>{loan.borrower_name}</td>
-                      <td style={{ ...tdStyle, color: C.textMuted }}>
-                        {loan.device_id || "—"}
-                      </td>
-                      <td style={{ ...tdStyle, color: C.textMuted }}>
-                        {loan.project_name || "—"}
-                      </td>
-                      <td style={tdStyle}>{loan.quantity}</td>
-                      <td style={{ ...tdStyle, color: C.textMuted }}>
-                        {loan.loan_date
-                          ? formatLocal(loan.loan_date, "date")
-                          : "—"}
-                      </td>
-                      <td
-                        style={{
-                          ...tdStyle,
-                          color: isOverdue ? C.error : C.textMuted,
-                        }}
-                      >
-                        {loan.due_date
-                          ? formatLocal(loan.due_date, "date")
-                          : "—"}
-                        {isOverdue && (
-                          <span
-                            style={{
-                              marginLeft: 4,
-                              fontSize: 10,
-                              color: C.error,
-                            }}
-                          >
-                            逾期 {loan.overdue_days > 0 ? `${loan.overdue_days} 天` : ""}
-                          </span>
-                        )}
-                      </td>
-                      <td style={tdStyle}>
-                        <Badge status="loaned" />
-                      </td>
-                      {canOperate && (
-                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                          <ReturnButtonGroup loanId={loan.id} onSuccess={fetchAll} />
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+      {activeTab === "records" && (
+        <div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            {[["damaged", "損壞／遺失"], ["inv_log", "盤點紀錄"]].map(([key, label]) => (
+              <button key={key} onClick={() => setRecordsSubTab(key)} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 6, cursor: "pointer", background: recordsSubTab === key ? C.surfaceHover : "transparent", color: recordsSubTab === key ? C.textPrimary : C.textMuted, border: `1px solid ${recordsSubTab === key ? C.border : "transparent"}` }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {recordsSubTab === "damaged" && <DamagedList />}
+          {recordsSubTab === "inv_log" && <InventoryLogTab refreshKey={invLogRefreshKey} />}
+          <div style={{ marginTop: 24, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 12, letterSpacing: "0.03em" }}>採購清單</div>
+            <PurchaseTab
+              orders={purchaseOrders}
+              canOperate={canOperate}
+              role={role}
+              onRefresh={fetchAll}
+              onNew={() => { setPurchasePreFill(null); setShowPurchaseModal(true); }}
+            />
+          </div>
         </div>
-      )}
-
-      {activeTab === "overdue" && (
-        <OverdueList
-          canOperate={canOperate}
-          onRefresh={fetchAll}
-        />
-      )}
-
-      {activeTab === "damaged" && <DamagedList />}
-
-      {activeTab === "inv_log" && <InventoryLogTab refreshKey={invLogRefreshKey} />}
-
-      {activeTab === "purchase" && (
-        <PurchaseTab
-          orders={purchaseOrders}
-          canOperate={canOperate}
-          role={role}
-          onRefresh={fetchAll}
-          onNew={() => { setPurchasePreFill(null); setShowPurchaseModal(true); }}
-        />
       )}
 
       {showImportModal && (
@@ -920,98 +798,6 @@ export default function FixturePage({ active, role }) {
   );
 }
 
-function OverdueList({ canOperate, onRefresh }) {
-  const [loans, setLoans] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const refresh = () => {
-    setLoading(true);
-    api
-      .get("/api/fixtures/loans/overdue")
-      .then((r) => setLoans(r.data))
-      .finally(() => setLoading(false));
-  };
-
-  // 掛載時取資料；refresh 內 setLoading 為標準 loading flag，掛載一次性同步 setState
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { refresh(); }, []);
-
-  return (
-    <div
-      style={{
-        background: C.surface,
-        border: `1px solid ${C.border}`,
-        borderRadius: 8,
-        overflow: "hidden",
-      }}
-    >
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ background: C.surfaceHover }}>
-            <th style={thStyle}>治具</th>
-            <th style={thStyle}>借用人</th>
-            <th style={thStyle}>綁定設備</th>
-            <th style={thStyle}>專案</th>
-            <th style={thStyle}>到期日</th>
-            <th style={thStyle}>逾期天數</th>
-            {canOperate && <th style={thStyle}>操作</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {loading ? (
-            <tr>
-              <td
-                colSpan={canOperate ? 7 : 6}
-                style={{ ...tdStyle, textAlign: "center", color: C.textMuted }}
-              >
-                載入中...
-              </td>
-            </tr>
-          ) : loans.length === 0 ? (
-            <tr>
-              <td
-                colSpan={canOperate ? 7 : 6}
-                style={{ ...tdStyle, textAlign: "center", color: C.success }}
-              >
-                目前無逾期未還
-              </td>
-            </tr>
-          ) : (
-            loans.map((loan) => (
-              <tr key={loan.id}>
-                <td style={tdStyle}>
-                  {loan.fixture_interface} — {loan.fixture_form_factor}
-                </td>
-                <td style={{ ...tdStyle, color: C.error, fontWeight: 600 }}>
-                  {loan.borrower_name}
-                </td>
-                <td style={{ ...tdStyle, color: C.textMuted }}>
-                  {loan.device_id || "—"}
-                </td>
-                <td style={{ ...tdStyle, color: C.textMuted }}>
-                  {loan.project_name || "—"}
-                </td>
-                <td style={{ ...tdStyle, color: C.error }}>
-                  {loan.due_date
-                    ? formatLocal(loan.due_date, "date")
-                    : "—"}
-                </td>
-                <td style={{ ...tdStyle, color: C.error, fontWeight: 700 }}>
-                  {loan.overdue_days} 天
-                </td>
-                {canOperate && (
-                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                    <ReturnButtonGroup loanId={loan.id} onSuccess={() => { refresh(); onRefresh?.(); }} />
-                  </td>
-                )}
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 // ── 損壞／遺失 tab ───────────────────────────────────────────
 const CONDITION_LABEL = {
