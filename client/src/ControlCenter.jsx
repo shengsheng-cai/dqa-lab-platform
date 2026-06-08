@@ -18,6 +18,7 @@ import { conditionLabel } from "./components/control/deviceCardUtils";
 import TabBadge from "./components/control/TabBadge";
 import LeftPanel from "./components/control/LeftPanel";
 import { DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, IDLE_STATUS } from "./constants";
+import { C } from "./styles/theme";
 
 const TAB_TO_PATH = {
   device: "/",
@@ -45,7 +46,7 @@ function BannerConfirmBtn({ device, schedule, onConfirmCondition }) {
     <button
       disabled={busy}
       onClick={async () => { setBusy(true); try { await onConfirmCondition(schedule.id); } finally { setBusy(false); } }}
-      style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 4, background: busy ? "#2d2600" : "#f0a50022", border: "1px solid #f0a500", color: "#f0a500", cursor: busy ? "not-allowed" : "pointer" }}
+      style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 4, background: busy ? C.warningBg : `${C.warning}22`, border: `1px solid ${C.warning}`, color: C.warning, cursor: busy ? "not-allowed" : "pointer" }}
     >
       {busy ? "處理中..." : label}
     </button>
@@ -79,23 +80,23 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
       {/* Tab bar */}
-      <div style={{ display: "flex", gap: 0, padding: "0 12px", borderBottom: "1px solid #30363d", flexShrink: 0, background: "#0d1117" }}>
+      <div style={{ display: "flex", gap: 0, padding: "0 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: C.bg }}>
         {visibleTabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
-            style={{ padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: activeTab === t.key ? "2px solid #58a6ff" : "2px solid transparent", color: activeTab === t.key ? "#cdd9e5" : "#8b949e", transition: "color .15s" }}
+            style={{ padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: activeTab === t.key ? `2px solid ${C.accent}` : "2px solid transparent", color: activeTab === t.key ? C.textPrimary : C.textMuted, transition: "color .15s" }}
           >
             {t.label}
-            {t.key === "schedule" && <TabBadge count={scheduleCounts.pending} bg="#e3b341" />}
+            {t.key === "schedule" && <TabBadge count={scheduleCounts.pending} bg={C.warningAlt} />}
           </button>
         ))}
       </div>
 
       {/* 等待確認 Banner */}
       {waitingDevices.length > 0 && (
-        <div className="banner-flash" style={{ flexShrink: 0, background: "#1a1500", borderBottom: "1px solid #f0a500", padding: "6px 12px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: "#f0a500", fontWeight: 700, marginRight: 4 }}>⚠ 等待確認</span>
+        <div className="banner-flash" style={{ flexShrink: 0, background: "#1a1500", borderBottom: `1px solid ${C.warning}`, padding: "6px 12px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: C.warning, fontWeight: 700, marginRight: 4 }}>⚠ 等待確認</span>
           {waitingDevices.map(d => (
             <BannerConfirmBtn key={d.device_id} device={d} schedule={pendingByDevice[d.device_id]} onConfirmCondition={onConfirmCondition} />
           ))}
@@ -272,8 +273,8 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       <TopBar devices={devices} fixtureSummary={fixtureSummary} displayName={displayName} role={role} onLogout={onLogout} />
       {runtimeWarnings.length > 0 && (
-        <div style={{ flexShrink: 0, padding: "7px 12px", borderBottom: "1px solid #f0a500", background: "#1a1500", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ color: "#f0a500", fontSize: 11, fontWeight: 700 }}>⚠ 環境告警</span>
+        <div style={{ flexShrink: 0, padding: "7px 12px", borderBottom: `1px solid ${C.warning}`, background: "#1a1500", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ color: C.warning, fontSize: 11, fontWeight: 700 }}>⚠ 環境告警</span>
           {runtimeWarnings.map((item) => (
             <span key={item.code} style={{ color: "#e6edf3", fontSize: 11 }}>{item.message}</span>
           ))}
@@ -313,14 +314,14 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       {/* 紀錄 Modal */}
       {recordsOpen && (
         <div onClick={() => setRecordsOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(900px, 92vw)", height: "min(620px, 85vh)", background: "#0d1117", border: "1px solid #30363d", borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", padding: "10px 16px", borderBottom: "1px solid #30363d", flexShrink: 0 }}>
-              <span style={{ flex: 1, fontWeight: 700, fontSize: 13, color: "#cdd9e5" }}>紀錄</span>
-              <button onClick={() => setRecordsOpen(false)} style={{ background: "none", border: "none", color: "#8b949e", fontSize: 16, cursor: "pointer", padding: "0 4px" }}>✕</button>
+          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(900px, 92vw)", height: "min(620px, 85vh)", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", padding: "10px 16px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <span style={{ flex: 1, fontWeight: 700, fontSize: 13, color: C.textPrimary }}>紀錄</span>
+              <button onClick={() => setRecordsOpen(false)} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 16, cursor: "pointer", padding: "0 4px" }}>✕</button>
             </div>
-            <div style={{ display: "flex", padding: "0 12px", borderBottom: "1px solid #30363d", flexShrink: 0, background: "#0d1117" }}>
+            <div style={{ display: "flex", padding: "0 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: C.bg }}>
               {[{ key: "errors", label: "異常紀錄" }, { key: "executions", label: "執行紀錄" }, { key: "audit", label: "稽核紀錄" }].map((t) => (
-                <button key={t.key} onClick={() => setRecordsSubTab(t.key)} style={{ padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: recordsSubTab === t.key ? "2px solid #58a6ff" : "2px solid transparent", color: recordsSubTab === t.key ? "#cdd9e5" : "#8b949e" }}>
+                <button key={t.key} onClick={() => setRecordsSubTab(t.key)} style={{ padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: recordsSubTab === t.key ? `2px solid ${C.accent}` : "2px solid transparent", color: recordsSubTab === t.key ? C.textPrimary : C.textMuted }}>
                   {t.label}
                 </button>
               ))}
@@ -358,7 +359,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
           onClick={() => setAiOpen((v) => !v)}
           title="AI 諮詢"
           className="ai-fab-pulse"
-          style={{ position: "fixed", bottom: 24, right: 24, zIndex: 200, width: 46, height: 46, borderRadius: "50%", background: "#1f6feb", border: "none", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", transition: "background .15s" }}
+          style={{ position: "fixed", bottom: 24, right: 24, zIndex: 200, width: 46, height: 46, borderRadius: "50%", background: C.accentDark, border: "none", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", transition: "background .15s" }}
         >
           🤖
         </button>
@@ -368,7 +369,7 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
       {aiOpen && <div onClick={() => setAiOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 198 }} />}
 
       {/* AI 滑入面板 */}
-      <div style={{ position: "fixed", top: 0, right: 0, height: "100%", width: 500, zIndex: 199, transform: aiOpen ? "translateX(0)" : "translateX(100%)", transition: "transform .2s ease", background: "#0d1117", borderLeft: "1px solid #30363d", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ position: "fixed", top: 0, right: 0, height: "100%", width: 500, zIndex: 199, transform: aiOpen ? "translateX(0)" : "translateX(100%)", transition: "transform .2s ease", background: C.bg, borderLeft: `1px solid ${C.border}`, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <RightPanel role={role} onClose={() => setAiOpen(false)} onApplySchedule={handleApplySchedule} />
       </div>
 

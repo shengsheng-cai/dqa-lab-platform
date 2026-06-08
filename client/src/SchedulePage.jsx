@@ -10,6 +10,7 @@ import {
   MS_PER_DAY, GANTT_PAST_DAYS, GANTT_FUTURE_DAYS,
   fmtDt, fmtHours, primaryBtn, scheduleIconBtn,
 } from "./components/schedule/scheduleUtils";
+import { C } from "./styles/theme";
 
 export default function SchedulePage({ active, role, userId, initConditions, onInitCondsConsumed, liveDeviceStatuses = {} }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -113,16 +114,16 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
   return (
     <div style={{
       height: "100%", display: "flex", flexDirection: "column",
-      background: "#0d1117", overflow: "hidden",
+      background: C.bg, overflow: "hidden",
     }}>
 
       {/* 甘特圖（固定區塊，永遠可見） */}
-      <div style={{ flexShrink: 0, padding: "10px 16px", borderBottom: "1px solid #30363d", ...(isMobile && { maxHeight: 200, overflow: "hidden" }) }}>
+      <div style={{ flexShrink: 0, padding: "10px 16px", borderBottom: `1px solid ${C.border}`, ...(isMobile && { maxHeight: 200, overflow: "hidden" }) }}>
         {loading ? (
           <div style={{
             height: HEADER_H + DEVICE_IDS.length * ROW_H,
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#484f58", fontSize: 13, border: "1px solid #30363d",
+            color: C.textDim, fontSize: 13, border: `1px solid ${C.border}`,
             borderRadius: 8,
           }}>
             載入中...
@@ -144,12 +145,12 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
         {/* 待審核警示條 */}
         {summary["待審核"] > 0 && (
           <div style={{
-            background: "#3a2a1a", border: "1px solid #f0a50044",
+            background: "#3a2a1a", border: `1px solid ${C.warning}44`,
             borderRadius: 6, padding: "8px 14px",
             display: "flex", alignItems: "center", gap: 8,
           }}>
-            <span style={{ fontSize: 13, color: "#f0a500", fontWeight: 700 }}>⚠️</span>
-            <span style={{ color: "#f0a500", fontSize: 13, fontWeight: 600 }}>
+            <span style={{ fontSize: 13, color: C.warning, fontWeight: 700 }}>⚠️</span>
+            <span style={{ color: C.warning, fontSize: 13, fontWeight: 600 }}>
               有 {summary["待審核"]} 筆排程申請待審核
             </span>
           </div>
@@ -160,16 +161,16 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
           const pending = schedules.filter((s) => s.status === "待審核");
           if (pending.length === 0) return null;
           return (
-            <div style={{ border: "1px solid #484f58", borderRadius: 8, overflow: "hidden", background: "#0d1117" }}>
+            <div style={{ border: `1px solid ${C.textDim}`, borderRadius: 8, overflow: "hidden", background: C.bg }}>
               <div style={{
                 padding: "6px 12px",
-                background: "#161b22",
-                borderBottom: "1px solid #30363d",
+                background: C.surface,
+                borderBottom: `1px solid ${C.border}`,
                 display: "flex", alignItems: "center", gap: 8,
               }}>
-                <span style={{ fontSize: 11, color: "#8b949e", fontWeight: 700, letterSpacing: 1 }}>待審核排程隊列</span>
+                <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, letterSpacing: 1 }}>待審核排程隊列</span>
                 <span style={{
-                  background: "#30363d", color: "#8b949e",
+                  background: C.border, color: C.textMuted,
                   borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700,
                 }}>{pending.length}</span>
               </div>
@@ -181,25 +182,25 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
                       padding: "7px 12px",
-                      borderBottom: idx < pending.length - 1 ? "1px solid #21262d" : "none",
+                      borderBottom: idx < pending.length - 1 ? `1px solid ${C.surfaceHover}` : "none",
                       cursor: "pointer",
                       transition: "background 0.15s",
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "#161b22"}
+                    onMouseEnter={(e) => e.currentTarget.style.background = C.surface}
                     onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                   >
-                    <span style={{ fontSize: 11, color: "#484f58", fontFamily: "monospace", width: 24, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: C.textDim, fontFamily: "monospace", width: 24, flexShrink: 0 }}>
                       #{idx + 1}
                     </span>
-                    <span style={{ fontSize: 12, color: "#cdd9e5", fontFamily: "monospace", minWidth: 90 }}>
+                    <span style={{ fontSize: 12, color: C.textPrimary, fontFamily: "monospace", minWidth: 90 }}>
                       {s.project_number}
                     </span>
-                    <span style={{ fontSize: 12, color: "#cdd9e5", flex: 1 }}>{s.sample_name}</span>
-                    <span style={{ fontSize: 11, color: "#8b949e", minWidth: 60 }}>{s.applicant_name || "—"}</span>
-                    <span style={{ fontSize: 11, color: "#e3b341", minWidth: 60, textAlign: "right" }}>
+                    <span style={{ fontSize: 12, color: C.textPrimary, flex: 1 }}>{s.sample_name}</span>
+                    <span style={{ fontSize: 11, color: C.textMuted, minWidth: 60 }}>{s.applicant_name || "—"}</span>
+                    <span style={{ fontSize: 11, color: C.warningAlt, minWidth: 60, textAlign: "right" }}>
                       {fmtHours(s.total_hours)}
                     </span>
-                    <span style={{ fontSize: 10, color: "#484f58", minWidth: 100, textAlign: "right" }}>
+                    <span style={{ fontSize: 10, color: C.textDim, minWidth: 100, textAlign: "right" }}>
                       {fmtDt(s.created_at)}
                     </span>
                   </div>
@@ -214,7 +215,7 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
           {Object.entries(STATUS_COLOR).map(([s, c]) => (
             <div key={s} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 14, height: 10, borderRadius: 2, background: c.bg, border: `1px solid ${c.border}` }} />
-              <span style={{ fontSize: 11, color: "#8b949e" }}>{s}</span>
+              <span style={{ fontSize: 11, color: C.textMuted }}>{s}</span>
             </div>
           ))}
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -223,7 +224,7 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
               background: "repeating-linear-gradient(135deg, #2d1a1a 0px, #2d1a1a 3px, #1a0a0a 3px, #1a0a0a 6px)",
               border: "1px solid #6e1b1b",
             }} />
-            <span style={{ fontSize: 11, color: "#8b949e" }}>不可用時段</span>
+            <span style={{ fontSize: 11, color: C.textMuted }}>不可用時段</span>
           </div>
         </div>
 
@@ -238,8 +239,8 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
                   padding: "4px 12px", fontSize: 12, borderRadius: 20,
                   cursor: "pointer",
                   background: filterStatus === s ? "#1c3a5e" : "transparent",
-                  color: filterStatus === s ? "#79c0ff" : "#8b949e",
-                  border: filterStatus === s ? "1px solid #388bfd" : "1px solid #30363d",
+                  color: filterStatus === s ? C.accentLight : C.textMuted,
+                  border: filterStatus === s ? `1px solid ${C.accentLink}` : `1px solid ${C.border}`,
                 }}
               >
                 {s === "all" ? "全部" : s}
@@ -265,13 +266,13 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
           </div>
 
           {filteredSchedules.length === 0 ? (
-            <div style={{ textAlign: "center", color: "#484f58", padding: 32, fontSize: 13 }}>
+            <div style={{ textAlign: "center", color: C.textDim, padding: 32, fontSize: 13 }}>
               {filterStatus === "all" ? "尚無排程紀錄" : `無「${filterStatus}」的排程`}
             </div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
-                <tr style={{ color: "#8b949e", borderBottom: "1px solid #30363d" }}>
+                <tr style={{ color: C.textMuted, borderBottom: `1px solid ${C.border}` }}>
                   {["狀態", "專案號碼", "樣品名稱", "申請人", "設備", "開始時間", "結束時間", "預估時長"].map((h) => (
                     <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
                   ))}
@@ -285,10 +286,10 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
                       key={s.id}
                       onClick={() => setSelectedSchedule(s)}
                       style={{
-                        borderBottom: "1px solid #21262d", cursor: "pointer",
+                        borderBottom: `1px solid ${C.surfaceHover}`, cursor: "pointer",
                         transition: "background 0.15s",
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = "#161b22"}
+                      onMouseEnter={(e) => e.currentTarget.style.background = C.surface}
                       onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                     >
                       <td style={{ padding: "6px 8px" }}>
@@ -298,13 +299,13 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
                           border: `1px solid ${color.border}`, whiteSpace: "nowrap",
                         }}>{s.status}</span>
                       </td>
-                      <td style={{ padding: "6px 8px", color: "#cdd9e5", fontFamily: "monospace" }}>{s.project_number}</td>
-                      <td style={{ padding: "6px 8px", color: "#cdd9e5" }}>{s.sample_name}</td>
-                      <td style={{ padding: "6px 8px", color: "#8b949e" }}>{s.applicant_name || "—"}</td>
-                      <td style={{ padding: "6px 8px", color: "#8b949e", fontFamily: "monospace" }}>{s.device_id || "—"}</td>
-                      <td style={{ padding: "6px 8px", color: "#8b949e", whiteSpace: "nowrap" }}>{fmtDt(s.start_time)}</td>
-                      <td style={{ padding: "6px 8px", color: "#8b949e", whiteSpace: "nowrap" }}>{fmtDt(s.end_time)}</td>
-                      <td style={{ padding: "6px 8px", color: "#e3b341", whiteSpace: "nowrap" }}>{fmtHours(s.total_hours)}</td>
+                      <td style={{ padding: "6px 8px", color: C.textPrimary, fontFamily: "monospace" }}>{s.project_number}</td>
+                      <td style={{ padding: "6px 8px", color: C.textPrimary }}>{s.sample_name}</td>
+                      <td style={{ padding: "6px 8px", color: C.textMuted }}>{s.applicant_name || "—"}</td>
+                      <td style={{ padding: "6px 8px", color: C.textMuted, fontFamily: "monospace" }}>{s.device_id || "—"}</td>
+                      <td style={{ padding: "6px 8px", color: C.textMuted, whiteSpace: "nowrap" }}>{fmtDt(s.start_time)}</td>
+                      <td style={{ padding: "6px 8px", color: C.textMuted, whiteSpace: "nowrap" }}>{fmtDt(s.end_time)}</td>
+                      <td style={{ padding: "6px 8px", color: C.warningAlt, whiteSpace: "nowrap" }}>{fmtHours(s.total_hours)}</td>
                     </tr>
                   );
                 })}

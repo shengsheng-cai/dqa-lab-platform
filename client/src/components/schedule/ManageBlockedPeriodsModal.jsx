@@ -8,6 +8,7 @@ import {
   fmtDt, toLocalInput,
   inputStyle, labelStyle, primaryBtn, cancelBtn,
 } from "./scheduleUtils";
+import { C } from "../../styles/theme";
 
 const EMPTY_FORM = { device_id: DEVICE_IDS[0], start_time: "", end_time: "", reason: "" };
 
@@ -119,13 +120,13 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
           </div>
 
           {loading ? (
-            <div style={{ color: "#8b949e", fontSize: 13, textAlign: "center", padding: 20 }}>載入中...</div>
+            <div style={{ color: C.textMuted, fontSize: 13, textAlign: "center", padding: 20 }}>載入中...</div>
           ) : list.length === 0 ? (
-            <div style={{ color: "#484f58", fontSize: 13, textAlign: "center", padding: 20 }}>目前無不可用時段</div>
+            <div style={{ color: C.textDim, fontSize: 13, textAlign: "center", padding: 20 }}>目前無不可用時段</div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ color: "#8b949e", borderBottom: "1px solid #30363d" }}>
+                <tr style={{ color: C.textMuted, borderBottom: `1px solid ${C.border}` }}>
                   <th style={{ padding: "4px 8px", textAlign: "left", fontWeight: 500 }}>設備</th>
                   <th style={{ padding: "4px 8px", textAlign: "left", fontWeight: 500 }}>開始</th>
                   <th style={{ padding: "4px 8px", textAlign: "left", fontWeight: 500 }}>結束</th>
@@ -135,17 +136,17 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
               </thead>
               <tbody>
                 {list.map((item) => (
-                  <tr key={item.id} style={{ borderBottom: "1px solid #21262d", color: "#cdd9e5" }}>
+                  <tr key={item.id} style={{ borderBottom: `1px solid ${C.surfaceHover}`, color: C.textPrimary }}>
                     <td style={{ padding: "6px 8px", fontWeight: 600 }}>{item.device_id}</td>
                     <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{fmtDt(item.start_time)}</td>
                     <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{fmtDt(item.end_time)}</td>
-                    <td style={{ padding: "6px 8px", color: "#8b949e" }}>{item.reason || "—"}</td>
+                    <td style={{ padding: "6px 8px", color: C.textMuted }}>{item.reason || "—"}</td>
                     <td style={{ padding: "6px 8px", display: "flex", gap: 6 }}>
                       <button onClick={() => openEdit(item)}
                         style={{ ...cancelBtn, padding: "2px 8px", fontSize: 12 }}>編輯</button>
                       <button onClick={() => handleDelete(item.id)}
                         disabled={deletingId === item.id}
-                        style={{ ...cancelBtn, padding: "2px 8px", fontSize: 12, color: "#f85149", borderColor: "#f85149" }}>
+                        style={{ ...cancelBtn, padding: "2px 8px", fontSize: 12, color: C.error, borderColor: C.errorDark }}>
                         {deletingId === item.id ? "..." : "刪除"}
                       </button>
                     </td>
@@ -157,8 +158,8 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
       </div>
 
       {showForm && (
-          <div style={{ borderTop: "1px solid #30363d", padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#cdd9e5", marginBottom: 2 }}>
+          <div style={{ borderTop: `1px solid ${C.border}`, padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary, marginBottom: 2 }}>
               {editingId !== null ? "編輯時段" : "新增時段"}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
@@ -193,7 +194,7 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
                 />
               </div>
             </div>
-            {error && <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>}
+            {error && <div style={{ color: C.error, fontSize: 12 }}>{error}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button onClick={cancelForm} style={cancelBtn}>取消</button>
               <button onClick={submit} disabled={saving} style={primaryBtn}>

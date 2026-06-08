@@ -1,4 +1,5 @@
 import { parseUtcDate } from "../../constants";
+import { C } from "../../styles/theme";
 
 export const HOUR_PX = 6;
 export const DAY_PX = HOUR_PX * 24;
@@ -7,11 +8,11 @@ export const HEADER_H = 48;
 export const LABEL_W = 68;
 
 export const STATUS_COLOR = {
-  待審核: { bg: "#30363d", text: "#8b949e", border: "#484f58" },
-  已確認: { bg: "#1c3a5e", text: "#79c0ff", border: "#388bfd" },
-  進行中: { bg: "#1a3828", text: "#7ee787", border: "#3fb950" },
-  已完成: { bg: "#1e1a2e", text: "#bc8cff", border: "#6e40c9" },
-  已取消: { bg: "#2d1a1a", text: "#ff7b72", border: "#f85149" },
+  待審核: { bg: C.border,        text: C.textMuted,    border: C.textDim },
+  已確認: { bg: "#1c3a5e",       text: C.accentLight,  border: C.accentLink },
+  進行中: { bg: C.successBgDeep, text: C.successText,  border: C.success },
+  已完成: { bg: "#1e1a2e",       text: "#bc8cff",      border: "#6e40c9" },
+  已取消: { bg: "#2d1a1a",       text: C.errorLight,   border: C.error },
 };
 
 export const STATUS_LIST = ["待審核", "已確認", "進行中", "已完成", "已取消"];
@@ -50,34 +51,34 @@ export const overlayStyle = {
   zIndex: 1000,
 };
 export const modalStyle = {
-  background: "#161b22", border: "1px solid #30363d", borderRadius: 10,
+  background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10,
   boxShadow: "0 8px 32px rgba(0,0,0,0.5)", overflow: "hidden",
 };
 export const modalHeader = {
   display: "flex", justifyContent: "space-between", alignItems: "center",
-  padding: "14px 20px", borderBottom: "1px solid #30363d",
-  background: "#0d1117",
+  padding: "14px 20px", borderBottom: `1px solid ${C.border}`,
+  background: C.bg,
 };
 export const closeBtn = {
-  background: "none", border: "none", color: "#8b949e",
+  background: "none", border: "none", color: C.textMuted,
   cursor: "pointer", fontSize: 16, padding: "2px 6px",
 };
 export const inputStyle = {
-  width: "100%", background: "#0d1117", border: "1px solid #30363d",
-  borderRadius: 6, padding: "7px 10px", color: "#cdd9e5",
+  width: "100%", background: C.bg, border: `1px solid ${C.border}`,
+  borderRadius: 6, padding: "7px 10px", color: C.textPrimary,
   fontSize: 13, boxSizing: "border-box", outline: "none",
   colorScheme: "dark",
 };
-export const labelStyle = { fontSize: 12, color: "#8b949e", marginBottom: 4, fontWeight: 600 };
+export const labelStyle = { fontSize: 12, color: C.textMuted, marginBottom: 4, fontWeight: 600 };
 export const primaryBtn = {
-  background: "#238636", border: "1px solid #2ea043", color: "#fff",
+  background: C.successDark, border: `1px solid ${C.success}`, color: C.white,
   padding: "7px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600,
 };
 export const scheduleIconBtn = {
-  background: "transparent", border: "1px solid #30363d", color: "#8b949e",
+  background: "transparent", border: `1px solid ${C.border}`, color: C.textMuted,
   padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontSize: 14, lineHeight: 1,
 };
 export const cancelBtn = {
-  background: "transparent", border: "1px solid #30363d", color: "#8b949e",
+  background: "transparent", border: `1px solid ${C.border}`, color: C.textMuted,
   padding: "7px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13,
 };
