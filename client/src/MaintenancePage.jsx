@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import api from "./api";
 import { DEVICE_IDS } from "./constants";
 import { useToast } from "./components/useToast";
+import { C } from "./styles/theme";
 
 const MAINTENANCE_TYPE_LABEL = {
   preventive: "預防性",
@@ -12,13 +13,13 @@ const MAINTENANCE_TYPE_LABEL = {
 function FieldRow({ label, value, onChange, placeholder }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 11, color: "#8b949e" }}>{label}</label>
+      <label style={{ fontSize: 11, color: C.textMuted }}>{label}</label>
       <input
         type="text"
         value={value ?? ""}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 5, color: "#cdd9e5", padding: "5px 8px", fontSize: 12 }}
+        style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textPrimary, padding: "5px 8px", fontSize: 12 }}
       />
     </div>
   );
@@ -151,18 +152,18 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
   };
 
   const fmtDt = (v) => v ? v.replace("T", " ").slice(0, 16) : "—";
-  const thS = { padding: "6px 10px", textAlign: "left", color: "#8b949e", fontWeight: 600, fontSize: 11, borderBottom: "1px solid #30363d" };
-  const tdS = { padding: "6px 10px", fontSize: 11, color: "#cdd9e5", borderBottom: "1px solid #21262d" };
+  const thS = { padding: "6px 10px", textAlign: "left", color: C.textMuted, fontWeight: 600, fontSize: 11, borderBottom: `1px solid ${C.border}` };
+  const tdS = { padding: "6px 10px", fontSize: 11, color: C.textPrimary, borderBottom: `1px solid ${C.surfaceHover}` };
   const sectionHeader = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0 6px" };
-  const sectionTitle = { fontSize: 12, fontWeight: 700, color: "#8b949e", letterSpacing: 1 };
-  const addBtn = { padding: "3px 10px", fontSize: 11, borderRadius: 5, cursor: "pointer", background: "#1f6feb22", border: "1px solid #1f6feb", color: "#58a6ff" };
+  const sectionTitle = { fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 1 };
+  const addBtn = { padding: "3px 10px", fontSize: 11, borderRadius: 5, cursor: "pointer", background: `${C.accentDark}22`, border: `1px solid ${C.accentDark}`, color: C.accent };
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#0d1117", color: "#cdd9e5", overflow: "hidden" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: C.bg, color: C.textPrimary, overflow: "hidden" }}>
       {/* 設備切換 */}
-      <div style={{ display: "flex", gap: 6, padding: "10px 16px", flexShrink: 0, borderBottom: "1px solid #30363d" }}>
+      <div style={{ display: "flex", gap: 6, padding: "10px 16px", flexShrink: 0, borderBottom: `1px solid ${C.border}` }}>
         {DEVICE_IDS.map(id => (
-          <button key={id} onClick={() => setSelectedDevice(id)} style={{ padding: "4px 10px", fontSize: 12, borderRadius: 5, cursor: "pointer", background: selectedDevice === id ? "#1f6feb" : "#21262d", border: `1px solid ${selectedDevice === id ? "#1f6feb" : "#30363d"}`, color: selectedDevice === id ? "#fff" : "#8b949e", fontWeight: selectedDevice === id ? 700 : 400 }}>{id}</button>
+          <button key={id} onClick={() => setSelectedDevice(id)} style={{ padding: "4px 10px", fontSize: 12, borderRadius: 5, cursor: "pointer", background: selectedDevice === id ? C.accentDark : C.surfaceHover, border: `1px solid ${selectedDevice === id ? C.accentDark : C.border}`, color: selectedDevice === id ? C.white : C.textMuted, fontWeight: selectedDevice === id ? 700 : 400 }}>{id}</button>
         ))}
       </div>
 
@@ -170,7 +171,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
       <div style={{ flex: 1, display: "flex", gap: 0, overflow: "hidden" }}>
 
         {/* 左：校驗紀錄 */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px", borderRight: "1px solid #30363d" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px", borderRight: `1px solid ${C.border}` }}>
           <div style={sectionHeader}>
             <span style={sectionTitle}>校驗紀錄</span>
             {role === "admin" && <button onClick={() => openCreate("calibrations")} style={addBtn}>+ 新增</button>}
@@ -181,7 +182,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
             </thead>
             <tbody>
               {calibrations.length === 0 ? (
-                <tr><td colSpan={6} style={{ ...tdS, color: "#484f58", textAlign: "center", padding: "16px 0" }}>尚無校驗紀錄</td></tr>
+                <tr><td colSpan={6} style={{ ...tdS, color: C.textDim, textAlign: "center", padding: "16px 0" }}>尚無校驗紀錄</td></tr>
               ) : calibrations.map(c => (
                 <tr key={c.id}>
                   <td style={tdS}>{fmtDt(c.calibration_date)}</td>
@@ -189,12 +190,12 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                   <td style={tdS}>{c.interval_days}天</td>
                   <td style={{ ...tdS, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.certificate_number || "—"}</td>
                   <td style={tdS}>
-                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 8, fontWeight: 700, background: c.result === "pass" ? "#0f2318" : "#2d0f0f", color: c.result === "pass" ? "#3fb950" : "#f85149", border: `1px solid ${c.result === "pass" ? "#2d5a3a" : "#5a2d2d"}` }}>{c.result === "pass" ? "通過" : "不通過"}</span>
+                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 8, fontWeight: 700, background: c.result === "pass" ? C.successBg : C.errorBg, color: c.result === "pass" ? C.success : C.error, border: `1px solid ${c.result === "pass" ? "#2d5a3a" : "#5a2d2d"}` }}>{c.result === "pass" ? "通過" : "不通過"}</span>
                   </td>
                   {role === "admin" && (
                     <td style={tdS}>
-                      <button onClick={() => openEdit(c, "calibrations")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#21262d", border: "1px solid #30363d", color: "#8b949e", cursor: "pointer" }}>編輯</button>
-                      <button onClick={() => handleDelete(c.id, "calibrations")} disabled={deleting === c.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#2d0f0f", border: "1px solid #5a2d2d", color: "#f85149", cursor: "pointer" }}>刪除</button>
+                      <button onClick={() => openEdit(c, "calibrations")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.surfaceHover, border: `1px solid ${C.border}`, color: C.textMuted, cursor: "pointer" }}>編輯</button>
+                      <button onClick={() => handleDelete(c.id, "calibrations")} disabled={deleting === c.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.errorBg, border: "1px solid #5a2d2d", color: C.error, cursor: "pointer" }}>刪除</button>
                     </td>
                   )}
                 </tr>
@@ -215,7 +216,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
             </thead>
             <tbody>
               {maintenances.length === 0 ? (
-                <tr><td colSpan={6} style={{ ...tdS, color: "#484f58", textAlign: "center", padding: "16px 0" }}>尚無維護紀錄</td></tr>
+                <tr><td colSpan={6} style={{ ...tdS, color: C.textDim, textAlign: "center", padding: "16px 0" }}>尚無維護紀錄</td></tr>
               ) : maintenances.map(m => (
                 <tr key={m.id}>
                   <td style={tdS}>{fmtDt(m.maintenance_date)}</td>
@@ -225,8 +226,8 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                   <td style={tdS}>{m.next_maintenance_date ? fmtDt(m.next_maintenance_date) : "—"}</td>
                   {role === "admin" && (
                     <td style={tdS}>
-                      <button onClick={() => openEdit(m, "maintenances")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#21262d", border: "1px solid #30363d", color: "#8b949e", cursor: "pointer" }}>編輯</button>
-                      <button onClick={() => handleDelete(m.id, "maintenances")} disabled={deleting === m.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#2d0f0f", border: "1px solid #5a2d2d", color: "#f85149", cursor: "pointer" }}>刪除</button>
+                      <button onClick={() => openEdit(m, "maintenances")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.surfaceHover, border: `1px solid ${C.border}`, color: C.textMuted, cursor: "pointer" }}>編輯</button>
+                      <button onClick={() => handleDelete(m.id, "maintenances")} disabled={deleting === m.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.errorBg, border: "1px solid #5a2d2d", color: C.error, cursor: "pointer" }}>刪除</button>
                     </td>
                   )}
                 </tr>
@@ -239,8 +240,8 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
       {/* Modal */}
       {showModal && (
         <div onClick={() => setShowModal(false)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.6)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(480px, 92vw)", background: "#161b22", border: "1px solid #30363d", borderRadius: 10, padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#cdd9e5" }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(480px, 92vw)", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>
               {editItem ? "編輯" : "新增"}{modalType === "calibrations" ? "校驗紀錄" : "維護紀錄"} — {selectedDevice}
             </div>
             {modalType === "calibrations" ? (
@@ -250,8 +251,8 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                 <FieldRow label="間隔(天)" value={form.interval_days} onChange={v => setForm(f => ({ ...f, interval_days: v }))} placeholder="365" />
                 <FieldRow label="證書號" value={form.certificate_number} onChange={v => setForm(f => ({ ...f, certificate_number: v }))} placeholder="CAL-2026-001" />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <label style={{ fontSize: 11, color: "#8b949e" }}>結果</label>
-                  <select value={form.result} onChange={e => setForm(f => ({ ...f, result: e.target.value }))} style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 5, color: "#cdd9e5", padding: "5px 8px", fontSize: 12 }}>
+                  <label style={{ fontSize: 11, color: C.textMuted }}>結果</label>
+                  <select value={form.result} onChange={e => setForm(f => ({ ...f, result: e.target.value }))} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textPrimary, padding: "5px 8px", fontSize: 12 }}>
                     <option value="pass">通過</option>
                     <option value="fail">不通過</option>
                   </select>
@@ -263,8 +264,8 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
               <>
                 <FieldRow label="維護日期 *" value={form.maintenance_date} onChange={v => setForm(f => ({ ...f, maintenance_date: v }))} placeholder="YYYY-MM-DD HH:MM" />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <label style={{ fontSize: 11, color: "#8b949e" }}>類型</label>
-                  <select value={form.maintenance_type} onChange={e => setForm(f => ({ ...f, maintenance_type: e.target.value }))} style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 5, color: "#cdd9e5", padding: "5px 8px", fontSize: 12 }}>
+                  <label style={{ fontSize: 11, color: C.textMuted }}>類型</label>
+                  <select value={form.maintenance_type} onChange={e => setForm(f => ({ ...f, maintenance_type: e.target.value }))} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textPrimary, padding: "5px 8px", fontSize: 12 }}>
                     <option value="preventive">預防性</option>
                     <option value="corrective">矯正性</option>
                     <option value="inspection">例行點檢</option>
@@ -276,8 +277,8 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
               </>
             )}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-              <button onClick={() => setShowModal(false)} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 5, background: "transparent", border: "1px solid #30363d", color: "#8b949e", cursor: "pointer" }}>取消</button>
-              <button onClick={handleSave} disabled={saving} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 5, background: saving ? "#21262d" : "#1f6feb", border: "none", color: "#fff", cursor: saving ? "not-allowed" : "pointer", fontWeight: 600 }}>
+              <button onClick={() => setShowModal(false)} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 5, background: "transparent", border: `1px solid ${C.border}`, color: C.textMuted, cursor: "pointer" }}>取消</button>
+              <button onClick={handleSave} disabled={saving} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 5, background: saving ? C.surfaceHover : C.accentDark, border: "none", color: C.white, cursor: saving ? "not-allowed" : "pointer", fontWeight: 600 }}>
                 {saving ? "儲存中..." : "儲存"}
               </button>
             </div>

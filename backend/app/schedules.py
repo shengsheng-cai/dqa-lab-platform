@@ -416,6 +416,7 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
         "device_id": device_id,
         "start_aware": start_aware,
         "cancelled_device_id": cancelled_device_id,
+        "should_remove_job": body.status == ScheduleStatus.CANCELLED,
     }
 
 
@@ -439,28 +440,26 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
 
     out = await asyncio.to_thread(_patch_schedule_db, schedule_id, body, role, user_id, _cache)
 
-    if body.status == ScheduleStatus.CONFIRMED:
-        if out["immediate_start"] and out["conditions"] and out["device_id"]:
-            from .sop import auto_start_sop
-            await auto_start_sop(out["device_id"], out["conditions"][0], _cache, _locks, skip_fixture_transfer=True)
-        elif _scheduler and not out["immediate_start"]:
-            _scheduler.add_job(
-                _start_schedule_by_id,
-                trigger="date",
-                run_date=out["start_aware"],
-                kwargs={"schedule_id": schedule_id, "cache": _cache, "locks": _locks},
-                id=f"sched_{schedule_id}",
-                replace_existing=True,
-            )
+    if out["immediate_start"] and out["conditions"] and out["device_id"]:
+        from .sop import auto_start_sop
+        await auto_start_sop(out["device_id"], out["conditions"][0], _cache, _locks, skip_fixture_transfer=True)
+    elif _scheduler and out["start_aware"]:
+        _scheduler.add_job(
+            _start_schedule_by_id,
+            trigger="date",
+            run_date=out["start_aware"],
+            kwargs={"schedule_id": schedule_id, "cache": _cache, "locks": _locks},
+            id=f"sched_{schedule_id}",
+            replace_existing=True,
+        )
 
-    elif body.status == ScheduleStatus.CANCELLED:
-        if _scheduler:
-            try:
-                _scheduler.remove_job(f"sched_{schedule_id}")
-            except Exception:
-                pass
-        if out["cancelled_device_id"]:
-            await _force_normal_stop(out["cancelled_device_id"], _cache, _locks)
+    if out["should_remove_job"] and _scheduler:
+        try:
+            _scheduler.remove_job(f"sched_{schedule_id}")
+        except Exception:
+            pass
+    if out["cancelled_device_id"]:
+        await _force_normal_stop(out["cancelled_device_id"], _cache, _locks)
 
     return out["result"]
 

@@ -705,7 +705,7 @@ export default function FixturePage({ active, role }) {
             ))}
           </div>
           {recordsSubTab === "damaged" && <DamagedList />}
-          {recordsSubTab === "inv_log" && <InventoryLogTab refreshKey={invLogRefreshKey} />}
+          {recordsSubTab === "inv_log" && <InventoryLogTab refreshKey={invLogRefreshKey} allFixtures={fixtures} />}
           <div style={{ marginTop: 24, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 12, letterSpacing: "0.03em" }}>採購清單</div>
             <PurchaseTab
@@ -1042,13 +1042,12 @@ function BatchTable({ rows, setLogs, allFixtures }) {
   );
 }
 
-function InventoryLogTab({ refreshKey }) {
+function InventoryLogTab({ refreshKey, allFixtures }) {
   const { showToast } = useToast();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterFixture, setFilterFixture] = useState("");
   const [expandedBatch, setExpandedBatch] = useState(null);
-  const [allFixtures, setAllFixtures] = useState([]);
   const [deletingBatch, setDeletingBatch] = useState(null);
   const [pendingBatch, setPendingBatch] = useState(null);
 
@@ -1075,13 +1074,9 @@ function InventoryLogTab({ refreshKey }) {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      api.get("/api/fixtures/inventory-logs"),
-      api.get("/api/fixtures/"),
-    ]).then(([logsRes, fixturesRes]) => {
-      setLogs(logsRes.data);
-      if (logsRes.data.length > 0) setExpandedBatch(logsRes.data[0].counted_at?.slice(0, 16));
-      setAllFixtures(fixturesRes.data);
+    api.get("/api/fixtures/inventory-logs").then((res) => {
+      setLogs(res.data);
+      if (res.data.length > 0) setExpandedBatch(res.data[0].counted_at?.slice(0, 16));
     }).finally(() => setLoading(false));
   }, [refreshKey]);
 
