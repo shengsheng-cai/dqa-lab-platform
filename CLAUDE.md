@@ -101,7 +101,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 不做 feature flag 切換：多一層抽象就多一份 bug 面
 - 遇到「加切換開關」「加 mock 模式」等需求，一律拒絕，改在真機版分支實作
 
-### Push 前建議（依改動規模判斷）
+### Push 前自動執行（依改動規模判斷，不詢問使用者）
 
 | 情境 | 要跑的 |
 |------|--------|
@@ -109,7 +109,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 單檔邏輯改動 | `/review` → `/code-review` → push |
 | 小改動（typo、config、純顯示） | 直接 push |
 
-> `/review` 管品質（reuse / simplify / efficiency / altitude）；`/code-review` 管正確性（bug / 邏輯 / 安全）。兩者互補，不互代。
+> 規則自動套用，不詢問「要不要跑 X？」。`/review` 管品質（reuse / simplify / efficiency / altitude）；`/code-review` 管正確性（bug / 邏輯 / 安全）。兩者互補，不互代。
+
+**Commit 前自我檢查（必做）**：`git commit` 前先列出「本次已執行：X / 跳過 Y 原因：Z」，確認符合上表再 commit。不得在未執行對應 skill 的情況下直接 commit。
 
 ---
 
