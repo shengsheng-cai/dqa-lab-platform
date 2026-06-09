@@ -663,6 +663,7 @@ export default function FixturePage({ active, role }) {
                                   return fixtureLoans.map((loan) => {
                                   const dueDate = loan.due_date ? parseUTC(loan.due_date) : null;
                                   const isOverdue = Boolean(dueDate) && !Number.isNaN(dueDate.getTime()) && dueDate < now;
+                                  const overdueDays = isOverdue ? Math.floor((now - dueDate) / 86400000) : 0;
                                   return (
                                     <tr key={loan.id}>
                                       <td style={{ ...tdStyle, fontSize: 12, color: isOverdue ? C.error : C.textPrimary, fontWeight: isOverdue ? 600 : 400 }}>{loan.borrower_name}</td>
@@ -671,7 +672,7 @@ export default function FixturePage({ active, role }) {
                                       <td style={{ ...tdStyle, fontSize: 12, color: C.textMuted }}>{loan.loan_date ? formatLocal(loan.loan_date, "date") : "—"}</td>
                                       <td style={{ ...tdStyle, fontSize: 12, color: isOverdue ? C.error : C.textMuted }}>
                                         {loan.due_date ? formatLocal(loan.due_date, "date") : "—"}
-                                        {isOverdue && <span style={{ marginLeft: 4, fontSize: 10 }}>逾期{loan.overdue_days > 0 ? ` ${loan.overdue_days}天` : ""}</span>}
+                                        {isOverdue && <span style={{ marginLeft: 4, fontSize: 10 }}>逾期{overdueDays > 0 ? ` ${overdueDays}天` : ""}</span>}
                                       </td>
                                       {canOperate && <td style={{ ...tdStyle, fontSize: 12 }}><ReturnButtonGroup loanId={loan.id} onSuccess={fetchAll} /></td>}
                                     </tr>

@@ -369,6 +369,7 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
 
         elif body.status in (ScheduleStatus.CANCELLED, ScheduleStatus.RUNNING, ScheduleStatus.DONE):
             original_status = s.status
+            original_device_id = s.device_id
             s.status = body.status
             if body.device_id:
                 s.device_id = body.device_id
@@ -382,8 +383,8 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
                     FixtureLoan.schedule_id == schedule_id,
                     FixtureLoan.status == "reserved",
                 ).delete(synchronize_session=False)
-                if original_status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) and s.device_id:
-                    cancelled_device_id = s.device_id
+                if original_status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) and original_device_id:
+                    cancelled_device_id = original_device_id
 
         else:
             if body.device_id is not None:
