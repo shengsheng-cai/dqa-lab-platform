@@ -584,8 +584,8 @@ with SessionLocal() as db:
                 vendor="通用電子材料",
                 unit_price=450.0,
                 total_price=900.0,
-                status="approved",
-                note="USB-A 治具損壞後補充，已核准，待到貨",
+                status="pending",
+                note="USB-A 治具損壞後補充，已核准採購中，待到貨",
             ),
         ]
     )
