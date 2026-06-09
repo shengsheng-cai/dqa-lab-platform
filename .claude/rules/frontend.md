@@ -4,10 +4,12 @@
 
 ```
 App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, MaintenancePage, UsersPage, ErrorLog, ExecutionList]
-├─ ai/         [ChatArea, MessageBubble, useAIChat, aiStorage]   ← src/ai/（非 components/）
+├─ ai/         [ChatArea, MarkdownRenderer, MessageBubble, useAIChat, aiStorage, markdownUtils, messageBubbleConstants]   ← src/ai/（非 components/）
+├─ constants.js   ← src/ 根目錄，全域共用常數（DEVICE_IDS、SESSION_DURATION）
 └─ components/
-   ├─ sop/     [ConditionCard, ConditionPicker, ControlPanel, ExecutionInfoPanel, ExecutionPanel, MonitorSide, SafetyChecklist, SelectGroup, StepList, TempChart, generateSP]
-   ├─ schedule/ [DateTimePicker, GanttChart, ManageBlockedPeriodsModal, NewScheduleModal, ScheduleDetailModal, ScheduleModalShell, scheduleUtils]
+   ├─ [ConfirmModal, Toast, ToastContext, useToast]   ← components/ 根目錄，全站共用
+   ├─ sop/     [ConditionCard, ControlPanel, ExecutionInfoPanel, ExecutionPanel, MonitorSide, SafetyChecklist, SelectGroup, StepList, TempChart, generateSP]
+   ├─ schedule/ [ConditionPicker, DateTimePicker, GanttChart, ManageBlockedPeriodsModal, NewScheduleModal, ScheduleDetailModal, ScheduleModalShell, scheduleUtils]
    ├─ fixture/  [AddEditModal, CreatePurchaseModal, DatePicker, ImportModal, LoanModal, ModalShell, ReturnModal, SetKeeperModal, StocktakeModal, modalStyles]
    └─ control/  [RightPanel, SensorQcModal, SensorQcChart, AuditLog,
                  TopBar, DeviceCard, deviceCardUtils, TabBadge, LeftPanel,
