@@ -811,10 +811,12 @@ function DamagedList() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     api
       .get("/api/fixtures/loans/damaged")
-      .then((r) => setLoans(r.data))
-      .finally(() => setLoading(false));
+      .then((r) => { if (!cancelled) setLoans(r.data); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   return (
@@ -1073,11 +1075,15 @@ function InventoryLogTab({ refreshKey, allFixtures }) {
   };
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     api.get("/api/fixtures/inventory-logs").then((res) => {
-      setLogs(res.data);
-      if (res.data.length > 0) setExpandedBatch(res.data[0].counted_at?.slice(0, 16));
-    }).finally(() => setLoading(false));
+      if (!cancelled) {
+        setLogs(res.data);
+        if (res.data.length > 0) setExpandedBatch(res.data[0].counted_at?.slice(0, 16));
+      }
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [refreshKey]);
 
   // 按分鐘分組

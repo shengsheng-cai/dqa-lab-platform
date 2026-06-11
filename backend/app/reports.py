@@ -626,12 +626,12 @@ def download_pdf_report(execution_id: int):
         execution, steps, device_records, truncated = _fetch_execution_data(execution_id, db)
         sop_data = STANDARDS_AND_SOPS.get(execution.sop_id, {})
         report_no = f"RPT-{execution.created_at.strftime('%Y%m%d')}-{execution_id:03d}"
+        sop_id = execution.sop_id
+        pdf_bytes = _build_pdf(
+            execution, steps, device_records, sop_data, report_no, truncated
+        )
 
-    pdf_bytes = _build_pdf(
-        execution, steps, device_records, sop_data, report_no, truncated
-    )
-
-    filename = f"{report_no}_{execution.sop_id}.pdf"
+    filename = f"{report_no}_{sop_id}.pdf"
     encoded_filename = urllib.parse.quote(filename)
     return StreamingResponse(
         iter([pdf_bytes]),
