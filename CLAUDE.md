@@ -33,7 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `ai.py` + `rag.py` | Gemini 整合 + RAG 向量檢索 |
 | `reports.py` | PDF / CSV 報告生成 |
 | `sop.py` | SOP 執行流程、步驟確認、照片上傳 |
-| `auth.py` | 登入、token 驗證、middleware、rate limiting |
+| `auth.py` | 登入、token 驗證、middleware、rate limiting；`current_user(request)` 共用 helper（user_id / username / role） |
 | `audit.py` | 稽核日誌寫入與查詢 API |
 | `ws.py` | WebSocket `/ws/devices` + ConnectionManager + broadcast_loop |
 | `line.py` | LINE push_message 推播 |

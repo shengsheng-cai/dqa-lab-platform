@@ -15,7 +15,7 @@ from .models import (
 )
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions
-from .auth import require_admin
+from .auth import require_admin, current_user
 from .line import push_message
 
 logger = logging.getLogger("sop")
@@ -97,7 +97,7 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     """啟動指定設備的 SOP 測試（admin 才可操作）"""
 
     operator: str = payload.get("operator", "")
-    operator_user_id: Optional[int] = getattr(request.state, "user_id", None)
+    operator_user_id = current_user(request).user_id
 
     cache = request.app.state.AICM_CACHE
     sop_id, device_id, device = _validate_start_sop_input(payload, cache)
@@ -386,7 +386,7 @@ def create_execution(
     data: ExecutionCreate, request: Request,
     background_tasks: BackgroundTasks, _: None = Depends(require_admin),
 ):
-    operator_user_id = getattr(request.state, "user_id", None)
+    operator_user_id = current_user(request).user_id
     with SessionLocal() as db:
         execution = SopExecution(
             sop_id=data.sop_id,

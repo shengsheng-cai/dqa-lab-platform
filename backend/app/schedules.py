@@ -14,7 +14,7 @@ from .models import (
 )
 from .standards import STANDARD_TREE, get_standard
 from .sop import DEVICE_IDS
-from .auth import require_admin
+from .auth import require_admin, current_user
 from .line import push_message
 from .utils import _now_utc, _now_utc_naive, _parse_conditions
 from .audit import log_audit
@@ -249,7 +249,7 @@ def create_schedule(body: ScheduleCreate, request: Request, _: None = Depends(re
         if not get_standard(sop_id):
             raise HTTPException(status_code=400, detail=f"無效的測試條件：{sop_id}")
 
-    user_id = getattr(request.state, "user_id", None)
+    user_id = current_user(request).user_id
     applicant_name = body.applicant_name
 
     # 從 DB 取 display_name（若未提供）
@@ -381,8 +381,12 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
             if body.status == ScheduleStatus.CANCELLED:
                 db.query(FixtureLoan).filter(
                     FixtureLoan.schedule_id == schedule_id,
-                    FixtureLoan.status.in_(["reserved", "loaned"]),
+                    FixtureLoan.status == "reserved",
                 ).delete(synchronize_session=False)
+                db.query(FixtureLoan).filter(
+                    FixtureLoan.schedule_id == schedule_id,
+                    FixtureLoan.status == "loaned",
+                ).update({"status": "returned"}, synchronize_session=False)
                 if original_status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) and original_device_id:
                     cancelled_device_id = original_device_id
 
@@ -426,8 +430,8 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
     更新排程（admin only）。
     status=已確認 時若無指定設備，自動排程。
     """
-    role = getattr(request.state, "user_role", None)
-    user_id = getattr(request.state, "user_id", None)
+    u = current_user(request)
+    user_id, role = u.user_id, u.role
 
     # 非 admin 只允許取消自己的待審核排程
     if role != "admin":
@@ -474,7 +478,6 @@ def _delete_schedule_db(schedule_id: int, user_id):
         db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == schedule_id).delete(synchronize_session=False)
         db.query(FixtureLoan).filter(
             FixtureLoan.schedule_id == schedule_id,
-            FixtureLoan.status.in_(["reserved", "loaned"]),
         ).delete(synchronize_session=False)
         db.delete(s)
         log_audit(db, str(user_id or "unknown"), "admin", "DELETE", "schedule", schedule_id, detail)
@@ -487,7 +490,7 @@ async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(
     _cache = getattr(request.app.state, "AICM_CACHE", {})
     _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     _scheduler = getattr(request.app.state, "scheduler", None)
-    user_id = getattr(request.state, "user_id", None)
+    user_id = current_user(request).user_id
 
     stop_device_id = await asyncio.to_thread(_delete_schedule_db, schedule_id, user_id)
 
@@ -544,7 +547,7 @@ async def confirm_condition(schedule_id: int, request: Request, _: None = Depend
     from .sop import auto_start_sop
     cache = getattr(request.app.state, "AICM_CACHE", {})
     locks = getattr(request.app.state, "DEVICE_LOCKS", {})
-    user_id = getattr(request.state, "user_id", None)
+    user_id = current_user(request).user_id
 
     result = await asyncio.to_thread(_confirm_condition_db, schedule_id, _now_utc_naive(), user_id)
 
@@ -614,7 +617,7 @@ def create_blocked_period(body: BlockedPeriodCreate, request: Request, _: None =
     if body.device_id not in DEVICE_IDS:
         raise HTTPException(status_code=400, detail=f"無效的設備 ID：{body.device_id}")
 
-    user_id = getattr(request.state, "user_id", None)
+    user_id = current_user(request).user_id
     with SessionLocal() as db:
         b = DeviceBlockedPeriod(
             device_id=body.device_id,

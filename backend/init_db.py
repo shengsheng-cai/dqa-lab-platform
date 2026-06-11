@@ -27,6 +27,7 @@ from app.models import (
     FixtureInventoryLog,
     PurchaseOrder,
     Schedule,
+    ScheduleFixture,
     SopExecution,
 )
 from app.sop import STANDARDS_AND_SOPS
@@ -454,6 +455,17 @@ with SessionLocal() as db:
                 due_date=_dt(days=12),
                 status="loaned",
             ),
+            # ── f5 (RJ45)：1 筆 reserved（sch3 已確認預約）────────────
+            FixtureLoan(
+                fixture_id=f5.id,
+                borrower_name="王工",
+                device_id="CH-04",
+                project_name="PRJ-2025-095",
+                quantity=2,
+                due_date=_dt(hours=-40),
+                status="reserved",
+                schedule_id=sch3.id,
+            ),
             # ── f5 (RJ45)：已歸還（歷史紀錄）───────────────────────────
             FixtureLoan(
                 fixture_id=f5.id,
@@ -506,7 +518,15 @@ with SessionLocal() as db:
         ]
     )
 
-    # ── 10. Fixture Inventory Logs（記錄 tab → 盤點紀錄 sub-tab）──
+    # ── 10. Schedule Fixtures（排程↔治具預約中間表）──────────────────
+    db.add_all([
+        ScheduleFixture(schedule_id=sch1.id, fixture_id=f1.id, quantity=1),
+        ScheduleFixture(schedule_id=sch2.id, fixture_id=f2.id, quantity=1),
+        ScheduleFixture(schedule_id=sch3.id, fixture_id=f5.id, quantity=2),
+        ScheduleFixture(schedule_id=sch5.id, fixture_id=f5.id, quantity=2),
+    ])
+
+    # ── 11. Fixture Inventory Logs（記錄 tab → 盤點紀錄 sub-tab）──
     db.add_all(
         [
             FixtureInventoryLog(
@@ -540,7 +560,7 @@ with SessionLocal() as db:
         ]
     )
 
-    # ── 11. Error Logs ─────────────────────────────────────────────
+    # ── 12. Error Logs ─────────────────────────────────────────────
     db.add_all(
         [
             ErrorLog(
@@ -566,7 +586,7 @@ with SessionLocal() as db:
         ]
     )
 
-    # ── 12. Purchase Orders（記錄 tab → 採購清單區塊）──────────────
+    # ── 13. Purchase Orders（記錄 tab → 採購清單區塊）──────────────
     db.add_all(
         [
             PurchaseOrder(

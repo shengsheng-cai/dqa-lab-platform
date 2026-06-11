@@ -11,6 +11,23 @@
 新增 API 端點時，寫入操作一律加 `role != "admin"` 檢查。  
 唯讀感測器端點（如 `GET /api/devices/{id}/sensor-stats`、`GET /api/devices/{id}/history`）不需 role 檢查，guest 可存取。
 
+### 使用者身份取用
+
+路由 handler 內需要 user_id / username / role 時，統一使用 `current_user(request)` helper（定義於 `auth.py`）：
+
+```python
+from .auth import require_admin, current_user
+
+# 單欄位
+user_id = current_user(request).user_id
+
+# 多欄位
+u = current_user(request)
+user_id, role = u.user_id, u.role
+```
+
+禁止在路由 handler 直接使用 `getattr(request.state, "user_id", None)` 等原始存取。
+
 ## LINE（Push）
 
 - 主動 push 時機（三個）：條件完成（等待人員確認）、測試完成、緊急停止。
