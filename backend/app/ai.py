@@ -8,7 +8,7 @@ import time
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from .utils import _now_utc
 from .rag import (
@@ -316,9 +316,16 @@ def _get_api_key() -> str:
     return key
 
 
+_MAX_HISTORY = 20
+
 class QueryRequest(BaseModel):
     message: str
     history: Optional[list] = []
+
+    @field_validator("history")
+    @classmethod
+    def cap_history(cls, v):
+        return (v or [])[-_MAX_HISTORY:]
 
 
 class QueryResponse(BaseModel):

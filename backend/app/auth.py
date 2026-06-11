@@ -8,6 +8,7 @@ import bcrypt as _bcrypt
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from .models import SessionLocal, User, DemoToken
 from .utils import _now_utc_naive
 
@@ -303,10 +304,23 @@ def delete_user(user_id: int, request: Request, _: None = Depends(require_admin)
 
 @router.get("/api/auth/guest-hint")
 def guest_hint():
-    """供登入頁顯示一鍵體驗按鈕，DEMO_PASSWORD 有設定時回傳 token 值。"""
+    """供登入頁顯示一鍵體驗按鈕，DEMO_PASSWORD 有設定時生成短效 DB token 回傳（不曝露原始密碼）。"""
     if not DEMO_PASSWORD:
         return {"token": None}
-    return {"token": DEMO_PASSWORD}
+    for _ in range(3):
+        token_str = _gen_demo_token()
+        try:
+            with SessionLocal() as db:
+                db.add(DemoToken(
+                    token=token_str,
+                    label="auto-hint",
+                    expires_at=_now_utc_naive() + datetime.timedelta(hours=1),
+                ))
+                db.commit()
+            return {"token": token_str}
+        except IntegrityError:
+            continue
+    raise HTTPException(status_code=500, detail="Token 生成失敗，請重試")
 
 
 # ---------- Demo Token ----------
