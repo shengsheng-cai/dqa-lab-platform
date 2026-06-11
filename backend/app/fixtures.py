@@ -16,7 +16,7 @@ from .models import (
     ReturnCondition,
 )
 from .utils import today_utc_window, _now_utc_naive
-from .auth import require_admin
+from .auth import require_admin, current_user
 from .audit import log_audit
 
 try:
@@ -502,8 +502,8 @@ def delete_inventory_log(log_id: int, _: None = Depends(require_admin)):
 
 @router.post("/inventory-logs")
 def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
-    user_id = getattr(request.state, "user_id", None)
-    counted_by = getattr(request.state, "username", None)
+    u = current_user(request)
+    user_id, counted_by = u.user_id, u.username
     with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
@@ -690,7 +690,7 @@ def list_damaged_lost_loans():
 
 @router.post("/loans")
 def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_admin)):
-    user_id = getattr(request.state, "user_id", None)
+    user_id = current_user(request).user_id
     with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == body.fixture_id).first()
         if not f:
@@ -729,7 +729,7 @@ def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_ad
 
 @router.post("/loans/{loan_id}/return")
 def return_loan(loan_id: int, body: ReturnUpdate, request: Request, _: None = Depends(require_admin)):
-    user_id = getattr(request.state, "user_id", None)
+    user_id = current_user(request).user_id
     with SessionLocal() as db:
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
         if not loan:
@@ -958,8 +958,8 @@ def _apply_inventory_db(db, f: Fixture, actual_quantity: int, user_id, counted_b
 
 @router.post("/{fixture_id}/inventory")
 def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
-    user_id = getattr(request.state, "user_id", None)
-    counted_by = getattr(request.state, "username", None)
+    u = current_user(request)
+    user_id, counted_by = u.user_id, u.username
 
     with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()

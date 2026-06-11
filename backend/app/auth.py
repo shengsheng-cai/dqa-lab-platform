@@ -3,12 +3,12 @@ import time
 import secrets
 import datetime
 import logging
+from types import SimpleNamespace
 from typing import Optional
 import bcrypt as _bcrypt
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy.exc import IntegrityError
 from .models import SessionLocal, User, DemoToken
 from .utils import _now_utc_naive
 
@@ -197,7 +197,7 @@ def logout(request: Request):
 
 @router.get("/api/auth/me", response_model=UserMeResponse)
 def get_me(request: Request):
-    user_id = getattr(request.state, "user_id", None)
+    user_id = current_user(request).user_id
     if not user_id:
         raise HTTPException(status_code=401, detail="未登入或訪客模式")
     with SessionLocal() as db:
@@ -213,9 +213,17 @@ def get_me(request: Request):
 
 # ---------- 使用者管理（admin only）----------
 
+def current_user(request) -> SimpleNamespace:
+    """Return user_id, username, role from request.state."""
+    return SimpleNamespace(
+        user_id=getattr(request.state, "user_id", None),
+        username=getattr(request.state, "username", None),
+        role=getattr(request.state, "user_role", None),
+    )
+
+
 def require_admin(request: Request):
-    role = getattr(request.state, "user_role", None)
-    if role != "admin":
+    if current_user(request).role != "admin":
         raise HTTPException(status_code=403, detail="需要管理者權限")
 
 
@@ -307,20 +315,17 @@ def guest_hint():
     """供登入頁顯示一鍵體驗按鈕，DEMO_PASSWORD 有設定時生成短效 DB token 回傳（不曝露原始密碼）。"""
     if not DEMO_PASSWORD:
         return {"token": None}
-    for _ in range(3):
-        token_str = _gen_demo_token()
-        try:
-            with SessionLocal() as db:
-                db.add(DemoToken(
-                    token=token_str,
-                    label="auto-hint",
-                    expires_at=_now_utc_naive() + datetime.timedelta(hours=1),
-                ))
-                db.commit()
-            return {"token": token_str}
-        except IntegrityError:
-            continue
-    raise HTTPException(status_code=500, detail="Token 生成失敗，請重試")
+    token_str = _gen_demo_token()
+    with SessionLocal() as db:
+        db.query(DemoToken).filter(DemoToken.label == "auto-hint").delete()
+        db.add(DemoToken(
+            token=token_str,
+            label="auto-hint",
+            max_uses=1,
+            expires_at=_now_utc_naive() + datetime.timedelta(hours=1),
+        ))
+        db.commit()
+    return {"token": token_str}
 
 
 # ---------- Demo Token ----------
@@ -379,7 +384,7 @@ def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(
         t = DemoToken(
             token=token_str,
             label=req.label,
-            created_by=getattr(request.state, "user_id", None),
+            created_by=current_user(request).user_id,
             expires_at=expires_at,
             max_uses=req.max_uses,
         )
