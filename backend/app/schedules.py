@@ -381,7 +381,7 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
             if body.status == ScheduleStatus.CANCELLED:
                 db.query(FixtureLoan).filter(
                     FixtureLoan.schedule_id == schedule_id,
-                    FixtureLoan.status == "reserved",
+                    FixtureLoan.status.in_(["reserved", "loaned"]),
                 ).delete(synchronize_session=False)
                 if original_status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) and original_device_id:
                     cancelled_device_id = original_device_id
@@ -472,7 +472,10 @@ def _delete_schedule_db(schedule_id: int, user_id):
         stop_device_id = s.device_id if s.status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) else None
         detail = f"{s.project_number} / {s.sample_name}"
         db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == schedule_id).delete(synchronize_session=False)
-        db.query(FixtureLoan).filter(FixtureLoan.schedule_id == schedule_id).delete(synchronize_session=False)
+        db.query(FixtureLoan).filter(
+            FixtureLoan.schedule_id == schedule_id,
+            FixtureLoan.status.in_(["reserved", "loaned"]),
+        ).delete(synchronize_session=False)
         db.delete(s)
         log_audit(db, str(user_id or "unknown"), "admin", "DELETE", "schedule", schedule_id, detail)
         db.commit()

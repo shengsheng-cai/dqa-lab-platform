@@ -502,22 +502,13 @@ def delete_inventory_log(log_id: int, _: None = Depends(require_admin)):
 
 @router.post("/inventory-logs")
 def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
+    user_id = getattr(request.state, "user_id", None)
     counted_by = getattr(request.state, "username", None)
     with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
-        previous = f.total_quantity
-        diff = actual_quantity - previous
-        f.total_quantity = actual_quantity
-        log = FixtureInventoryLog(
-            fixture_id=fixture_id,
-            previous_quantity=previous,
-            counted_quantity=actual_quantity,
-            difference=diff,
-            counted_by=counted_by,
-        )
-        db.add(log)
+        log, _, _ = _apply_inventory_db(db, f, actual_quantity, user_id, counted_by)
         db.commit()
         db.refresh(log)
         return {
@@ -948,26 +939,33 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, _: None = Depends(require_a
 # ---------- 月盤點 ----------
 
 
+def _apply_inventory_db(db, f: Fixture, actual_quantity: int, user_id, counted_by) -> tuple:
+    previous = f.total_quantity
+    diff = actual_quantity - previous
+    f.total_quantity = actual_quantity
+    log = FixtureInventoryLog(
+        fixture_id=f.id,
+        previous_quantity=previous,
+        counted_quantity=actual_quantity,
+        difference=diff,
+        counted_by=counted_by,
+    )
+    db.add(log)
+    log_audit(db, str(user_id or "unknown"), "admin", "INVENTORY", "fixture", f.id,
+              f"盤點：{previous} → {actual_quantity}（差：{diff:+d}）")
+    return log, previous, diff
+
+
 @router.post("/{fixture_id}/inventory")
 def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
+    user_id = getattr(request.state, "user_id", None)
     counted_by = getattr(request.state, "username", None)
 
     with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
-        previous = f.total_quantity
-        diff = actual_quantity - previous
-        f.total_quantity = actual_quantity
-
-        log = FixtureInventoryLog(
-            fixture_id=fixture_id,
-            previous_quantity=previous,
-            counted_quantity=actual_quantity,
-            difference=diff,
-            counted_by=counted_by,
-        )
-        db.add(log)
+        _, previous, diff = _apply_inventory_db(db, f, actual_quantity, user_id, counted_by)
         db.commit()
         return {
             "status": "success",
