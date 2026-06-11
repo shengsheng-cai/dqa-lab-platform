@@ -249,7 +249,11 @@ def _idle_state_patch() -> dict:
         "operator_user_id": None,
         "sim_phase": "idle",
         "sim_cycle": 0,
+        "dwell_high_start": None,
+        "dwell_low_start": None,
         "dwell_half_fired": False,
+        "completed_steps": 0,
+        "active_execution_id": None,
     }
 
 
@@ -335,23 +339,7 @@ async def data_simulator(cache: dict, locks: dict):
                 if item.get("sim_phase") == "done":
                     execution_id = item.get("active_execution_id")
                     async with locks[device_id]:
-                        item.update({
-                            "status": "IDLE",
-                            "running_sop_name": "STANDBY",
-                            "running_sop_id": None,
-                            "standard_id": None,
-                            "active_sop_json": None,
-                            "completed_steps": 0,
-                            "started_at": None,
-                            "operator": "",
-                            "operator_user_id": None,
-                            "sim_phase": "idle",
-                            "sim_cycle": 0,
-                            "dwell_high_start": None,
-                            "dwell_low_start": None,
-                            "dwell_half_fired": False,
-                            "active_execution_id": None,
-                        })
+                        item.update(_idle_state_patch())
                         _save_device_state(device_id, item)
                     if execution_id:
                         for _attempt in range(3):
@@ -389,6 +377,11 @@ async def data_simulator(cache: dict, locks: dict):
                     continue
             elif status == "FINISHING":
                 await _sim_handle_finishing(device_id, item, current_temp, current_humi, locks, elapsed_seconds)
+                if item.get("status") == "IDLE":
+                    for _suffix in ("_high", "_low"):
+                        _k = f"{device_id}{_suffix}"
+                        dwell_start_times.pop(_k, None)
+                        dwell_elapsed_times.pop(_k, None)
             elif status == "EMERGENCY":
                 _sim_handle_emergency(item, current_temp, current_humi)
 
