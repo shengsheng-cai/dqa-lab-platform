@@ -299,7 +299,7 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
             raise HTTPException(status_code=404, detail="找不到排程")
 
         if role != "admin":
-            if s.applicant_user_id != user_id:
+            if user_id is None or s.applicant_user_id != user_id:
                 raise HTTPException(status_code=403, detail="只能取消自己的排程")
             if s.status != ScheduleStatus.PENDING:
                 raise HTTPException(status_code=400, detail="只能取消待審核的排程")

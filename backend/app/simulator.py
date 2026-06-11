@@ -8,7 +8,7 @@ from typing import Optional
 
 from .models import SessionLocal, DeviceData, SopExecution, Schedule, ScheduleStatus
 from .standards import get_ramp_rate, get_standard
-from .utils import _now_utc, _save_device_state
+from .utils import _now_utc_naive, _save_device_state
 from .schedule_service import _complete_schedule
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 from .line import push_message
@@ -108,8 +108,8 @@ def _advance_sim_phase(
             if stored:
                 try:
                     t = datetime.datetime.fromisoformat(stored)
-                    if t.tzinfo is None:
-                        t = t.replace(tzinfo=datetime.timezone.utc)
+                    if t.tzinfo is not None:
+                        t = t.replace(tzinfo=None)
                     dwell_start_times[key] = t
                 except Exception:
                     _set_dwell_start(key_suffix, field)
@@ -220,7 +220,7 @@ def _try_complete_schedule_for_device(device_id: str) -> str | None:
     """查找設備的進行中排程並立即標為已完成（含治具歸還）。
     回傳推播訊息字串（有排程時），或 None（無排程時）。"""
     try:
-        now = _now_utc()
+        now = _now_utc_naive()
         with SessionLocal() as db:
             schedule = db.query(Schedule).filter(
                 Schedule.device_id == device_id,
@@ -305,7 +305,7 @@ async def data_simulator(cache: dict, locks: dict):
     last_tick: dict = {}
 
     while True:
-        now = _now_utc()
+        now = _now_utc_naive()
 
         for device_id, item in cache.items():
             status = item.get("status", "OFFLINE")

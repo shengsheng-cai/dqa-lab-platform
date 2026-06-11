@@ -77,7 +77,7 @@ def get_token_info(token: str) -> Optional[dict]:
             expires = expires.replace(tzinfo=datetime.timezone.utc)
         if expires < datetime.datetime.now(datetime.timezone.utc):
             return None
-        return {"user_id": user.id, "role": user.role}
+        return {"user_id": user.id, "role": user.role, "username": user.username}
 
 
 def revoke_token(token: str):
@@ -529,6 +529,7 @@ async def auth_middleware(request: Request, call_next):
         if info:
             request.state.user_role = info["role"]
             request.state.user_id = info["user_id"]
+            request.state.username = info["username"]
             tracker["count"] = 0
             return await call_next(request)
         return JSONResponse(
@@ -545,6 +546,7 @@ async def auth_middleware(request: Request, call_next):
         if _validate_demo_token(demo_token) or (DEMO_PASSWORD and demo_token == DEMO_PASSWORD):
             request.state.user_role = "guest"
             request.state.user_id = None
+            request.state.username = None
             tracker["count"] = 0
             return await call_next(request)
         # Token 格式存在但已失效（過期/耗盡/停用）→ 直接 401，不計入失敗次數
