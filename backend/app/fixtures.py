@@ -130,7 +130,7 @@ class LoanOut(BaseModel):
     device_id: Optional[str]
     project_name: Optional[str]
     quantity: int
-    loan_date: datetime.datetime
+    loan_date: Optional[datetime.datetime] = None
     due_date: Optional[datetime.datetime]
     return_date: Optional[datetime.datetime]
     status: str
@@ -413,7 +413,7 @@ def download_template():
 
 
 @router.get("/export")
-def export_fixtures():
+def export_fixtures(_: None = Depends(require_admin)):
     """匯出所有治具為 Excel"""
     if pd is None:
         raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
@@ -502,8 +502,7 @@ def delete_inventory_log(log_id: int, _: None = Depends(require_admin)):
 
 @router.post("/inventory-logs")
 def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
-    user = getattr(request.state, "user", None)
-    counted_by = user.get("username") if user else None
+    counted_by = getattr(request.state, "username", None)
     with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
@@ -951,14 +950,12 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, _: None = Depends(require_a
 
 @router.post("/{fixture_id}/inventory")
 def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
-    user = getattr(request.state, "user", None)
-    counted_by = user.get("username") if user else None
+    counted_by = getattr(request.state, "username", None)
 
     with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
-
         previous = f.total_quantity
         diff = actual_quantity - previous
         f.total_quantity = actual_quantity

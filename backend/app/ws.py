@@ -49,7 +49,7 @@ async def broadcast_loop(cache: dict):
         if manager.count == 0:
             continue
         try:
-            data = build_device_list(cache)
+            data = await asyncio.to_thread(build_device_list, dict(cache))
             await manager.broadcast(data)
         except Exception as e:
             logger.error(f"[WS] broadcast_loop error: {e}")
@@ -78,7 +78,7 @@ async def ws_devices(ws: WebSocket):
     await manager.connect(ws)
     try:
         # 連線後立即推一幀，讓前端不用等 1 秒
-        data = build_device_list(ws.app.state.AICM_CACHE)
+        data = build_device_list(dict(ws.app.state.AICM_CACHE))
         await ws.send_json(data)
         # 持續接收（維持連線活著，客戶端可發 ping）
         while True:
