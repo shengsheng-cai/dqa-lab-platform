@@ -1,10 +1,11 @@
 import { IDLE_STATUS, EMERGENCY_STATUS } from "../../constants";
+import { C } from "../../styles/theme";
 
 function Stat({ label, value, color }) {
   return (
     <span style={{ fontSize: 12, color: "#8b949e", whiteSpace: "nowrap" }}>
       {label}：
-      <span style={{ color: color || "#cdd9e5", fontWeight: 600 }}>{value}</span>
+      <span style={{ color: color || C.textPrimary, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{value}</span>
     </span>
   );
 }
@@ -45,7 +46,9 @@ export default function TopBar({ devices, fixtureSummary, displayName, role, onL
         )}
         <button
           onClick={onLogout}
-          style={{ color: "#8b949e", background: "transparent", border: "1px solid #30363d", fontSize: 11, padding: "3px 10px", borderRadius: 5, cursor: "pointer" }}
+          style={{ color: C.textMuted, background: "transparent", border: `1px solid ${C.border}`, fontSize: 11, padding: "3px 10px", borderRadius: 5, cursor: "pointer", transition: "color .15s, border-color .15s" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = C.textPrimary; e.currentTarget.style.borderColor = C.textFaint; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = C.textMuted; e.currentTarget.style.borderColor = C.border; }}
         >
           登出
         </button>

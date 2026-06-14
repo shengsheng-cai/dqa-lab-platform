@@ -138,11 +138,11 @@ function LoginPage({ onLogin }) {
           maxWidth: 400,
         }}
       >
-        <span style={{ color: "#58a6ff", fontWeight: 700, fontSize: 22 }}>
+        <span style={{ color: "#58a6ff", fontWeight: 700, fontSize: 28, letterSpacing: -0.5 }}>
           DQA Lab
         </span>
-        <span style={{ color: "#8b949e", fontSize: 13 }}>
-          DQA Lab Platform
+        <span style={{ color: "#6e7681", fontSize: 12, marginTop: -6 }}>
+          環境測試實驗室管理平台
         </span>
 
         {backendOffline ? (
@@ -258,7 +258,7 @@ function LoginPage({ onLogin }) {
                     fontSize: 14,
                     width: "100%",
                     boxSizing: "border-box",
-                    outline: "none",
+                    transition: "border-color .15s",
                   }}
                 />
                 <input
@@ -276,7 +276,7 @@ function LoginPage({ onLogin }) {
                     fontSize: 14,
                     width: "100%",
                     boxSizing: "border-box",
-                    outline: "none",
+                    transition: "border-color .15s",
                   }}
                 />
                 <button
@@ -337,7 +337,7 @@ function LoginPage({ onLogin }) {
                     fontSize: 14,
                     width: "100%",
                     boxSizing: "border-box",
-                    outline: "none",
+                    transition: "border-color .15s",
                   }}
                 />
                 <button
