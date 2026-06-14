@@ -41,12 +41,16 @@ function toDeviceMap(schedules) {
 
 function BannerConfirmBtn({ device, schedule, onConfirmCondition }) {
   const [busy, setBusy] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const { label } = conditionLabel(schedule, `${device.device_id} `);
+  const bg = busy ? C.warningBg : hovered ? `${C.warning}44` : `${C.warning}22`;
   return (
     <button
       disabled={busy}
       onClick={async () => { setBusy(true); try { await onConfirmCondition(schedule.id); } finally { setBusy(false); } }}
-      style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 4, background: busy ? C.warningBg : `${C.warning}22`, border: `1px solid ${C.warning}`, color: C.warning, cursor: busy ? "not-allowed" : "pointer" }}
+      style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 4, background: bg, border: `1px solid ${C.warning}`, color: C.warning, cursor: busy ? "not-allowed" : "pointer", transition: "background .15s" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       {busy ? "處理中..." : label}
     </button>
@@ -59,8 +63,8 @@ const TABS = [
   { key: "device", label: "設備" },
   { key: "fixture", label: "治具" },
   { key: "schedule", label: "排程" },
-  { key: "maintenance", label: "維護" },
-  { key: "users", label: "人員管理" },
+  { key: "maintenance", label: "維護", adminOnly: true },
+  { key: "users", label: "人員管理", adminOnly: true },
 ];
 
 function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange }) {
@@ -85,7 +89,9 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
-            style={{ padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: activeTab === t.key ? `2px solid ${C.accent}` : "2px solid transparent", color: activeTab === t.key ? C.textPrimary : C.textMuted, transition: "color .15s" }}
+            style={{ padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: activeTab === t.key ? `2px solid ${C.accent}` : "2px solid transparent", color: activeTab === t.key ? C.textPrimary : C.textMuted, transition: "color .15s, background .15s" }}
+            onMouseEnter={(e) => { if (activeTab !== t.key) e.currentTarget.style.background = C.surfaceHover; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
           >
             {t.label}
             {t.key === "schedule" && <TabBadge count={scheduleCounts.pending} bg={C.warningAlt} />}

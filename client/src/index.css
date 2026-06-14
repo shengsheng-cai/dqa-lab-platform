@@ -1,5 +1,5 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   color-scheme: dark;
   /* 統一背景色，與 App.jsx 的 #0d1117 一致 */
@@ -45,4 +45,10 @@ body {
 }
 .ai-fab-pulse {
   animation: fab-pulse 2.2s ease-out infinite;
+}
+
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #58a6ff66;
+  outline-offset: 1px;
 }

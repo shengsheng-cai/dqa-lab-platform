@@ -27,15 +27,7 @@ export const btnPrimary = {
   cursor: "pointer",
   fontSize: 12,
   fontWeight: 600,
-};
-export const btnOutline = {
-  padding: "5px 12px",
-  borderRadius: 6,
-  background: "transparent",
-  color: C.textMuted,
-  border: `1px solid ${C.border}`,
-  cursor: "pointer",
-  fontSize: 12,
+  transition: "background .15s, opacity .15s",
 };
 export const btnDanger = {
   padding: "3px 8px",
@@ -45,6 +37,7 @@ export const btnDanger = {
   border: `1px solid ${C.errorDark}`,
   cursor: "pointer",
   fontSize: 12,
+  transition: "opacity .15s",
 };
 
 // inputs

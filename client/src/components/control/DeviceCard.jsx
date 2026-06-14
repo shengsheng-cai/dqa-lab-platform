@@ -9,6 +9,23 @@ import {
   SIM_PHASE_LABEL,
 } from "../../constants";
 import { conditionLabel } from "./deviceCardUtils";
+import { C } from "../../styles/theme";
+
+const CALIB_BADGE_CFG = {
+  due_soon: { bg: C.warningBg,    color: C.warningAlt, borderColor: `${C.warningAlt}44`, label: "校驗即將到期" },
+  overdue:  { bg: C.errorBg,      color: C.error,      borderColor: `${C.error}44`,      label: "校驗逾期"    },
+  unknown:  { bg: C.surfaceHover,  color: C.textMuted,  borderColor: `${C.border}44`,     label: "未校驗"      },
+};
+
+function CalibBadge({ status }) {
+  const cfg = CALIB_BADGE_CFG[status];
+  if (!cfg) return null;
+  return (
+    <span style={{ fontSize: 10, padding: "1px 4px", borderRadius: 4, whiteSpace: "nowrap", background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.borderColor}` }}>
+      {cfg.label}
+    </span>
+  );
+}
 
 function useCountdown(estimatedEndAt) {
   const [remaining, setRemaining] = useState(null);
@@ -88,15 +105,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: "#cdd9e5", display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
           {device.device_id}
-          {calibrationStatus === "due_soon" && (
-            <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 4, background: "#2d2200", color: "#e3b341", border: "1px solid #e3b34144", whiteSpace: "nowrap" }}>校驗即將到期</span>
-          )}
-          {calibrationStatus === "overdue" && (
-            <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 4, background: "#2d0f0f", color: "#f85149", border: "1px solid #f8514944", whiteSpace: "nowrap" }}>校驗逾期</span>
-          )}
-          {calibrationStatus === "unknown" && (
-            <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 4, background: "#21262d", color: "#8b949e", border: "1px solid #30363d", whiteSpace: "nowrap" }}>未校驗</span>
-          )}
+          <CalibBadge status={calibrationStatus} />
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {onShowQc && (
@@ -108,7 +117,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
               📊
             </button>
           )}
-          <span style={{ fontSize: 9, fontWeight: 600, color: cfg.color, whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: cfg.color, whiteSpace: "nowrap" }}>
             {cfg.label}
           </span>
         </span>
@@ -124,13 +133,13 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
               )}
             </span>
             {SIM_PHASE_LABEL[device.sim_phase] && (
-              <span style={{ fontSize: 8, color: isFinishing ? "#6e7681" : "#484f58" }}>
+              <span style={{ fontSize: 10, color: isFinishing ? "#6e7681" : "#484f58" }}>
                 {SIM_PHASE_LABEL[device.sim_phase]}
               </span>
             )}
           </div>
           {device.running_sop_name && device.running_sop_name !== "STANDBY" && (
-            <div style={{ fontSize: 9, color: "#484f58", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 }}>
+            <div style={{ fontSize: 10, color: "#484f58", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 }}>
               {device.running_sop_name}
             </div>
           )}
@@ -140,7 +149,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
             </div>
           )}
           {remaining !== null && (
-            <div style={{ fontSize: 9, color: "#58a6ff" }}>
+            <div style={{ fontSize: 10, color: "#58a6ff" }}>
               剩 {fmtRemaining(remaining)}
             </div>
           )}
@@ -148,19 +157,19 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
       )}
 
       {isBlocked && (
-        <div style={{ fontSize: 9, color: "#f85149", marginTop: 2 }}>
+        <div style={{ fontSize: 10, color: "#f85149", marginTop: 2 }}>
           🔒 {device.blocked_reason || "排定不可用時段"}
         </div>
       )}
 
       {isEmergency && (
-        <div style={{ fontSize: 9, color: "#f85149", marginTop: 2 }}>
+        <div style={{ fontSize: 10, color: "#f85149", marginTop: 2 }}>
           ⚠ 緊急停止
         </div>
       )}
 
       {isFinishing && (
-        <div style={{ fontSize: 9, color: "#79c0ff", marginTop: 2 }}>
+        <div style={{ fontSize: 10, color: "#79c0ff", marginTop: 2 }}>
           {device.temperature != null && <div>目前溫度: {device.temperature}°C</div>}
           <div>⏳ 正在自動降溫到 25°C，請稍候...</div>
         </div>
@@ -168,14 +177,14 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
 
       {isWaiting && (
         <div style={{ marginTop: 5 }}>
-          <div style={{ fontSize: 9, color: "#f0a500", marginBottom: 3 }}>
+          <div style={{ fontSize: 10, color: "#f0a500", marginBottom: 3 }}>
             ⚠ 等待確認 ({waitingIdx}/{waitingTotal})
           </div>
           <button
             disabled={confirming}
             onClick={handleConfirm}
             style={{
-              width: "100%", padding: "3px 0", fontSize: 9, fontWeight: 700,
+              width: "100%", padding: "3px 0", fontSize: 10, fontWeight: 700,
               background: confirming ? "#2d2600" : "#f0a50022",
               border: "1px solid #f0a500", borderRadius: 4,
               color: "#f0a500", cursor: confirming ? "not-allowed" : "pointer",
