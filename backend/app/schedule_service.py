@@ -239,6 +239,29 @@ def _enrich(s: Schedule, db=None, fixtures_map=None) -> dict:
 # ── 自動排程邏輯 ──────────────────────────────────────────────────────────────
 
 
+def find_overlapping_schedule(
+    db, schedule_id: Optional[int], device_id: Optional[str], start, end,
+) -> Optional[Schedule]:
+    """同一設備上與 [start, end) 重疊的有效排程（不含自己）；無則 None。
+
+    這是 _find_earliest_slot 的另一面：那邊「找出不重疊的時段」，這邊「驗證時段不重疊」。
+    兩者共用 ACTIVE_STATUSES，規則必須一致。
+    """
+    if not device_id or not start or not end:
+        return None
+    return (
+        db.query(Schedule)
+        .filter(
+            Schedule.device_id == device_id,
+            Schedule.id != schedule_id,
+            Schedule.status.in_(ACTIVE_STATUSES),
+            Schedule.start_time < end,
+            Schedule.end_time > start,
+        )
+        .first()
+    )
+
+
 def _find_earliest_slot(
     device_id: str,
     total_hours: float,
@@ -345,9 +368,27 @@ async def _force_normal_stop(device_id: str, cache: dict, locks: dict):
         _save_device_state(device_id, device)
 
 
-async def _start_schedule_by_id(schedule_id: int, cache: dict, locks: dict):
-    """排程到達 start_time 時由 APScheduler date job 精確觸發。"""
-    from .sop import auto_start_sop
+def _confirmed_schedules_db(schedule_id: Optional[int] = None) -> list[tuple]:
+    """待啟動的已確認排程 → [(id, device_id, conditions)]。
+    指定 schedule_id 取該筆；否則取所有已到開始時間的。"""
+    with SessionLocal() as db:
+        q = db.query(Schedule).filter(Schedule.status == ScheduleStatus.CONFIRMED)
+        if schedule_id is not None:
+            q = q.filter(Schedule.id == schedule_id)
+        else:
+            q = q.filter(Schedule.start_time <= _now_utc_naive())
+        return [(s.id, s.device_id, _parse_conditions(s.conditions)) for s in q.all()]
+
+
+def _activate_schedule_db(schedule_id: int) -> None:
+    """設備確實啟動後：排程轉進行中 + 預約治具轉借出（單一 transaction）。
+
+    兩者必須同進同退——若分兩次 commit，中間失敗會讓排程已是進行中、治具卻永遠
+    卡在「已預約」（_complete_schedule 只歸還 loaned，reserved 不會被回收）。
+
+    治具依 schedule_id 精準轉借，不可改用 sop._transfer_reserved_fixtures：
+    那個用 device_id 猜排程（`.first()`），同一設備上有多筆已確認排程時會借錯人。
+    """
     now = _now_utc_naive()
     with SessionLocal() as db:
         s = db.query(Schedule).filter(
@@ -358,41 +399,58 @@ async def _start_schedule_by_id(schedule_id: int, cache: dict, locks: dict):
             return
         s.status = ScheduleStatus.RUNNING
         s.updated_at = now
+        db.query(FixtureLoan).filter(
+            FixtureLoan.schedule_id == schedule_id,
+            FixtureLoan.status == "reserved",
+        ).update(
+            {"status": "loaned", "loan_date": now},
+            synchronize_session=False,
+        )
         log_audit(db, "system:scheduler", None, "AUTO_START", "schedule", schedule_id,
                   f"{s.project_number} / {s.sample_name}")
         db.commit()
-        conditions = json.loads(s.conditions) if s.conditions else []
-        device_id = s.device_id
 
-    if conditions and device_id:
-        await auto_start_sop(device_id, conditions[0], cache, locks)
+
+async def try_start_schedule(
+    schedule_id: int, device_id: Optional[str], conditions: List[str],
+    cache: dict, locks: dict,
+) -> bool:
+    """啟動排程的唯一入口：設備真的進入 RUNNING 才把排程標為進行中、治具才轉借出。
+
+    設備不可用時排程維持「已確認」，由 auto_advance_schedules 每 5 分鐘重試。
+    """
+    from .sop import auto_start_sop
+    if not conditions or not device_id:
+        logger.warning(f"[scheduler] 排程 #{schedule_id} 缺少測試條件或設備，不啟動")
+        return False
+
+    if not await auto_start_sop(device_id, conditions[0], cache, locks):
+        logger.info(f"[scheduler] 排程 #{schedule_id} 的 {device_id} 非 IDLE，維持「已確認」等待重試")
+        return False
+
+    await asyncio.to_thread(_activate_schedule_db, schedule_id)
+    return True
+
+
+async def _start_schedule_by_id(schedule_id: int, cache: dict, locks: dict):
+    """排程到達 start_time 時由 APScheduler date job 精確觸發。"""
+    rows = await asyncio.to_thread(_confirmed_schedules_db, schedule_id)
+    if rows:
+        await try_start_schedule(*rows[0], cache, locks)
 
 
 async def auto_advance_schedules(cache: dict = None, locks: dict = None):
-    """Fallback：每 5 分鐘掃一次，補抓任何漏掉的已確認排程（如重啟後 date job 遺失）。"""
-    from .sop import auto_start_sop
-    now = _now_utc_naive()
-    with SessionLocal() as db:
-        to_running = (
-            db.query(Schedule)
-            .filter(Schedule.status == ScheduleStatus.CONFIRMED, Schedule.start_time <= now)
-            .all()
-        )
-        for s in to_running:
-            s.status = ScheduleStatus.RUNNING
-            s.updated_at = now
+    """Fallback：每 5 分鐘掃一次，補抓任何漏掉的已確認排程（如重啟後 date job 遺失、設備當時忙碌）。"""
+    if cache is None or locks is None:
+        return
 
-        if to_running:
-            db.commit()
-            logger.info(f"[scheduler] fallback 推進：{len(to_running)} 筆→進行中")
+    rows = await asyncio.to_thread(_confirmed_schedules_db)
+    if not rows:
+        return
 
-        start_info = []
-        for s in to_running:
-            conditions = json.loads(s.conditions) if s.conditions else []
-            if conditions and s.device_id:
-                start_info.append((s.device_id, conditions[0]))
-
-    if cache is not None and locks is not None and start_info:
-        tasks = [auto_start_sop(dev, cond, cache, locks) for dev, cond in start_info]
-        if tasks:
-            await asyncio.gather(*tasks)
+    results = await asyncio.gather(
+        *(try_start_schedule(sid, dev, conds, cache, locks) for sid, dev, conds in rows)
+    )
+    started = sum(results)
+    if started:
+        logger.info(f"[scheduler] fallback 推進：{started}/{len(rows)} 筆→進行中")

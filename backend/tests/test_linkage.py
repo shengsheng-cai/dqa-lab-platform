@@ -234,7 +234,7 @@ def test_auto_start_sop_happy_path_updates_cache():
     cache = {"CH-01": {"status": "IDLE"}}
     with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
         with patch("app.sop._save_device_state") as mock_save:
-            _run_async(_start_sop("CH-01", "sop_test", cache, skip_fixture_transfer=True))
+            _run_async(_start_sop("CH-01", "sop_test", cache))
             assert mock_save.called
 
     assert cache["CH-01"]["status"] == "RUNNING"
@@ -242,11 +242,16 @@ def test_auto_start_sop_happy_path_updates_cache():
     assert cache["CH-01"]["total_steps"] == 2
 
 
-def test_auto_start_sop_skip_fixture_transfer():
-    """skip_fixture_transfer=True → _transfer_reserved_fixtures 不被呼叫"""
+def test_auto_start_sop_never_touches_fixtures():
+    """auto_start_sop 不得自行轉借治具。
+
+    _transfer_reserved_fixtures 用 device_id + .first() 猜排程，同一設備上有多筆
+    已確認排程時會借錯人。治具轉借一律由 schedule_service._activate_schedule_db
+    依 schedule_id 精準處理。
+    """
     cache = {"CH-01": {"status": "IDLE"}}
     with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
         with patch("app.sop._save_device_state"):
             with patch("app.sop._transfer_reserved_fixtures") as mock_transfer:
-                _run_async(_start_sop("CH-01", "sop_test", cache, skip_fixture_transfer=True))
+                _run_async(_start_sop("CH-01", "sop_test", cache))
                 mock_transfer.assert_not_called()

@@ -26,6 +26,7 @@ from .schedule_service import (
     _build_schedule_fixtures_map, _enrich,
     _find_earliest_slot, _auto_assign,
     _force_normal_stop, _start_schedule_by_id,
+    find_overlapping_schedule, try_start_schedule,
 )
 
 logger = logging.getLogger("schedules")
@@ -286,6 +287,21 @@ def create_schedule(body: ScheduleCreate, request: Request, _: None = Depends(re
         return _enrich(s, db)
 
 
+def _slot_changed(body: "SchedulePatch") -> bool:
+    """請求是否試圖變更設備或時段（純改備註不需重新檢查衝突）。"""
+    return any(v is not None for v in (body.device_id, body.start_time, body.end_time))
+
+
+def _assert_no_overlap(db, schedule_id: int, device_id, start, end) -> None:
+    """同一設備上不得有時段重疊的有效排程。"""
+    overlap = find_overlapping_schedule(db, schedule_id, device_id, start, end)
+    if overlap:
+        raise HTTPException(
+            status_code=409,
+            detail=f"時段與排程 #{overlap.id}（{overlap.project_number}）重疊"
+        )
+
+
 def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, cache: dict):
     cancelled_device_id = None
     immediate_start = None
@@ -318,22 +334,7 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
                 device_id = body.device_id
                 start = body.start_time
                 end = body.end_time
-                overlap = (
-                    db.query(Schedule)
-                    .filter(
-                        Schedule.device_id == device_id,
-                        Schedule.id != schedule_id,
-                        Schedule.status.in_(ACTIVE_STATUSES),
-                        Schedule.start_time < end,
-                        Schedule.end_time > start,
-                    )
-                    .first()
-                )
-                if overlap:
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"時段與排程 #{overlap.id}（{overlap.project_number}）重疊"
-                    )
+                _assert_no_overlap(db, schedule_id, device_id, start, end)
             elif body.device_id:
                 device_id = body.device_id
                 total_hours = _calc_total_hours(conditions)
@@ -350,9 +351,9 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
             now_utc = _now_utc()
             start_aware = start if start.tzinfo else start.replace(tzinfo=datetime.timezone.utc)
             immediate_start = start_aware <= now_utc
-            s.status = ScheduleStatus.RUNNING if immediate_start else ScheduleStatus.CONFIRMED
-            fixture_status = "loaned" if immediate_start else "reserved"
-            fixture_loan_date = _now_utc_naive() if immediate_start else None
+            # 一律先落地為「已確認 + 治具已預約」。即時啟動的排程由 try_start_schedule
+            # 在設備真的進入 RUNNING 後，才推進狀態並把預約治具轉為借出。
+            s.status = ScheduleStatus.CONFIRMED
             for sf in db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == s.id).all():
                 db.add(FixtureLoan(
                     fixture_id=sf.fixture_id,
@@ -362,21 +363,25 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
                     project_name=f"{s.project_number} / {s.sample_name}",
                     quantity=sf.quantity,
                     due_date=end,
-                    status=fixture_status,
-                    loan_date=fixture_loan_date,
+                    status="reserved",
+                    loan_date=None,
                     schedule_id=s.id,
                 ))
 
         elif body.status in (ScheduleStatus.CANCELLED, ScheduleStatus.RUNNING, ScheduleStatus.DONE):
             original_status = s.status
             original_device_id = s.device_id
+            new_device_id = body.device_id or s.device_id
+            new_start = body.start_time or s.start_time
+            new_end = body.end_time or s.end_time
+            # 仍佔用設備的狀態（RUNNING）才需檢查；取消/完成會退出 ACTIVE_STATUSES
+            if _slot_changed(body) and body.status in ACTIVE_STATUSES:
+                _assert_no_overlap(db, schedule_id, new_device_id, new_start, new_end)
+
             s.status = body.status
-            if body.device_id:
-                s.device_id = body.device_id
-            if body.start_time:
-                s.start_time = body.start_time
-            if body.end_time:
-                s.end_time = body.end_time
+            s.device_id = new_device_id
+            s.start_time = new_start
+            s.end_time = new_end
 
             if body.status == ScheduleStatus.CANCELLED:
                 db.query(FixtureLoan).filter(
@@ -391,12 +396,15 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
                     cancelled_device_id = original_device_id
 
         else:
-            if body.device_id is not None:
-                s.device_id = body.device_id
-            if body.start_time is not None:
-                s.start_time = body.start_time
-            if body.end_time is not None:
-                s.end_time = body.end_time
+            new_device_id = body.device_id if body.device_id is not None else s.device_id
+            new_start = body.start_time if body.start_time is not None else s.start_time
+            new_end = body.end_time if body.end_time is not None else s.end_time
+            if _slot_changed(body) and s.status in ACTIVE_STATUSES:
+                _assert_no_overlap(db, schedule_id, new_device_id, new_start, new_end)
+
+            s.device_id = new_device_id
+            s.start_time = new_start
+            s.end_time = new_end
 
         s.updated_at = _now_utc_naive()
         if body.status:
@@ -445,8 +453,10 @@ async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request
     out = await asyncio.to_thread(_patch_schedule_db, schedule_id, body, role, user_id, _cache)
 
     if out["immediate_start"] and out["conditions"] and out["device_id"]:
-        from .sop import auto_start_sop
-        await auto_start_sop(out["device_id"], out["conditions"][0], _cache, _locks, skip_fixture_transfer=True)
+        # 設備忙碌時不會啟動；排程維持「已確認」，由 fallback 於設備空出後重試。
+        await try_start_schedule(
+            schedule_id, out["device_id"], out["conditions"], _cache, _locks,
+        )
     elif _scheduler and out["start_aware"]:
         _scheduler.add_job(
             _start_schedule_by_id,
@@ -555,36 +565,48 @@ async def confirm_condition(schedule_id: int, request: Request, _: None = Depend
         asyncio.create_task(push_message(result["push_msg"]))
         return {"status": "completed"}
 
-    asyncio.create_task(auto_start_sop(result["dev"], result["next_sop_id"], cache, locks, skip_fixture_transfer=True))
+    # 不可 fire-and-forget：設備若尚未回到 IDLE，啟動會被跳過，
+    # 而排程停在「進行中」不會被 fallback 重試 → 測試靜默停擺。
+    if not await auto_start_sop(result["dev"], result["next_sop_id"], cache, locks):
+        dev_status = (cache.get(result["dev"]) or {}).get("status", "未知")
+        raise HTTPException(
+            status_code=409,
+            detail=f"{result['dev']} 目前為「{dev_status}」，尚未回到待機狀態，請待降溫收尾完成後再開始下一條件",
+        )
     return {"status": "started", "sop_id": result["next_sop_id"]}
 
 
-def _start_schedule_db(schedule_id: int, now):
+def _load_startable_schedule_db(schedule_id: int):
+    """手動啟動前的檢查；狀態不動，由 try_start_schedule 在設備啟動後才推進。"""
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
             raise HTTPException(status_code=404, detail="找不到排程")
         if s.status != ScheduleStatus.CONFIRMED:
             raise HTTPException(status_code=400, detail="只有「已確認」狀態的排程才能手動啟動")
-        s.status = ScheduleStatus.RUNNING
-        s.updated_at = now
-        db.commit()
         return _parse_conditions(s.conditions), s.device_id
 
 
 @router.post("/{schedule_id}/start")
 async def start_schedule(schedule_id: int, request: Request, _: None = Depends(require_admin)):
     """手動立即啟動「已確認」排程（補救 APScheduler 漏掉的情況）。"""
-    from .sop import auto_start_sop
     cache = getattr(request.app.state, "AICM_CACHE", {})
     locks = getattr(request.app.state, "DEVICE_LOCKS", {})
 
-    conditions, device_id = await asyncio.to_thread(_start_schedule_db, schedule_id, _now_utc_naive())
+    conditions, device_id = await asyncio.to_thread(_load_startable_schedule_db, schedule_id)
 
-    sop_id = conditions[0] if conditions else None
-    if sop_id and device_id:
-        asyncio.create_task(auto_start_sop(device_id, sop_id, cache, locks))
-    return {"status": "started", "device_id": device_id, "sop_id": sop_id}
+    if not conditions or not device_id:
+        raise HTTPException(status_code=400, detail="排程缺少測試條件或設備，無法啟動")
+
+    if not await try_start_schedule(schedule_id, device_id, conditions, cache, locks):
+        dev_status = (cache.get(device_id) or {}).get("status", "未知")
+        raise HTTPException(
+            status_code=409,
+            detail=f"{device_id} 目前為「{dev_status}」，非待機狀態，無法啟動；"
+                   f"排程維持「已確認」，設備空出後會自動啟動",
+        )
+
+    return {"status": "started", "device_id": device_id, "sop_id": conditions[0]}
 
 
 # ── Device Blocked Periods 端點 ────────────────────────────────────────────
