@@ -278,21 +278,27 @@ def _transfer_reserved_fixtures(device_id: str, now: datetime.datetime):
 
 async def auto_start_sop(
     device_id: str, sop_id: str, cache: dict, locks: dict,
-    operator: str = "排程系統", skip_fixture_transfer: bool = False,
-):
-    """排程到達開始時間時自動啟動 SOP（供 auto_advance_schedules 呼叫）"""
+    operator: str = "排程系統",
+) -> bool:
+    """排程到達開始時間時自動啟動 SOP（供 schedule_service.try_start_schedule 呼叫）。
+
+    回傳設備是否真的進入 RUNNING；呼叫方需據此決定排程狀態，
+    否則排程會顯示「進行中」但設備其實沒啟動。
+
+    不處理治具：治具轉借需要 schedule_id 才不會借錯排程，由呼叫方負責。
+    """
     device = cache.get(device_id)
     if not device:
         logger.warning(f"[auto_start] 設備 {device_id} 不在 cache，跳過")
-        return
+        return False
     if device.get("status") != "IDLE":
         logger.info(f"[auto_start] {device_id} 狀態為 {device.get('status')}，非 IDLE，跳過自動啟動")
-        return
+        return False
 
     std_data = STANDARDS_AND_SOPS.get(sop_id, {})
     if not std_data:
         logger.warning(f"[auto_start] sop_id={sop_id} 查無法規資料，跳過")
-        return
+        return False
 
     sop_name = std_data.get("name", sop_id)
     now_utc = _now_utc()
@@ -303,11 +309,11 @@ async def auto_start_sop(
     lock = locks.get(device_id)
     if not lock:
         logger.warning(f"[auto_start] {device_id} 無對應 lock，跳過")
-        return
+        return False
 
     async with lock:
         if device.get("status") != "IDLE":
-            return
+            return False
         device.update({
             "status": "RUNNING",
             "running_sop_id": sop_id,
@@ -347,9 +353,8 @@ async def auto_start_sop(
             if _attempt == 2:
                 logger.error(f"[auto_start] {device_id} 建立 SopExecution 三次失敗，放棄")
 
-    if not skip_fixture_transfer:
-        _transfer_reserved_fixtures(device_id, now)
     logger.info(f"[auto_start] {device_id} 自動啟動 SOP: {sop_id} ({sop_name})")
+    return True
 
 
 # SOP 執行紀錄路由
