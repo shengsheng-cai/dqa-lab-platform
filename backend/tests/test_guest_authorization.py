@@ -64,24 +64,35 @@ def _make_guest_app(routers, session=None):
     return app
 
 
-def _write_routes(app):
-    """(method, concrete_path)：把 {param} 代成 1。"""
+def _write_routes(routers):
+    """(method, concrete_path)：直接列舉每個 router 自身的 routes，把 {param} 代成 1。
+
+    刻意不走「掛載後的 app.routes」：FastAPI 0.139 / Starlette 1.3 起，include_router
+    不再把子路由攤平進 app.routes，而是塞一個巢狀 _IncludedRouter，走頂層會得到 0 條。
+    router 自身的 routes 在 import 時就固定、含完整 prefix 路徑，不受此版本行為影響。
+    """
     seen = []
-    for route in app.routes:
-        methods = getattr(route, "methods", None) or set()
-        for m in methods & WRITE_METHODS:
-            path = re.sub(r"\{[^}]+\}", "1", route.path)
-            seen.append((m, path))
+    for router in routers:
+        for route in router.routes:
+            methods = getattr(route, "methods", None) or set()
+            for m in methods & WRITE_METHODS:
+                path = re.sub(r"\{[^}]+\}", "1", route.path)
+                seen.append((m, path))
     return sorted(set(seen))
 
 
 def test_guest_cannot_write_any_endpoint():
     """走訪每個寫入路由，guest 一律不得拿到 2xx。"""
-    app = _make_guest_app(_all_write_routers())
+    routers = _all_write_routers()
+    app = _make_guest_app(routers)
     client = TestClient(app)
+    routes = _write_routes(routers)
+
+    # 非空守衛：路由列表為空時本測試會靜默假通過（0 條 → 0 洩漏），必須擋掉
+    assert len(routes) >= 20, f"寫入路由數異常偏低（{len(routes)}），列舉可能失效"
 
     leaks = []
-    for method, path in _write_routes(app):
+    for method, path in routes:
         resp = client.request(method, path)
         if 200 <= resp.status_code < 300:
             leaks.append(f"{method} {path} → {resp.status_code}")
@@ -89,13 +100,15 @@ def test_guest_cannot_write_any_endpoint():
     assert not leaks, "guest 成功寫入了以下端點（缺 require_admin）：\n" + "\n".join(leaks)
 
 
-def test_write_route_net_is_non_empty():
-    """確保上面的走訪真的掃到了端點，而不是路由表為空的假通過。"""
-    app = _make_guest_app(_all_write_routers())
-    routes = _write_routes(app)
-    assert len(routes) >= 20, f"寫入路由數異常偏低（{len(routes)}），走訪可能沒掛到 router"
+def test_write_route_net_covers_all_routers():
+    """確保列舉真的涵蓋各 router，而非路由表為空的假通過。"""
+    routes = _write_routes(_all_write_routers())
+    assert len(routes) >= 20, f"寫入路由數異常偏低（{len(routes)}），列舉可能失效"
     # execution_router 是先前 grep 漏掉的，明確確認它在網內
     assert any("/api/sop-executions" in p for _, p in routes)
+    # 另外確認 fixtures / schedules / devices 三大來源都有被涵蓋
+    assert any("/api/fixtures" in p for _, p in routes)
+    assert any("/api/schedules" in p for _, p in routes)
 
 
 # ── guest 對排程 PATCH 的邊界 ─────────────────────────────────────────────────
