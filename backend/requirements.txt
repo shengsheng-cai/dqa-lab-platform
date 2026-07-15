@@ -1,16 +1,20 @@
-fastapi>=0.128,<1.0
-uvicorn>=0.39,<1.0
-sqlalchemy>=2.0,<3.0
-python-dotenv>=1.0,<2.0
-alembic>=1.13,<2.0
-httpx>=0.28,<1.0
-numpy>=2.0,<3.0
-google-genai>=1.0,<2.0
-python-multipart>=0.0.18,<1.0
-pandas>=2.0,<3.0
-openpyxl>=3.1,<4.0
-apscheduler>=3.10,<4.0
-bcrypt>=4.0,<6.0
-pytest>=8.0,<9.0
-reportlab>=4.0,<5.0
-ruff>=0.9,<1.0
+# 版本鎖定（==）確保本地與 CI 安裝完全一致，避免「本地綠 CI 紅」。
+# 升級時：改版本號 → pip install -r requirements.txt --upgrade → 跑全套測試 → 一起 commit。
+fastapi==0.139.0
+# starlette 是 fastapi 的傳遞依賴、原本未列，浮動時曾導致 include_router 行為改變讓測試在 CI 掛掉，故明確鎖定。
+starlette==1.3.1
+uvicorn==0.51.0
+sqlalchemy==2.0.51
+python-dotenv==1.2.2
+alembic==1.18.5
+httpx==0.28.1
+numpy==2.5.1
+google-genai==1.75.0
+python-multipart==0.0.32
+pandas==2.3.3
+openpyxl==3.1.5
+apscheduler==3.11.3
+bcrypt==5.0.0
+pytest==8.4.2
+reportlab==4.5.1
+ruff==0.15.21
