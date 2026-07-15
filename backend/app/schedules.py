@@ -250,6 +250,10 @@ def create_schedule(body: ScheduleCreate, request: Request, _: None = Depends(re
         if not get_standard(sop_id):
             raise HTTPException(status_code=400, detail=f"無效的測試條件：{sop_id}")
 
+    # 預約治具數量必須為正：負數會在轉為 reserved 借出時灌大可借量（繞過 create_loan 的守衛）
+    if any(fi.quantity <= 0 for fi in body.fixtures):
+        raise HTTPException(status_code=400, detail="預約治具數量必須大於 0")
+
     user_id = current_user(request).user_id
     applicant_name = body.applicant_name
 

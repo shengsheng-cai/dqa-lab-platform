@@ -691,6 +691,8 @@ def list_damaged_lost_loans():
 @router.post("/loans")
 def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_admin)):
     user_id = current_user(request).user_id
+    if body.quantity <= 0:
+        raise HTTPException(status_code=400, detail="借出數量必須大於 0")
     with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == body.fixture_id).first()
         if not f:
