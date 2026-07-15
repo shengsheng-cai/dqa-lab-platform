@@ -153,6 +153,23 @@ def test_standards_query_logs_http_error_without_url(monkeypatch, caplog):
     assert "key=" not in text
 
 
+def test_standards_query_timeout_returns_503(monkeypatch, caplog):
+    """Gemini 逾時 → 使用者拿到乾淨的 503「逾時」，非 500 崩潰；log 標記 outcome=timeout。"""
+    _patch_common(monkeypatch)
+    monkeypatch.setattr(
+        ai_module.httpx, "AsyncClient",
+        lambda **kwargs: FakePostClient(exc=httpx.TimeoutException("timed out"), **kwargs),
+    )
+
+    with caplog.at_level("ERROR", logger="ai"):
+        with pytest.raises(HTTPException) as exc:
+            _run_async(ai_module.standards_query(_query_request()))
+
+    assert exc.value.status_code == 503
+    assert exc.value.detail == "AI 服務逾時，請稍後再試"
+    assert "outcome=timeout" in _messages(caplog)
+
+
 def test_standards_query_logs_unavailable_without_exception_detail(monkeypatch, caplog):
     _patch_common(monkeypatch)
     monkeypatch.setattr(
