@@ -91,6 +91,36 @@ def get_standards_tree():
 # B5 fix: 移除 list_sops 廢棄端點，前端完全不呼叫
 
 
+def _create_execution_id_db(
+    sop_id: str, device_id: str, operator: str, now: datetime.datetime,
+    operator_user_id: Optional[int] = None, log_prefix: str = "",
+) -> Optional[int]:
+    """建 SopExecution 並回傳 id；3 次重試皆失敗回 None。
+
+    start_sop（手動）與 auto_start_sop（排程）共用——兩條路徑的建立語意必須一致。
+    sync DB I/O，呼叫端一律用 asyncio.to_thread 包裝（見 api-conventions Async/Sync 慣例）。
+    """
+    for _attempt in range(3):
+        try:
+            with SessionLocal() as db:
+                execution = SopExecution(
+                    sop_id=sop_id,
+                    device_id=device_id,
+                    operator=operator,
+                    operator_user_id=operator_user_id,
+                    test_started_at=now,
+                )
+                db.add(execution)
+                db.flush()
+                eid = execution.id
+                db.commit()
+                return eid
+        except Exception as e:
+            logger.error(f"{log_prefix}建立 SopExecution 失敗（第{_attempt+1}次）：{e}")
+    logger.error(f"{log_prefix}建立 SopExecution 三次失敗，放棄")
+    return None
+
+
 # 啟動 SOP 路由
 @router.post("/start")
 async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: None = Depends(require_admin)):
@@ -201,28 +231,11 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
         )
         _save_device_state(device_id, device)
 
-    # 建 SopExecution + 寫 active_execution_id（與 auto_start_sop 對齊，讓 simulator 完成時能寫 test_ended_at）
-    def _create_execution_id() -> Optional[int]:
-        for _attempt in range(3):
-            try:
-                with SessionLocal() as db:
-                    execution = SopExecution(
-                        sop_id=sop_id,
-                        device_id=device_id,
-                        operator=device["operator"],
-                        operator_user_id=operator_user_id,
-                        test_started_at=now,
-                    )
-                    db.add(execution)
-                    db.flush()
-                    eid = execution.id
-                    db.commit()
-                    return eid
-            except Exception as e:
-                logger.error(f"[{device_id}] 建立 SopExecution 失敗（第{_attempt+1}次）：{e}")
-        return None
-
-    execution_id = await asyncio.to_thread(_create_execution_id)
+    # 建 SopExecution + 寫 active_execution_id（讓 simulator 完成時能寫 test_ended_at）
+    execution_id = await asyncio.to_thread(
+        _create_execution_id_db, sop_id, device_id, device["operator"], now,
+        operator_user_id, f"[{device_id}] ",
+    )
     if execution_id is not None:
         async with request.app.state.DEVICE_LOCKS[device_id]:
             device["active_execution_id"] = execution_id
@@ -330,28 +343,17 @@ async def auto_start_sop(
         })
         _save_device_state(device_id, device)
 
-    # 建立 SopExecution 記錄，並將 id 存入 device cache 供完成時寫入 test_ended_at
-    for _attempt in range(3):
-        try:
-            with SessionLocal() as db:
-                execution = SopExecution(
-                    sop_id=sop_id,
-                    device_id=device_id,
-                    operator=operator,
-                    test_started_at=now,
-                )
-                db.add(execution)
-                db.flush()
-                execution_id = execution.id
-                db.commit()
-            async with lock:
-                device["active_execution_id"] = execution_id
-                _save_device_state(device_id, device)
-            break
-        except Exception as e:
-            logger.error(f"[auto_start] {device_id} 建立 SopExecution 失敗（第{_attempt+1}次）：{e}")
-            if _attempt == 2:
-                logger.error(f"[auto_start] {device_id} 建立 SopExecution 三次失敗，放棄")
+    # 建 SopExecution 記錄，並將 id 存入 device cache 供完成時寫入 test_ended_at。
+    # sync DB I/O 走 to_thread：auto_start_sop 跑在 APScheduler event loop 上，直接 blocking
+    # 會卡住 ws.py 每秒的 broadcast_loop（與手動 start_sop 共用 _create_execution_id_db）。
+    execution_id = await asyncio.to_thread(
+        _create_execution_id_db, sop_id, device_id, operator, now,
+        None, f"[auto_start] {device_id} ",
+    )
+    if execution_id is not None:
+        async with lock:
+            device["active_execution_id"] = execution_id
+            _save_device_state(device_id, device)
 
     logger.info(f"[auto_start] {device_id} 自動啟動 SOP: {sop_id} ({sop_name})")
     return True
