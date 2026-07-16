@@ -262,31 +262,29 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     confirmed_schedule_id = await asyncio.to_thread(_sync_confirmed_schedule_to_running)
     if confirmed_schedule_id:
         logger.info(f"[{device_id}] 排程 {confirmed_schedule_id} CONFIRMED → RUNNING（手動啟動觸發）")
+        # 只轉借剛標為 RUNNING 的那筆排程的預約治具（依 schedule_id，不用 device_id 猜）
+        await asyncio.to_thread(_transfer_reserved_fixtures, confirmed_schedule_id, now)
 
-    await asyncio.to_thread(_transfer_reserved_fixtures, device_id, now)
     logger.info(f"[{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}")
 
     return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
 
 
-def _transfer_reserved_fixtures(device_id: str, now: datetime.datetime):
-    """將此設備「已確認」或「進行中」排程的預約治具轉為借出"""
+def _transfer_reserved_fixtures(schedule_id: int, now: datetime.datetime):
+    """將指定排程的預約治具轉為借出（依 schedule_id 精準，不用 device_id 猜）。
+
+    手動 start_sop 呼叫端傳入的是 _sync_confirmed_schedule_to_running 已挑定並標為
+    RUNNING 的那筆排程 id，兩步作用在同一筆排程；同設備多筆已確認排程時不會借錯人。
+    """
     try:
         with SessionLocal() as db:
-            active_schedule = (
-                db.query(Schedule)
-                .filter(Schedule.device_id == device_id,
-                        Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]))
-                .first()
-            )
-            if active_schedule:
-                db.query(FixtureLoan).filter(
-                    FixtureLoan.schedule_id == active_schedule.id,
-                    FixtureLoan.status == "reserved",
-                ).update({"status": "loaned", "loan_date": now}, synchronize_session=False)
-                db.commit()
+            db.query(FixtureLoan).filter(
+                FixtureLoan.schedule_id == schedule_id,
+                FixtureLoan.status == "reserved",
+            ).update({"status": "loaned", "loan_date": now}, synchronize_session=False)
+            db.commit()
     except Exception as e:
-        logger.warning(f"[{device_id}] 治具預約轉借出失敗：{e}")
+        logger.warning(f"[schedule {schedule_id}] 治具預約轉借出失敗：{e}")
 
 
 async def auto_start_sop(

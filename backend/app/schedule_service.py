@@ -386,8 +386,9 @@ def _activate_schedule_db(schedule_id: int) -> None:
     兩者必須同進同退——若分兩次 commit，中間失敗會讓排程已是進行中、治具卻永遠
     卡在「已預約」（_complete_schedule 只歸還 loaned，reserved 不會被回收）。
 
-    治具依 schedule_id 精準轉借，不可改用 sop._transfer_reserved_fixtures：
-    那個用 device_id 猜排程（`.first()`），同一設備上有多筆已確認排程時會借錯人。
+    治具依 schedule_id 精準轉借。此處與狀態變更同一 transaction 原子完成，
+    不委派給 sop._transfer_reserved_fixtures（那是手動路徑的獨立 best-effort 轉借，
+    分開 commit），以維持本函式「flip + 轉借同進同退」的保證。
     """
     now = _now_utc_naive()
     with SessionLocal() as db:

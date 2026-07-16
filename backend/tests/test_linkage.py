@@ -141,7 +141,7 @@ def test_transfer_reserved_to_loaned(db):
     now = datetime.datetime.now(UTC)
 
     with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
-        _transfer_reserved_fixtures("CH-01", now)
+        _transfer_reserved_fixtures(loan.schedule_id, now)
 
     db.refresh(loan)
     assert loan.status == "loaned"
@@ -155,22 +155,26 @@ def test_transfer_does_not_affect_already_loaned(db):
     db.commit()
 
     with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
-        _transfer_reserved_fixtures("CH-01", datetime.datetime.now(UTC))
+        _transfer_reserved_fixtures(loan.schedule_id, datetime.datetime.now(UTC))
 
     db.refresh(loan)
     assert loan.status == "loaned"
     assert loan.loan_date == original_date
 
 
-def test_transfer_wrong_device_not_affected(db):
-    """CH-02 的預約治具 → 對 CH-01 呼叫時不被轉換"""
-    loan = _seed_loan(db, "CH-02", status="reserved")
+def test_transfer_only_affects_target_schedule(db):
+    """同設備多筆已確認排程：只轉借目標 schedule_id 的預約治具，不誤借其他筆"""
+    loan_a = _seed_loan(db, "CH-01", status="reserved")
+    loan_b = _seed_loan(db, "CH-01", status="reserved")  # 同設備另一筆已確認排程
+    target_id = loan_a.schedule_id
 
     with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
-        _transfer_reserved_fixtures("CH-01", datetime.datetime.now(UTC))
+        _transfer_reserved_fixtures(target_id, datetime.datetime.now(UTC))
 
-    db.refresh(loan)
-    assert loan.status == "reserved"
+    db.refresh(loan_a)
+    db.refresh(loan_b)
+    assert loan_a.status == "loaned"
+    assert loan_b.status == "reserved"  # 另一筆排程的預約未被誤轉
 
 
 # ── auto_start_sop ─────────────────────────────────────────────────────────
@@ -246,9 +250,9 @@ def test_auto_start_sop_happy_path_updates_cache(db):
 def test_auto_start_sop_never_touches_fixtures(db):
     """auto_start_sop 不得自行轉借治具。
 
-    _transfer_reserved_fixtures 用 device_id + .first() 猜排程，同一設備上有多筆
-    已確認排程時會借錯人。治具轉借一律由 schedule_service._activate_schedule_db
-    依 schedule_id 精準處理。
+    治具轉借一律由呼叫方依 schedule_id 精準處理（排程路徑走
+    schedule_service._activate_schedule_db；手動路徑 sop._transfer_reserved_fixtures
+    收呼叫端傳入的 schedule_id）——auto_start_sop 本身不碰治具。
     """
     cache = {"CH-01": {"status": "IDLE"}}
     with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
