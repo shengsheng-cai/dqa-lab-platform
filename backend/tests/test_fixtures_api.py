@@ -1,58 +1,21 @@
 """
 T-15: fixtures API 補充測試
 - delete_fixture：有 reserved/loaned 借用時不可刪除
+- update_inventory：負數盤點擋下、歸零合法
 """
 import datetime
 
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.fixtures import router as fixtures_router
-from app.models import Base, Fixture, FixtureLoan
-
-
-def _make_admin_app():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
-
-    import app.fixtures as fixtures_module
-    original_session = fixtures_module.SessionLocal
-
-    def _override_session():
-        return TestSession()
-
-    fixtures_module.SessionLocal = _override_session  # type: ignore[assignment]
-
-    test_app = FastAPI()
-
-    class RoleMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
-            request.state.user_role = "admin"
-            return await call_next(request)
-
-    test_app.add_middleware(RoleMiddleware)
-    test_app.include_router(fixtures_router)
-
-    return test_app, engine, TestSession, fixtures_module, original_session
+from app.models import Fixture, FixtureLoan
 
 
 @pytest.fixture()
-def admin_client():
-    app, engine, TestSession, fixtures_module, original_session = _make_admin_app()
-    with TestClient(app) as client:
-        yield client, TestSession
-    fixtures_module.SessionLocal = original_session  # type: ignore[assignment]
-    Base.metadata.drop_all(engine)
+def admin_client(api_client):
+    import app.fixtures as fixtures_module
+    with api_client(fixtures_module, fixtures_router) as (client, Session):
+        yield client, Session
 
 
 def _seed_fixture_with_loan(Session, loan_status: str) -> int:
@@ -87,3 +50,60 @@ def test_delete_fixture_blocks_reserved_loan(admin_client):
 
     assert resp.status_code == 400
     assert "借出/預約未結束" in resp.json()["detail"]
+
+
+def _seed_plain_fixture(Session, total_quantity: int = 5) -> int:
+    with Session() as db:
+        fixture = Fixture(
+            interface_type="USB",
+            form_factor="Desktop",
+            total_quantity=total_quantity,
+            shortage=0,
+            is_active=True,
+        )
+        db.add(fixture)
+        db.commit()
+        return fixture.id
+
+
+def test_inventory_rejects_negative(admin_client):
+    """盤點負數 → 400，庫存不變（負庫存會讓可借量計算連鎖出錯）"""
+    client, Session = admin_client
+    fixture_id = _seed_plain_fixture(Session, total_quantity=5)
+
+    resp = client.post(f"/api/fixtures/{fixture_id}/inventory?actual_quantity=-1")
+
+    assert resp.status_code == 400
+    assert "不可為負數" in resp.json()["detail"]
+    with Session() as db:
+        f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
+        assert f.total_quantity == 5  # 未被改動
+
+
+def test_inventory_allows_zero(admin_client):
+    """盤點歸零（0）合法 → 200，庫存變 0"""
+    client, Session = admin_client
+    fixture_id = _seed_plain_fixture(Session, total_quantity=5)
+
+    resp = client.post(f"/api/fixtures/{fixture_id}/inventory?actual_quantity=0")
+
+    assert resp.status_code == 200
+    with Session() as db:
+        f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
+        assert f.total_quantity == 0
+
+
+def test_inventory_log_rejects_negative(admin_client):
+    """第二道門：POST /inventory-logs 負數也要被 _apply_inventory_db 守住 → 400，庫存不變"""
+    client, Session = admin_client
+    fixture_id = _seed_plain_fixture(Session, total_quantity=5)
+
+    resp = client.post(
+        f"/api/fixtures/inventory-logs?fixture_id={fixture_id}&actual_quantity=-1"
+    )
+
+    assert resp.status_code == 400
+    assert "不可為負數" in resp.json()["detail"]
+    with Session() as db:
+        f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
+        assert f.total_quantity == 5
