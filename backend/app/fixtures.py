@@ -942,6 +942,10 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, _: None = Depends(require_a
 
 
 def _apply_inventory_db(db, f: Fixture, actual_quantity: int, user_id, counted_by) -> tuple:
+    # 守衛下沉到共用變動點：update_inventory 與 create_inventory_log 兩個 route 都經此，
+    # 一道守衛守住兩門（0 為合法歸零，故用 < 0）。
+    if actual_quantity < 0:
+        raise HTTPException(status_code=400, detail="盤點數量不可為負數")
     previous = f.total_quantity
     diff = actual_quantity - previous
     f.total_quantity = actual_quantity

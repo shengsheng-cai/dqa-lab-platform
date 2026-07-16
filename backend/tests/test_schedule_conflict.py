@@ -7,50 +7,20 @@
 import datetime
 
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from starlette.middleware.base import BaseHTTPMiddleware
 
 import app.schedules as schedules_module
-from app.models import Base, Schedule, ScheduleStatus
+from app.models import Schedule, ScheduleStatus
 from app.schedules import router as schedules_router
 
 
 @pytest.fixture()
-def admin_client():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
-
-    original_session = schedules_module.SessionLocal
-    schedules_module.SessionLocal = lambda: TestSession()  # type: ignore[assignment]
-
-    test_app = FastAPI()
-
-    class RoleMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
-            request.state.user_role = "admin"
-            request.state.user_id = 1
-            request.state.username = "admin"
-            return await call_next(request)
-
-    test_app.add_middleware(RoleMiddleware)
-    test_app.include_router(schedules_router)
-    test_app.state.AICM_CACHE = {}
-    test_app.state.DEVICE_LOCKS = {}
-
-    with TestClient(test_app) as client:
-        yield client, TestSession
-
-    schedules_module.SessionLocal = original_session  # type: ignore[assignment]
-    Base.metadata.drop_all(engine)
+def admin_client(api_client):
+    with api_client(
+        schedules_module, schedules_router,
+        role="admin", user_id=1, username="admin",
+        app_state={"AICM_CACHE": {}, "DEVICE_LOCKS": {}},
+    ) as (client, Session):
+        yield client, Session
 
 
 BASE = datetime.datetime(2030, 1, 1, 8, 0, 0)

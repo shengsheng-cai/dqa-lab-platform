@@ -4,85 +4,33 @@ T-11: 設備校驗 & 維護排程 API 測試
 - MaintenanceCRUD（list / create）
 - calibration-status 摘要端點
 """
-import datetime
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from fastapi.testclient import TestClient
-from fastapi import FastAPI, Request
-from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.models import Base
 from app.devices_maintenance import router as maintenance_router
 
-UTC = datetime.timezone.utc
 
-
-# ── Test App Factory ──────────────────────────────────────────────────────────
-
-def _make_app(role: str | None):
-    """建立隔離測試 app：in-memory SQLite + role 注入 middleware"""
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
-
-    # Patch SessionLocal in the module under test
+@pytest.fixture()
+def client(api_client):
+    """無角色 client（相當於匿名，唯讀端點應通過），role=guest"""
     import app.devices_maintenance as dm_module
-    original_session = dm_module.SessionLocal
-
-    def _override_session():
-        return TestSession()
-
-    # Override SessionLocal for the duration of each test
-    dm_module.SessionLocal = _override_session  # type: ignore[assignment]
-
-    test_app = FastAPI()
-
-    class RoleMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
-            if role is not None:
-                request.state.user_role = role
-            return await call_next(request)
-
-    test_app.add_middleware(RoleMiddleware)
-    test_app.include_router(maintenance_router)
-
-    return test_app, engine, TestSession, dm_module, original_session
-
-
-@pytest.fixture()
-def client():
-    """無角色 client（相當於匿名，唯讀端點應通過）"""
-    app, engine, Session, dm_module, original = _make_app(role="guest")
-    with TestClient(app) as c:
+    with api_client(dm_module, maintenance_router, role="guest") as (c, _Session):
         yield c
-    dm_module.SessionLocal = original  # type: ignore[assignment]
-    Base.metadata.drop_all(engine)
 
 
 @pytest.fixture()
-def admin_client():
-    """admin role client + 可存取 DB 的 session"""
-    app, engine, Session, dm_module, original = _make_app(role="admin")
-    with TestClient(app) as c:
+def admin_client(api_client):
+    """admin role client"""
+    import app.devices_maintenance as dm_module
+    with api_client(dm_module, maintenance_router, role="admin") as (c, _Session):
         yield c
-    dm_module.SessionLocal = original  # type: ignore[assignment]
-    Base.metadata.drop_all(engine)
 
 
 @pytest.fixture()
-def guest_client():
+def guest_client(api_client):
     """guest role client（不可寫入）"""
-    app, engine, Session, dm_module, original = _make_app(role="guest")
-    with TestClient(app) as c:
+    import app.devices_maintenance as dm_module
+    with api_client(dm_module, maintenance_router, role="guest") as (c, _Session):
         yield c
-    dm_module.SessionLocal = original  # type: ignore[assignment]
-    Base.metadata.drop_all(engine)
 
 
 # ── Calibration Tests ─────────────────────────────────────────────────────────
