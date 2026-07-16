@@ -105,11 +105,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 情境 | 要跑的 |
 |------|--------|
-| 功能完成、跨多檔改動 | `/simplify` → `/review` → `/code-review` → push |
-| 單檔邏輯改動 | `/review` → `/code-review` → push |
-| 小改動（typo、config、純顯示） | 直接 push |
+| 任何 `.py` / `.jsx` 邏輯改動（含單檔、含只改一行邏輯） | `/simplify` → `/review` → `/code-review` → push |
+| 小改動（typo、config、純顯示、純文件、純測試斷言微調） | 直接 push |
 
-> 規則自動套用，不詢問「要不要跑 X？」。`/review` 管品質（reuse / simplify / efficiency / altitude）；`/code-review` 管正確性（bug / 邏輯 / 安全）。兩者互補，不互代。
+> 規則自動套用，不詢問「要不要跑 X？」。**只要動到邏輯，三個一律都跑，不得用「單檔」「感覺小」「有把握」當理由跳過 `/simplify`。** `/simplify` 管品質重構（reuse / simplify / efficiency / altitude，會實際改碼）；`/review` 管品質 checklist；`/code-review` 管正確性（bug / 邏輯 / 安全）。三者互補，不互代。
 
 **Commit 前自我檢查（必做）**：`git commit` 前先列出「本次已執行：X / 跳過 Y 原因：Z」，確認符合上表再 commit。不得在未執行對應 skill 的情況下直接 commit。
 
