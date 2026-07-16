@@ -229,12 +229,13 @@ def test_auto_start_sop_unknown_sop_id():
             mock_save.assert_not_called()
 
 
-def test_auto_start_sop_happy_path_updates_cache():
+def test_auto_start_sop_happy_path_updates_cache(db):
     """正常啟動 → cache 改為 RUNNING，_save_device_state 至少被呼叫一次"""
     cache = {"CH-01": {"status": "IDLE"}}
     with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
         with patch("app.sop._save_device_state") as mock_save:
-            _run_async(_start_sop("CH-01", "sop_test", cache))
+            with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
+                _run_async(_start_sop("CH-01", "sop_test", cache))
             assert mock_save.called
 
     assert cache["CH-01"]["status"] == "RUNNING"
@@ -242,7 +243,7 @@ def test_auto_start_sop_happy_path_updates_cache():
     assert cache["CH-01"]["total_steps"] == 2
 
 
-def test_auto_start_sop_never_touches_fixtures():
+def test_auto_start_sop_never_touches_fixtures(db):
     """auto_start_sop 不得自行轉借治具。
 
     _transfer_reserved_fixtures 用 device_id + .first() 猜排程，同一設備上有多筆
@@ -253,5 +254,6 @@ def test_auto_start_sop_never_touches_fixtures():
     with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
         with patch("app.sop._save_device_state"):
             with patch("app.sop._transfer_reserved_fixtures") as mock_transfer:
-                _run_async(_start_sop("CH-01", "sop_test", cache))
+                with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
+                    _run_async(_start_sop("CH-01", "sop_test", cache))
                 mock_transfer.assert_not_called()
