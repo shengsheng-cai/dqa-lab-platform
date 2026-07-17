@@ -8,6 +8,8 @@ sqlalchemy==2.0.51
 python-dotenv==1.2.2
 alembic==1.18.5
 httpx==0.28.1
+# starlette.testclient 未來會棄用 httpx fallback，改吃這個 fork；純測試期依賴，不影響 ai.py/line.py 的正式 httpx 呼叫。
+httpx2==2.7.0
 numpy==2.5.1
 google-genai==1.75.0
 python-multipart==0.0.32
