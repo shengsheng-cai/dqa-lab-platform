@@ -207,7 +207,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
     }
   }, [showToast]);
 
-  const [scheduleCounts, setScheduleCounts] = useState({ pending: 0, confirmed: 0, running: 0, done: 0 });
+  const [scheduleCounts, setScheduleCounts] = useState({ pending: 0, confirmed: 0, running: 0, done: 0, error: 0 });
   const scheduleCountsRef = useRef(null);
 
   useEffect(() => {
@@ -219,6 +219,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
           confirmed: all.filter(s => s.status === "已確認").length,
           running: all.filter(s => s.status === "進行中").length,
           done: all.filter(s => s.status === "已完成").length,
+          error: all.filter(s => s.status === "異常").length,
         };
         const json = JSON.stringify(next);
         if (json !== scheduleCountsRef.current) {

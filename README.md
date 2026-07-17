@@ -144,7 +144,7 @@ Docker / Hugging Face Spaces 部署時不依賴 `backend/.env`，改由平台 Se
 | **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Flash-Lite）+ 可切換 RAG Embedding（Gemini / sentence-transformers） |
 | **通知** | LINE Messaging API（條件完成 / 測試完成 / 緊急停止推播）|
-| **品質** | pytest 169 tests · Vitest 11 tests · GitHub Actions CI/CD · Alembic 版本控制遷移 |
+| **品質** | pytest 175 tests · Vitest 11 tests · GitHub Actions CI/CD · Alembic 版本控制遷移 |
 
 ---
 

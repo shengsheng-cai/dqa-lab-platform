@@ -412,6 +412,28 @@ def _activate_schedule_db(schedule_id: int) -> None:
         db.commit()
 
 
+def _mark_schedule_error_db(schedule_id: int, reason: str) -> None:
+    """壞排程收斂：已確認但缺設備/條件、永遠無法啟動 → 轉「異常」並停止重試。
+
+    不同於「設備忙碌」（暫時性、應留 CONFIRMED 重試），缺設備/條件是資料層面的
+    永久缺陷，每 5 分鐘重試也不會好。轉為終止狀態 ERROR（退出 ACTIVE_STATUSES，
+    釋放設備時段占用），寫 audit 讓管理者在紀錄與排程頁看得到、可手動修復。
+    """
+    now = _now_utc_naive()
+    with SessionLocal() as db:
+        s = db.query(Schedule).filter(
+            Schedule.id == schedule_id,
+            Schedule.status == ScheduleStatus.CONFIRMED,
+        ).first()
+        if not s:
+            return
+        s.status = ScheduleStatus.ERROR
+        s.updated_at = now
+        log_audit(db, "system:scheduler", None, "ERROR", "schedule", schedule_id,
+                  f"{s.project_number} / {s.sample_name}：{reason}")
+        db.commit()
+
+
 async def try_start_schedule(
     schedule_id: int, device_id: Optional[str], conditions: List[str],
     cache: dict, locks: dict,
@@ -422,7 +444,8 @@ async def try_start_schedule(
     """
     from .sop import auto_start_sop
     if not conditions or not device_id:
-        logger.warning(f"[scheduler] 排程 #{schedule_id} 缺少測試條件或設備，不啟動")
+        logger.warning(f"[scheduler] 排程 #{schedule_id} 缺少測試條件或設備，轉「異常」停止重試")
+        await asyncio.to_thread(_mark_schedule_error_db, schedule_id, "缺少測試條件或設備")
         return False
 
     if not await auto_start_sop(device_id, conditions[0], cache, locks):

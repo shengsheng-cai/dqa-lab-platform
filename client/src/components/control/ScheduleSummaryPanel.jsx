@@ -6,6 +6,9 @@ export default function ScheduleSummaryPanel({ devices, pendingByDevice, onConfi
     { label: "進行中", value: counts.running, color: counts.running > 0 ? "#3fb950" : "#8b949e" },
     { label: "已確認", value: counts.confirmed, color: counts.confirmed > 0 ? "#58a6ff" : "#8b949e" },
     { label: "已完成", value: counts.done, color: counts.done > 0 ? "#bc8cff" : "#8b949e" },
+    // 異常是例外狀態，正常營運為 0；只在真的有壞排程時顯示，避免長駐一個 0 增加雜訊
+    // 洋紅：與「待審核」金色、「已取消」紅色都明顯區隔，避免左側計數撞色
+    ...(counts.error > 0 ? [{ label: "異常", value: counts.error, color: "#ff9bce" }] : []),
   ];
 
   return (
