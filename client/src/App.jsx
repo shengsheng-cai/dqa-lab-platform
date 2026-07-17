@@ -21,7 +21,6 @@ function clearSession() {
   localStorage.removeItem("user_token");
   localStorage.removeItem("user_role");
   localStorage.removeItem("user_display_name");
-  localStorage.removeItem("user_id");
 }
 
 function getCurrentRole() {
@@ -64,7 +63,6 @@ function LoginPage({ onLogin }) {
         localStorage.setItem("user_token", data.token);
         localStorage.setItem("user_role", data.role);
         localStorage.setItem("user_display_name", data.display_name);
-        if (data.user_id) localStorage.setItem("user_id", String(data.user_id));
         onLogin();
       }
     } catch {
@@ -92,7 +90,6 @@ function LoginPage({ onLogin }) {
       } else {
         const keysToRemove = [
           "user_token",
-          "user_id",
           "user_role",
           "user_display_name",
           "dqa_ai_chats_v2",
@@ -377,9 +374,6 @@ function App() {
   const [displayName, setDisplayName] = useState(
     () => localStorage.getItem("user_display_name") || ""
   );
-  const [userId, setUserId] = useState(
-    () => parseInt(localStorage.getItem("user_id") || "0") || null
-  );
 
   // 有 token 時，從後端驗證並刷新 role（防止 localStorage 被竄改）
   useEffect(() => {
@@ -387,13 +381,11 @@ function App() {
     const token = localStorage.getItem("user_token");
     if (!token) return;
     api.get("/api/auth/me").then((res) => {
-      const { id, role: r, display_name: dn } = res.data;
+      const { role: r, display_name: dn } = res.data;
       localStorage.setItem("user_role", r);
       localStorage.setItem("user_display_name", dn);
-      if (id) localStorage.setItem("user_id", String(id));
       setRole(r);
       setDisplayName(dn);
-      setUserId(id || null);
     }).catch(() => {});
   }, [authed]);
 
@@ -404,13 +396,11 @@ function App() {
     }
     clearSession();
     setAuthed(false);
-    setUserId(null);
   };
 
   const handleLogin = () => {
     setRole(getCurrentRole());
     setDisplayName(localStorage.getItem("user_display_name") || "");
-    setUserId(parseInt(localStorage.getItem("user_id") || "0") || null);
     setAuthed(true);
   };
   if (!authed) return <LoginPage onLogin={handleLogin} />;
@@ -418,7 +408,7 @@ function App() {
   return (
     <ToastProvider>
       <div style={{ height: "100vh", backgroundColor: "#0d1117", overflow: "hidden" }}>
-        <ControlCenter role={role} userId={userId} displayName={displayName} onLogout={handleLogout} />
+        <ControlCenter role={role} displayName={displayName} onLogout={handleLogout} />
       </div>
     </ToastProvider>
   );

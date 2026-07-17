@@ -12,7 +12,7 @@ import {
 } from "./components/schedule/scheduleUtils";
 import { C } from "./styles/theme";
 
-export default function SchedulePage({ active, role, userId, initConditions, onInitCondsConsumed, liveDeviceStatuses = {} }) {
+export default function SchedulePage({ active, role, initConditions, onInitCondsConsumed, liveDeviceStatuses = {} }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
@@ -346,7 +346,6 @@ export default function SchedulePage({ active, role, userId, initConditions, onI
         <ScheduleDetailModal
           schedule={selectedSchedule}
           role={role}
-          userId={userId}
           deviceStatuses={{ ...deviceStatuses, ...liveDeviceStatuses }}
           onClose={() => setSelectedSchedule(null)}
           onRefresh={fetchAll}

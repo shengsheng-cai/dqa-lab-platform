@@ -27,7 +27,6 @@ api.interceptors.response.use(
       localStorage.removeItem("user_token");
       localStorage.removeItem("user_role");
       localStorage.removeItem("user_display_name");
-      localStorage.removeItem("user_id");
       window.location.href = "/";
     }
     // 轉譯錯誤訊息為使用者友善版本，並附上恢復建議
