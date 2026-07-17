@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.models import Base, Fixture, FixtureLoan, Schedule, ScheduleStatus
+from app.models import AuditLog, Base, Fixture, FixtureLoan, Schedule, ScheduleStatus
 from app.schedule_service import _start_schedule_by_id, auto_advance_schedules, try_start_schedule
 from app.utils import _now_utc_naive
 
@@ -46,8 +46,11 @@ def session_factory():
     Base.metadata.drop_all(engine)
 
 
-def _seed_confirmed(Session, device_id="CH-01", start=None) -> int:
-    """start 預設為過去時間，讓 fallback（只撈 start_time <= now）也能撈到。"""
+def _seed_confirmed(Session, device_id="CH-01", start=None, conditions='["iec60068_ab_-40_16h"]') -> int:
+    """start 預設為過去時間，讓 fallback（只撈 start_time <= now）也能撈到。
+
+    conditions 可傳 None／'[]' 模擬缺條件的壞排程（一般 API 路徑生不出來）。
+    """
     start = start or _now_utc_naive() - datetime.timedelta(minutes=10)
     with Session() as db:
         s = Schedule(
@@ -55,7 +58,7 @@ def _seed_confirmed(Session, device_id="CH-01", start=None) -> int:
             sample_name="樣品",
             device_id=device_id,
             standard="IEC 60068",
-            conditions='["iec60068_ab_-40_16h"]',
+            conditions=conditions,
             start_time=start,
             end_time=start + datetime.timedelta(hours=8),
             status=ScheduleStatus.CONFIRMED,
@@ -118,6 +121,58 @@ def test_fallback_retries_after_device_frees_up(session_factory):
     asyncio.run(auto_advance_schedules(idle, locks))
     assert _status(Session, sid) == ScheduleStatus.RUNNING
     assert idle["CH-01"]["status"] == "RUNNING"
+
+
+# ── 壞排程收斂：缺設備/條件 → 轉「異常」，不無限重試 ──────────────────────────
+
+
+def _audit_count(Session, sid, action="ERROR") -> int:
+    with Session() as db:
+        return (
+            db.query(AuditLog)
+            .filter(AuditLog.entity_type == "schedule",
+                    AuditLog.entity_id == str(sid),
+                    AuditLog.action == action)
+            .count()
+        )
+
+
+def test_broken_schedule_missing_device_becomes_error(session_factory):
+    """已確認排程缺 device_id → fallback 應轉「異常」並寫 audit，而非卡著重試。"""
+    Session = session_factory
+    sid = _seed_confirmed(Session, device_id=None)
+    locks = {"CH-01": asyncio.Lock()}
+
+    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
+
+    assert _status(Session, sid) == ScheduleStatus.ERROR, (
+        "缺設備的排程沒被收斂：會每 5 分鐘重試、永遠停在「已確認」，畫面也看不出壞掉"
+    )
+    assert _audit_count(Session, sid) == 1, "轉異常必須留一筆稽核紀錄供追查"
+
+
+def test_broken_schedule_missing_conditions_becomes_error(session_factory):
+    """已確認排程 conditions 為空 → 同樣轉「異常」。"""
+    Session = session_factory
+    sid = _seed_confirmed(Session, conditions="[]")
+    locks = {"CH-01": asyncio.Lock()}
+
+    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
+
+    assert _status(Session, sid) == ScheduleStatus.ERROR
+
+
+def test_error_schedule_not_retried(session_factory):
+    """轉「異常」後退出 CONFIRMED，後續 fallback 不得再撿它、不得重複寫 audit。"""
+    Session = session_factory
+    sid = _seed_confirmed(Session, device_id=None)
+    locks = {"CH-01": asyncio.Lock()}
+
+    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
+    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
+
+    assert _status(Session, sid) == ScheduleStatus.ERROR
+    assert _audit_count(Session, sid) == 1, "已是異常的排程不該被重複處理、重複寫 audit"
 
 
 # ── 治具轉借必須認排程，不能認設備 ────────────────────────────────────────────

@@ -13,9 +13,10 @@ export const STATUS_COLOR = {
   進行中: { bg: C.successBgDeep, text: C.successText,  border: C.success },
   已完成: { bg: "#1e1a2e",       text: "#bc8cff",      border: "#6e40c9" },
   已取消: { bg: "#2d1a1a",       text: C.errorLight,   border: C.error },
+  異常:   { bg: "#2d1524",       text: "#ff9bce",      border: "#db61a2" },
 };
 
-export const STATUS_LIST = ["待審核", "已確認", "進行中", "已完成", "已取消"];
+export const STATUS_LIST = ["待審核", "已確認", "進行中", "已完成", "已取消", "異常"];
 
 export const BUFFER_TIME_HOURS = 0.5;
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;

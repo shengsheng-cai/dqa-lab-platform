@@ -369,6 +369,7 @@ class ScheduleStatus(StrEnum):
     RUNNING = "進行中"
     DONE = "已完成"
     CANCELLED = "已取消"
+    ERROR = "異常"  # 已確認排程缺設備/條件，無法啟動且無法收斂 → 停止重試、供人員修復
 
 
 class ReturnCondition(StrEnum):

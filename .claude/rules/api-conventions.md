@@ -76,4 +76,5 @@ async def my_route(...):
 - 排除超時卡機設備：`est_end` 超過 1h 仍未回 IDLE（`_get_stuck_devices`）
 - Fallback：若所有設備都超時，改取全部中最早可用（避免無法申請）
 - APScheduler 每 5 分鐘：已確認 → 進行中（自動啟動第一條件）；進行中不再自動完成
+- 壞排程收斂：已確認排程若缺設備/條件（永遠無法啟動），`try_start_schedule` 轉「異常」並寫 audit、停止重試（`_mark_schedule_error_db`）；設備忙碌屬暫時性，仍維持已確認重試
 - 條件銜接由人員在排程頁面手動確認（`POST /api/schedules/{id}/confirm-condition`）
