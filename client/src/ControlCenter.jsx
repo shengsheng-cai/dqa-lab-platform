@@ -67,7 +67,7 @@ const TABS = [
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange }) {
+function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange }) {
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
@@ -126,7 +126,6 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
           <SchedulePage
             active={activeTab === "schedule"}
             role={role}
-            userId={userId}
             initConditions={scheduleInitConds}
             onInitCondsConsumed={handleInitCondsConsumed}
             liveDeviceStatuses={Object.fromEntries(devices.map(d => [d.device_id, (d.is_blocked && d.status === IDLE_STATUS) ? "BLOCKED" : d.status]))}
@@ -145,7 +144,7 @@ function CenterPanel({ role, userId, activeTab, setActiveTab, selectedDevice, sc
 
 // ── ControlCenter ─────────────────────────────────────────────────────────────
 
-export default function ControlCenter({ role, userId, displayName, onLogout }) {
+export default function ControlCenter({ role, displayName, onLogout }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const activeTab = PATH_TO_TAB[pathname] ?? "device";
@@ -302,7 +301,6 @@ export default function ControlCenter({ role, userId, displayName, onLogout }) {
         />
         <CenterPanel
           role={role}
-          userId={userId}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           selectedDevice={selectedDevice}

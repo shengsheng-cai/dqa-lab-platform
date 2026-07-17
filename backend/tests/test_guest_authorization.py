@@ -1,17 +1,15 @@
 """
 Guest 越權防護。
 
-安全屬性：guest（唯讀訪客）不得成功執行任何寫入操作。
+安全屬性：guest（唯讀訪客）不得執行任何需要 admin 權限的業務寫入。
+AI 查詢、LINE webhook 與 login/logout/demo-login 是公開流程，不屬於這個限制。
 
-用走訪「實際路由表」而非 grep 來確保涵蓋——先前用 grep 掃描曾漏掉整個
-execution_router（正則只比對 @router.，沒比對 @execution_router.）。走訪路由表
-不管路由掛在哪個變數名都涵蓋得到，是唯一可靠的回歸網。
+用走訪「實際路由表」而非 grep 來確保涵蓋，並直接驗證每個 admin 寫入 route
+都宣告 require_admin dependency。這樣不會因缺 body 回 422、資料不存在回 404
+而假通過，也不會在權限遺失時誤執行 handler、碰到真實 DB。
 
-唯一允許 guest 寫入的例外：取消自己的待審核排程。其完整語義由 test_guest_may_cancel_*
-一組測試釘住。
+排程 PATCH 也沒有例外：確認、取消與內容修改都必須由 admin 執行。
 """
-import re
-
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -21,103 +19,88 @@ from sqlalchemy.pool import StaticPool
 from starlette.middleware.base import BaseHTTPMiddleware
 
 import app.schedules as schedules_module
+from app.auth import require_admin
 from app.models import Base, Schedule, ScheduleStatus
 
 WRITE_METHODS = {"POST", "PATCH", "PUT", "DELETE"}
+# 「不需 admin」的公開寫入 route——與 auth.py 的 SKIP_PATHS（「不需 token」）語意不同，
+# 刻意不共用：這裡含需登入的 ai / logout，且不含 SKIP_PATHS 的唯讀 GET 路徑。
+PUBLIC_WRITE_ROUTES = {
+    ("POST", "/api/ai/standards-query"),
+    ("POST", "/api/ai/standards-query-stream"),
+    ("POST", "/api/line/webhook"),
+    ("POST", "/api/auth/login"),
+    ("POST", "/api/auth/logout"),
+    ("POST", "/api/auth/demo-login"),
+}
+# 走訪失效（框架升級改內部結構）時的最低寫入 route 數守衛，兩個列舉測試共用。
+MIN_WRITE_ROUTES = 49
 
 
-def _all_write_routers():
-    """所有帶寫入端點的 router（含非 `router` 變數名的，例如 execution_router）。"""
-    import app.devices as devices
-    import app.devices_maintenance as maintenance
-    import app.fixtures as fixtures
-    import app.purchase_orders as purchase_orders
-    import app.schedules as schedules
-    import app.sop as sop
-    return [
-        fixtures.router,
-        purchase_orders.router,
-        schedules.router,
-        schedules.blocked_router,
-        sop.router,
-        sop.execution_router,
-        devices.router,
-        maintenance.router,
-    ]
+def _walk_mounted_routes(routes, prefix=""):
+    """遞迴攤平 FastAPI 0.139 的 _IncludedRouter，回傳有效 path 與原始 route。"""
+    for route in routes:
+        original_router = getattr(route, "original_router", None)
+        if original_router is not None:
+            include_prefix = route.include_context.prefix
+            yield from _walk_mounted_routes(original_router.routes, prefix + include_prefix)
+        else:
+            yield prefix + getattr(route, "path", ""), route
 
 
-def _make_guest_app(routers, session=None):
-    app = FastAPI()
+def _write_routes():
+    """從 production app 的實際掛載樹列舉寫入 routes，保留 dependency metadata。
 
-    class GuestMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
-            request.state.user_role = "guest"
-            request.state.user_id = None
-            request.state.username = None
-            return await call_next(request)
-
-    app.add_middleware(GuestMiddleware)
-    for r in routers:
-        app.include_router(r)
-    app.state.AICM_CACHE = {}
-    app.state.DEVICE_LOCKS = {}
-    return app
-
-
-def _write_routes(routers):
-    """(method, concrete_path)：直接列舉每個 router 自身的 routes，把 {param} 代成 1。
-
-    刻意不走「掛載後的 app.routes」：FastAPI 0.139 / Starlette 1.3 起，include_router
-    不再把子路由攤平進 app.routes，而是塞一個巢狀 _IncludedRouter，走頂層會得到 0 條。
-    router 自身的 routes 在 import 時就固定、含完整 prefix 路徑，不受此版本行為影響。
+    FastAPI 0.139 / Starlette 1.3 起，include_router 會在 app.routes 放入巢狀
+    _IncludedRouter；必須沿 original_router 遞迴，不能只看 app.routes 頂層。
     """
-    seen = []
-    for router in routers:
-        for route in router.routes:
-            methods = getattr(route, "methods", None) or set()
-            for m in methods & WRITE_METHODS:
-                path = re.sub(r"\{[^}]+\}", "1", route.path)
-                seen.append((m, path))
-    return sorted(set(seen))
+    import app.main as main_module
+
+    seen = {}
+    for path, route in _walk_mounted_routes(main_module.app.routes):
+        methods = getattr(route, "methods", None) or set()
+        for method in methods & WRITE_METHODS:
+            seen[(method, path)] = route
+    return [(method, path, route) for (method, path), route in sorted(seen.items())]
 
 
-def test_guest_cannot_write_any_endpoint():
-    """走訪每個寫入路由，guest 一律不得拿到 2xx。"""
-    routers = _all_write_routers()
-    app = _make_guest_app(routers)
-    client = TestClient(app)
-    routes = _write_routes(routers)
+def test_admin_write_routes_require_admin():
+    """所有非公開寫入 route 必須直接宣告 require_admin，不執行 handler。"""
+    routes = _write_routes()
 
-    # 非空守衛：路由列表為空時本測試會靜默假通過（0 條 → 0 洩漏），必須擋掉
-    assert len(routes) >= 20, f"寫入路由數異常偏低（{len(routes)}），列舉可能失效"
+    # 自我守衛：列舉若縮水（走訪失效），下面的 require_admin 檢查會對殘缺集合假通過。
+    assert len(routes) >= MIN_WRITE_ROUTES, f"寫入路由數異常偏低（{len(routes)}），列舉可能失效"
 
-    leaks = []
-    for method, path in routes:
-        resp = client.request(method, path)
-        if 200 <= resp.status_code < 300:
-            leaks.append(f"{method} {path} → {resp.status_code}")
+    route_keys = {(method, path) for method, path, _ in routes}
+    assert PUBLIC_WRITE_ROUTES <= route_keys, "公開寫入 route 清單與實際掛載路由不一致"
 
-    assert not leaks, "guest 成功寫入了以下端點（缺 require_admin）：\n" + "\n".join(leaks)
+    missing = []
+    for method, path, route in routes:
+        if (method, path) in PUBLIC_WRITE_ROUTES:
+            continue
+        dependencies = {dependency.call for dependency in route.dependant.dependencies}
+        if require_admin not in dependencies:
+            missing.append(f"{method} {path}")
+
+    assert not missing, "以下 admin 寫入 route 缺少 require_admin：\n" + "\n".join(missing)
 
 
-def test_write_route_net_covers_all_routers():
-    """確保列舉真的涵蓋各 router，而非路由表為空的假通過。"""
-    routes = _write_routes(_all_write_routers())
-    assert len(routes) >= 20, f"寫入路由數異常偏低（{len(routes)}），列舉可能失效"
+def test_write_route_net_covers_mounted_app():
+    """確保 production app 的巢狀路由真的被攤平，而非列舉失效後假通過。"""
+    routes = _write_routes()
+    assert len(routes) >= MIN_WRITE_ROUTES, f"寫入路由數異常偏低（{len(routes)}），列舉可能失效"
     # execution_router 是先前 grep 漏掉的，明確確認它在網內
-    assert any("/api/sop-executions" in p for _, p in routes)
-    # 另外確認 fixtures / schedules / devices 三大來源都有被涵蓋
-    assert any("/api/fixtures" in p for _, p in routes)
-    assert any("/api/schedules" in p for _, p in routes)
+    assert any("/api/sop-executions" in path for _, path, _ in routes)
+    # 另外確認 auth / fixtures / schedules / devices 四大來源都有被涵蓋
+    assert any("/api/auth/users" in path for _, path, _ in routes)
+    assert any("/api/fixtures" in path for _, path, _ in routes)
+    assert any("/api/schedules" in path for _, path, _ in routes)
+    assert any(path.startswith(("/api/devices", "/api/stop")) for _, path, _ in routes)
 
 
 # ── guest 對排程 PATCH 的邊界 ─────────────────────────────────────────────────
-#
-# 觀察：route 層「非取消一律 403」暗示 guest 能取消自己的排程，但下游
-# _patch_schedule_db 的第一道檢查是「user_id is None → 403」。現行 2 角色模型下
-# guest 的 user_id 恆為 None，所以 guest 連取消都做不到——完全唯讀。
-# 這是 fail-closed（安全），但兩層意圖不一致；「取消自己排程」的成功路徑實際上
-# 只有具 user_id 的非 admin 登入者可達，而該角色目前不存在。已記入 CLAUDE.local.md。
+# PATCH 是寫入操作，route 必須直接由 require_admin 擋下。這裡 seed 真實排程，
+# 避免未來若誤刪權限 dependency，請求只因資料不存在而回 404、讓越權測試假通過。
 
 
 @pytest.fixture()
@@ -133,7 +116,9 @@ def guest_client():
     original = schedules_module.SessionLocal
     schedules_module.SessionLocal = lambda: TestSession()  # type: ignore[assignment]
 
-    GUEST_ID = None  # guest 的 user_id 一律為 None
+    # 刻意給非 admin 一個 user_id：即使排程 ownership 相符，也必須由 role 在 route 層擋下。
+    # 舊死分支會允許這個身分取消自己的待審核排程，因此能形成有效回歸測試。
+    GUEST_ID = 5
 
     app = FastAPI()
 
@@ -176,38 +161,21 @@ def _status(Session, sid) -> str:
         return db.query(Schedule).filter(Schedule.id == sid).first().status
 
 
-def test_guest_cannot_do_non_cancel_patch(guest_client):
-    """guest 對排程做「取消以外」的變更（例如審核確認）→ 403。"""
-    client, Session = guest_client
-    sid = _seed(Session, applicant_user_id=None)
-
-    resp = client.patch(f"/api/schedules/{sid}", json={"status": ScheduleStatus.CONFIRMED})
-
-    assert resp.status_code == 403
-    assert _status(Session, sid) == ScheduleStatus.PENDING
-
-
-def test_guest_cannot_cancel_someone_elses_schedule(guest_client):
-    """guest 不得取消他人（applicant_user_id=5）的排程 → 403。"""
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({"status": ScheduleStatus.CONFIRMED}, id="confirm"),
+        pytest.param({"status": ScheduleStatus.CANCELLED}, id="cancel"),
+        pytest.param({"note": "guest 不得修改"}, id="edit-note"),
+    ],
+)
+def test_guest_cannot_patch_schedule(guest_client, payload):
+    """非 admin 即使帶有相符 owner id，任何排程 PATCH 仍由 require_admin 擋下。"""
     client, Session = guest_client
     sid = _seed(Session, applicant_user_id=5)
 
-    resp = client.patch(f"/api/schedules/{sid}", json={"status": ScheduleStatus.CANCELLED})
+    resp = client.patch(f"/api/schedules/{sid}", json=payload)
 
     assert resp.status_code == 403
-    assert _status(Session, sid) == ScheduleStatus.PENDING
-
-
-def test_guest_cannot_cancel_even_ownerless_schedule(guest_client):
-    """即使排程 applicant_user_id 也是 None，guest 仍不得取消 → 403。
-
-    釘住「guest 完全唯讀」：下游 `user_id is None → 403` 最先觸發，
-    所以 guest 對排程的任何 PATCH（含取消）都被擋，不會走到狀態/歸屬判斷。
-    """
-    client, Session = guest_client
-    sid = _seed(Session, applicant_user_id=None)
-
-    resp = client.patch(f"/api/schedules/{sid}", json={"status": ScheduleStatus.CANCELLED})
-
-    assert resp.status_code == 403
+    assert resp.json() == {"detail": "需要管理者權限"}
     assert _status(Session, sid) == ScheduleStatus.PENDING

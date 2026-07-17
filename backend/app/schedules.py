@@ -306,7 +306,7 @@ def _assert_no_overlap(db, schedule_id: int, device_id, start, end) -> None:
         )
 
 
-def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, cache: dict):
+def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, cache: dict):
     cancelled_device_id = None
     immediate_start = None
     conditions = None
@@ -317,12 +317,6 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
             raise HTTPException(status_code=404, detail="找不到排程")
-
-        if role != "admin":
-            if user_id is None or s.applicant_user_id != user_id:
-                raise HTTPException(status_code=403, detail="只能取消自己的排程")
-            if s.status != ScheduleStatus.PENDING:
-                raise HTTPException(status_code=400, detail="只能取消待審核的排程")
 
         if body.note is not None:
             s.note = body.note
@@ -419,7 +413,7 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
                 ScheduleStatus.DONE: "DONE",
             }
             action = action_map.get(body.status, "UPDATE")
-            log_audit(db, str(user_id or "unknown"), role or "admin", action, "schedule", schedule_id,
+            log_audit(db, str(user_id or "unknown"), "admin", action, "schedule", schedule_id,
                       f"{s.project_number} / {s.sample_name}")
         db.commit()
         db.refresh(s)
@@ -437,24 +431,23 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", role, user_id, c
 
 
 @router.patch("/{schedule_id}", response_model=ScheduleOut)
-async def patch_schedule(schedule_id: int, body: SchedulePatch, request: Request):
+async def patch_schedule(
+    schedule_id: int,
+    body: SchedulePatch,
+    request: Request,
+    _: None = Depends(require_admin),
+):
     """
     更新排程（admin only）。
     status=已確認 時若無指定設備，自動排程。
     """
-    u = current_user(request)
-    user_id, role = u.user_id, u.role
-
-    # 非 admin 只允許取消自己的待審核排程
-    if role != "admin":
-        if body.status != ScheduleStatus.CANCELLED:
-            raise HTTPException(status_code=403, detail="僅管理者可審核排程")
+    user_id = current_user(request).user_id
 
     _cache = getattr(request.app.state, "AICM_CACHE", {})
     _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     _scheduler = getattr(request.app.state, "scheduler", None)
 
-    out = await asyncio.to_thread(_patch_schedule_db, schedule_id, body, role, user_id, _cache)
+    out = await asyncio.to_thread(_patch_schedule_db, schedule_id, body, user_id, _cache)
 
     if out["immediate_start"] and out["conditions"] and out["device_id"]:
         # 設備忙碌時不會啟動；排程維持「已確認」，由 fallback 於設備空出後重試。
