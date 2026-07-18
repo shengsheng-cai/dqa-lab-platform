@@ -46,7 +46,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 技術規格
 
-### 資料庫（18 張）
+### 資料庫
 
 | 表名 | 說明 |
 |------|------|
@@ -130,7 +130,7 @@ alembic revision --autogenerate -m "描述"
 alembic upgrade head
 
 # 後端單元測試
-cd backend && ../venv/bin/python -m pytest                        # 全套（175 tests）
+cd backend && ../venv/bin/python -m pytest                        # 後端全套
 cd backend && ../venv/bin/python -m pytest tests/test_auth.py -v  # 單一測試檔
 ```
 
