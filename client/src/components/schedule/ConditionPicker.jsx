@@ -1,3 +1,4 @@
+import { C } from "../../styles/theme";
 import { useState, useEffect } from "react";
 
 export default function ConditionPicker({ standardsTree, selected, onChange, initialStd, initialVer }) {
@@ -31,7 +32,7 @@ export default function ConditionPicker({ standardsTree, selected, onChange, ini
             onClick={() => { setActiveStd(std); setActiveVer(""); }}
             style={{
               padding: "6px 8px", fontSize: 12, cursor: "pointer",
-              background: activeStd === std ? "#1c3a5e" : "transparent",
+              background: activeStd === std ? C.accentSurface : "transparent",
               color: activeStd === std ? "#79c0ff" : "#8b949e",
               borderRadius: 4,
             }}

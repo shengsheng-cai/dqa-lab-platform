@@ -221,7 +221,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <div style={{
               width: 14, height: 10, borderRadius: 2,
-              background: "repeating-linear-gradient(135deg, #2d1a1a 0px, #2d1a1a 3px, #1a0a0a 3px, #1a0a0a 6px)",
+              background: `repeating-linear-gradient(135deg, ${C.errorSurface} 0px, ${C.errorSurface} 3px, ${C.errorSurfaceDark} 3px, ${C.errorSurfaceDark} 6px)`,
               border: "1px solid #6e1b1b",
             }} />
             <span style={{ fontSize: 11, color: C.textMuted }}>不可用時段</span>
@@ -238,7 +238,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
                 style={{
                   padding: "4px 12px", fontSize: 12, borderRadius: 20,
                   cursor: "pointer",
-                  background: filterStatus === s ? "#1c3a5e" : "transparent",
+                  background: filterStatus === s ? C.accentSurface : "transparent",
                   color: filterStatus === s ? C.accentLight : C.textMuted,
                   border: filterStatus === s ? `1px solid ${C.accentLink}` : `1px solid ${C.border}`,
                 }}

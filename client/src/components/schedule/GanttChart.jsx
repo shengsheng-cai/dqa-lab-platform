@@ -1,3 +1,4 @@
+import { C } from "../../styles/theme";
 import { useRef, useEffect } from "react";
 import { DEVICE_IDS, parseUtcDate } from "../../constants";
 import { HOUR_PX, DAY_PX, ROW_H, HEADER_H, LABEL_W, STATUS_COLOR, fmtDt } from "./scheduleUtils";
@@ -137,7 +138,7 @@ export default function GanttChart({ schedules, blockedPeriods, rangeStart, rang
                         style={{
                           position: "absolute", left, top: 4,
                           width: right - left, height: ROW_H - 8,
-                          background: "repeating-linear-gradient(135deg, #2d1a1a 0px, #2d1a1a 6px, #1a0a0a 6px, #1a0a0a 12px)",
+                          background: `repeating-linear-gradient(135deg, ${C.errorSurface} 0px, ${C.errorSurface} 6px, ${C.errorSurfaceDark} 6px, ${C.errorSurfaceDark} 12px)`,
                           border: "1px solid #6e1b1b",
                           borderRadius: 3, opacity: 0.7, zIndex: 1,
                         }}

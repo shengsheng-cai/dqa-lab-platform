@@ -116,7 +116,7 @@ function ReturnButtonGroup({ loanId, onSuccess }) {
 const STATUS_COLORS = {
   ok:           { bg: C.successBgMid, color: C.success, label: "庫存足夠" },
   shortage:     { bg: C.warningBg,    color: C.warning, label: "即將不足" },
-  out_of_stock: { bg: "#2d1a1a",      color: C.error,   label: "缺貨" },
+  out_of_stock: { bg: C.errorSurface,      color: C.error,   label: "缺貨" },
   loaned:       { bg: "#1a1f2d",      color: C.accent,  label: "借出中" },
   reserved:     { bg: "#1a252d",      color: C.reserved, label: "預約中" },
 };
