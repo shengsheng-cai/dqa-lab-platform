@@ -16,7 +16,10 @@ from .models import (
 )
 from .standards import get_standard
 from .sop import DEVICE_IDS
-from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions, parse_iso_utc, _to_naive_utc
+from .utils import (
+    _now_utc, _now_utc_naive, _save_device_state, _parse_conditions,
+    parse_iso_utc, _to_naive_utc, device_blocked_reason_now,
+)
 from .audit import log_audit
 
 logger = logging.getLogger("schedule_service")
@@ -446,6 +449,16 @@ async def try_start_schedule(
     if not conditions or not device_id:
         logger.warning(f"[scheduler] 排程 #{schedule_id} 缺少測試條件或設備，轉「異常」停止重試")
         await asyncio.to_thread(_mark_schedule_error_db, schedule_id, "缺少測試條件或設備")
+        return False
+
+    # 設備在維護（不可用）時段內不自動啟動，維持「已確認」等維護結束後重試。
+    # 維護是暫時性阻擋（會結束），與「設備忙碌」同類，故不轉「異常」。
+    blocked_reason = await asyncio.to_thread(device_blocked_reason_now, device_id)
+    if blocked_reason is not None:
+        logger.info(
+            f"[scheduler] 排程 #{schedule_id} 的 {device_id} 在維護時段"
+            f"（{blocked_reason}），維持「已確認」等待重試"
+        )
         return False
 
     if not await auto_start_sop(device_id, conditions[0], cache, locks):

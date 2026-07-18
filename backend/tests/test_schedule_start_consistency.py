@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.models import AuditLog, Base, Fixture, FixtureLoan, Schedule, ScheduleStatus
+from app.models import AuditLog, Base, DeviceBlockedPeriod, Fixture, FixtureLoan, Schedule, ScheduleStatus
 from app.schedule_service import _start_schedule_by_id, auto_advance_schedules, try_start_schedule
 from app.utils import _now_utc_naive
 
@@ -105,6 +105,82 @@ def test_start_marks_running_when_device_idle(session_factory):
 
     assert _status(Session, sid) == ScheduleStatus.RUNNING
     assert cache["CH-01"]["status"] == "RUNNING"
+
+
+# ── 維護（不可用）時段：自動啟動也要尊重，不能只擋手動 ────────────────────────
+
+
+def _seed_blocked(Session, device_id="CH-01", reason="校驗中"):
+    """在 device_id 上插入一段涵蓋『當下』的不可用（維護）時段。"""
+    now = _now_utc_naive()
+    with Session() as db:
+        db.add(DeviceBlockedPeriod(
+            device_id=device_id,
+            start_time=now - datetime.timedelta(hours=1),
+            end_time=now + datetime.timedelta(hours=1),
+            reason=reason,
+        ))
+        db.commit()
+
+
+def test_start_skipped_when_device_in_maintenance(session_factory):
+    """設備 IDLE 但當下在維護時段 → 不自動啟動，排程維持「已確認」。
+
+    手動 start_sop 早就會擋維護；自動這條若不擋，維護等於白標，
+    測試到點照樣跑在維護中的機器上。
+    """
+    Session = session_factory
+    sid = _seed_confirmed(Session)
+    _seed_blocked(Session)
+    cache = {"CH-01": {"status": "IDLE"}}
+    locks = {"CH-01": asyncio.Lock()}
+
+    asyncio.run(_start_schedule_by_id(sid, cache, locks))
+
+    assert _status(Session, sid) == ScheduleStatus.CONFIRMED, (
+        "設備標了維護，排程卻自動啟動：測試會跑在維護中的機器上"
+    )
+    assert cache["CH-01"]["status"] == "IDLE", "維護中不得啟動設備"
+
+
+def test_start_skipped_when_maintenance_has_no_reason(session_factory):
+    """維護時段的 reason 可為空（欄位 nullable、建立時可不填）→ 仍須擋住自動啟動。
+
+    有無封鎖只看時段存在與否，不能拿 reason 當判準。
+    """
+    Session = session_factory
+    sid = _seed_confirmed(Session)
+    _seed_blocked(Session, reason=None)
+    cache = {"CH-01": {"status": "IDLE"}}
+    locks = {"CH-01": asyncio.Lock()}
+
+    asyncio.run(_start_schedule_by_id(sid, cache, locks))
+
+    assert _status(Session, sid) == ScheduleStatus.CONFIRMED, (
+        "沒填原因的維護時段被當成沒封鎖，測試照樣自動啟動"
+    )
+    assert cache["CH-01"]["status"] == "IDLE"
+
+
+def test_maintenance_keeps_confirmed_then_resumes(session_factory):
+    """維護是暫時性阻擋：撞維護維持 CONFIRMED（不轉「異常」）；維護結束後應能重試啟動。"""
+    Session = session_factory
+    sid = _seed_confirmed(Session)
+    _seed_blocked(Session)
+    locks = {"CH-01": asyncio.Lock()}
+
+    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
+    assert _status(Session, sid) == ScheduleStatus.CONFIRMED, (
+        "維護會結束，屬暫時性阻擋，不該轉『異常』終止重試"
+    )
+
+    with Session() as db:  # 維護時段結束（移除）
+        db.query(DeviceBlockedPeriod).delete()
+        db.commit()
+    idle = {"CH-01": {"status": "IDLE"}}
+    asyncio.run(auto_advance_schedules(idle, locks))
+    assert _status(Session, sid) == ScheduleStatus.RUNNING
+    assert idle["CH-01"]["status"] == "RUNNING"
 
 
 def test_fallback_retries_after_device_frees_up(session_factory):

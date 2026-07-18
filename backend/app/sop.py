@@ -11,10 +11,10 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from .models import (
     SessionLocal, SopTemplate, SopExecution, StepRecord,
-    User, Schedule, ScheduleStatus, FixtureLoan, DeviceBlockedPeriod,
+    User, Schedule, ScheduleStatus, FixtureLoan,
 )
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
-from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions
+from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions, device_blocked_reason_now
 from .auth import require_admin, current_user
 from .line import push_message
 
@@ -189,20 +189,11 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     now_utc = _now_utc()
     now = _now_utc_naive()
 
-    def _query_blocked_reason() -> Optional[str]:
-        with SessionLocal() as db:
-            blocked = db.query(DeviceBlockedPeriod).filter(
-                DeviceBlockedPeriod.device_id == device_id,
-                DeviceBlockedPeriod.start_time <= now,
-                DeviceBlockedPeriod.end_time > now,
-            ).first()
-            return blocked.reason if blocked else None
-
-    blocked_reason = await asyncio.to_thread(_query_blocked_reason)
+    blocked_reason = await asyncio.to_thread(device_blocked_reason_now, device_id)
     if blocked_reason is not None:
         raise HTTPException(
             status_code=409,
-            detail=f"{device_id} 目前在不可用時段（{blocked_reason or '已設定封鎖'}），無法啟動測試。"
+            detail=f"{device_id} 目前在不可用時段（{blocked_reason}），無法啟動測試。"
         )
 
     active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}

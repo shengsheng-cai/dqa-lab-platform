@@ -3,7 +3,7 @@
 import datetime
 import json
 from typing import Optional
-from .models import SessionLocal, DeviceState
+from .models import SessionLocal, DeviceState, DeviceBlockedPeriod
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 
 
@@ -28,6 +28,26 @@ def _now_utc() -> datetime.datetime:
 def _now_utc_naive() -> datetime.datetime:
     """回傳 naive UTC datetime，用於與 SQLite 儲存的 naive datetime 比較。"""
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+
+def device_blocked_reason_now(device_id: str) -> Optional[str]:
+    """設備當下是否落在不可用（維護）時段；是則回傳原因字串，否則 None。
+
+    「有沒有封鎖」只看時段是否存在——reason 可為空（欄位 nullable、建立時可不填），
+    不能拿它當有無封鎖的判準，否則沒填原因的維護時段會被當成沒封鎖而放行。
+    手動 start_sop 與自動 try_start_schedule 共用同一份判斷，維持
+    「手動、自動一致尊重維護時段」。
+    """
+    now = _now_utc_naive()
+    with SessionLocal() as db:
+        blocked = db.query(DeviceBlockedPeriod).filter(
+            DeviceBlockedPeriod.device_id == device_id,
+            DeviceBlockedPeriod.start_time <= now,
+            DeviceBlockedPeriod.end_time > now,
+        ).first()
+        if blocked is None:
+            return None
+        return blocked.reason or "已設定封鎖"
 
 
 def _to_naive_utc(dt: Optional[datetime.datetime | str]) -> Optional[datetime.datetime]:
