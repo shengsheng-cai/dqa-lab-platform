@@ -28,7 +28,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 
 | | |
 |---|---|
-| **180 automated tests** | Device state machine · Schedule calculation · Fixture lifecycle · Three-module integration · SOP validation · Measurement uncertainty · Calibration & maintenance CRUD · Frontend utility (Vitest) |
+| **Automated test suite** | Device state machine · Schedule calculation · Fixture lifecycle · Three-module integration · SOP validation · Measurement uncertainty · Calibration & maintenance CRUD · Frontend utility (Vitest) |
 | **GitHub Actions CI/CD** | Push-triggered test gate + auto-deploy to HF Spaces |
 | **RAG + backend validation** | Gemini Flash-Lite with retrieval-augmented generation — AI output validated server-side before DB write |
 | **Three-module integration** | AI → Schedule → Fixture fully automated (reserve → loan → return) |
@@ -144,7 +144,7 @@ Docker / Hugging Face Spaces 部署時不依賴 `backend/.env`，改由平台 Se
 | **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Flash-Lite）+ 可切換 RAG Embedding（Gemini / sentence-transformers） |
 | **通知** | LINE Messaging API（條件完成 / 測試完成 / 緊急停止推播）|
-| **品質** | pytest 175 tests · Vitest 11 tests · GitHub Actions CI/CD · Alembic 版本控制遷移 |
+| **品質** | pytest（後端）· Vitest（前端）· GitHub Actions CI/CD · Alembic 版本控制遷移 |
 
 ---
 
