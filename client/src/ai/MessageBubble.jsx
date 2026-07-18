@@ -1,3 +1,4 @@
+import { C } from "../styles/theme";
 // client/src/ai/MessageBubble.jsx
 import { useState, useRef, useEffect } from "react";
 import MarkdownRenderer from "./MarkdownRenderer";
@@ -190,7 +191,7 @@ export default function MessageBubble({
                   onClick={() => onApplySchedule(m.sop_ids)}
                   disabled={!canApplySchedule}
                   style={canApplySchedule ? S.applyBtn : S.applyBtnDisabled}
-                  onMouseEnter={canApplySchedule ? (e) => (e.currentTarget.style.background = "#1c3a5e") : undefined}
+                  onMouseEnter={canApplySchedule ? (e) => (e.currentTarget.style.background = C.accentSurface) : undefined}
                   onMouseLeave={canApplySchedule ? (e) => (e.currentTarget.style.background = "transparent") : undefined}
                 >
                   📅 申請此測試

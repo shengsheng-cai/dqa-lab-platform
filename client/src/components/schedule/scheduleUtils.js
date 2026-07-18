@@ -9,11 +9,11 @@ export const LABEL_W = 68;
 
 export const STATUS_COLOR = {
   待審核: { bg: C.border,        text: C.textMuted,    border: C.textDim },
-  已確認: { bg: "#1c3a5e",       text: C.accentLight,  border: C.accentLink },
+  已確認: { bg: C.accentSurface,   text: C.accentLight,  border: C.accentLink },
   進行中: { bg: C.successBgDeep, text: C.successText,  border: C.success },
-  已完成: { bg: "#1e1a2e",       text: "#bc8cff",      border: "#6e40c9" },
-  已取消: { bg: "#2d1a1a",       text: C.errorLight,   border: C.error },
-  異常:   { bg: "#2d1524",       text: "#ff9bce",      border: "#db61a2" },
+  已完成: { bg: C.violetBg,      text: C.violetText,   border: C.violet },
+  已取消: { bg: C.errorSurface,   text: C.errorLight,   border: C.error },
+  異常:   { bg: C.magentaBg,     text: C.magentaText,  border: C.magenta },
 };
 
 export const STATUS_LIST = ["待審核", "已確認", "進行中", "已完成", "已取消", "異常"];

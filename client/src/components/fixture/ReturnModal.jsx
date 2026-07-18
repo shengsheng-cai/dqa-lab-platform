@@ -1,3 +1,4 @@
+import { C } from "../../styles/theme";
 import { useState } from "react";
 import api from "../../api";
 import { useToast } from "../useToast";
@@ -70,7 +71,7 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
                   condition === v
                     ? v === "normal"
                       ? "#1a2d1a"
-                      : "#2d1a1a"
+                      : C.errorSurface
                     : "transparent",
                 color:
                   condition === v

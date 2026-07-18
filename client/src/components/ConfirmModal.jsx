@@ -1,3 +1,4 @@
+import { C } from "../styles/theme";
 import React from "react";
 
 /**
@@ -46,7 +47,7 @@ export default function ConfirmModal({
       icon: "⚠️",
     },
     danger: {
-      bgColor: "#2d1a1a",
+      bgColor: C.errorSurface,
       borderColor: "#da363344",
       titleColor: "#f85149",
       btnColor: "#fff",
