@@ -15,7 +15,7 @@ from .models import (
     ScheduleFixture, Fixture, FixtureLoan,
 )
 from .standards import get_standard
-from .sop import DEVICE_IDS
+from .constants import DEVICE_IDS
 from .utils import (
     _now_utc, _now_utc_naive, _save_device_state, _parse_conditions,
     parse_iso_utc, _to_naive_utc, device_blocked_reason_now,
@@ -32,17 +32,43 @@ STABILIZATION_HOURS = 0.5
 # ── 排程完成 ─────────────────────────────────────────────────────────────────
 
 
-def _complete_schedule(db, schedule, now: datetime.datetime) -> None:
-    """排程標為已完成，並將借出治具改為已歸還（不 commit，由呼叫方負責）"""
-    schedule.status = ScheduleStatus.DONE
-    schedule.updated_at = now
+def _return_loaned_fixtures(db, schedule_id: int, now: datetime.datetime) -> None:
+    """把該排程「借出中」的治具標為已歸還並記下歸還時間（不 commit，由呼叫方負責）。
+
+    完成與取消都會歸還治具，寫的欄位必須一樣——分開寫過就發生過「取消還回來的治具
+    查不到歸還時間」。歸還要寫什麼只定義在這裡一處。
+    """
     db.query(FixtureLoan).filter(
-        FixtureLoan.schedule_id == schedule.id,
+        FixtureLoan.schedule_id == schedule_id,
         FixtureLoan.status == "loaned",
     ).update(
         {"status": "returned", "return_date": now},
         synchronize_session=False,
     )
+
+
+def _complete_schedule(db, schedule, now: datetime.datetime) -> None:
+    """排程標為已完成，並將借出治具改為已歸還（不 commit，由呼叫方負責）"""
+    schedule.status = ScheduleStatus.DONE
+    schedule.updated_at = now
+    _return_loaned_fixtures(db, schedule.id, now)
+
+
+def _release_schedule_fixtures(
+    db, schedule_id: int, now: datetime.datetime, *, return_loaned: bool = False,
+) -> None:
+    """排程走到終止狀態（取消／異常）時釋放它占用的治具（不 commit，由呼叫方負責）。
+
+    取消和異常曾經各寫各的，漏掉一邊就會讓治具永遠卡住、可借量收不回來。收成同一支
+    避免日後再漂：還沒真正借出的「預約」一律刪掉；return_loaned=True 時，連已經借出的
+    也一併歸還（只有取消進行中排程需要，異常只會從已確認進來、不會有借出中的）。
+    """
+    db.query(FixtureLoan).filter(
+        FixtureLoan.schedule_id == schedule_id,
+        FixtureLoan.status == "reserved",
+    ).delete(synchronize_session=False)
+    if return_loaned:
+        _return_loaned_fixtures(db, schedule_id, now)
 
 
 # ── 時長計算 ──────────────────────────────────────────────────────────────────
@@ -383,15 +409,18 @@ def _confirmed_schedules_db(schedule_id: Optional[int] = None) -> list[tuple]:
         return [(s.id, s.device_id, _parse_conditions(s.conditions)) for s in q.all()]
 
 
-def _activate_schedule_db(schedule_id: int) -> None:
-    """設備確實啟動後：排程轉進行中 + 預約治具轉借出（單一 transaction）。
+def _activate_schedule_db(
+    schedule_id: int, *,
+    actor: str = "system:scheduler", role: Optional[str] = None, action: str = "AUTO_START",
+) -> bool:
+    """設備確實啟動後：排程轉進行中 + 預約治具轉借出 + 寫 audit（單一 transaction）。
 
-    兩者必須同進同退——若分兩次 commit，中間失敗會讓排程已是進行中、治具卻永遠
+    三件事必須同進同退——若分開 commit，中間失敗會讓排程已是進行中、治具卻永遠
     卡在「已預約」（_complete_schedule 只歸還 loaned，reserved 不會被回收）。
 
-    治具依 schedule_id 精準轉借。此處與狀態變更同一 transaction 原子完成，
-    不委派給 sop._transfer_reserved_fixtures（那是手動路徑的獨立 best-effort 轉借，
-    分開 commit），以維持本函式「flip + 轉借同進同退」的保證。
+    自動（APScheduler）與手動（start_sop）兩條啟動路徑共用這一支，只有 audit 的
+    操作者不同：自動預設記 system:scheduler／AUTO_START，手動由呼叫端傳入 admin／START。
+    只在排程仍是「已確認」時動作；回傳是否真的啟動了（找不到或已非已確認回 False）。
     """
     now = _now_utc_naive()
     with SessionLocal() as db:
@@ -400,7 +429,7 @@ def _activate_schedule_db(schedule_id: int) -> None:
             Schedule.status == ScheduleStatus.CONFIRMED,
         ).first()
         if not s:
-            return
+            return False
         s.status = ScheduleStatus.RUNNING
         s.updated_at = now
         db.query(FixtureLoan).filter(
@@ -410,9 +439,10 @@ def _activate_schedule_db(schedule_id: int) -> None:
             {"status": "loaned", "loan_date": now},
             synchronize_session=False,
         )
-        log_audit(db, "system:scheduler", None, "AUTO_START", "schedule", schedule_id,
+        log_audit(db, actor, role, action, "schedule", schedule_id,
                   f"{s.project_number} / {s.sample_name}")
         db.commit()
+        return True
 
 
 def _mark_schedule_error_db(schedule_id: int, reason: str) -> None:
@@ -432,9 +462,35 @@ def _mark_schedule_error_db(schedule_id: int, reason: str) -> None:
             return
         s.status = ScheduleStatus.ERROR
         s.updated_at = now
+        # 轉「異常」＝排程永遠不會啟動，把它占用的治具放回去（比照「取消」），否則可借量卡死。
+        _release_schedule_fixtures(db, schedule_id, now)
         log_audit(db, "system:scheduler", None, "ERROR", "schedule", schedule_id,
                   f"{s.project_number} / {s.sample_name}：{reason}")
         db.commit()
+
+
+def _earliest_confirmed_schedule_id(device_id: str) -> Optional[int]:
+    """該設備上最該先跑的「已確認」排程 id；沒有就回 None。
+
+    同一台設備上可能排了多筆已確認，手動啟動 SOP 時要推進哪一筆的規則就定在這裡：
+    預定開始時間最早的優先，同時間再用 id（建立先後）決勝，確保每次挑的都一樣。
+    沒有開始時間的（資料異常）排到最後，不要被誤挑中。
+    """
+    with SessionLocal() as db:
+        s = (
+            db.query(Schedule)
+            .filter(
+                Schedule.device_id == device_id,
+                Schedule.status == ScheduleStatus.CONFIRMED,
+            )
+            .order_by(
+                Schedule.start_time.is_(None),
+                Schedule.start_time.asc(),
+                Schedule.id.asc(),
+            )
+            .first()
+        )
+        return s.id if s else None
 
 
 async def try_start_schedule(
@@ -465,6 +521,8 @@ async def try_start_schedule(
         logger.info(f"[scheduler] 排程 #{schedule_id} 的 {device_id} 非 IDLE，維持「已確認」等待重試")
         return False
 
+    # 這裡不看 _activate_schedule_db 的回傳：設備已經真的啟動了，就算排程剛好被別人
+    # 搶先推進（回 False），對呼叫方而言「這次啟動成功」仍然成立。
     await asyncio.to_thread(_activate_schedule_db, schedule_id)
     return True
 

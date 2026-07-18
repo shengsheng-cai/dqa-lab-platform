@@ -11,10 +11,15 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from .models import (
     SessionLocal, SopTemplate, SopExecution, StepRecord,
-    User, Schedule, ScheduleStatus, FixtureLoan,
+    User, Schedule, ScheduleStatus, DeviceBlockedPeriod,
 )
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
-from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions, device_blocked_reason_now
+from .constants import DEVICE_IDS
+from .schedule_service import _activate_schedule_db, _earliest_confirmed_schedule_id
+from .utils import (
+    _now_utc, _now_utc_naive, _save_device_state, _parse_conditions,
+    _idle_state_patch,
+)
 from .auth import require_admin, current_user
 from .line import push_message
 
@@ -27,8 +32,17 @@ os.makedirs(PHOTO_UPLOAD_DIR, exist_ok=True)
 router = APIRouter()
 execution_router = APIRouter(prefix="/api/sop-executions", tags=["sop"])
 
-# 定義設備 ID 清單（目前支援的五個設備）
-DEVICE_IDS = ["CH-01", "CH-02", "CH-03", "CH-04", "CH-05"]
+
+async def _revert_device_to_idle(device_id: str, device: dict, lock) -> None:
+    """啟動失敗時把設備清回待機（手動與自動兩條啟動路徑共用）。
+
+    只在設備仍是我們剛設的 RUNNING 時才清——建執行紀錄那段鎖是放開的，
+    若這空檔有人緊急停止（改成 EMERGENCY），別把那個狀態蓋掉。
+    """
+    async with lock:
+        if device.get("status") == "RUNNING":
+            device.update(_idle_state_patch())
+            await asyncio.to_thread(_save_device_state, device_id, device)
 
 
 def _validate_start_sop_input(payload: dict, cache: dict) -> tuple:
@@ -132,68 +146,75 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     cache = request.app.state.AICM_CACHE
     sop_id, device_id, device = _validate_start_sop_input(payload, cache)
 
-    # 檢查設備是否有排程進行中（IDLE 條件間隙仍不允許手動啟動）
-    def _query_running_schedule() -> Optional[dict]:
+    std_data = STANDARDS_AND_SOPS.get(sop_id, {})
+    sop_name = std_data.get("name", sop_id)
+    # 法規表查不到名稱時才需要回頭查 SOP 範本表
+    need_template_name = sop_name == sop_id
+
+    def _load_start_context() -> dict:
+        """啟動前的唯讀檢查一次查完：進行中排程、操作者名稱、範本名稱、維護時段。
+
+        這四個都只是讀，沒必要各開一條連線——併成一次連線少三趟往返。
+        """
         with SessionLocal() as db:
-            row = db.query(Schedule).filter(
+            running = db.query(Schedule).filter(
                 Schedule.device_id == device_id,
                 Schedule.status == ScheduleStatus.RUNNING,
             ).first()
-            if not row:
-                return None
+            running_info = None
+            if running:
+                running_info = {
+                    "conditions": running.conditions,
+                    "current_condition_index": running.current_condition_index,
+                }
+
+            display_name = None
+            if not operator and operator_user_id:
+                u = db.query(User).filter(User.id == operator_user_id).first()
+                display_name = (u.display_name or "") if u else None
+
+            template_name = None
+            if need_template_name:
+                tpl = db.query(SopTemplate).filter(SopTemplate.sop_id == sop_id).first()
+                template_name = tpl.name if tpl else None
+
+            blocked = db.query(DeviceBlockedPeriod).filter(
+                DeviceBlockedPeriod.device_id == device_id,
+                DeviceBlockedPeriod.start_time <= _now_utc_naive(),
+                DeviceBlockedPeriod.end_time > _now_utc_naive(),
+            ).first()
+
             return {
-                "conditions": row.conditions,
-                "current_condition_index": row.current_condition_index,
+                "running": running_info,
+                "display_name": display_name,
+                "template_name": template_name,
+                "blocked_reason": (blocked.reason or "已設定封鎖") if blocked else None,
             }
 
-    running_schedule = await asyncio.to_thread(_query_running_schedule)
-    if running_schedule:
-        total = len(_parse_conditions(running_schedule["conditions"]))
-        idx = (running_schedule["current_condition_index"] or 0) + 1
+    ctx = await asyncio.to_thread(_load_start_context)
+
+    # 檢查設備是否有排程進行中（IDLE 條件間隙仍不允許手動啟動）
+    if ctx["running"]:
+        total = len(_parse_conditions(ctx["running"]["conditions"]))
+        idx = (ctx["running"]["current_condition_index"] or 0) + 1
         raise HTTPException(
             status_code=409,
             detail=f"{device_id} 正在執行排程（第 {idx}/{total} 條件），請透過排程頁面操作"
         )
 
     # 若前端未填 operator，從登入帳號自動帶入顯示名稱
-    if not operator and operator_user_id:
-        def _query_operator_display_name() -> Optional[str]:
-            with SessionLocal() as db:
-                u = db.query(User).filter(User.id == operator_user_id).first()
-                if not u:
-                    return None
-                return u.display_name or ""
-
-        try:
-            display_name = await asyncio.to_thread(_query_operator_display_name)
-            if display_name:
-                operator = display_name
-        except Exception:
-            pass
-
-    std_data = STANDARDS_AND_SOPS.get(sop_id, {})
-    sop_name = std_data.get("name", sop_id)
-
-    if sop_name == sop_id:
-        def _query_template_name() -> Optional[str]:
-            with SessionLocal() as db:
-                sop = db.query(SopTemplate).filter(SopTemplate.sop_id == sop_id).first()
-                if not sop:
-                    return None
-                return sop.name
-
-        template_name = await asyncio.to_thread(_query_template_name)
-        if template_name:
-            sop_name = template_name
+    if ctx["display_name"]:
+        operator = ctx["display_name"]
+    if ctx["template_name"]:
+        sop_name = ctx["template_name"]
 
     now_utc = _now_utc()
     now = _now_utc_naive()
 
-    blocked_reason = await asyncio.to_thread(device_blocked_reason_now, device_id)
-    if blocked_reason is not None:
+    if ctx["blocked_reason"] is not None:
         raise HTTPException(
             status_code=409,
-            detail=f"{device_id} 目前在不可用時段（{blocked_reason}），無法啟動測試。"
+            detail=f"{device_id} 目前在不可用時段（{ctx['blocked_reason']}），無法啟動測試。"
         )
 
     active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
@@ -220,62 +241,45 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
                 "sim_cycle": 0,
             }
         )
-        _save_device_state(device_id, device)
+        await asyncio.to_thread(_save_device_state, device_id, device)
 
     # 建 SopExecution + 寫 active_execution_id（讓 simulator 完成時能寫 test_ended_at）
     execution_id = await asyncio.to_thread(
         _create_execution_id_db, sop_id, device_id, device["operator"], now,
         operator_user_id, f"[{device_id}] ",
     )
-    if execution_id is not None:
-        async with request.app.state.DEVICE_LOCKS[device_id]:
-            device["active_execution_id"] = execution_id
-            _save_device_state(device_id, device)
+    if execution_id is None:
+        # 建不出執行紀錄＝這次啟動不算數：把設備清回待機、回報失敗。
+        # 不能放著設備 RUNNING 卻沒紀錄——完成時寫不了 test_ended_at、也沒報告可連。
+        # 這裡就 return，下面的排程同步 / 治具轉借都不會執行（尚未動到排程與治具）。
+        await _revert_device_to_idle(device_id, device, request.app.state.DEVICE_LOCKS[device_id])
+        logger.error(f"[{device_id}] 建立執行紀錄失敗，已把設備復原為待機")
+        raise HTTPException(status_code=500, detail=f"{device_id} 啟動失敗：無法建立執行紀錄，請稍後再試")
 
-    # 同步排程狀態：CONFIRMED → RUNNING（管理者從排程頁看到的永遠是設備真實狀態）
-    def _sync_confirmed_schedule_to_running() -> Optional[int]:
-        try:
-            with SessionLocal() as db:
-                confirmed_schedule = db.query(Schedule).filter(
-                    Schedule.device_id == device_id,
-                    Schedule.status == ScheduleStatus.CONFIRMED,
-                ).first()
-                if not confirmed_schedule:
-                    return None
-                confirmed_schedule.status = ScheduleStatus.RUNNING
-                confirmed_schedule.updated_at = now
-                db.commit()
-                return confirmed_schedule.id
-        except Exception as e:
-            logger.warning(f"[{device_id}] 同步排程狀態失敗：{e}")
-        return None
+    async with request.app.state.DEVICE_LOCKS[device_id]:
+        device["active_execution_id"] = execution_id
+        await asyncio.to_thread(_save_device_state, device_id, device)
 
-    confirmed_schedule_id = await asyncio.to_thread(_sync_confirmed_schedule_to_running)
+    # 同步排程狀態：手動啟動時，把該設備上「已確認」的排程一起推進成進行中，
+    # 讓管理者從排程頁看到的永遠是設備真實狀態。排程轉進行中 + 治具轉借 + 寫 audit
+    # 走排程層的共用原子函式（與自動排程同一支），三件事同一 transaction，不會中途分裂。
+    # 挑哪一筆已確認排程的規則也定在排程層，手動與自動共用同一套。
+    confirmed_schedule_id = await asyncio.to_thread(_earliest_confirmed_schedule_id, device_id)
     if confirmed_schedule_id:
-        logger.info(f"[{device_id}] 排程 {confirmed_schedule_id} CONFIRMED → RUNNING（手動啟動觸發）")
-        # 只轉借剛標為 RUNNING 的那筆排程的預約治具（依 schedule_id，不用 device_id 猜）
-        await asyncio.to_thread(_transfer_reserved_fixtures, confirmed_schedule_id, now)
+        # 排程同步是次要動作：即使失敗也不該把「設備已啟動」翻成錯誤（設備確實在跑了）。
+        try:
+            activated = await asyncio.to_thread(
+                _activate_schedule_db, confirmed_schedule_id,
+                actor=str(operator_user_id or "unknown"), role="admin", action="START",
+            )
+            if activated:
+                logger.info(f"[{device_id}] 排程 {confirmed_schedule_id} CONFIRMED → RUNNING（手動啟動觸發）")
+        except Exception as e:
+            logger.warning(f"[{device_id}] 排程同步／治具轉借失敗：{e}")
 
     logger.info(f"[{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}")
 
     return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
-
-
-def _transfer_reserved_fixtures(schedule_id: int, now: datetime.datetime):
-    """將指定排程的預約治具轉為借出（依 schedule_id 精準，不用 device_id 猜）。
-
-    手動 start_sop 呼叫端傳入的是 _sync_confirmed_schedule_to_running 已挑定並標為
-    RUNNING 的那筆排程 id，兩步作用在同一筆排程；同設備多筆已確認排程時不會借錯人。
-    """
-    try:
-        with SessionLocal() as db:
-            db.query(FixtureLoan).filter(
-                FixtureLoan.schedule_id == schedule_id,
-                FixtureLoan.status == "reserved",
-            ).update({"status": "loaned", "loan_date": now}, synchronize_session=False)
-            db.commit()
-    except Exception as e:
-        logger.warning(f"[schedule {schedule_id}] 治具預約轉借出失敗：{e}")
 
 
 async def auto_start_sop(
@@ -330,7 +334,7 @@ async def auto_start_sop(
             "sim_phase": "idle",
             "sim_cycle": 0,
         })
-        _save_device_state(device_id, device)
+        await asyncio.to_thread(_save_device_state, device_id, device)
 
     # 建 SopExecution 記錄，並將 id 存入 device cache 供完成時寫入 test_ended_at。
     # sync DB I/O 走 to_thread：auto_start_sop 跑在 APScheduler event loop 上，直接 blocking
@@ -339,10 +343,17 @@ async def auto_start_sop(
         _create_execution_id_db, sop_id, device_id, operator, now,
         None, f"[auto_start] {device_id} ",
     )
-    if execution_id is not None:
-        async with lock:
-            device["active_execution_id"] = execution_id
-            _save_device_state(device_id, device)
+    if execution_id is None:
+        # 建不出執行紀錄＝這次啟動不算數：清回待機、回報失敗。
+        # 回 False 讓排程留在「已確認」等 fallback 重試，治具也不會被轉借
+        # （try_start_schedule 只在這裡回 True 後才轉借）。
+        await _revert_device_to_idle(device_id, device, lock)
+        logger.error(f"[auto_start] {device_id} 建立執行紀錄失敗，已復原為待機、放棄本次啟動")
+        return False
+
+    async with lock:
+        device["active_execution_id"] = execution_id
+        await asyncio.to_thread(_save_device_state, device_id, device)
 
     logger.info(f"[auto_start] {device_id} 自動啟動 SOP: {sop_id} ({sop_name})")
     return True

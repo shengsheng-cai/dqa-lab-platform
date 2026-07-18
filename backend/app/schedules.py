@@ -13,14 +13,14 @@ from .models import (
     User, ScheduleFixture, FixtureLoan,
 )
 from .standards import STANDARD_TREE, get_standard
-from .sop import DEVICE_IDS
+from .constants import DEVICE_IDS
 from .auth import require_admin, current_user
 from .line import push_message
 from .utils import _now_utc, _now_utc_naive, _parse_conditions
 from .audit import log_audit
 from .schedule_service import (
     ACTIVE_STATUSES,
-    _complete_schedule,
+    _complete_schedule, _release_schedule_fixtures,
     _calc_condition_hours, _calc_total_hours,
     _build_running_until,
     _build_schedule_fixtures_map, _enrich,
@@ -312,6 +312,8 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, cache: 
     conditions = None
     device_id = None
     start_aware = None
+    # 同一次修改共用一個時間，治具歸還時間與排程 updated_at 才不會差幾毫秒對不起來
+    now = _now_utc_naive()
 
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
@@ -382,14 +384,8 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, cache: 
             s.end_time = new_end
 
             if body.status == ScheduleStatus.CANCELLED:
-                db.query(FixtureLoan).filter(
-                    FixtureLoan.schedule_id == schedule_id,
-                    FixtureLoan.status == "reserved",
-                ).delete(synchronize_session=False)
-                db.query(FixtureLoan).filter(
-                    FixtureLoan.schedule_id == schedule_id,
-                    FixtureLoan.status == "loaned",
-                ).update({"status": "returned"}, synchronize_session=False)
+                # 取消＝釋放預約治具、把借出中的收回（與「異常」共用同一支，避免兩路漂掉）
+                _release_schedule_fixtures(db, schedule_id, now, return_loaned=True)
                 if original_status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) and original_device_id:
                     cancelled_device_id = original_device_id
 
@@ -404,7 +400,7 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, cache: 
             s.start_time = new_start
             s.end_time = new_end
 
-        s.updated_at = _now_utc_naive()
+        s.updated_at = now
         if body.status:
             action_map = {
                 ScheduleStatus.CONFIRMED: "CONFIRM",
@@ -483,9 +479,13 @@ def _delete_schedule_db(schedule_id: int, user_id):
         stop_device_id = s.device_id if s.status in (ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING) else None
         detail = f"{s.project_number} / {s.sample_name}"
         db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == schedule_id).delete(synchronize_session=False)
+        # 刪排程＝比照取消：預約的丟掉、借出中的收回來（不是連借用紀錄一起硬刪）。
+        # 借出歷史要留著才查得到那批治具曾被誰借走、何時還。
+        _release_schedule_fixtures(db, schedule_id, _now_utc_naive(), return_loaned=True)
+        # 排程本身要刪掉，留下來的借用紀錄不能再指向一筆不存在的排程
         db.query(FixtureLoan).filter(
             FixtureLoan.schedule_id == schedule_id,
-        ).delete(synchronize_session=False)
+        ).update({"schedule_id": None}, synchronize_session=False)
         db.delete(s)
         log_audit(db, str(user_id or "unknown"), "admin", "DELETE", "schedule", schedule_id, detail)
         db.commit()

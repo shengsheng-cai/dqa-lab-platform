@@ -13,7 +13,7 @@ from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditio
 from .auth import require_admin, current_user
 from .audit import log_audit
 from .constants import AMBIENT_TEMP
-from .sop import DEVICE_IDS
+from .constants import DEVICE_IDS
 
 logger = logging.getLogger("app")
 
@@ -199,7 +199,9 @@ def build_device_list(cache: dict) -> list:
     with SessionLocal() as db:
         active_blocks = db.query(DeviceBlockedPeriod).filter(
             DeviceBlockedPeriod.start_time <= now_dt,
-            DeviceBlockedPeriod.end_time >= now_dt,
+            # 到結束時刻就解除封鎖（用 > 不用 >=），與啟動判斷 device_blocked_reason_now 一致，
+            # 否則列表在結束那一瞬還顯示「不可用」、啟動卻已放行，兩邊對不上。
+            DeviceBlockedPeriod.end_time > now_dt,
         ).all()
         running_schedules = db.query(Schedule).filter(
             Schedule.status == ScheduleStatus.RUNNING,

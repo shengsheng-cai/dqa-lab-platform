@@ -8,7 +8,7 @@ from typing import Optional
 
 from .models import SessionLocal, DeviceData, SopExecution, Schedule, ScheduleStatus
 from .standards import get_ramp_rate, get_standard
-from .utils import _now_utc_naive, _save_device_state
+from .utils import _now_utc_naive, _save_device_state, _idle_state_patch
 from .schedule_service import _complete_schedule
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 from .line import push_message
@@ -235,26 +235,6 @@ def _try_complete_schedule_for_device(device_id: str) -> str | None:
     except Exception as e:
         logger.error(f"[{device_id}] 更新排程失敗：{e}", exc_info=True)
     return None
-
-
-def _idle_state_patch() -> dict:
-    return {
-        "status": "IDLE",
-        "running_sop_name": "STANDBY",
-        "running_sop_id": None,
-        "active_sop_json": None,
-        "started_at": None,
-        "standard_id": None,
-        "operator": "",
-        "operator_user_id": None,
-        "sim_phase": "idle",
-        "sim_cycle": 0,
-        "dwell_high_start": None,
-        "dwell_low_start": None,
-        "dwell_half_fired": False,
-        "completed_steps": 0,
-        "active_execution_id": None,
-    }
 
 
 async def _sim_handle_finishing(

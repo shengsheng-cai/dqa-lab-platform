@@ -12,7 +12,9 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
-from .sop import router as sop_router, execution_router, DEVICE_IDS
+from .sop import router as sop_router, execution_router
+from .constants import DEVICE_IDS
+from .utils import _idle_state_patch
 from .reports import router as reports_router
 from .errors import router as errors_router
 from .ai import router as ai_router
@@ -156,21 +158,12 @@ async def lifespan(app: FastAPI):
             }
             logger.info(f"[{device_id}] 恢復狀態：{s.status}，溫度：{s.temperature}°C")
         else:
+            # 沒有存檔的設備＝全新待機。直接套共用的待機欄位表，開機後的欄位才會跟
+            # 「跑完一輪回到待機」完全一樣，不會少幾個欄位變成只有開機才有的怪狀況。
             cache[device_id] = {
+                **_idle_state_patch(),
                 "temperature": round(AMBIENT_TEMP + random.uniform(-1.0, 1.0), 2),
                 "humidity": round(AMBIENT_HUMIDITY + random.uniform(-2.0, 2.0), 1),
-                "status": "IDLE",
-                "running_sop_name": "STANDBY",
-                "running_sop_id": None,
-                "standard_id": None,
-                "active_sop_json": None,
-                "completed_steps": 0,
-                "started_at": None,
-                "operator": "",
-                "operator_user_id": None,
-                "sim_phase": "idle",
-                "sim_cycle": 0,
-                "dwell_half_fired": False,
             }
 
     app.state.AICM_CACHE = cache

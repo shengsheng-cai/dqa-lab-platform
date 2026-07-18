@@ -10,7 +10,9 @@
 
 - 測試檔放在 `backend/tests/`
 - 執行：`cd backend && python -m pytest`
-- conftest.py 使用 in-memory SQLite，測試間互相隔離
+- conftest.py 使用 in-memory SQLite（StaticPool，跨執行緒共用同一個 DB），測試間互相隔離
+- 共用 fixture：`db`（單一 session）、`api_client`（掛 router 的 TestClient + 角色注入）、`patched_session`（一次 patch 多個模組的 SessionLocal）
+- 跨模組寫 DB 的流程（如啟動排程會動到 schedule_service / sop / utils / schedules）一律用 `patched_session` 把相關模組一次 patch 完——漏一個那模組就會寫進真實的 aicm.db
 
 ## 資料庫
 

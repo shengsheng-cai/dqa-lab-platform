@@ -1,7 +1,7 @@
 """
 T-04: 三模組連動核心邏輯測試
 - _get_emergency_devices / _get_stuck_devices（純 cache dict）
-- _transfer_reserved_fixtures（mock SessionLocal，驗證 reserved→loaned）
+- _activate_schedule_db（mock SessionLocal，驗證排程啟動時 reserved→loaned 治具轉借）
 - auto_start_sop（async，驗證 cache 狀態更新與 early-exit 路徑）
 """
 import asyncio
@@ -10,11 +10,12 @@ from unittest.mock import patch, MagicMock
 
 from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan
 from app.schedule_service import (
+    _activate_schedule_db,
     _force_normal_stop,
     _get_emergency_devices,
     _get_stuck_devices,
 )
-from app.sop import _transfer_reserved_fixtures, auto_start_sop
+from app.sop import auto_start_sop
 
 UTC = datetime.timezone.utc
 
@@ -92,7 +93,7 @@ def test_force_normal_stop_sets_skip_push():
     mock_save.assert_called_once_with("CH-01", device)
 
 
-# ── _transfer_reserved_fixtures ────────────────────────────────────────────
+# ── _activate_schedule_db：排程啟動時的治具轉借（reserved→loaned）─────────────
 
 
 def _mock_session_cm(session):
@@ -135,41 +136,39 @@ def _seed_loan(db, device_id: str, status: str = "reserved") -> FixtureLoan:
     return loan
 
 
-def test_transfer_reserved_to_loaned(db):
-    """reserved 治具 → 轉為 loaned"""
+def test_activate_turns_reserved_into_loaned(db):
+    """排程啟動 → 該排程的 reserved 治具轉為 loaned"""
     loan = _seed_loan(db, "CH-01", status="reserved")
-    now = datetime.datetime.now(UTC)
 
-    with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
-        _transfer_reserved_fixtures(loan.schedule_id, now)
+    with patch("app.schedule_service.SessionLocal", return_value=_mock_session_cm(db)):
+        _activate_schedule_db(loan.schedule_id)
 
     db.refresh(loan)
     assert loan.status == "loaned"
 
 
-def test_transfer_does_not_affect_already_loaned(db):
-    """已是 loaned → update 不觸動它（status 維持 loaned，loan_date 不變）"""
+def test_activate_does_not_affect_already_loaned(db):
+    """轉借只挑 reserved：已是 loaned 的不被觸動（status 維持 loaned，loan_date 不變）"""
     original_date = datetime.datetime(2026, 1, 1)  # naive，SQLite 不存 tz
     loan = _seed_loan(db, "CH-01", status="loaned")
     loan.loan_date = original_date
     db.commit()
 
-    with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
-        _transfer_reserved_fixtures(loan.schedule_id, datetime.datetime.now(UTC))
+    with patch("app.schedule_service.SessionLocal", return_value=_mock_session_cm(db)):
+        _activate_schedule_db(loan.schedule_id)
 
     db.refresh(loan)
     assert loan.status == "loaned"
     assert loan.loan_date == original_date
 
 
-def test_transfer_only_affects_target_schedule(db):
-    """同設備多筆已確認排程：只轉借目標 schedule_id 的預約治具，不誤借其他筆"""
+def test_activate_only_affects_target_schedule(db):
+    """同設備多筆已確認排程：只轉借目標排程的預約治具，不誤借其他筆"""
     loan_a = _seed_loan(db, "CH-01", status="reserved")
     loan_b = _seed_loan(db, "CH-01", status="reserved")  # 同設備另一筆已確認排程
-    target_id = loan_a.schedule_id
 
-    with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
-        _transfer_reserved_fixtures(target_id, datetime.datetime.now(UTC))
+    with patch("app.schedule_service.SessionLocal", return_value=_mock_session_cm(db)):
+        _activate_schedule_db(loan_a.schedule_id)
 
     db.refresh(loan_a)
     db.refresh(loan_b)
@@ -250,14 +249,17 @@ def test_auto_start_sop_happy_path_updates_cache(db):
 def test_auto_start_sop_never_touches_fixtures(db):
     """auto_start_sop 不得自行轉借治具。
 
-    治具轉借一律由呼叫方依 schedule_id 精準處理（排程路徑走
-    schedule_service._activate_schedule_db；手動路徑 sop._transfer_reserved_fixtures
-    收呼叫端傳入的 schedule_id）——auto_start_sop 本身不碰治具。
+    治具轉借一律由呼叫方依 schedule_id 精準處理（走 schedule_service._activate_schedule_db）——
+    auto_start_sop 本身只管把設備開起來、不碰治具。這裡放一筆 reserved 治具，
+    啟動後它必須維持 reserved。
     """
+    loan = _seed_loan(db, "CH-01", status="reserved")
     cache = {"CH-01": {"status": "IDLE"}}
     with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
         with patch("app.sop._save_device_state"):
-            with patch("app.sop._transfer_reserved_fixtures") as mock_transfer:
-                with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
-                    _run_async(_start_sop("CH-01", "sop_test", cache))
-                mock_transfer.assert_not_called()
+            with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
+                _run_async(_start_sop("CH-01", "sop_test", cache))
+
+    db.refresh(loan)
+    assert loan.status == "reserved", "auto_start_sop 不該碰治具"
+    assert cache["CH-01"]["status"] == "RUNNING"
