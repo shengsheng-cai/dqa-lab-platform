@@ -5,48 +5,16 @@
 任何借出/歸還操作都不得讓 available 被灌大或讓庫存被超借。
 """
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from starlette.middleware.base import BaseHTTPMiddleware
 
 import app.fixtures as fixtures_module
 from app.fixtures import router as fixtures_router
-from app.models import Base, Fixture
+from app.models import Fixture
 
 
 @pytest.fixture()
-def admin_client():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
-
-    original = fixtures_module.SessionLocal
-    fixtures_module.SessionLocal = lambda: TestSession()  # type: ignore[assignment]
-
-    app = FastAPI()
-
-    class RoleMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
-            request.state.user_role = "admin"
-            request.state.user_id = 1
-            request.state.username = "admin"
-            return await call_next(request)
-
-    app.add_middleware(RoleMiddleware)
-    app.include_router(fixtures_router)
-
-    with TestClient(app) as client:
-        yield client, TestSession
-
-    fixtures_module.SessionLocal = original  # type: ignore[assignment]
-    Base.metadata.drop_all(engine)
+def admin_client(api_client):
+    with api_client(fixtures_module, fixtures_router, role="admin", user_id=1, username="admin") as (client, Session):
+        yield client, Session
 
 
 def _seed_fixture(Session, total=5) -> int:
@@ -139,50 +107,26 @@ def test_return_restores_available(admin_client):
     assert _available(client, fid) == 5
 
 
-def test_schedule_reservation_rejects_negative_quantity():
+def test_schedule_reservation_rejects_negative_quantity(api_client):
     """排程預約治具的負數量必須被拒——否則轉為 reserved 借出時同樣灌大庫存，繞過 create_loan 守衛。"""
     import app.schedules as schedules_module
     from app.schedules import router as schedules_router
 
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    original = schedules_module.SessionLocal
-    schedules_module.SessionLocal = lambda: Session()  # type: ignore[assignment]
-    try:
+    with api_client(
+        schedules_module, schedules_router, role="admin", user_id=1, username="admin",
+        app_state={"AICM_CACHE": {}, "DEVICE_LOCKS": {}},
+    ) as (client, Session):
         with Session() as db:
             db.add(Fixture(interface_type="USB", form_factor="Desktop", total_quantity=5, is_active=True))
             db.commit()
 
-        app = FastAPI()
-
-        class RoleMiddleware(BaseHTTPMiddleware):
-            async def dispatch(self, request: Request, call_next):
-                request.state.user_role = "admin"
-                request.state.user_id = 1
-                request.state.username = "admin"
-                return await call_next(request)
-
-        app.add_middleware(RoleMiddleware)
-        app.include_router(schedules_router)
-        app.state.AICM_CACHE = {}
-        app.state.DEVICE_LOCKS = {}
-
-        with TestClient(app) as client:
-            resp = client.post("/api/schedules", json={
-                "project_number": "P-1", "sample_name": "s", "standard": "IEC 60068",
-                "conditions": ["iec60068_ab_-40_16h"],
-                "fixtures": [{"fixture_id": 1, "quantity": -5}],
-            })
+        resp = client.post("/api/schedules", json={
+            "project_number": "P-1", "sample_name": "s", "standard": "IEC 60068",
+            "conditions": ["iec60068_ab_-40_16h"],
+            "fixtures": [{"fixture_id": 1, "quantity": -5}],
+        })
 
         assert resp.status_code == 400, f"負數預約應被拒，實際 {resp.status_code}"
-    finally:
-        schedules_module.SessionLocal = original  # type: ignore[assignment]
-        Base.metadata.drop_all(engine)
 
 
 def test_double_return_is_rejected(admin_client):

@@ -13,7 +13,7 @@ from reportlab.platypus import (
 )
 from .models import SessionLocal, SopExecution, StepRecord, DeviceData
 from .standards import STANDARDS_AND_SOPS
-from .sop import DEVICE_IDS
+from .constants import DEVICE_IDS
 from . import uncertainty as unc
 from .utils import _now_utc
 

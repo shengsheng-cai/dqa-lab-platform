@@ -37,8 +37,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `audit.py` | 稽核日誌寫入與查詢 API |
 | `ws.py` | WebSocket `/ws/devices` + ConnectionManager + broadcast_loop |
 | `line.py` | LINE push_message 推播 |
-| `utils.py` | 共用工具函式（時間、條件解析、device state 存寫） |
-| `constants.py` | 全域常數（AMBIENT_TEMP/HUMIDITY 等） |
+| `utils.py` | 共用工具函式（時間、條件解析、device state 存寫、待機欄位表 `_idle_state_patch`） |
+| `constants.py` | 全域常數（`DEVICE_IDS`、AMBIENT_TEMP/HUMIDITY 等）；設備清單一律從這裡拿，不要各模組自己定義 |
 | `uncertainty.py` | GUM 量測不確定度計算（Type A/B/uc/U） |
 | `errors.py` | 異常紀錄 API |
 
@@ -173,8 +173,8 @@ cd backend && ../venv/bin/python -m pytest tests/test_auth.py -v  # 單一測試
 
 連動實作關鍵：
 - `schedule_fixtures` 中間表 + `fixture_loans.schedule_id` 外鍵
-- 排程確認時呼叫 `_transfer_reserved_fixtures`
-- 設備 RUNNING 時預約治具自動轉借出；測試完成時自動歸還
+- 設備真的進入 RUNNING 後，才由 `_activate_schedule_db` 把排程推進成進行中、預約治具轉借出、寫 audit——三件事同一 transaction，自動與手動兩條啟動路徑共用
+- 排程走到終止狀態（取消／異常／刪除）一律走 `_release_schedule_fixtures`：預約的丟掉、借出中的歸還並記時間；測試完成時同樣自動歸還
 
 ---
 

@@ -69,6 +69,29 @@ def today_utc_window() -> tuple:
     return now, today_start, today_end
 
 
+def _idle_state_patch() -> dict:
+    """把設備清回待機時要覆蓋的欄位集合。收尾完成、緊急停止、啟動失敗復原都用這一份，
+    避免各處各清一半、留下髒欄位。只回傳 dict，呼叫端 update 進 cache 後自行 _save_device_state。"""
+    return {
+        "status": "IDLE",
+        "running_sop_name": "STANDBY",
+        "running_sop_id": None,
+        "active_sop_json": None,
+        "started_at": None,
+        "standard_id": None,
+        "operator": "",
+        "operator_user_id": None,
+        "sim_phase": "idle",
+        "sim_cycle": 0,
+        "dwell_high_start": None,
+        "dwell_low_start": None,
+        "dwell_half_fired": False,
+        "completed_steps": 0,
+        "total_steps": 0,
+        "active_execution_id": None,
+    }
+
+
 def _save_device_state(device_id: str, item: dict):
     with SessionLocal() as db:
         state = db.get(DeviceState, device_id)

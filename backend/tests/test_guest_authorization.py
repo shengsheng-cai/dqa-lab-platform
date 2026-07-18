@@ -11,16 +11,10 @@ AI 查詢、LINE webhook 與 login/logout/demo-login 是公開流程，不屬於
 排程 PATCH 也沒有例外：確認、取消與內容修改都必須由 admin 執行。
 """
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from starlette.middleware.base import BaseHTTPMiddleware
 
 import app.schedules as schedules_module
 from app.auth import require_admin
-from app.models import Base, Schedule, ScheduleStatus
+from app.models import Schedule, ScheduleStatus
 
 WRITE_METHODS = {"POST", "PATCH", "PUT", "DELETE"}
 # 「不需 admin」的公開寫入 route——與 auth.py 的 SKIP_PATHS（「不需 token」）語意不同，
@@ -104,41 +98,14 @@ def test_write_route_net_covers_mounted_app():
 
 
 @pytest.fixture()
-def guest_client():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
-
-    original = schedules_module.SessionLocal
-    schedules_module.SessionLocal = lambda: TestSession()  # type: ignore[assignment]
-
-    # 刻意給非 admin 一個 user_id：即使排程 ownership 相符，也必須由 role 在 route 層擋下。
+def guest_client(api_client):
+    # 刻意給非 admin 一個 user_id（5）：即使排程 ownership 相符，也必須由 role 在 route 層擋下。
     # 舊死分支會允許這個身分取消自己的待審核排程，因此能形成有效回歸測試。
-    GUEST_ID = 5
-
-    app = FastAPI()
-
-    class GuestMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
-            request.state.user_role = "guest"
-            request.state.user_id = GUEST_ID
-            request.state.username = None
-            return await call_next(request)
-
-    app.add_middleware(GuestMiddleware)
-    app.include_router(schedules_module.router)
-    app.state.AICM_CACHE = {}
-    app.state.DEVICE_LOCKS = {}
-
-    with TestClient(app) as client:
-        yield client, TestSession
-
-    schedules_module.SessionLocal = original  # type: ignore[assignment]
-    Base.metadata.drop_all(engine)
+    with api_client(
+        schedules_module, schedules_module.router, role="guest", user_id=5,
+        app_state={"AICM_CACHE": {}, "DEVICE_LOCKS": {}},
+    ) as (client, Session):
+        yield client, Session
 
 
 def _seed(Session, applicant_user_id, status=ScheduleStatus.PENDING) -> int:
