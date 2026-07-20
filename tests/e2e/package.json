@@ -1,0 +1,13 @@
+{
+  "name": "dqa-lab-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DQA Lab Platform 端對端測試（Playwright）",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}
