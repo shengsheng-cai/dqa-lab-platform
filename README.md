@@ -100,6 +100,7 @@ make install                  # 安裝所有依賴
 venv/bin/python backend/init_db.py  # 重建並重灌 demo 資料（會清空既有資料）
 make dev                      # 啟動全部服務（含 HF 本地預覽）
 make test                     # 執行後端 + 前端測試
+make test-e2e                 # E2E 瀏覽器測試（自己開測試後端）
 ```
 
 | 服務 | 網址 |
@@ -144,7 +145,7 @@ Docker / Hugging Face Spaces 部署時不依賴 `backend/.env`，改由平台 Se
 | **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
 | **AI** | Gemini API（Flash-Lite）；RAG 檢索自建（Gemini embedding + numpy 餘弦相似度，無向量資料庫框架；embedding 可切換 Gemini / sentence-transformers） |
 | **通知** | LINE Messaging API（條件完成 / 測試完成 / 緊急停止推播）|
-| **品質** | pytest（後端）· Vitest（前端）· GitHub Actions CI/CD · Alembic 版本控制遷移 |
+| **品質** | pytest（後端）· Vitest（前端）· Playwright（E2E）· GitHub Actions CI/CD · Alembic 版本控制遷移 |
 
 ---
 

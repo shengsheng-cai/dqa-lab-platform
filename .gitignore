@@ -107,5 +107,12 @@ docs/templates/
 .codex/
 chat-history/
 
+### E2E 測試產出（測試碼本身要進 git，這些跑出來的不進）
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/.last-run.json
+tests/e2e/.backend.log
+client/dist-e2e/
+
 ### 雜項
 git_log.txt
