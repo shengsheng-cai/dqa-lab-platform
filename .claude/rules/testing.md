@@ -25,7 +25,7 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 後端不是靜態的：模擬器每秒寫感測資料、推設備狀態機，排程也會自己往前跑。
 所以每個測試檔都要自己重灌資料庫、重開後端。忘了寫不會報錯，只會變成偶爾紅一次的鬼故事。
 
-登入用 `helpers/login.js` 的 `loginAsAdmin(page)`，不要每個檔案自己填帳密。
+登入用 `helpers/login.js`：管理員 `loginAsAdmin(page)`、訪客 `loginAsGuest(page)`，不要每個檔案自己填帳密。
 
 ### 已經踩過的坑，不要再踩
 
@@ -33,7 +33,7 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 - **測試環境和開發環境完全分開**：port 8100、資料庫 `/tmp/dqa-e2e.db`、假帳密。前端 build 到 `client/dist-e2e`，**不要改用 `client/dist`**——那個會被 `make dev` 蓋成 HF 預覽版，測試會安靜地連到別的後端
 - **殺程序一定要加 `lsof -sTCP:LISTEN`**。不加會連「連到這個 port 的客戶端」一起列出來，包括 Playwright 自己，結果測試把自己殺掉
 - **登入連錯 5 次會鎖 IP 10 分鐘**（記憶體計數）。寫負向測試時小心，每個測試檔重開後端剛好會清掉
-- **訪客相關測試**要設 `DEMO_PASSWORD`，沒設後端會直接放行、測起來是假的；另需先開一張訪客 token
+- **訪客相關測試**要設 `DEMO_PASSWORD`，沒設後端會直接放行、測起來是假的。`loginAsGuest` 拿這個 master key 直接進，不用先開訪客 token
 - 定位優先用畫面文字，前端目前沒有 test id
 
 ## Backend 單元測試（pytest）
