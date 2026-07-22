@@ -46,7 +46,7 @@ App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, Maintenan
 ## SchedulePage 佈局
 
 - Header：無（badge 已移至 LeftPanel ScheduleSummaryPanel）
-- 過濾列：全部/待審核/已確認/進行中/已取消/已完成/異常 tab + 右側 ↺/🔒/+申請排程 按鈕
+- 過濾列：全部/待審核/已確認/進行中/已取消/已完成/異常 tab + 右側 ↺/+ 不可用時段/+ 申請排程 按鈕
 - 甘特圖：`flexShrink:0` 固定區塊（308px），永遠可見，不可改為可捲動
 - 捲動區：待審核警示條 + 待審核隊列 + 圖例 + 排程表格
 
