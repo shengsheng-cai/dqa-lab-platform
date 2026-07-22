@@ -355,6 +355,31 @@ def test_manual_start_succeeds_on_idle_device(session_factory):
     assert cache["CH-01"]["status"] == "RUNNING"
 
 
+def test_manual_start_rejects_maintenance_device(session_factory):
+    """設備 IDLE 但當下在維護時段 → 手動「立即開始」也要擋下：回 409、排程維持「已確認」。
+
+    自動路徑早有涵蓋（test_start_skipped_when_device_in_maintenance）；手動 HTTP 這條
+    有自己的錯誤回應，之前只測了「忙碌設備」沒測「維護設備」，補這條把「手動也尊重維護」鎖住。
+
+    註：目前這個 409 的訊息本身有毛病（拿設備狀態拼字，維護中卻說成「非待機狀態」、
+    也沒提維護），已記在 CLAUDE.local.md 待補。所以這裡只斷言擋沒擋住這個地面事實，
+    不押在訊息字串上。
+    """
+    Session = session_factory
+    sid = _seed_confirmed(Session)
+    _seed_blocked(Session)  # CH-01 插一段涵蓋當下的維護時段
+    cache = {"CH-01": {"status": "IDLE"}}
+
+    client = _make_client(schedules_router, cache)
+    resp = client.post(f"/api/schedules/{sid}/start")
+
+    assert resp.status_code == 409, f"維護中不得回報啟動成功，實際 {resp.status_code}"
+    assert _status(Session, sid) == ScheduleStatus.CONFIRMED, (
+        "維護中卻把排程標為進行中：畫面顯示測試中但設備在維護、根本沒動"
+    )
+    assert cache["CH-01"]["status"] == "IDLE", "維護中不得啟動設備"
+
+
 # ── 建不出執行紀錄 → 視為啟動失敗、把設備清回待機 ─────────────────────────────
 
 
