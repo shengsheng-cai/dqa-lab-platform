@@ -59,11 +59,9 @@ test("申請排程並確認後，系統會自動選機並把設備開起來", as
     await expect(card).toBeVisible();
   });
 
-  await test.step("重新整理後排程狀態為進行中", async () => {
-    // 註：這裡必須手動按重新整理，排程列才會更新成「進行中」。
-    // 確認後後端 100ms 內就轉成進行中並啟動設備了，但畫面不會自己跟上——
-    // 已知問題，記錄在 CLAUDE.local.md 待補。
-    await page.getByRole("button", { name: "重新整理" }).click();
+  await test.step("確認後這一列會自動變「進行中」，不用手動重新整理", async () => {
+    // BUG-001 修好後的回歸保護：確認成功會自動重抓一次，這一列不用手動刷新就轉「進行中」。
+    // 若有人退回「確認後不重抓」的舊行為，這一步會失敗。
     await expect(row).toContainText("進行中");
   });
 });
