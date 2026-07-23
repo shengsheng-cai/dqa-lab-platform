@@ -16,7 +16,7 @@ from .standards import STANDARD_TREE, get_standard
 from .constants import DEVICE_IDS
 from .auth import require_admin, current_user
 from .line import push_message
-from .utils import _now_utc, _now_utc_naive, _parse_conditions
+from .utils import _now_utc, _now_utc_naive, _parse_conditions, device_blocked_reason_now
 from .audit import log_audit
 from .schedule_service import (
     ACTIVE_STATUSES,
@@ -596,12 +596,17 @@ async def start_schedule(schedule_id: int, request: Request, _: None = Depends(r
         raise HTTPException(status_code=400, detail="排程缺少測試條件或設備，無法啟動")
 
     if not await try_start_schedule(schedule_id, device_id, conditions, cache, locks):
-        dev_status = (cache.get(device_id) or {}).get("status", "未知")
-        raise HTTPException(
-            status_code=409,
-            detail=f"{device_id} 目前為「{dev_status}」，非待機狀態，無法啟動；"
-                   f"排程維持「已確認」，設備空出後會自動啟動",
-        )
+        # 分兩種擋下的原因給對的話：維護中的設備明明是 IDLE，不能再回它「非待機狀態」
+        # 那種自相矛盾、又不提維護的訊息。
+        maint_reason = await asyncio.to_thread(device_blocked_reason_now, device_id)
+        if maint_reason:
+            detail = (f"{device_id} 在維護時段（{maint_reason}），無法啟動；"
+                      f"排程維持「已確認」，維護結束後會自動啟動")
+        else:
+            dev_status = (cache.get(device_id) or {}).get("status", "未知")
+            detail = (f"{device_id} 目前為「{dev_status}」，非待機狀態，無法啟動；"
+                      f"排程維持「已確認」，設備空出後會自動啟動")
+        raise HTTPException(status_code=409, detail=detail)
 
     return {"status": "started", "device_id": device_id, "sop_id": conditions[0]}
 

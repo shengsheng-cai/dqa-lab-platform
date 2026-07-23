@@ -356,18 +356,16 @@ def test_manual_start_succeeds_on_idle_device(session_factory):
 
 
 def test_manual_start_rejects_maintenance_device(session_factory):
-    """設備 IDLE 但當下在維護時段 → 手動「立即開始」也要擋下：回 409、排程維持「已確認」。
+    """設備 IDLE 但當下在維護時段 → 手動「立即開始」要擋下（409、排程維持「已確認」），
+    而且訊息要講「維護中」，不能回「IDLE…非待機狀態」那種自相矛盾又不提維護的話。
 
     自動路徑早有涵蓋（test_start_skipped_when_device_in_maintenance）；手動 HTTP 這條
-    有自己的錯誤回應，之前只測了「忙碌設備」沒測「維護設備」，補這條把「手動也尊重維護」鎖住。
-
-    註：目前這個 409 的訊息本身有毛病（拿設備狀態拼字，維護中卻說成「非待機狀態」、
-    也沒提維護），已記在 CLAUDE.local.md 待補。所以這裡只斷言擋沒擋住這個地面事實，
-    不押在訊息字串上。
+    有自己的錯誤回應，之前只測了「忙碌設備」沒測「維護設備」，補這條把「手動也尊重維護、
+    而且把話講對」一起鎖住。
     """
     Session = session_factory
     sid = _seed_confirmed(Session)
-    _seed_blocked(Session)  # CH-01 插一段涵蓋當下的維護時段
+    _seed_blocked(Session, reason="校驗中")  # CH-01 插一段涵蓋當下的維護時段
     cache = {"CH-01": {"status": "IDLE"}}
 
     client = _make_client(schedules_router, cache)
@@ -378,6 +376,12 @@ def test_manual_start_rejects_maintenance_device(session_factory):
         "維護中卻把排程標為進行中：畫面顯示測試中但設備在維護、根本沒動"
     )
     assert cache["CH-01"]["status"] == "IDLE", "維護中不得啟動設備"
+
+    detail = resp.json()["detail"]
+    assert "維護" in detail and "校驗中" in detail, f"擋是擋了，但訊息沒講維護原因：{detail}"
+    assert "非待機" not in detail, (
+        f"維護中的 IDLE 設備不該收到「非待機狀態」這種自相矛盾的訊息：{detail}"
+    )
 
 
 # ── 建不出執行紀錄 → 視為啟動失敗、把設備清回待機 ─────────────────────────────
