@@ -48,17 +48,17 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const canEdit = role === "admin";
   const isPending = schedule.status === "待審核";
+  const previewConditions = schedule.conditions?.join(",") || "";
 
   const fetchPreview = useCallback(() => {
     if (!isPending) return;
-    const conditions = schedule.conditions?.join(",") || "";
-    if (!conditions) return;
+    if (!previewConditions) return;
     setPreviewState(s => ({ ...s, loading: true }));
     api
-      .get("/api/schedules/preview", { params: { conditions, device_id: deviceId || undefined } })
+      .get("/api/schedules/preview", { params: { conditions: previewConditions, device_id: deviceId || undefined } })
       .then((r) => setPreviewState({ data: r.data, loading: false, updatedAt: new Date() }))
       .catch(() => setPreviewState(s => ({ ...s, data: null, loading: false })));
-  }, [deviceId, isPending, schedule.conditions?.join(",")]);
+  }, [deviceId, isPending, previewConditions]);
 
   useEffect(() => {
     fetchPreview();
@@ -73,6 +73,9 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
       const res = await api.patch(`/api/schedules/${schedule.id}`, payload);
       showToast("排程已確認", "success");
       onUpdated(res.data);
+      // 確認回應仍帶「已確認」；重抓列表以顯示後端啟動後的最終狀態
+      // （通常為「進行中」，設備忙碌或維護時仍會維持「已確認」；BUG-001）。
+      onRefresh?.();
       setResultScreen({ type: "confirmed", data: res.data });
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
