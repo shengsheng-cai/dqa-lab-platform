@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 from .models import SessionLocal, PurchaseOrder, Fixture
-from .auth import require_admin
+from .auth import require_admin, current_user
 from .utils import _now_utc_naive
+from .audit import log_audit
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
 
@@ -72,12 +73,13 @@ class PurchaseOrderCreate(BaseModel):
 
 
 @router.post("/", response_model=PurchaseOrderOut)
-def create_purchase_order(body: PurchaseOrderCreate, _: None = Depends(require_admin)):
+def create_purchase_order(body: PurchaseOrderCreate, request: Request, _: None = Depends(require_admin)):
     """新增採購單（admin only）"""
 
     if body.quantity <= 0:
         raise HTTPException(status_code=400, detail="數量必須大於 0")
 
+    u = current_user(request)
     with SessionLocal() as db:
         fixture = db.query(Fixture).filter(Fixture.id == body.fixture_id).first()
         if not fixture:
@@ -98,6 +100,9 @@ def create_purchase_order(body: PurchaseOrderCreate, _: None = Depends(require_a
             status="pending",
         )
         db.add(order)
+        db.flush()
+        log_audit(db, str(u.user_id or "unknown"), u.role, "CREATE", "purchase_order", order.id,
+                  f"新增採購單（治具 #{body.fixture_id} × {body.quantity}）")
         db.commit()
         db.refresh(order)
         return _order_to_dict(order, {fixture.id: fixture})
@@ -112,9 +117,10 @@ class PurchaseOrderUpdate(BaseModel):
 
 
 @router.patch("/{order_id}", response_model=PurchaseOrderOut)
-def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, _: None = Depends(require_admin)):
+def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Request, _: None = Depends(require_admin)):
     """更新採購單；status=arrived 時自動將 arrived_quantity 加入治具庫存（admin only）"""
 
+    u = current_user(request)
     with SessionLocal() as db:
         order = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()
         if not order:
@@ -128,6 +134,7 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, _: None = De
         if body.note is not None:
             order.note = body.note
 
+        audit_detail = f"更新採購單 #{order_id}"
         if body.status == "arrived" and order.status != "arrived":
             order.status = "arrived"
             order.arrived_at = _now_utc_naive()
@@ -140,9 +147,13 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, _: None = De
             if fixture:
                 fixture.total_quantity = (fixture.total_quantity or 0) + arrived_qty
                 fixture.shortage = max(0, (fixture.shortage or 0) - arrived_qty)
+            audit_detail = f"採購單 #{order_id} 到貨（+{arrived_qty} 入庫，治具 #{order.fixture_id}）"
         elif body.status in ("pending", "cancelled") and body.status is not None:
             order.status = body.status
+            audit_detail = f"採購單 #{order_id} → {body.status}"
 
+        log_audit(db, str(u.user_id or "unknown"), u.role, "UPDATE", "purchase_order", order_id,
+                  audit_detail)
         db.commit()
         db.refresh(order)
         fixture = db.query(Fixture).filter(Fixture.id == order.fixture_id).first()
@@ -150,9 +161,10 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, _: None = De
 
 
 @router.delete("/{order_id}")
-def delete_purchase_order(order_id: int, _: None = Depends(require_admin)):
+def delete_purchase_order(order_id: int, request: Request, _: None = Depends(require_admin)):
     """刪除採購單（admin only，僅限 pending 狀態）"""
 
+    u = current_user(request)
     with SessionLocal() as db:
         order = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()
         if not order:
@@ -160,5 +172,7 @@ def delete_purchase_order(order_id: int, _: None = Depends(require_admin)):
         if order.status == "arrived":
             raise HTTPException(status_code=400, detail="已到貨的採購單不可刪除")
         db.delete(order)
+        log_audit(db, str(u.user_id or "unknown"), u.role, "DELETE", "purchase_order", order_id,
+                  f"刪除採購單 #{order_id}")
         db.commit()
         return {"status": "deleted"}

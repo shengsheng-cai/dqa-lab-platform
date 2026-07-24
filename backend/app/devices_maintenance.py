@@ -3,13 +3,14 @@
 """
 import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
 from .models import SessionLocal, DeviceCalibration, DeviceMaintenance
-from .auth import require_admin
+from .auth import require_admin, current_user
 from .utils import _now_utc_naive, _to_naive_utc
 from .constants import DEVICE_IDS
+from .audit import log_audit
 
 router = APIRouter(tags=["maintenance"])
 
@@ -97,7 +98,8 @@ def list_calibrations(device_id: str):
 
 
 @router.post("/api/devices/{device_id}/calibrations", response_model=CalibrationOut, status_code=201)
-def create_calibration(device_id: str, body: CalibrationCreate, _: None = Depends(require_admin)):
+def create_calibration(device_id: str, body: CalibrationCreate, request: Request, _: None = Depends(require_admin)):
+    u = current_user(request)
     with SessionLocal() as db:
         cal = DeviceCalibration(
             device_id=device_id,
@@ -110,6 +112,8 @@ def create_calibration(device_id: str, body: CalibrationCreate, _: None = Depend
             created_by=body.created_by,
         )
         db.add(cal)
+        log_audit(db, str(u.user_id or "unknown"), u.role, "CALIBRATION_CREATE", "device", device_id,
+                  f"新增校驗（{body.result}）")
         db.commit()
         db.refresh(cal)
         return cal
@@ -120,8 +124,10 @@ def update_calibration(
     device_id: str,
     cal_id: int,
     body: CalibrationUpdate,
+    request: Request,
     _: None = Depends(require_admin),
 ):
+    u = current_user(request)
     with SessionLocal() as db:
         cal = (
             db.query(DeviceCalibration)
@@ -134,6 +140,8 @@ def update_calibration(
             if field in ("calibration_date", "next_calibration_date"):
                 value = _to_naive_utc(value)
             setattr(cal, field, value)
+        log_audit(db, str(u.user_id or "unknown"), u.role, "CALIBRATION_UPDATE", "device", device_id,
+                  f"更新校驗 #{cal_id}")
         db.commit()
         db.refresh(cal)
         return cal
@@ -143,8 +151,10 @@ def update_calibration(
 def delete_calibration(
     device_id: str,
     cal_id: int,
+    request: Request,
     _: None = Depends(require_admin),
 ):
+    u = current_user(request)
     with SessionLocal() as db:
         cal = (
             db.query(DeviceCalibration)
@@ -154,6 +164,8 @@ def delete_calibration(
         if not cal:
             raise HTTPException(status_code=404, detail="校驗紀錄不存在")
         db.delete(cal)
+        log_audit(db, str(u.user_id or "unknown"), u.role, "CALIBRATION_DELETE", "device", device_id,
+                  f"刪除校驗 #{cal_id}")
         db.commit()
         return {"ok": True}
 
@@ -173,7 +185,8 @@ def list_maintenances(device_id: str):
 
 
 @router.post("/api/devices/{device_id}/maintenances", response_model=MaintenanceOut, status_code=201)
-def create_maintenance(device_id: str, body: MaintenanceCreate, _: None = Depends(require_admin)):
+def create_maintenance(device_id: str, body: MaintenanceCreate, request: Request, _: None = Depends(require_admin)):
+    u = current_user(request)
     with SessionLocal() as db:
         maint = DeviceMaintenance(
             device_id=device_id,
@@ -184,6 +197,8 @@ def create_maintenance(device_id: str, body: MaintenanceCreate, _: None = Depend
             next_maintenance_date=_to_naive_utc(body.next_maintenance_date),
         )
         db.add(maint)
+        log_audit(db, str(u.user_id or "unknown"), u.role, "MAINTENANCE_CREATE", "device", device_id,
+                  f"新增維護（{body.maintenance_type}）")
         db.commit()
         db.refresh(maint)
         return maint
@@ -194,8 +209,10 @@ def update_maintenance(
     device_id: str,
     maint_id: int,
     body: MaintenanceUpdate,
+    request: Request,
     _: None = Depends(require_admin),
 ):
+    u = current_user(request)
     with SessionLocal() as db:
         maint = (
             db.query(DeviceMaintenance)
@@ -208,6 +225,8 @@ def update_maintenance(
             if field in ("maintenance_date", "next_maintenance_date"):
                 value = _to_naive_utc(value)
             setattr(maint, field, value)
+        log_audit(db, str(u.user_id or "unknown"), u.role, "MAINTENANCE_UPDATE", "device", device_id,
+                  f"更新維護 #{maint_id}")
         db.commit()
         db.refresh(maint)
         return maint
@@ -217,8 +236,10 @@ def update_maintenance(
 def delete_maintenance(
     device_id: str,
     maint_id: int,
+    request: Request,
     _: None = Depends(require_admin),
 ):
+    u = current_user(request)
     with SessionLocal() as db:
         maint = (
             db.query(DeviceMaintenance)
@@ -228,6 +249,8 @@ def delete_maintenance(
         if not maint:
             raise HTTPException(status_code=404, detail="維護紀錄不存在")
         db.delete(maint)
+        log_audit(db, str(u.user_id or "unknown"), u.role, "MAINTENANCE_DELETE", "device", device_id,
+                  f"刪除維護 #{maint_id}")
         db.commit()
         return {"ok": True}
 

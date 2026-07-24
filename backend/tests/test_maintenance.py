@@ -7,6 +7,7 @@ T-11: 設備校驗 & 維護排程 API 測試
 import pytest
 
 from app.devices_maintenance import router as maintenance_router
+from app.models import AuditLog
 
 
 @pytest.fixture()
@@ -156,6 +157,46 @@ def test_create_maintenance(admin_client):
     list_resp = admin_client.get("/api/devices/CH-01/maintenances")
     assert list_resp.status_code == 200
     assert len(list_resp.json()) == 1
+
+
+# ── Audit Trail Tests ─────────────────────────────────────────────────────────
+
+
+def test_calibration_writes_audit_trail(api_client):
+    """建立與刪除校驗紀錄都要留下 audit（ISO 17025：校驗紀錄需可追溯），
+    且 actor/role 帶入真實登入者（非寫死）。"""
+    import app.devices_maintenance as dm_module
+    payload = {
+        "calibration_date": "2026-05-01T00:00:00",
+        "next_calibration_date": "2027-05-01T00:00:00",
+        "interval_days": 365,
+        "result": "pass",
+        "created_by": "admin",
+    }
+    with api_client(
+        dm_module, maintenance_router, role="admin", user_id=7, username="tester",
+    ) as (client, Session):
+        create_resp = client.post("/api/devices/CH-04/calibrations", json=payload)
+        assert create_resp.status_code == 201
+        cal_id = create_resp.json()["id"]
+
+        with Session() as s:
+            row = (
+                s.query(AuditLog)
+                .filter(AuditLog.action == "CALIBRATION_CREATE")
+                .one()
+            )
+            assert row.entity_type == "device"
+            assert row.entity_id == "CH-04"
+            assert row.actor == "7"      # 帶入真實 user_id，非 "unknown"
+            assert row.role == "admin"   # 帶入真實 role，非寫死字串
+
+        del_resp = client.delete(f"/api/devices/CH-04/calibrations/{cal_id}")
+        assert del_resp.status_code == 200
+
+        with Session() as s:
+            actions = {r.action for r in s.query(AuditLog).all()}
+            assert actions == {"CALIBRATION_CREATE", "CALIBRATION_DELETE"}
 
 
 # ── Calibration Status API ────────────────────────────────────────────────────

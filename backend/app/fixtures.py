@@ -462,7 +462,8 @@ def export_fixtures(_: None = Depends(require_admin)):
 
 
 @router.patch("/inventory-logs/{log_id}")
-def patch_inventory_log(log_id: int, actual_quantity: int, _: None = Depends(require_admin)):
+def patch_inventory_log(log_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
+    u = current_user(request)
     with SessionLocal() as db:
         log = (
             db.query(FixtureInventoryLog)
@@ -477,6 +478,8 @@ def patch_inventory_log(log_id: int, actual_quantity: int, _: None = Depends(req
         f.total_quantity = actual_quantity
         log.counted_quantity = actual_quantity
         log.difference = actual_quantity - log.previous_quantity
+        log_audit(db, str(u.user_id or "unknown"), u.role, "INVENTORY_LOG_UPDATE", "fixture", log.fixture_id,
+                  f"修改盤點紀錄 #{log_id}：庫存改為 {actual_quantity}")
         db.commit()
         return {
             "id": log.id,
@@ -486,7 +489,8 @@ def patch_inventory_log(log_id: int, actual_quantity: int, _: None = Depends(req
 
 
 @router.delete("/inventory-logs/{log_id}")
-def delete_inventory_log(log_id: int, _: None = Depends(require_admin)):
+def delete_inventory_log(log_id: int, request: Request, _: None = Depends(require_admin)):
+    u = current_user(request)
     with SessionLocal() as db:
         log = (
             db.query(FixtureInventoryLog)
@@ -495,7 +499,10 @@ def delete_inventory_log(log_id: int, _: None = Depends(require_admin)):
         )
         if not log:
             raise HTTPException(status_code=404, detail="盤點紀錄不存在")
+        fixture_id = log.fixture_id
         db.delete(log)
+        log_audit(db, str(u.user_id or "unknown"), u.role, "INVENTORY_LOG_DELETE", "fixture", fixture_id,
+                  f"刪除盤點紀錄 #{log_id}")
         db.commit()
         return {"status": "deleted"}
 
@@ -772,7 +779,8 @@ def return_loan(loan_id: int, body: ReturnUpdate, request: Request, _: None = De
 
 
 @router.post("/loans/{loan_id}/extend")
-def extend_loan(loan_id: int, body: ExtensionRequest, _: None = Depends(require_admin)):
+def extend_loan(loan_id: int, body: ExtensionRequest, request: Request, _: None = Depends(require_admin)):
+    u = current_user(request)
     with SessionLocal() as db:
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
         if not loan:
@@ -782,6 +790,8 @@ def extend_loan(loan_id: int, body: ExtensionRequest, _: None = Depends(require_
         loan.due_date = body.new_due_date
         note = f"[延期] {old_due} → {body.new_due_date.isoformat()} 原因：{body.reason}"
         loan.extension_note = (loan.extension_note or "") + "\n" + note
+        log_audit(db, str(u.user_id or "unknown"), u.role, "LOAN_EXTEND", "fixture", loan.fixture_id,
+                  f"借出 #{loan_id} 延期至 {body.new_due_date.date()}")
         db.commit()
         return {"status": "success"}
 
@@ -789,7 +799,7 @@ def extend_loan(loan_id: int, body: ExtensionRequest, _: None = Depends(require_
 # ---------- Excel 匯入 ----------
 
 
-def _run_import_db(df, col_map):
+def _run_import_db(df, col_map, actor, role):
     def safe_str(row, field):
         col = col_map.get(field)
         if col is None:
@@ -880,6 +890,8 @@ def _run_import_db(df, col_map):
                     )
                     imported += 1
 
+            log_audit(db, actor, role, "IMPORT", "fixture", "import",
+                      f"Excel 匯入治具：新增 {imported}、更新 {updated}、略過 {skipped}")
             db.commit()
             return {
                 "status": "success",
@@ -893,11 +905,12 @@ def _run_import_db(df, col_map):
 
 
 @router.post("/import")
-async def import_fixtures(file: UploadFile = File(...), _: None = Depends(require_admin)):
+async def import_fixtures(request: Request, file: UploadFile = File(...), _: None = Depends(require_admin)):
     """從 Excel 匯入治具資料（admin only）"""
     if pd is None:
         raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
 
+    u = current_user(request)
     contents = await file.read()
     df = pd.read_excel(io.BytesIO(contents), header=0)
 
@@ -910,15 +923,18 @@ async def import_fixtures(file: UploadFile = File(...), _: None = Depends(requir
                 col_map[field] = normalized_cols[key]
                 break
 
-    return await asyncio.to_thread(_run_import_db, df, col_map)
+    return await asyncio.to_thread(
+        _run_import_db, df, col_map, str(u.user_id or "unknown"), u.role
+    )
 
 
 # ---------- 設定保管人 ----------
 
 
 @router.patch("/{fixture_id}/keeper")
-def set_keeper(fixture_id: int, body: SetKeeperBody, _: None = Depends(require_admin)):
+def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request, _: None = Depends(require_admin)):
     """設定治具的系統保管人（admin only）"""
+    actor = current_user(request)
     with SessionLocal() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
@@ -934,6 +950,8 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, _: None = Depends(require_a
         else:
             f.keeper_name = None
 
+        log_audit(db, str(actor.user_id or "unknown"), actor.role, "KEEPER_SET", "fixture", fixture_id,
+                  f"設定保管人：{f.keeper_name or '（清除）'}")
         db.commit()
         return {"status": "success"}
 
@@ -985,7 +1003,8 @@ def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _:
 
 
 @router.post("/")
-def create_fixture(body: FixtureUpsert, _: None = Depends(require_admin)):
+def create_fixture(body: FixtureUpsert, request: Request, _: None = Depends(require_admin)):
+    u = current_user(request)
     with SessionLocal() as db:
         f = Fixture(
             interface_type=body.interface_type,
@@ -1005,6 +1024,9 @@ def create_fixture(body: FixtureUpsert, _: None = Depends(require_admin)):
             unit_price=body.unit_price,
         )
         db.add(f)
+        db.flush()
+        log_audit(db, str(u.user_id or "unknown"), u.role, "CREATE", "fixture", f.id,
+                  f"新增治具：{f.interface_type} / {f.form_factor}")
         db.commit()
         db.refresh(f)
         loan_map = _build_loan_qty_map(db, [f.id])
@@ -1015,7 +1037,8 @@ def create_fixture(body: FixtureUpsert, _: None = Depends(require_admin)):
 
 
 @router.patch("/{fixture_id}")
-def update_fixture(fixture_id: int, body: FixtureUpsert, _: None = Depends(require_admin)):
+def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request, _: None = Depends(require_admin)):
+    u = current_user(request)
     with SessionLocal() as db:
         f = (
             db.query(Fixture)
@@ -1039,6 +1062,8 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, _: None = Depends(requi
         f.vendor = body.vendor
         f.model_number = body.model_number
         f.unit_price = body.unit_price
+        log_audit(db, str(u.user_id or "unknown"), u.role, "UPDATE", "fixture", fixture_id,
+                  f"編輯治具 #{fixture_id}")
         db.commit()
         loan_map = _build_loan_qty_map(db, [f.id])
         return _fixture_to_out(db, f, loan_map)
@@ -1048,7 +1073,8 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, _: None = Depends(requi
 
 
 @router.delete("/{fixture_id}")
-def delete_fixture(fixture_id: int, _: None = Depends(require_admin)):
+def delete_fixture(fixture_id: int, request: Request, _: None = Depends(require_admin)):
+    u = current_user(request)
     with SessionLocal() as db:
         f = (
             db.query(Fixture)
@@ -1071,5 +1097,7 @@ def delete_fixture(fixture_id: int, _: None = Depends(require_admin)):
                 detail=f"此治具有 {active_loans} 筆借出/預約未結束，無法刪除",
             )
         f.is_active = False
+        log_audit(db, str(u.user_id or "unknown"), u.role, "DELETE", "fixture", fixture_id,
+                  f"刪除治具 #{fixture_id}（{f.interface_type} / {f.form_factor}）")
         db.commit()
         return {"status": "success"}
