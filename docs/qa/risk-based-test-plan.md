@@ -89,7 +89,6 @@ execution, and fixture states.
 
 ## 8. Known gaps
 
-- E2E is local-only until the CI gate and failure artifacts are implemented.
 - No real chamber or protocol testing is claimed.
 - Performance, browser matrix, accessibility, and security penetration testing
   require separate plans if they become release goals.
