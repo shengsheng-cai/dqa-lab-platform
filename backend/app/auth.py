@@ -255,9 +255,11 @@ def list_users(_: None = Depends(require_admin)):
 
 
 @router.post("/api/auth/users", status_code=201, response_model=UserMeResponse)
-def create_user(body: UserCreateBody, _: None = Depends(require_admin)):
+def create_user(body: UserCreateBody, request: Request, _: None = Depends(require_admin)):
+    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
     if not body.role or not body.role.strip():
         raise HTTPException(status_code=400, detail="角色不能為空")
+    u = current_user(request)
     with SessionLocal() as db:
         # username 自動產生，這類使用者不需要登入
         username = f"user_{secrets.token_hex(4)}"
@@ -270,32 +272,46 @@ def create_user(body: UserCreateBody, _: None = Depends(require_admin)):
             role=body.role,
         )
         db.add(user)
+        db.flush()
+        log_audit(db, str(u.user_id or "unknown"), u.role, "CREATE", "user", user.id,
+                  f"新增使用者：{user.display_name}（{user.role}）")
         db.commit()
         db.refresh(user)
         return {"id": user.id, "display_name": user.display_name, "role": user.role}
 
 
 @router.patch("/api/auth/users/{user_id}")
-def update_user(user_id: int, body: UserUpdateBody, _: None = Depends(require_admin)):
+def update_user(user_id: int, body: UserUpdateBody, request: Request, _: None = Depends(require_admin)):
+    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
+    u = current_user(request)
     with SessionLocal() as db:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="使用者不存在")
+        changes = []
         if body.display_name is not None:
             user.display_name = body.display_name
+            changes.append(f"名稱→{body.display_name}")
         if body.role is not None:
             if not body.role.strip():
                 raise HTTPException(status_code=400, detail="角色不能為空")
+            if body.role != user.role:
+                changes.append(f"角色 {user.role}→{body.role}")
             user.role = body.role
         # 使用 __fields_set__ 檢測是否被顯式傳入（包括 null）
         if body.is_active is not None:
             user.is_active = body.is_active
+            changes.append(f"啟用→{body.is_active}")
+        log_audit(db, str(u.user_id or "unknown"), u.role, "UPDATE", "user", user_id,
+                  f"更新使用者 #{user_id}：{'、'.join(changes) or '（無變更）'}")
         db.commit()
         return {"ok": True}
 
 
 @router.delete("/api/auth/users/{user_id}")
 def delete_user(user_id: int, request: Request, _: None = Depends(require_admin)):
+    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
+    u = current_user(request)
     # 取得當前登入者 ID，不允許刪除自己
     current_token = request.headers.get("X-User-Token", "")
     with SessionLocal() as db:
@@ -306,6 +322,8 @@ def delete_user(user_id: int, request: Request, _: None = Depends(require_admin)
         if not user:
             raise HTTPException(status_code=404, detail="使用者不存在")
         db.delete(user)
+        log_audit(db, str(u.user_id or "unknown"), u.role, "DELETE", "user", user_id,
+                  f"刪除使用者 #{user_id}（{user.display_name}）")
         db.commit()
         return {"ok": True}
 
@@ -373,6 +391,7 @@ def list_demo_tokens(_: None = Depends(require_admin)):
 
 @router.post("/api/auth/demo-tokens")
 def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(require_admin)):
+    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
     with SessionLocal() as db:
         expires_at = None
         if req.expires_days:
@@ -381,14 +400,18 @@ def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(
         # 確保唯一
         while db.query(DemoToken).filter(DemoToken.token == token_str).first():
             token_str = _gen_demo_token()
+        u = current_user(request)
         t = DemoToken(
             token=token_str,
             label=req.label,
-            created_by=current_user(request).user_id,
+            created_by=u.user_id,
             expires_at=expires_at,
             max_uses=req.max_uses,
         )
         db.add(t)
+        db.flush()
+        log_audit(db, str(u.user_id or "unknown"), u.role, "CREATE", "demo_token", t.id,
+                  f"建立訪客 Token：{req.label}")
         db.commit()
         db.refresh(t)
         return {
@@ -403,23 +426,31 @@ def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(
 
 
 @router.delete("/api/auth/demo-tokens/{token_id}")
-def delete_demo_token(token_id: int, _: None = Depends(require_admin)):
+def delete_demo_token(token_id: int, request: Request, _: None = Depends(require_admin)):
+    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
+    u = current_user(request)
     with SessionLocal() as db:
         t = db.query(DemoToken).filter(DemoToken.id == token_id).first()
         if not t:
             raise HTTPException(status_code=404, detail="Token 不存在")
         db.delete(t)
+        log_audit(db, str(u.user_id or "unknown"), u.role, "DELETE", "demo_token", token_id,
+                  f"刪除訪客 Token #{token_id}（{t.label}）")
         db.commit()
         return {"ok": True}
 
 
 @router.patch("/api/auth/demo-tokens/{token_id}/toggle")
-def toggle_demo_token(token_id: int, _: None = Depends(require_admin)):
+def toggle_demo_token(token_id: int, request: Request, _: None = Depends(require_admin)):
+    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
+    u = current_user(request)
     with SessionLocal() as db:
         t = db.query(DemoToken).filter(DemoToken.id == token_id).first()
         if not t:
             raise HTTPException(status_code=404, detail="Token 不存在")
         t.is_active = not t.is_active
+        log_audit(db, str(u.user_id or "unknown"), u.role, "TOGGLE", "demo_token", token_id,
+                  f"訪客 Token #{token_id} → {'啟用' if t.is_active else '停用'}")
         db.commit()
         return {"id": t.id, "is_active": t.is_active}
 
