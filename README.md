@@ -13,6 +13,8 @@ short_description: Environmental test lab management (FastAPI + React + AI)
 
 # DQA Lab Platform
 
+[![Tests](https://github.com/shengsheng-cai/dqa-lab-platform/actions/workflows/test.yml/badge.svg)](https://github.com/shengsheng-cai/dqa-lab-platform/actions/workflows/test.yml)
+![Playwright](https://img.shields.io/badge/E2E-Playwright-2EAD33?logo=playwright&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
@@ -28,8 +30,8 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 
 | | |
 |---|---|
-| **Automated test suite** | Device state machine · Schedule calculation · Fixture lifecycle · Three-module integration · SOP validation · Measurement uncertainty · Calibration & maintenance CRUD · Frontend utility (Vitest) |
-| **GitHub Actions CI/CD** | Push-triggered test gate + auto-deploy to HF Spaces |
+| **Automated test suite** | Device state machine · Schedule calculation · Fixture lifecycle · Three-module integration · SOP validation · Measurement uncertainty · Calibration & maintenance CRUD · Frontend utility (Vitest) · Browser E2E (Playwright) |
+| **GitHub Actions CI/CD** | Push-triggered gate — backend + frontend + browser E2E; deploy to HF Spaces is blocked if any layer fails |
 | **RAG + backend validation** | Gemini Flash-Lite with retrieval-augmented generation — AI output validated server-side before DB write |
 | **Three-module integration** | AI → Schedule → Fixture fully automated (reserve → loan → return) |
 
@@ -61,6 +63,29 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 | 🔧 **維護** | 設備校驗紀錄（日期、證書號、結果）& 維護紀錄（預防性 / 矯正性 / 例行點檢）；左側欄即時顯示各台設備校驗狀態（正常 / 即將到期 / 逾期 / 未知）；DeviceCard badge 警示 |
 
 <img src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-1.png" width="260"> <img src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-2.png" width="260"> <img src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-3.png" width="260">
+
+---
+
+## 🧪 測試與品質保證（Testing & QA）
+
+這個平台也是我的**軟體測試作品**：把它當成「受測系統」，示範一套完整的 QA 流程，重點是測試深度而不是功能數量。
+
+**分層自動化測試** — 每次 push 由 GitHub Actions 擋關，任一層沒過就不會部署到 Demo：
+
+| 層級 | 工具 | 顧什麼 |
+|------|------|--------|
+| 後端單元／整合 | pytest（真 in-memory SQLite） | API、狀態機、跨模組一致性、失敗注入與回滾 |
+| 前端單元 | Vitest | 純邏輯工具函式 |
+| 瀏覽器 E2E | Playwright | 高風險使用者流程（排程、權限、治具、維護、AI 帶入排程）；失敗自動保留截圖與 trace |
+
+**QA 文件（[`docs/qa/`](docs/qa/)）：**
+
+- **[測試策略](docs/qa/test-strategy.md)** — 範圍、風險分層、進出場條件、缺陷生命週期
+- **[風險導向測試計畫](docs/qa/risk-based-test-plan.md)** — 風險登記表 × 對應的自動化證據
+- **[追溯表](docs/qa/traceability.md)** — 需求 ↔ 風險 ↔ 測試 ↔ 缺陷
+- **真實 bug 報告**：[BUG-001](docs/qa/BUG-001-schedule-status-not-refreshed-after-confirm.md)（確認後畫面沒更新）、[BUG-002](docs/qa/BUG-002-maintenance-device-auto-started.md)（維護中設備被自動啟動）、[BUG-003](docs/qa/BUG-003-execution-insert-failure-left-zombie-running-state.md)（啟動失敗留下殭屍狀態）——測試時真的抓到的，都走完「發現 → 記錄 → 修 → 回歸驗證」
+
+> **誠實揭露**：本專案大量使用 AI coding agent（Claude Code／Codex）協作。我負責定義需求、判斷風險、決定測什麼與如何斷言、判讀 bug 與驗收；不宣稱已獨立精通每個框架，也不掛 SDET 頭銜。定位是約 9 年硬體 DQA／可靠度驗證背景，延伸到實驗室流程軟體化與測試自動化，不是純軟體或純 AI。
 
 ---
 
