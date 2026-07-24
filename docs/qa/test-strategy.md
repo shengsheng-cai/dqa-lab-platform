@@ -86,7 +86,7 @@ Playwright uses a dedicated environment:
 - A clean database and restarted backend for each spec file
 - One worker and no retry, so shared-state defects are not hidden
 
-E2E is currently a local quality gate and is not yet part of GitHub Actions.
+E2E also runs in GitHub Actions (the `e2e` job in the Tests workflow) and uploads the Playwright report, traces, and backend log as artifacts on failure. Because the HF Spaces deploy waits for the Tests workflow to succeed, a failing E2E run also blocks deployment.
 
 ## 6. Risk and execution priority
 
@@ -130,7 +130,6 @@ and must not claim physical-device validation when only the simulator was used.
 
 ## 9. Current limitations
 
-- Browser E2E is not yet enforced by CI.
-- Coverage and failure artifacts are not yet published automatically.
+- Test coverage is not yet published automatically.
 - Real-device behavior remains unverified until hardware and an authorized
   protocol are available.

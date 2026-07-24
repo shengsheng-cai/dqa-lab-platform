@@ -20,6 +20,5 @@ route or UI element.
 
 | Gap | Impact | Planned treatment |
 |---|---|---|
-| **GAP-01** — Browser E2E is not in GitHub Actions | Regressions can pass CI but fail the local browser suite | Add E2E CI gate and upload failure artifacts |
 | **GAP-02** — No real chamber integration | Simulator evidence cannot prove vendor protocol or physical control | Validate on a separate real-device branch when authorized hardware is available |
 | **GAP-03** — No load/browser/accessibility matrix | Non-functional regressions may be missed | Create separate plans only when these become release requirements |
