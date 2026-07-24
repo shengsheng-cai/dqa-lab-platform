@@ -187,3 +187,19 @@ macOS M2
 前端：http://localhost:5173
 API 文件：http://localhost:8000/docs
 ```
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issue 放在 GitHub Issues（`shengsheng-cai/dqa-lab-platform`），用 `gh` CLI 操作。見 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用五個預設角色標籤，標籤字串等於角色名。見 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+單一 context：root `CONTEXT.md` + `docs/adr/`（目前皆尚未建立，由 /domain-modeling 需要時再產生）。見 `docs/agents/domain.md`。
