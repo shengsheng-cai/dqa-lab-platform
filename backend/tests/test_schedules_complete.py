@@ -186,7 +186,7 @@ def test_delete_schedule_keeps_loan_history(db, api_client):
 
     with api_client(
         schedules_module, schedules_router, role="admin", user_id=1, username="admin",
-        app_state={"AICM_CACHE": {}, "DEVICE_LOCKS": {}},
+            app_state={"AICM_CACHE": {}},
     ) as (client, Session):
         with Session() as s_db:
             sched = _seed_schedule(s_db)

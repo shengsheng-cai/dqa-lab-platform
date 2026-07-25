@@ -21,7 +21,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 檔案 | 職責 |
 |------|------|
-| `main.py` | FastAPI 入口、device state cache、simulator 啟動 |
+| `main.py` | FastAPI 入口、啟動時還原 device state、simulator 啟動 |
+| `device_state.py` | device state 唯一 owner：cache、狀態轉換、per-device lock、DeviceState 持久化與 thread offload |
 | `models.py` | SQLAlchemy models + SessionLocal |
 | `simulator.py` | 溫濕度模擬（**真機版替換點**：換成 `kson_driver.py`） |
 | `schedules.py` | 排程 API routes（CRUD、確認、取消） |
@@ -37,7 +38,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `audit.py` | 稽核日誌寫入與查詢 API |
 | `ws.py` | WebSocket `/ws/devices` + ConnectionManager + broadcast_loop |
 | `line.py` | LINE push_message 推播 |
-| `utils.py` | 共用工具函式（時間、條件解析、device state 存寫、待機欄位表 `_idle_state_patch`） |
+| `utils.py` | 共用工具函式（時間、條件解析、維護時段查詢） |
 | `constants.py` | 全域常數（`DEVICE_IDS`、AMBIENT_TEMP/HUMIDITY 等）；設備清單一律從這裡拿，不要各模組自己定義 |
 | `uncertainty.py` | GUM 量測不確定度計算（Type A/B/uc/U） |
 | `errors.py` | 異常紀錄 API |
@@ -51,7 +52,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 表名 | 說明 |
 |------|------|
 | `device_data` | 設備感測器時序資料（溫度、濕度） |
-| `device_states` | 設備狀態機（IDLE/RUNNING/PAUSED/FINISHING）+ sim_phase |
+| `device_states` | 設備狀態機（IDLE/RUNNING/PAUSED/EMERGENCY/FINISHING）+ sim_phase 與重啟恢復欄位 |
 | `sop_executions` | SOP 執行記錄（設備、條件、開始/結束時間） |
 | `step_records` | SOP 執行步驟確認紀錄 |
 | `error_logs` | 設備異常/錯誤日誌 |

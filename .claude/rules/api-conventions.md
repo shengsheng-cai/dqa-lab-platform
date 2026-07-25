@@ -59,13 +59,14 @@ async def my_route(...):
     return result
 ```
 
-實作參考：`sop.py`、`schedules.py`（`_patch_schedule_db` 等）、`devices.py`（`_emergency_stop_db`）、`fixtures.py`（`_run_import_db`）
+實作參考：`sop.py`、`schedules.py`（`_patch_schedule_db` 等）、`fixtures.py`（`_run_import_db`）。設備狀態寫入則一律呼叫 `DeviceStateManager` 的五個 async 動詞，由 manager 在內部持 lock 並用 `asyncio.to_thread` 落盤。
 
 ## Datetime 慣例
 
 - DB 寫入一律用 `_now_utc_naive()`（`utils.py`），保持與 SQLite naive datetime 欄位一致
 - `_now_utc()` 只用於 HTTP response、推播文字等不寫入 DB 的場景
 - `datetime.datetime.now(datetime.timezone.utc)` 禁止出現在 DB 寫入路徑
+- 唯一例外是 device state cache 的 `started_at`：cache 保留 aware UTC 供 API/排程計算，`DeviceStateManager._save` 是唯一落盤入口，會先正規化成 naive UTC；同 transaction 的 `SopExecution.test_started_at` 仍直接使用 `_now_utc_naive()`
 
 ## 自動排程邏輯
 
@@ -77,6 +78,6 @@ async def my_route(...):
 - Fallback：若所有設備都超時，改取全部中最早可用（避免無法申請）
 - APScheduler 每 5 分鐘：已確認 → 進行中（自動啟動第一條件）；進行中不再自動完成
 - 壞排程收斂：已確認排程若缺設備/條件（永遠無法啟動），`try_start_schedule` 轉「異常」、釋放預約治具並寫 audit、停止重試（`_mark_schedule_error_db`）；設備忙碌屬暫時性，仍維持已確認重試
-- 啟動失敗即回退：建不出 SopExecution 就視為這次啟動不算數，設備清回待機（`_idle_state_patch`），不推進排程也不轉借治具
+- 啟動失敗即不發布：`DeviceStateManager.start` 在同一 transaction 建立 SopExecution 與 DeviceState；三次建立皆失敗時 cache/DB 維持原狀，不推進排程也不轉借治具
 - 同設備多筆已確認排程時，手動啟動挑「預定開始時間最早」那筆（`_earliest_confirmed_schedule_id`）
 - 條件銜接由人員在排程頁面手動確認（`POST /api/schedules/{id}/confirm-condition`）

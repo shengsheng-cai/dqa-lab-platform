@@ -16,10 +16,8 @@ from .models import (
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .constants import DEVICE_IDS
 from .schedule_service import _activate_schedule_db, _earliest_confirmed_schedule_id
-from .utils import (
-    _now_utc, _now_utc_naive, _save_device_state, _parse_conditions,
-    _idle_state_patch,
-)
+from .utils import _now_utc, _now_utc_naive, _parse_conditions
+from . import device_state
 from .auth import require_admin, current_user
 from .line import push_message
 
@@ -31,18 +29,6 @@ os.makedirs(PHOTO_UPLOAD_DIR, exist_ok=True)
 # 導出 API 路由器
 router = APIRouter()
 execution_router = APIRouter(prefix="/api/sop-executions", tags=["sop"])
-
-
-async def _revert_device_to_idle(device_id: str, device: dict, lock) -> None:
-    """啟動失敗時把設備清回待機（手動與自動兩條啟動路徑共用）。
-
-    只在設備仍是我們剛設的 RUNNING 時才清——建執行紀錄那段鎖是放開的，
-    若這空檔有人緊急停止（改成 EMERGENCY），別把那個狀態蓋掉。
-    """
-    async with lock:
-        if device.get("status") == "RUNNING":
-            device.update(_idle_state_patch())
-            await asyncio.to_thread(_save_device_state, device_id, device)
 
 
 def _validate_start_sop_input(payload: dict, cache: dict) -> tuple:
@@ -106,33 +92,59 @@ def get_standards_tree():
 
 
 def _create_execution_id_db(
-    sop_id: str, device_id: str, operator: str, now: datetime.datetime,
-    operator_user_id: Optional[int] = None, log_prefix: str = "",
+    db, sop_id: str, device_id: str, operator: str, now: datetime.datetime,
+    operator_user_id: Optional[int] = None,
 ) -> Optional[int]:
-    """建 SopExecution 並回傳 id；3 次重試皆失敗回 None。
+    """在 DeviceStateManager.start 的同一 transaction 建 SopExecution。
 
     start_sop（手動）與 auto_start_sop（排程）共用——兩條路徑的建立語意必須一致。
-    sync DB I/O，呼叫端一律用 asyncio.to_thread 包裝（見 api-conventions Async/Sync 慣例）。
+    sync DB I/O 與 commit 都由 DeviceStateManager.start 在 worker thread 內處理。
     """
-    for _attempt in range(3):
-        try:
-            with SessionLocal() as db:
-                execution = SopExecution(
-                    sop_id=sop_id,
-                    device_id=device_id,
-                    operator=operator,
-                    operator_user_id=operator_user_id,
-                    test_started_at=now,
-                )
-                db.add(execution)
-                db.flush()
-                eid = execution.id
-                db.commit()
-                return eid
-        except Exception as e:
-            logger.error(f"{log_prefix}建立 SopExecution 失敗（第{_attempt+1}次）：{e}")
-    logger.error(f"{log_prefix}建立 SopExecution 三次失敗，放棄")
-    return None
+    execution = SopExecution(
+        sop_id=sop_id,
+        device_id=device_id,
+        operator=operator,
+        operator_user_id=operator_user_id,
+        test_started_at=now,
+    )
+    db.add(execution)
+    db.flush()
+    return execution.id
+
+
+async def _start_device_sop(
+    states: device_state.DeviceStateManager,
+    device_id: str,
+    sop_id: str,
+    sop_name: str,
+    std_data: dict,
+    operator: str,
+    operator_user_id: int | None,
+) -> device_state.TransitionResult:
+    started_at = _now_utc()
+    execution_started_at = _now_utc_naive()
+    active_sop_json = json.dumps(
+        {**std_data, "sop_id": sop_id, "name": sop_name},
+        ensure_ascii=False,
+    )
+    return await states.start(
+        device_id,
+        sop_id=sop_id,
+        sop_name=sop_name,
+        active_sop_json=active_sop_json,
+        total_steps=len(std_data.get("steps", [])),
+        operator=operator,
+        operator_user_id=operator_user_id,
+        started_at=started_at,
+        create_execution=lambda db: _create_execution_id_db(
+            db,
+            sop_id,
+            device_id,
+            operator,
+            execution_started_at,
+            operator_user_id,
+        ),
+    )
 
 
 # 啟動 SOP 路由
@@ -143,8 +155,8 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     operator: str = payload.get("operator", "")
     operator_user_id = current_user(request).user_id
 
-    cache = request.app.state.AICM_CACHE
-    sop_id, device_id, device = _validate_start_sop_input(payload, cache)
+    states = request.app.state.DEVICE_STATE
+    sop_id, device_id, _device = _validate_start_sop_input(payload, states)
 
     std_data = STANDARDS_AND_SOPS.get(sop_id, {})
     sop_name = std_data.get("name", sop_id)
@@ -208,57 +220,32 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     if ctx["template_name"]:
         sop_name = ctx["template_name"]
 
-    now_utc = _now_utc()
-    now = _now_utc_naive()
-
     if ctx["blocked_reason"] is not None:
         raise HTTPException(
             status_code=409,
             detail=f"{device_id} 目前在不可用時段（{ctx['blocked_reason']}），無法啟動測試。"
         )
 
-    active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
-    active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
-
-    async with request.app.state.DEVICE_LOCKS[device_id]:
-        if device.get("status") != "IDLE":
-            raise HTTPException(
-                status_code=400, detail=f"{device_id} 非待機狀態（目前：{device.get('status')}），請先停止現有測試。"
-            )
-        device.update(
-            {
-                "status": "RUNNING",
-                "running_sop_id": sop_id,
-                "running_sop_name": sop_name,
-                "standard_id": sop_id,
-                "active_sop_json": active_sop_json,
-                "completed_steps": 0,
-                "started_at": now_utc,
-                "total_steps": len(std_data.get("steps", [])),
-                "operator": operator.strip() if operator else "",
-                "operator_user_id": operator_user_id,
-                "sim_phase": "idle",
-                "sim_cycle": 0,
-            }
-        )
-        await asyncio.to_thread(_save_device_state, device_id, device)
-
-    # 建 SopExecution + 寫 active_execution_id（讓 simulator 完成時能寫 test_ended_at）
-    execution_id = await asyncio.to_thread(
-        _create_execution_id_db, sop_id, device_id, device["operator"], now,
-        operator_user_id, f"[{device_id}] ",
+    operator = operator.strip() if operator else ""
+    result = await _start_device_sop(
+        states,
+        device_id,
+        sop_id,
+        sop_name,
+        std_data,
+        operator,
+        operator_user_id,
     )
-    if execution_id is None:
-        # 建不出執行紀錄＝這次啟動不算數：把設備清回待機、回報失敗。
-        # 不能放著設備 RUNNING 卻沒紀錄——完成時寫不了 test_ended_at、也沒報告可連。
-        # 這裡就 return，下面的排程同步 / 治具轉借都不會執行（尚未動到排程與治具）。
-        await _revert_device_to_idle(device_id, device, request.app.state.DEVICE_LOCKS[device_id])
-        logger.error(f"[{device_id}] 建立執行紀錄失敗，已把設備復原為待機")
+    if result.reason == "invalid_status":
+        raise HTTPException(
+            status_code=400,
+            detail=f"{device_id} 非待機狀態（目前：{result.before.get('status')}），請先停止現有測試。",
+        )
+    if result.reason == "execution_failed":
+        logger.error(f"[{device_id}] 建立執行紀錄失敗，設備維持待機")
         raise HTTPException(status_code=500, detail=f"{device_id} 啟動失敗：無法建立執行紀錄，請稍後再試")
-
-    async with request.app.state.DEVICE_LOCKS[device_id]:
-        device["active_execution_id"] = execution_id
-        await asyncio.to_thread(_save_device_state, device_id, device)
+    if not result.changed:
+        raise HTTPException(status_code=404, detail=f"設備 {device_id} 不存在")
 
     # 同步排程狀態：手動啟動時，把該設備上「已確認」的排程一起推進成進行中，
     # 讓管理者從排程頁看到的永遠是設備真實狀態。排程轉進行中 + 治具轉借 + 寫 audit
@@ -283,7 +270,9 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
 
 
 async def auto_start_sop(
-    device_id: str, sop_id: str, cache: dict, locks: dict,
+    device_id: str,
+    sop_id: str,
+    states: device_state.DeviceStateManager,
     operator: str = "排程系統",
 ) -> bool:
     """排程到達開始時間時自動啟動 SOP（供 schedule_service.try_start_schedule 呼叫）。
@@ -293,7 +282,7 @@ async def auto_start_sop(
 
     不處理治具：治具轉借需要 schedule_id 才不會借錯排程，由呼叫方負責。
     """
-    device = cache.get(device_id)
+    device = states.get(device_id)
     if not device:
         logger.warning(f"[auto_start] 設備 {device_id} 不在 cache，跳過")
         return False
@@ -307,53 +296,21 @@ async def auto_start_sop(
         return False
 
     sop_name = std_data.get("name", sop_id)
-    now_utc = _now_utc()
-    now = _now_utc_naive()
-    active_sop_data = {**std_data, "sop_id": sop_id, "name": sop_name}
-    active_sop_json = json.dumps(active_sop_data, ensure_ascii=False)
-
-    lock = locks.get(device_id)
-    if not lock:
-        logger.warning(f"[auto_start] {device_id} 無對應 lock，跳過")
-        return False
-
-    async with lock:
-        if device.get("status") != "IDLE":
-            return False
-        device.update({
-            "status": "RUNNING",
-            "running_sop_id": sop_id,
-            "running_sop_name": sop_name,
-            "standard_id": sop_id,
-            "active_sop_json": active_sop_json,
-            "completed_steps": 0,
-            "started_at": now_utc,
-            "total_steps": len(std_data.get("steps", [])),
-            "operator": operator,
-            "operator_user_id": None,
-            "sim_phase": "idle",
-            "sim_cycle": 0,
-        })
-        await asyncio.to_thread(_save_device_state, device_id, device)
-
-    # 建 SopExecution 記錄，並將 id 存入 device cache 供完成時寫入 test_ended_at。
-    # sync DB I/O 走 to_thread：auto_start_sop 跑在 APScheduler event loop 上，直接 blocking
-    # 會卡住 ws.py 每秒的 broadcast_loop（與手動 start_sop 共用 _create_execution_id_db）。
-    execution_id = await asyncio.to_thread(
-        _create_execution_id_db, sop_id, device_id, operator, now,
-        None, f"[auto_start] {device_id} ",
+    result = await _start_device_sop(
+        states,
+        device_id,
+        sop_id,
+        sop_name,
+        std_data,
+        operator,
+        None,
     )
-    if execution_id is None:
-        # 建不出執行紀錄＝這次啟動不算數：清回待機、回報失敗。
-        # 回 False 讓排程留在「已確認」等 fallback 重試，治具也不會被轉借
-        # （try_start_schedule 只在這裡回 True 後才轉借）。
-        await _revert_device_to_idle(device_id, device, lock)
-        logger.error(f"[auto_start] {device_id} 建立執行紀錄失敗，已復原為待機、放棄本次啟動")
+    if result.reason == "execution_failed":
+        logger.error(f"[auto_start] {device_id} 建立執行紀錄失敗，維持待機、放棄本次啟動")
         return False
-
-    async with lock:
-        device["active_execution_id"] = execution_id
-        await asyncio.to_thread(_save_device_state, device_id, device)
+    if not result.changed:
+        logger.info(f"[auto_start] {device_id} 啟動被拒絕：{result.reason}")
+        return False
 
     logger.info(f"[auto_start] {device_id} 自動啟動 SOP: {sop_id} ({sop_name})")
     return True

@@ -18,7 +18,7 @@ def admin_client(api_client):
     with api_client(
         schedules_module, schedules_router,
         role="admin", user_id=1, username="admin",
-        app_state={"AICM_CACHE": {}, "DEVICE_LOCKS": {}},
+        app_state={"AICM_CACHE": {}},
     ) as (client, Session):
         yield client, Session
 

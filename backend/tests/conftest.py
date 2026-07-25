@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.device_state import DeviceStateManager
 from app.models import Base
 
 
@@ -54,7 +55,7 @@ def api_client():
 
     - module.SessionLocal 導向測試 session，離開 context 還原並清庫
     - role / user_id / username 為 None 時該欄位不注入（沿用 handler 的 getattr 預設）
-    - app_state：需掛在 app.state 的額外物件（如排程用的 AICM_CACHE / DEVICE_LOCKS）
+    - app_state：需掛在 app.state 的額外物件（如排程用的 AICM_CACHE）
     - yield (client, Session)：只需要 client 的呼叫端解包後忽略 Session 即可
     """
     @contextmanager
@@ -80,6 +81,11 @@ def api_client():
         app.include_router(router)
         for key, value in (app_state or {}).items():
             setattr(app.state, key, value)
+        if not hasattr(app.state, "DEVICE_STATE"):
+            raw_cache = getattr(app.state, "AICM_CACHE", {})
+            states = DeviceStateManager(raw_cache)
+            app.state.DEVICE_STATE = states
+            app.state.AICM_CACHE = states
 
         try:
             with TestClient(app) as client:
@@ -100,7 +106,7 @@ def patched_session():
     漏 patch 任一個，那個模組就會寫進真實的 aicm.db。集中在這裡就不會逐檔漏。
 
     用法：
-        with patched_session("app.schedule_service", "app.sop", "app.utils") as Session:
+        with patched_session("app.schedule_service", "app.sop", "app.device_state") as Session:
             ...
     """
     @contextmanager

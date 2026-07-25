@@ -8,7 +8,10 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     Index,
+    false,
+    inspect,
 )
+from sqlalchemy.schema import CreateColumn
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Mapped, mapped_column
 from enum import StrEnum
 import datetime
@@ -329,9 +332,13 @@ class DeviceState(Base):
     standard_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     active_sop_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     completed_steps: Mapped[int] = mapped_column(Integer, default=0)
+    total_steps: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     started_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
     )
+    operator: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    operator_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    skip_push: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     # --- 執行紀錄 ID（重啟後可恢復，避免 test_ended_at 寫入失敗）---
     active_execution_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -529,4 +536,23 @@ def ensure_admin_user():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _ensure_device_state_columns()
     ensure_admin_user()
+
+
+def _ensure_device_state_columns() -> None:
+    """create_all 不會替既有資料表補欄；為舊 SQLite/Postgres DB 補上新增狀態欄位。"""
+    table = DeviceState.__table__
+    with engine.begin() as connection:
+        existing = {
+            column["name"]
+            for column in inspect(connection).get_columns(table.name)
+        }
+        quoted_table = engine.dialect.identifier_preparer.quote(table.name)
+        for name in ("total_steps", "operator", "operator_user_id", "skip_push"):
+            if name in existing:
+                continue
+            column_sql = str(CreateColumn(table.c[name]).compile(dialect=engine.dialect))
+            connection.exec_driver_sql(
+                f"ALTER TABLE {quoted_table} ADD COLUMN {column_sql}"
+            )

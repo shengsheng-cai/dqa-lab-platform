@@ -442,7 +442,7 @@ async def patch_schedule(
     user_id = u.user_id
 
     _cache = getattr(request.app.state, "AICM_CACHE", {})
-    _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
+    _states = request.app.state.DEVICE_STATE
     _scheduler = getattr(request.app.state, "scheduler", None)
 
     out = await asyncio.to_thread(_patch_schedule_db, schedule_id, body, user_id, u.role, _cache)
@@ -450,14 +450,14 @@ async def patch_schedule(
     if out["immediate_start"] and out["conditions"] and out["device_id"]:
         # 設備忙碌時不會啟動；排程維持「已確認」，由 fallback 於設備空出後重試。
         await try_start_schedule(
-            schedule_id, out["device_id"], out["conditions"], _cache, _locks,
+            schedule_id, out["device_id"], out["conditions"], _states,
         )
     elif _scheduler and out["start_aware"]:
         _scheduler.add_job(
             _start_schedule_by_id,
             trigger="date",
             run_date=out["start_aware"],
-            kwargs={"schedule_id": schedule_id, "cache": _cache, "locks": _locks},
+            kwargs={"schedule_id": schedule_id, "states": _states},
             id=f"sched_{schedule_id}",
             replace_existing=True,
         )
@@ -468,7 +468,7 @@ async def patch_schedule(
         except Exception:
             pass
     if out["cancelled_device_id"]:
-        await _force_normal_stop(out["cancelled_device_id"], _cache, _locks)
+        await _force_normal_stop(out["cancelled_device_id"], _states)
 
     return out["result"]
 
@@ -496,8 +496,7 @@ def _delete_schedule_db(schedule_id: int, user_id, role):
 
 @router.delete("/{schedule_id}")
 async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(require_admin)):
-    _cache = getattr(request.app.state, "AICM_CACHE", {})
-    _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
+    _states = request.app.state.DEVICE_STATE
     _scheduler = getattr(request.app.state, "scheduler", None)
     u = current_user(request)
     user_id = u.user_id
@@ -510,7 +509,7 @@ async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(
         except Exception:
             pass
     if stop_device_id:
-        await _force_normal_stop(stop_device_id, _cache, _locks)
+        await _force_normal_stop(stop_device_id, _states)
 
     return {"ok": True}
 
@@ -556,7 +555,7 @@ def _confirm_condition_db(schedule_id: int, now, user_id, role):
 async def confirm_condition(schedule_id: int, request: Request, _: None = Depends(require_admin)):
     from .sop import auto_start_sop
     cache = getattr(request.app.state, "AICM_CACHE", {})
-    locks = getattr(request.app.state, "DEVICE_LOCKS", {})
+    states = request.app.state.DEVICE_STATE
     u = current_user(request)
     user_id = u.user_id
 
@@ -568,7 +567,7 @@ async def confirm_condition(schedule_id: int, request: Request, _: None = Depend
 
     # 不可 fire-and-forget：設備若尚未回到 IDLE，啟動會被跳過，
     # 而排程停在「進行中」不會被 fallback 重試 → 測試靜默停擺。
-    if not await auto_start_sop(result["dev"], result["next_sop_id"], cache, locks):
+    if not await auto_start_sop(result["dev"], result["next_sop_id"], states):
         dev_status = (cache.get(result["dev"]) or {}).get("status", "未知")
         raise HTTPException(
             status_code=409,
@@ -592,14 +591,14 @@ def _load_startable_schedule_db(schedule_id: int):
 async def start_schedule(schedule_id: int, request: Request, _: None = Depends(require_admin)):
     """手動立即啟動「已確認」排程（補救 APScheduler 漏掉的情況）。"""
     cache = getattr(request.app.state, "AICM_CACHE", {})
-    locks = getattr(request.app.state, "DEVICE_LOCKS", {})
+    states = request.app.state.DEVICE_STATE
 
     conditions, device_id = await asyncio.to_thread(_load_startable_schedule_db, schedule_id)
 
     if not conditions or not device_id:
         raise HTTPException(status_code=400, detail="排程缺少測試條件或設備，無法啟動")
 
-    if not await try_start_schedule(schedule_id, device_id, conditions, cache, locks):
+    if not await try_start_schedule(schedule_id, device_id, conditions, states):
         # 分兩種擋下的原因給對的話：維護中的設備明明是 IDLE，不能再回它「非待機狀態」
         # 那種自相矛盾、又不提維護的訊息。
         maint_reason = await asyncio.to_thread(device_blocked_reason_now, device_id)
