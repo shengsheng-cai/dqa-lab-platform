@@ -18,6 +18,7 @@ from .auth import require_admin, current_user
 from .line import push_message
 from .utils import _now_utc, _now_utc_naive, _parse_conditions
 from .audit_log import log_audit
+from .schedule_api import schedule_start_http_error
 from .schedule_service import (
     ACTIVE_STATUSES,
     _complete_schedule, _release_schedule_fixtures,
@@ -26,7 +27,7 @@ from .schedule_service import (
     _build_schedule_fixtures_map, _enrich,
     _find_earliest_slot, _auto_assign,
     _force_normal_stop, _register_schedule_start_job,
-    ScheduleStartActor, ScheduleStartCode, ScheduleStartResult,
+    ScheduleStartActor,
     find_overlapping_schedule, start_schedule as start_schedule_service,
 )
 
@@ -329,19 +330,6 @@ def _schedule_start_actor(user, action: str) -> ScheduleStartActor:
     )
 
 
-def _schedule_start_http_error(result: ScheduleStartResult) -> HTTPException:
-    status_code = {
-        ScheduleStartCode.NOT_FOUND: 404,
-        ScheduleStartCode.BROKEN: 400,
-        ScheduleStartCode.NOT_STARTABLE: 400,
-        ScheduleStartCode.RETRYABLE_FAILURE: 503,
-    }.get(result.code, 409)
-    return HTTPException(
-        status_code=status_code,
-        detail=result.detail or "排程目前無法啟動",
-    )
-
-
 def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, role, cache: dict):
     cancelled_device_id = None
     completed_device_id = None
@@ -519,7 +507,7 @@ async def patch_schedule(
         # 設備忙碌時不會啟動；排程維持「已確認」，由 fallback 於設備空出後重試。
         start_result = await start_schedule_service(schedule_id, actor, _states)
         if explicit_start and not start_result.started:
-            raise _schedule_start_http_error(start_result)
+            raise schedule_start_http_error(start_result)
         out["result"] = await asyncio.to_thread(get_schedule, schedule_id)
     elif _scheduler and out["scheduled_start"]:
         _register_schedule_start_job(
@@ -648,7 +636,7 @@ async def confirm_condition(schedule_id: int, request: Request, _: None = Depend
         continuation=True,
     )
     if not start_result.started:
-        raise _schedule_start_http_error(start_result)
+        raise schedule_start_http_error(start_result)
     return {"status": "started", "sop_id": start_result.sop_id}
 
 
@@ -663,7 +651,7 @@ async def start_schedule_route(schedule_id: int, request: Request, _: None = Dep
         states,
     )
     if not result.started:
-        raise _schedule_start_http_error(result)
+        raise schedule_start_http_error(result)
     return {
         "status": "started",
         "device_id": result.device_id,
