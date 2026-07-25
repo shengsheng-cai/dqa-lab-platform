@@ -62,10 +62,13 @@ The defect also applied when the unavailable period had no reason text.
 - Historical fix: commit
   `9a7116bd045ec4438c335ddf9f80795e1ae1b675`.
 - Current automatic-start guard:
-  [`schedule_service.py`](../../backend/app/schedule_service.py#L510).
+  [`start_schedule()` and `_apply_schedule_start()`](../../backend/app/schedule_service.py).
 - Regression tests:
-  [`test_schedule_start_consistency.py`](../../backend/tests/test_schedule_start_consistency.py#L110)
-  covers maintenance blocking, a blank reason, and retry after maintenance.
+  [`test_schedule_start_consistency.py`](../../backend/tests/test_schedule_start_consistency.py)
+  covers `test_start_skipped_when_device_in_maintenance`,
+  `test_start_skipped_when_maintenance_has_no_reason`,
+  `test_maintenance_keeps_confirmed_then_resumes`, and
+  `test_confirm_condition_blocks_next_sop_during_maintenance`.
 - Browser coverage:
   [`maintenance-block.spec.js`](../../tests/e2e/specs/maintenance-block.spec.js)
   verifies that a blocked device is disabled while a healthy device remains
@@ -73,9 +76,10 @@ The defect also applied when the unavailable period had no reason text.
 
 ## Root cause
 
-Manual and automatic start paths enforced different rules. The manual SOP route
-checked the maintenance table, while `try_start_schedule()` went directly from
-basic schedule validation to `auto_start_sop()`.
+In the pre-fix implementation, manual and automatic start paths enforced
+different rules. The manual SOP route checked the maintenance table, while
+`try_start_schedule()` went directly from basic schedule validation to
+`auto_start_sop()`.
 
 The block reason was also nullable. Treating the reason value as the existence
 signal meant an unavailable period with no text could be misclassified as
@@ -100,6 +104,13 @@ unblocked.
 - A blocked schedule remains confirmed instead of becoming an error.
 - The normal fallback retries after the unavailable period ends.
 
+## Subsequent hardening (2026-07-25)
+
+Commit `659396a` consolidated all six scheduled-start paths on
+`start_schedule(...)`. Maintenance now produces a typed early result and is
+revalidated inside the atomic start transaction, closing the gap between the
+initial check and commit. Next-condition continuation uses the same guard.
+
 ## Verification
 
 The regression suite asserts all three required behaviors:
@@ -114,4 +125,3 @@ Targeted command:
 ```bash
 cd backend && ../venv/bin/python -m pytest tests/test_schedule_start_consistency.py -k maintenance -v
 ```
-

@@ -76,7 +76,8 @@ async def my_route(...):
 - 設備選擇：遍歷 CH-01~CH-05，取最早可用（`_auto_assign`）
 - 排除超時卡機設備：`est_end` 超過 1h 仍未回 IDLE（`_get_stuck_devices`）
 - Fallback：若所有設備都超時，改取全部中最早可用（避免無法申請）
-- APScheduler 每 5 分鐘：已確認 → 進行中（自動啟動第一條件）；進行中不再自動完成
+- 未來的已確認排程以 `sched_{id}` APScheduler date job 精確啟動；確認或修改設備／時段時都用 `replace_existing=True` 更新同一 job
+- 每 5 分鐘 fallback 只補抓漏觸發或當時被暫時阻擋的排程；進行中不再自動完成
 - 單一啟動入口：APScheduler、fallback、立即開始、PATCH→RUNNING、吻合的手動 SOP、條件銜接一律呼叫 `start_schedule(schedule_id, actor, states)`，caller 不得自行傳入設備或條件快照
 - 啟動結果使用 `ScheduleStartResult`，由 `STARTED`、`DEVICE_BUSY`、`UNDER_MAINTENANCE`、`BROKEN` 等 code 表達原因；route 不得重新查 DB/cache 猜原因
 - 原子啟動：DeviceState、SopExecution、Schedule、FixtureLoan、AuditLog 在同一 transaction 寫入，commit 成功後才發布 cache

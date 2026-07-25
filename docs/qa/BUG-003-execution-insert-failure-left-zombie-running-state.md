@@ -35,7 +35,7 @@ reservation could also advance even though the execution did not exist.
 1. Prepare an IDLE device and a valid SOP.
 2. Force `_create_execution_id_db()` to return `None`, simulating a database
    insert failure.
-3. Start the SOP manually or through `try_start_schedule()`.
+3. Start the SOP manually or through the pre-fix `try_start_schedule()`.
 4. Inspect the API result, device cache, schedule status, fixture loan, and
    execution table.
 
@@ -59,14 +59,13 @@ reservation could also advance even though the execution did not exist.
 
 - Historical fix: commit
   `fa709947d3fb6a39b36234398401b5cd907830c3`.
-- Shared rollback:
-  [`sop.py`](../../backend/app/sop.py#L36).
-- Manual failure handling:
-  [`sop.py`](../../backend/app/sop.py#L246).
-- Automatic failure handling:
-  [`sop.py`](../../backend/app/sop.py#L339).
+- Current atomic state owner:
+  [`device_state.py`](../../backend/app/device_state.py).
+- Current scheduled-start transaction:
+  [`schedule_service.py`](../../backend/app/schedule_service.py).
 - Failure-injection regression tests:
-  [`test_schedule_start_consistency.py`](../../backend/tests/test_schedule_start_consistency.py#L390).
+  [`test_device_state.py`](../../backend/tests/test_device_state.py) and
+  [`test_schedule_start_consistency.py`](../../backend/tests/test_schedule_start_consistency.py).
 
 ## Root cause
 
@@ -88,7 +87,7 @@ The start operation therefore was not atomic from the business perspective.
   that never successfully started.
 - Manual recovery was required to clear the device.
 
-## Resolution
+## Original resolution
 
 - Added `_revert_device_to_idle()` for both manual and automatic start paths.
 - Rollback only clears the state if the device is still RUNNING, so it does not
@@ -98,17 +97,34 @@ The start operation therefore was not atomic from the business perspective.
   stay reserved for a later retry.
 - Schedule/fixture activation occurs only after execution creation succeeds.
 
+## Subsequent hardening (2026-07-25)
+
+- Commit `401de42` introduced `DeviceStateManager` as the single owner of
+  device-state persistence, cache publication, per-device locking, and
+  `SopExecution` creation inside the start transaction.
+- Commit `659396a` made scheduled start write `DeviceState`, `SopExecution`,
+  `Schedule`, `FixtureLoan`, and `AuditLog` in one transaction. Cache is
+  published only after a successful commit.
+- Cancellation now waits for the in-flight transaction even after repeated task
+  cancellation, publishes cache only after a successful commit, then re-raises
+  `CancelledError`.
+
 ## Verification
 
 Failure-injection tests cover:
 
-1. Automatic SOP start returns `False` and restores IDLE.
-2. Scheduled start keeps the schedule confirmed and the fixture reserved.
-3. Manual start returns an error and restores IDLE.
+1. Execution insertion and transaction commit failures leave DB and cache
+   unchanged.
+2. Repeated caller cancellation cannot leave a committed DB state with stale
+   cache.
+3. Scheduled start returns a retryable result while the schedule remains
+   confirmed and fixtures remain reserved.
+4. Audit failure rolls back every entity in the scheduled-start transaction.
+5. Manual ad-hoc start returns HTTP 500 and restores IDLE when execution
+   insertion fails.
 
 Targeted command:
 
 ```bash
-cd backend && ../venv/bin/python -m pytest tests/test_schedule_start_consistency.py -k execution_insert_fails -v
+cd backend && ../venv/bin/python -m pytest tests/test_device_state.py tests/test_schedule_start_consistency.py -v
 ```
-
