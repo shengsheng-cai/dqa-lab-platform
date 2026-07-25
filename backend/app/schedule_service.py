@@ -17,9 +17,10 @@ from .models import (
 from .standards import get_standard
 from .constants import DEVICE_IDS
 from .utils import (
-    _now_utc, _now_utc_naive, _save_device_state, _parse_conditions,
+    _now_utc, _now_utc_naive, _parse_conditions,
     parse_iso_utc, _to_naive_utc, device_blocked_reason_now,
 )
+from . import device_state
 from .audit_log import log_audit
 
 logger = logging.getLogger("schedule_service")
@@ -376,25 +377,12 @@ def _auto_assign(
 # ── 排程狀態自動推進 ──────────────────────────────────────────────────────────
 
 
-async def _force_normal_stop(device_id: str, cache: dict, locks: dict):
+async def _force_normal_stop(
+    device_id: str,
+    states: device_state.DeviceStateManager,
+) -> None:
     """取消/刪除排程時，若設備正在執行，改為正常收尾（不觸發 LINE 推播或錯誤記錄）。"""
-    device = cache.get(device_id)
-    if not device or device.get("status") not in ("RUNNING", "PAUSED"):
-        return
-    lock = locks.get(device_id)
-    if not lock:
-        return
-    async with lock:
-        if device.get("status") not in ("RUNNING", "PAUSED"):
-            return
-        device.update({
-            "status": "FINISHING",
-            "running_sop_name": "排程取消，降溫收尾中...",
-            "sim_phase": "ramp_to_ambient",
-            "sim_cycle": 0,
-            "skip_push": True,
-        })
-        _save_device_state(device_id, device)
+    await states.finish(device_id, cancelled=True, notify=False)
 
 
 def _confirmed_schedules_db(schedule_id: Optional[int] = None) -> list[tuple]:
@@ -495,7 +483,7 @@ def _earliest_confirmed_schedule_id(device_id: str) -> Optional[int]:
 
 async def try_start_schedule(
     schedule_id: int, device_id: Optional[str], conditions: List[str],
-    cache: dict, locks: dict,
+    states: device_state.DeviceStateManager,
 ) -> bool:
     """啟動排程的唯一入口：設備真的進入 RUNNING 才把排程標為進行中、治具才轉借出。
 
@@ -517,7 +505,7 @@ async def try_start_schedule(
         )
         return False
 
-    if not await auto_start_sop(device_id, conditions[0], cache, locks):
+    if not await auto_start_sop(device_id, conditions[0], states):
         logger.info(f"[scheduler] 排程 #{schedule_id} 的 {device_id} 非 IDLE，維持「已確認」等待重試")
         return False
 
@@ -527,16 +515,21 @@ async def try_start_schedule(
     return True
 
 
-async def _start_schedule_by_id(schedule_id: int, cache: dict, locks: dict):
+async def _start_schedule_by_id(
+    schedule_id: int,
+    states: device_state.DeviceStateManager,
+) -> None:
     """排程到達 start_time 時由 APScheduler date job 精確觸發。"""
     rows = await asyncio.to_thread(_confirmed_schedules_db, schedule_id)
     if rows:
-        await try_start_schedule(*rows[0], cache, locks)
+        await try_start_schedule(*rows[0], states)
 
 
-async def auto_advance_schedules(cache: dict = None, locks: dict = None):
+async def auto_advance_schedules(
+    states: device_state.DeviceStateManager | None = None,
+) -> None:
     """Fallback：每 5 分鐘掃一次，補抓任何漏掉的已確認排程（如重啟後 date job 遺失、設備當時忙碌）。"""
-    if cache is None or locks is None:
+    if states is None:
         return
 
     rows = await asyncio.to_thread(_confirmed_schedules_db)
@@ -544,7 +537,7 @@ async def auto_advance_schedules(cache: dict = None, locks: dict = None):
         return
 
     results = await asyncio.gather(
-        *(try_start_schedule(sid, dev, conds, cache, locks) for sid, dev, conds in rows)
+        *(try_start_schedule(sid, dev, conds, states) for sid, dev, conds in rows)
     )
     started = sum(results)
     if started:

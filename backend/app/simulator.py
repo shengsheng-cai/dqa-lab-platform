@@ -4,11 +4,13 @@ import datetime
 import json
 import logging
 import random
+from collections.abc import Mapping
 from typing import Optional
 
 from .models import SessionLocal, DeviceData, SopExecution, Schedule, ScheduleStatus
 from .standards import get_ramp_rate, get_standard
-from .utils import _now_utc_naive, _save_device_state, _idle_state_patch
+from .utils import _now_utc_naive
+from . import device_state
 from .schedule_service import _complete_schedule
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 from .line import push_message
@@ -237,9 +239,13 @@ def _try_complete_schedule_for_device(device_id: str) -> str | None:
     return None
 
 
-async def _sim_handle_finishing(
-    device_id: str, item: dict, current_temp: float, current_humi: float, locks: dict, elapsed_seconds: float = 1.0
-) -> None:
+def _sim_handle_finishing(
+    item: dict,
+    current_temp: float,
+    current_humi: float,
+    elapsed_seconds: float = 1.0,
+) -> bool:
+    """推進降溫；到達常溫時回 True，由 data_simulator 透過 state interface 完成清場。"""
     try:
         finishing_sop = json.loads(item.get("active_sop_json") or "{}")
         ramp_rate = finishing_sop.get("ramp_rate") or 1.0
@@ -252,23 +258,15 @@ async def _sim_handle_finishing(
         item["temperature"] = round(
             current_temp + (finishing_ramp if diff > 0 else -finishing_ramp), 2
         )
+        completed = False
     else:
         item["temperature"] = AMBIENT_TEMP
-        sop_name = item.get("running_sop_name") or "未知測試"
-        skip_push = item.pop("skip_push", False)
-        async with locks[device_id]:
-            item.update(_idle_state_patch())
-            _save_device_state(device_id, item)
-        logger.info(f"[{device_id}] 手動停止降溫完成，回待機。")
-        if not skip_push:
-            push_text = await asyncio.to_thread(_try_complete_schedule_for_device, device_id)
-            if push_text is None:
-                push_text = f"✅ 測試完成\n設備：{device_id}\n測試：{sop_name}"
-            asyncio.create_task(push_message(push_text))
+        completed = True
 
     item["humidity"] = round(
         max(0.0, min(100.0, current_humi + random.uniform(-0.2, 0.2))), 1
     )
+    return completed
 
 
 def _sim_handle_emergency(item: dict, current_temp: float, current_humi: float) -> None:
@@ -279,10 +277,91 @@ def _sim_handle_emergency(item: dict, current_temp: float, current_humi: float) 
     )
 
 
+def _mark_execution_ended(execution_id: int, now: datetime.datetime) -> None:
+    with SessionLocal() as db:
+        db.query(SopExecution).filter(
+            SopExecution.id == execution_id,
+            SopExecution.test_ended_at.is_(None),
+        ).update({"test_ended_at": now}, synchronize_session=False)
+        db.commit()
+
+
+def _advance_schedule_condition(device_id: str) -> dict | None:
+    with SessionLocal() as db:
+        schedule = db.query(Schedule).filter(
+            Schedule.device_id == device_id,
+            Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
+        ).first()
+        if schedule is None:
+            return None
+        new_idx = schedule.current_condition_index + 1
+        total = len(json.loads(schedule.conditions)) if schedule.conditions else 0
+        schedule.current_condition_index = new_idx
+        db.commit()
+        return {
+            "schedule_id": schedule.id,
+            "new_idx": new_idx,
+            "total": total,
+            "project": schedule.project_number,
+            "sample": schedule.sample_name,
+        }
+
+
+def _record_device_data(
+    device_id: str,
+    item: Mapping[str, object],
+    now: datetime.datetime,
+) -> None:
+    with SessionLocal() as db:
+        db.add(DeviceData(
+            device_id=device_id,
+            temperature=item["temperature"],
+            humidity=item.get("humidity", AMBIENT_HUMIDITY),
+            timestamp=now,
+        ))
+        db.commit()
+
+
+async def _apply_simulated_item_with_retry(
+    states: device_state.DeviceStateManager,
+    device_id: str,
+    item: dict,
+    *,
+    expected_status: str,
+    expected_sim_phase: str | None,
+    complete: bool = False,
+    checkpoint: bool = False,
+    attempts: int = 2,
+) -> device_state.TransitionResult | None:
+    for attempt in range(attempts):
+        try:
+            return await states.advance(
+                device_id,
+                temperature=item.get("temperature", AMBIENT_TEMP),
+                humidity=item.get("humidity", AMBIENT_HUMIDITY),
+                sim_phase=item.get("sim_phase"),
+                sim_cycle=item.get("sim_cycle", 0),
+                dwell_half_fired=item.get("dwell_half_fired", False),
+                dwell_high_start=item.get("dwell_high_start"),
+                dwell_low_start=item.get("dwell_low_start"),
+                expected_statuses=(expected_status,),
+                expected_sim_phase=expected_sim_phase,
+                complete=complete,
+                checkpoint=checkpoint,
+            )
+        except Exception as error:
+            if attempt + 1 < attempts:
+                logger.warning(f"[{device_id}] state checkpoint retry: {error}")
+                await asyncio.sleep(0.5)
+            else:
+                logger.error(f"[{device_id}] state checkpoint failed: {error}")
+    return None
+
+
 # ── 主模擬迴圈 ───────────────────────────────────────────────────────────────
 
 
-async def data_simulator(cache: dict, locks: dict):
+async def data_simulator(states: device_state.DeviceStateManager) -> None:
     write_counters: dict = {}
     dwell_start_times: dict = {}
     dwell_elapsed_times: dict = {}
@@ -291,8 +370,10 @@ async def data_simulator(cache: dict, locks: dict):
     while True:
         now = _now_utc_naive()
 
-        for device_id, item in cache.items():
+        for device_id in states:
+            item = dict(states[device_id])
             status = item.get("status", "OFFLINE")
+            expected_sim_phase = item.get("sim_phase")
 
             # IDLE 設備跳過，不做無謂迭代
             if status == "IDLE":
@@ -317,19 +398,21 @@ async def data_simulator(cache: dict, locks: dict):
                 await _sim_handle_running(device_id, item, now, dwell_start_times, dwell_elapsed_times, elapsed_seconds)
                 # 測試自然完成（ramp_to_ambient 降溫到 25°C）
                 if item.get("sim_phase") == "done":
-                    execution_id = item.get("active_execution_id")
-                    async with locks[device_id]:
-                        item.update(_idle_state_patch())
-                        _save_device_state(device_id, item)
+                    completion = await _apply_simulated_item_with_retry(
+                        states,
+                        device_id,
+                        item,
+                        expected_status="RUNNING",
+                        expected_sim_phase=expected_sim_phase,
+                        complete=True,
+                    )
+                    if completion is None or not completion.changed:
+                        continue
+                    execution_id = completion.before.get("active_execution_id")
                     if execution_id:
                         for _attempt in range(3):
                             try:
-                                with SessionLocal() as db:
-                                    db.query(SopExecution).filter(
-                                        SopExecution.id == execution_id,
-                                        SopExecution.test_ended_at.is_(None),
-                                    ).update({"test_ended_at": now}, synchronize_session=False)
-                                    db.commit()
+                                await asyncio.to_thread(_mark_execution_ended, execution_id, now)
                                 break
                             except Exception as e:
                                 logger.error(f"[{device_id}] 寫入 test_ended_at 失敗（第{_attempt+1}次）：{e}")
@@ -337,48 +420,73 @@ async def data_simulator(cache: dict, locks: dict):
                                     logger.error(f"[{device_id}] 寫入 test_ended_at 三次失敗，放棄")
                     logger.info(f"[{device_id}] 測試自然完成，回待機。")
                     try:
-                        with SessionLocal() as db:
-                            schedule = db.query(Schedule).filter(
-                                Schedule.device_id == device_id,
-                                Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
-                            ).first()
-                            if schedule:
-                                new_idx = schedule.current_condition_index + 1
-                                total = len(json.loads(schedule.conditions)) if schedule.conditions else 0
-                                schedule.current_condition_index = new_idx
-                                db.commit()
-                                proj, sample = schedule.project_number, schedule.sample_name
-                                asyncio.create_task(push_message(
-                                    f"✅ 條件 {new_idx}/{total} 完成\n專案：{proj} / {sample}\n設備：{device_id}\n請至排程頁面確認下一步"
-                                ))
-                                logger.info(f"[{device_id}] 排程 {schedule.id} 條件 {new_idx}/{total} 完成，等待人員確認")
+                        progress = await asyncio.to_thread(_advance_schedule_condition, device_id)
+                        if progress:
+                            asyncio.create_task(push_message(
+                                f"✅ 條件 {progress['new_idx']}/{progress['total']} 完成\n"
+                                f"專案：{progress['project']} / {progress['sample']}\n"
+                                f"設備：{device_id}\n請至排程頁面確認下一步"
+                            ))
+                            logger.info(
+                                f"[{device_id}] 排程 {progress['schedule_id']} "
+                                f"條件 {progress['new_idx']}/{progress['total']} 完成，等待人員確認"
+                            )
                     except Exception as e:
                         logger.error(f"[{device_id}] 更新排程條件進度失敗：{e}", exc_info=True)
                     continue
             elif status == "FINISHING":
-                await _sim_handle_finishing(device_id, item, current_temp, current_humi, locks, elapsed_seconds)
-                if item.get("status") == "IDLE":
+                completed = _sim_handle_finishing(item, current_temp, current_humi, elapsed_seconds)
+                if completed:
+                    completion = await _apply_simulated_item_with_retry(
+                        states,
+                        device_id,
+                        item,
+                        expected_status="FINISHING",
+                        expected_sim_phase=expected_sim_phase,
+                        complete=True,
+                    )
+                    if completion is None or not completion.changed:
+                        continue
                     for _suffix in ("_high", "_low"):
                         _k = f"{device_id}{_suffix}"
                         dwell_start_times.pop(_k, None)
                         dwell_elapsed_times.pop(_k, None)
+                    logger.info(f"[{device_id}] 手動停止降溫完成，回待機。")
+                    if not completion.before.get("skip_push", False):
+                        push_text = await asyncio.to_thread(_try_complete_schedule_for_device, device_id)
+                        if push_text is None:
+                            sop_name = completion.before.get("running_sop_name") or "未知測試"
+                            push_text = f"✅ 測試完成\n設備：{device_id}\n測試：{sop_name}"
+                        asyncio.create_task(push_message(push_text))
+                    continue
             elif status == "EMERGENCY":
                 _sim_handle_emergency(item, current_temp, current_humi)
 
             if status in ["RUNNING", "FINISHING", "EMERGENCY"]:
                 write_counters[device_id] += 1
-                if write_counters[device_id] >= 10:
+                checkpoint = write_counters[device_id] >= 10
+                result = await _apply_simulated_item_with_retry(
+                    states,
+                    device_id,
+                    item,
+                    expected_status=status,
+                    expected_sim_phase=expected_sim_phase,
+                    checkpoint=checkpoint,
+                    attempts=2 if checkpoint else 1,
+                )
+                if (
+                    checkpoint
+                    and result is not None
+                    and result.reason in ("advanced", "no_changes")
+                ):
                     for _attempt in range(2):
                         try:
-                            with SessionLocal() as db:
-                                db.add(DeviceData(
-                                    device_id=device_id,
-                                    temperature=item["temperature"],
-                                    humidity=item.get("humidity", AMBIENT_HUMIDITY),
-                                    timestamp=now,
-                                ))
-                                db.commit()
-                            _save_device_state(device_id, item)
+                            await asyncio.to_thread(
+                                _record_device_data,
+                                device_id,
+                                result.after,
+                                now,
+                            )
                             break
                         except Exception as e:
                             if _attempt == 0:
@@ -386,6 +494,7 @@ async def data_simulator(cache: dict, locks: dict):
                                 await asyncio.sleep(0.5)
                             else:
                                 logger.error(f"[{device_id}] DB write error after retry: {e}")
+                if checkpoint:
                     write_counters[device_id] = 0
             else:
                 write_counters[device_id] = 0

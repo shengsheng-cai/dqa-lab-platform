@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.device_state import DeviceStateManager
 from app.models import AuditLog, DeviceBlockedPeriod, Fixture, FixtureLoan, Schedule, ScheduleStatus
 from app.schedule_service import _start_schedule_by_id, auto_advance_schedules, try_start_schedule
 from app.schedules import router as schedules_router
@@ -22,10 +23,10 @@ from app.utils import _now_utc_naive
 @pytest.fixture()
 def session_factory(patched_session):
     # 啟動流程會跨多個模組寫 DB：schedule_service（排程）、sop（SopExecution）、
-    # utils（device_states）、schedules（手動 /start 路由）。全部一起 patch，
-    # 少一個那個模組就會寫進真實的 aicm.db。
+    # device_state（device_states 落盤）、utils（維護時段查詢）、schedules（手動 /start 路由）。
+    # 全部一起 patch，少一個那個模組就會寫進真實的 aicm.db。
     with patched_session(
-        "app.schedule_service", "app.sop", "app.utils", "app.schedules",
+        "app.schedule_service", "app.sop", "app.device_state", "app.utils", "app.schedules",
     ) as TestSession:
         yield TestSession
 
@@ -62,20 +63,24 @@ def _busy_cache(status="FINISHING"):
     return {"CH-01": {"status": status, "sim_phase": "ramp_to_ambient"}}
 
 
+def _states(cache):
+    return DeviceStateManager(cache)
+
+
 def test_start_does_not_mark_running_when_device_busy(session_factory):
     """設備非 IDLE → 排程必須留在「已確認」，讓 fallback 稍後重試。"""
     Session = session_factory
     sid = _seed_confirmed(Session)
     cache = _busy_cache()
-    locks = {"CH-01": asyncio.Lock()}
+    states = _states(cache)
 
-    asyncio.run(_start_schedule_by_id(sid, cache, locks))
+    asyncio.run(_start_schedule_by_id(sid, states))
 
     assert _status(Session, sid) == ScheduleStatus.CONFIRMED, (
         "設備仍在收尾，排程卻已標為進行中：畫面顯示測試中但設備是空的，"
         "且 fallback 只掃 CONFIRMED，不會再重試"
     )
-    assert cache["CH-01"]["status"] == "FINISHING", "不得覆蓋設備既有狀態"
+    assert states["CH-01"]["status"] == "FINISHING", "不得覆蓋設備既有狀態"
 
 
 def test_start_marks_running_when_device_idle(session_factory):
@@ -83,12 +88,12 @@ def test_start_marks_running_when_device_idle(session_factory):
     Session = session_factory
     sid = _seed_confirmed(Session)
     cache = {"CH-01": {"status": "IDLE"}}
-    locks = {"CH-01": asyncio.Lock()}
+    states = _states(cache)
 
-    asyncio.run(_start_schedule_by_id(sid, cache, locks))
+    asyncio.run(_start_schedule_by_id(sid, states))
 
     assert _status(Session, sid) == ScheduleStatus.RUNNING
-    assert cache["CH-01"]["status"] == "RUNNING"
+    assert states["CH-01"]["status"] == "RUNNING"
 
 
 # ── 維護（不可用）時段：自動啟動也要尊重，不能只擋手動 ────────────────────────
@@ -117,14 +122,14 @@ def test_start_skipped_when_device_in_maintenance(session_factory):
     sid = _seed_confirmed(Session)
     _seed_blocked(Session)
     cache = {"CH-01": {"status": "IDLE"}}
-    locks = {"CH-01": asyncio.Lock()}
+    states = _states(cache)
 
-    asyncio.run(_start_schedule_by_id(sid, cache, locks))
+    asyncio.run(_start_schedule_by_id(sid, states))
 
     assert _status(Session, sid) == ScheduleStatus.CONFIRMED, (
         "設備標了維護，排程卻自動啟動：測試會跑在維護中的機器上"
     )
-    assert cache["CH-01"]["status"] == "IDLE", "維護中不得啟動設備"
+    assert states["CH-01"]["status"] == "IDLE", "維護中不得啟動設備"
 
 
 def test_start_skipped_when_maintenance_has_no_reason(session_factory):
@@ -136,14 +141,14 @@ def test_start_skipped_when_maintenance_has_no_reason(session_factory):
     sid = _seed_confirmed(Session)
     _seed_blocked(Session, reason=None)
     cache = {"CH-01": {"status": "IDLE"}}
-    locks = {"CH-01": asyncio.Lock()}
+    states = _states(cache)
 
-    asyncio.run(_start_schedule_by_id(sid, cache, locks))
+    asyncio.run(_start_schedule_by_id(sid, states))
 
     assert _status(Session, sid) == ScheduleStatus.CONFIRMED, (
         "沒填原因的維護時段被當成沒封鎖，測試照樣自動啟動"
     )
-    assert cache["CH-01"]["status"] == "IDLE"
+    assert states["CH-01"]["status"] == "IDLE"
 
 
 def test_maintenance_keeps_confirmed_then_resumes(session_factory):
@@ -151,9 +156,8 @@ def test_maintenance_keeps_confirmed_then_resumes(session_factory):
     Session = session_factory
     sid = _seed_confirmed(Session)
     _seed_blocked(Session)
-    locks = {"CH-01": asyncio.Lock()}
 
-    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
+    asyncio.run(auto_advance_schedules(_states({"CH-01": {"status": "IDLE"}})))
     assert _status(Session, sid) == ScheduleStatus.CONFIRMED, (
         "維護會結束，屬暫時性阻擋，不該轉『異常』終止重試"
     )
@@ -162,25 +166,26 @@ def test_maintenance_keeps_confirmed_then_resumes(session_factory):
         db.query(DeviceBlockedPeriod).delete()
         db.commit()
     idle = {"CH-01": {"status": "IDLE"}}
-    asyncio.run(auto_advance_schedules(idle, locks))
+    states = _states(idle)
+    asyncio.run(auto_advance_schedules(states))
     assert _status(Session, sid) == ScheduleStatus.RUNNING
-    assert idle["CH-01"]["status"] == "RUNNING"
+    assert states["CH-01"]["status"] == "RUNNING"
 
 
 def test_fallback_retries_after_device_frees_up(session_factory):
     """設備忙 → 排程留 CONFIRMED；設備空出來後，fallback 應能成功啟動。"""
     Session = session_factory
     sid = _seed_confirmed(Session)
-    locks = {"CH-01": asyncio.Lock()}
 
     busy = _busy_cache()
-    asyncio.run(auto_advance_schedules(busy, locks))
+    asyncio.run(auto_advance_schedules(_states(busy)))
     assert _status(Session, sid) == ScheduleStatus.CONFIRMED
 
     idle = {"CH-01": {"status": "IDLE"}}
-    asyncio.run(auto_advance_schedules(idle, locks))
+    states = _states(idle)
+    asyncio.run(auto_advance_schedules(states))
     assert _status(Session, sid) == ScheduleStatus.RUNNING
-    assert idle["CH-01"]["status"] == "RUNNING"
+    assert states["CH-01"]["status"] == "RUNNING"
 
 
 # ── 壞排程收斂：缺設備/條件 → 轉「異常」，不無限重試 ──────────────────────────
@@ -201,9 +206,8 @@ def test_broken_schedule_missing_device_becomes_error(session_factory):
     """已確認排程缺 device_id → fallback 應轉「異常」並寫 audit，而非卡著重試。"""
     Session = session_factory
     sid = _seed_confirmed(Session, device_id=None)
-    locks = {"CH-01": asyncio.Lock()}
 
-    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
+    asyncio.run(auto_advance_schedules(_states({"CH-01": {"status": "IDLE"}})))
 
     assert _status(Session, sid) == ScheduleStatus.ERROR, (
         "缺設備的排程沒被收斂：會每 5 分鐘重試、永遠停在「已確認」，畫面也看不出壞掉"
@@ -215,9 +219,8 @@ def test_broken_schedule_missing_conditions_becomes_error(session_factory):
     """已確認排程 conditions 為空 → 同樣轉「異常」。"""
     Session = session_factory
     sid = _seed_confirmed(Session, conditions="[]")
-    locks = {"CH-01": asyncio.Lock()}
 
-    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
+    asyncio.run(auto_advance_schedules(_states({"CH-01": {"status": "IDLE"}})))
 
     assert _status(Session, sid) == ScheduleStatus.ERROR
 
@@ -226,10 +229,9 @@ def test_error_schedule_not_retried(session_factory):
     """轉「異常」後退出 CONFIRMED，後續 fallback 不得再撿它、不得重複寫 audit。"""
     Session = session_factory
     sid = _seed_confirmed(Session, device_id=None)
-    locks = {"CH-01": asyncio.Lock()}
 
-    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
-    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
+    asyncio.run(auto_advance_schedules(_states({"CH-01": {"status": "IDLE"}})))
+    asyncio.run(auto_advance_schedules(_states({"CH-01": {"status": "IDLE"}})))
 
     assert _status(Session, sid) == ScheduleStatus.ERROR
     assert _audit_count(Session, sid) == 1, "已是異常的排程不該被重複處理、重複寫 audit"
@@ -244,9 +246,8 @@ def test_error_schedule_releases_reserved_fixtures(session_factory):
     Session = session_factory
     sid = _seed_confirmed(Session, device_id=None)
     loan_id = _seed_reserved_fixture(Session, sid)
-    locks = {"CH-01": asyncio.Lock()}
 
-    asyncio.run(auto_advance_schedules({"CH-01": {"status": "IDLE"}}, locks))
+    asyncio.run(auto_advance_schedules(_states({"CH-01": {"status": "IDLE"}})))
 
     assert _status(Session, sid) == ScheduleStatus.ERROR
     with Session() as db:
@@ -289,8 +290,12 @@ def test_start_loans_only_its_own_fixtures(session_factory):
     target_loan = _seed_reserved_fixture(Session, target)
 
     cache = {"CH-01": {"status": "IDLE"}}
-    locks = {"CH-01": asyncio.Lock()}
-    asyncio.run(try_start_schedule(target, "CH-01", ["iec60068_ab_-40_16h"], cache, locks))
+    asyncio.run(try_start_schedule(
+        target,
+        "CH-01",
+        ["iec60068_ab_-40_16h"],
+        _states(cache),
+    ))
 
     assert _loan_status(Session, target_loan) == "loaned", "啟動的排程治具應轉為借出"
     assert _loan_status(Session, other_loan) == "reserved", (
@@ -322,8 +327,9 @@ def _make_client(router, cache):
 
     app.add_middleware(RoleMiddleware)
     app.include_router(router)
-    app.state.AICM_CACHE = cache
-    app.state.DEVICE_LOCKS = {d: asyncio.Lock() for d in cache}
+    states = cache if isinstance(cache, DeviceStateManager) else _states(cache)
+    app.state.DEVICE_STATE = states
+    app.state.AICM_CACHE = states
     return TestClient(app)
 
 
@@ -346,13 +352,14 @@ def test_manual_start_succeeds_on_idle_device(session_factory):
     Session = session_factory
     sid = _seed_confirmed(Session)
     cache = {"CH-01": {"status": "IDLE"}}
+    states = _states(cache)
 
-    client = _make_client(schedules_router, cache)
+    client = _make_client(schedules_router, states)
     resp = client.post(f"/api/schedules/{sid}/start")
 
     assert resp.status_code == 200
     assert _status(Session, sid) == ScheduleStatus.RUNNING
-    assert cache["CH-01"]["status"] == "RUNNING"
+    assert states["CH-01"]["status"] == "RUNNING"
 
 
 def test_manual_start_rejects_maintenance_device(session_factory):
@@ -367,15 +374,16 @@ def test_manual_start_rejects_maintenance_device(session_factory):
     sid = _seed_confirmed(Session)
     _seed_blocked(Session, reason="校驗中")  # CH-01 插一段涵蓋當下的維護時段
     cache = {"CH-01": {"status": "IDLE"}}
+    states = _states(cache)
 
-    client = _make_client(schedules_router, cache)
+    client = _make_client(schedules_router, states)
     resp = client.post(f"/api/schedules/{sid}/start")
 
     assert resp.status_code == 409, f"維護中不得回報啟動成功，實際 {resp.status_code}"
     assert _status(Session, sid) == ScheduleStatus.CONFIRMED, (
         "維護中卻把排程標為進行中：畫面顯示測試中但設備在維護、根本沒動"
     )
-    assert cache["CH-01"]["status"] == "IDLE", "維護中不得啟動設備"
+    assert states["CH-01"]["status"] == "IDLE", "維護中不得啟動設備"
 
     detail = resp.json()["detail"]
     assert "維護" in detail and "校驗中" in detail, f"擋是擋了，但訊息沒講維護原因：{detail}"
@@ -396,13 +404,17 @@ def test_auto_start_reverts_device_when_execution_insert_fails(session_factory):
 
     device = {"status": "IDLE"}
     cache = {"CH-01": device}
-    locks = {"CH-01": asyncio.Lock()}
+    states = _states(cache)
 
     with patch("app.sop._create_execution_id_db", return_value=None):
-        ok = asyncio.run(auto_start_sop("CH-01", "iec60068_ab_-40_16h", cache, locks))
+        ok = asyncio.run(auto_start_sop(
+            "CH-01",
+            "iec60068_ab_-40_16h",
+            states,
+        ))
 
     assert ok is False, "建不出執行紀錄卻回報啟動成功"
-    assert device["status"] == "IDLE", "啟動失敗卻沒把設備清回待機，會顯示 RUNNING 但無紀錄"
+    assert states["CH-01"]["status"] == "IDLE", "啟動失敗卻沒把設備清回待機，會顯示 RUNNING 但無紀錄"
 
 
 def test_try_start_keeps_confirmed_when_execution_insert_fails(session_factory):
@@ -411,10 +423,14 @@ def test_try_start_keeps_confirmed_when_execution_insert_fails(session_factory):
     sid = _seed_confirmed(Session)
     loan_id = _seed_reserved_fixture(Session, sid)
     cache = {"CH-01": {"status": "IDLE"}}
-    locks = {"CH-01": asyncio.Lock()}
 
     with patch("app.sop._create_execution_id_db", return_value=None):
-        ok = asyncio.run(try_start_schedule(sid, "CH-01", ["iec60068_ab_-40_16h"], cache, locks))
+        ok = asyncio.run(try_start_schedule(
+            sid,
+            "CH-01",
+            ["iec60068_ab_-40_16h"],
+            _states(cache),
+        ))
 
     assert ok is False
     assert _status(Session, sid) == ScheduleStatus.CONFIRMED, "啟動失敗卻把排程標為進行中"
@@ -424,13 +440,14 @@ def test_try_start_keeps_confirmed_when_execution_insert_fails(session_factory):
 def test_manual_start_sop_reverts_when_execution_insert_fails(session_factory):
     """手動啟動時建不出執行紀錄→回 500 並把設備清回待機，不留 RUNNING 卻無紀錄的殭屍狀態。"""
     cache = {"CH-01": {"status": "IDLE"}}
+    states = _states(cache)
 
     with patch("app.sop._create_execution_id_db", return_value=None):
-        client = _make_client(sop_router, cache)
+        client = _make_client(sop_router, states)
         resp = client.post("/start", json={"sop_id": "iec60068_ab_-40_16h", "device_id": "CH-01"})
 
     assert resp.status_code == 500, f"建紀錄失敗必須回報啟動失敗，實際 {resp.status_code}"
-    assert cache["CH-01"]["status"] == "IDLE", "啟動失敗卻沒把設備清回待機"
+    assert states["CH-01"]["status"] == "IDLE", "啟動失敗卻沒把設備清回待機"
 
 
 def test_manual_start_sop_activates_schedule_atomically(session_factory):

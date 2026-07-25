@@ -8,6 +8,7 @@ import asyncio
 import datetime
 from unittest.mock import patch, MagicMock
 
+from app.device_state import DeviceStateManager
 from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan
 from app.schedule_service import (
     _activate_schedule_db,
@@ -79,18 +80,17 @@ def test_stuck_devices_overdue_less_than_1h_not_stuck():
     assert _get_stuck_devices(cache) == set()
 
 
-def test_force_normal_stop_sets_skip_push():
+def test_force_normal_stop_sets_skip_push(patched_session):
     cache = {"CH-01": {"status": "RUNNING"}}
-    locks = {"CH-01": asyncio.Lock()}
+    states = DeviceStateManager(cache)
 
-    with patch("app.schedule_service._save_device_state") as mock_save:
-        _run_async(_force_normal_stop("CH-01", cache, locks))
+    with patched_session("app.device_state"):
+        _run_async(_force_normal_stop("CH-01", states))
 
-    device = cache["CH-01"]
+    device = states["CH-01"]
     assert device["status"] == "FINISHING"
     assert device["sim_phase"] == "ramp_to_ambient"
     assert device["skip_push"] is True
-    mock_save.assert_called_once_with("CH-01", device)
 
 
 # ── _activate_schedule_db：排程啟動時的治具轉借（reserved→loaned）─────────────
@@ -198,68 +198,55 @@ def _run_async(coro):
         loop.close()
 
 
-async def _start_sop(device_id, sop_id, cache, **kwargs):
-    lock = asyncio.Lock()
-    locks = {device_id: lock}
-    await auto_start_sop(device_id, sop_id, cache, locks, **kwargs)
-
-
 def test_auto_start_sop_device_not_in_cache():
     """設備不在 cache → 直接 return"""
-    cache = {}
+    states = DeviceStateManager({})
     with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
-        with patch("app.sop._save_device_state") as mock_save:
-            _run_async(_start_sop("CH-01", "sop_test", cache))
-            mock_save.assert_not_called()
+        assert _run_async(auto_start_sop("CH-01", "sop_test", states)) is False
 
 
 def test_auto_start_sop_device_not_idle():
     """設備非 IDLE → 跳過"""
-    cache = {"CH-01": {"status": "RUNNING"}}
+    states = DeviceStateManager({"CH-01": {"status": "RUNNING"}})
     with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
-        with patch("app.sop._save_device_state") as mock_save:
-            _run_async(_start_sop("CH-01", "sop_test", cache))
-            mock_save.assert_not_called()
-    assert cache["CH-01"]["status"] == "RUNNING"
+        assert _run_async(auto_start_sop("CH-01", "sop_test", states)) is False
+    assert states["CH-01"]["status"] == "RUNNING"
 
 
 def test_auto_start_sop_unknown_sop_id():
     """sop_id 不存在 → 跳過"""
-    cache = {"CH-01": {"status": "IDLE"}}
+    states = DeviceStateManager({"CH-01": {"status": "IDLE"}})
     with patch("app.sop.STANDARDS_AND_SOPS", {}):
-        with patch("app.sop._save_device_state") as mock_save:
-            _run_async(_start_sop("CH-01", "nonexistent", cache))
-            mock_save.assert_not_called()
+        assert _run_async(auto_start_sop("CH-01", "nonexistent", states)) is False
 
 
-def test_auto_start_sop_happy_path_updates_cache(db):
-    """正常啟動 → cache 改為 RUNNING，_save_device_state 至少被呼叫一次"""
-    cache = {"CH-01": {"status": "IDLE"}}
-    with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
-        with patch("app.sop._save_device_state") as mock_save:
-            with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
-                _run_async(_start_sop("CH-01", "sop_test", cache))
-            assert mock_save.called
+def test_auto_start_sop_happy_path_updates_cache(patched_session):
+    """正常啟動 → cache 與 DeviceState DB 一起改為 RUNNING。"""
+    states = DeviceStateManager({"CH-01": {"status": "IDLE"}})
+    with patched_session("app.sop", "app.device_state"):
+        with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
+            assert _run_async(auto_start_sop("CH-01", "sop_test", states)) is True
 
-    assert cache["CH-01"]["status"] == "RUNNING"
-    assert cache["CH-01"]["running_sop_id"] == "sop_test"
-    assert cache["CH-01"]["total_steps"] == 2
+    assert states["CH-01"]["status"] == "RUNNING"
+    assert states["CH-01"]["running_sop_id"] == "sop_test"
+    assert states["CH-01"]["total_steps"] == 2
 
 
-def test_auto_start_sop_never_touches_fixtures(db):
+def test_auto_start_sop_never_touches_fixtures(patched_session):
     """auto_start_sop 不得自行轉借治具。
 
     治具轉借一律由呼叫方依 schedule_id 精準處理（走 schedule_service._activate_schedule_db）——
     auto_start_sop 本身只管把設備開起來、不碰治具。這裡放一筆 reserved 治具，
     啟動後它必須維持 reserved。
     """
-    loan = _seed_loan(db, "CH-01", status="reserved")
-    cache = {"CH-01": {"status": "IDLE"}}
-    with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
-        with patch("app.sop._save_device_state"):
-            with patch("app.sop.SessionLocal", return_value=_mock_session_cm(db)):
-                _run_async(_start_sop("CH-01", "sop_test", cache))
-
-    db.refresh(loan)
-    assert loan.status == "reserved", "auto_start_sop 不該碰治具"
-    assert cache["CH-01"]["status"] == "RUNNING"
+    states = DeviceStateManager({"CH-01": {"status": "IDLE"}})
+    with patched_session("app.sop", "app.device_state") as Session:
+        with Session() as db:
+            loan_id = _seed_loan(db, "CH-01", status="reserved").id
+        with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
+            _run_async(auto_start_sop("CH-01", "sop_test", states))
+        with Session() as db:
+            assert db.get(FixtureLoan, loan_id).status == "reserved", (
+                "auto_start_sop 不該碰治具"
+            )
+        assert states["CH-01"]["status"] == "RUNNING"

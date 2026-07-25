@@ -103,7 +103,7 @@ def guest_client(api_client):
     # 舊死分支會允許這個身分取消自己的待審核排程，因此能形成有效回歸測試。
     with api_client(
         schedules_module, schedules_module.router, role="guest", user_id=5,
-        app_state={"AICM_CACHE": {}, "DEVICE_LOCKS": {}},
+        app_state={"AICM_CACHE": {}},
     ) as (client, Session):
         yield client, Session
 

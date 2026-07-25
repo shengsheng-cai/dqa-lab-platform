@@ -3,8 +3,7 @@
 import datetime
 import json
 from typing import Optional
-from .models import SessionLocal, DeviceState, DeviceBlockedPeriod
-from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
+from .models import SessionLocal, DeviceBlockedPeriod
 
 
 def _parse_conditions(conditions_str: Optional[str]) -> list:
@@ -67,70 +66,3 @@ def today_utc_window() -> tuple:
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
     return now, today_start, today_end
-
-
-def _idle_state_patch() -> dict:
-    """把設備清回待機時要覆蓋的欄位集合。收尾完成、緊急停止、啟動失敗復原都用這一份，
-    避免各處各清一半、留下髒欄位。只回傳 dict，呼叫端 update 進 cache 後自行 _save_device_state。"""
-    return {
-        "status": "IDLE",
-        "running_sop_name": "STANDBY",
-        "running_sop_id": None,
-        "active_sop_json": None,
-        "started_at": None,
-        "standard_id": None,
-        "operator": "",
-        "operator_user_id": None,
-        "sim_phase": "idle",
-        "sim_cycle": 0,
-        "dwell_high_start": None,
-        "dwell_low_start": None,
-        "dwell_half_fired": False,
-        "completed_steps": 0,
-        "total_steps": 0,
-        "active_execution_id": None,
-    }
-
-
-def _save_device_state(device_id: str, item: dict):
-    with SessionLocal() as db:
-        state = db.get(DeviceState, device_id)
-        if state is None:
-            state = DeviceState(device_id=device_id)
-            db.add(state)
-
-        state.status = item.get("status", "IDLE")
-        state.temperature = item.get("temperature", AMBIENT_TEMP)
-        state.humidity = item.get("humidity", AMBIENT_HUMIDITY)
-        state.running_sop_id = item.get("running_sop_id")
-        state.running_sop_name = item.get("running_sop_name")
-        state.standard_id = item.get("standard_id")
-        state.active_sop_json = item.get("active_sop_json")
-        state.completed_steps = item.get("completed_steps", 0)
-        state.updated_at = _now_utc_naive()
-
-        # ✅ 補上 started_at — 修復重啟後圖表與倒數計時失效的問題
-        started_at = item.get("started_at")
-        if started_at is not None:
-            if isinstance(started_at, str):
-                started_at = parse_iso_utc(started_at)
-            # 存入 DB 前去掉 tzinfo（SQLite 不支援 aware datetime）
-            state.started_at = started_at.replace(tzinfo=None)
-        else:
-            state.started_at = None
-
-        state.active_execution_id = item.get("active_execution_id")
-        state.sim_phase = item.get("sim_phase", "idle")
-        state.sim_cycle = item.get("sim_cycle", 0)
-        state.dwell_half_fired = item.get("dwell_half_fired", False)
-
-        for field in ("dwell_high_start", "dwell_low_start"):
-            val = item.get(field)
-            if val is not None:
-                if isinstance(val, str):
-                    val = parse_iso_utc(val)
-                setattr(state, field, val.replace(tzinfo=None))
-            else:
-                setattr(state, field, None)
-
-        db.commit()

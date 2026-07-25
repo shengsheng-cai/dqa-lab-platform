@@ -6,7 +6,6 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 import os
 import asyncio
 import datetime
-import random
 import time
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
@@ -14,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from .sop import router as sop_router, execution_router
 from .constants import DEVICE_IDS
-from .utils import _idle_state_patch
+from . import device_state
 from .reports import router as reports_router
 from .errors import router as errors_router
 from .ai import router as ai_router
@@ -27,13 +26,12 @@ from .schedules import (
     router as schedules_router, blocked_router as device_blocked_router,
 )
 from .schedule_service import auto_advance_schedules
-from .models import SessionLocal, DeviceState, SQLALCHEMY_DATABASE_URL
+from .models import SessionLocal, SQLALCHEMY_DATABASE_URL
 from .simulator import data_simulator
 from .devices import router as devices_router
 from .audit import router as audit_router
 from .devices_maintenance import router as devices_maintenance_router
 from .ws import router as ws_router, broadcast_loop
-from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 import httpx as _httpx
 import logging
 
@@ -125,55 +123,21 @@ async def lifespan(app: FastAPI):
 
     init_db()
 
-    with SessionLocal() as db:
-        saved_states = {s.device_id: s for s in db.query(DeviceState).all()}
+    states = device_state.DeviceStateManager.restore(DEVICE_IDS)
+    app.state.DEVICE_STATE = states
+    # 舊的讀取端仍以 AICM_CACHE 命名；值是只回 snapshot 的 Mapping，不再是可寫 live dict。
+    app.state.AICM_CACHE = states
+    for device_id, item in states.items():
+        logger.info(
+            f"[{device_id}] 恢復狀態：{item.get('status')}，"
+            f"溫度：{item.get('temperature')}°C"
+        )
 
-    cache = {}
-    for device_id in DEVICE_IDS:
-        s = saved_states.get(device_id)
-        if s:
-            started_at = s.started_at
-            if started_at is not None and started_at.tzinfo is None:
-                started_at = started_at.replace(tzinfo=datetime.timezone.utc)
-            dwell_high_start = s.dwell_high_start.isoformat() if s.dwell_high_start else None
-            dwell_low_start = s.dwell_low_start.isoformat() if s.dwell_low_start else None
-            cache[device_id] = {
-                "temperature": s.temperature,
-                "humidity": s.humidity,
-                "status": s.status,
-                "running_sop_name": s.running_sop_name or "STANDBY",
-                "running_sop_id": s.running_sop_id,
-                "standard_id": s.standard_id,
-                "active_sop_json": s.active_sop_json,
-                "completed_steps": s.completed_steps or 0,
-                "started_at": started_at,
-                "operator": "",
-                "operator_user_id": None,
-                "active_execution_id": s.active_execution_id,
-                "sim_phase": s.sim_phase or "idle",
-                "sim_cycle": s.sim_cycle or 0,
-                "dwell_half_fired": s.dwell_half_fired,
-                "dwell_high_start": dwell_high_start,
-                "dwell_low_start": dwell_low_start,
-            }
-            logger.info(f"[{device_id}] 恢復狀態：{s.status}，溫度：{s.temperature}°C")
-        else:
-            # 沒有存檔的設備＝全新待機。直接套共用的待機欄位表，開機後的欄位才會跟
-            # 「跑完一輪回到待機」完全一樣，不會少幾個欄位變成只有開機才有的怪狀況。
-            cache[device_id] = {
-                **_idle_state_patch(),
-                "temperature": round(AMBIENT_TEMP + random.uniform(-1.0, 1.0), 2),
-                "humidity": round(AMBIENT_HUMIDITY + random.uniform(-2.0, 2.0), 1),
-            }
-
-    app.state.AICM_CACHE = cache
-    app.state.DEVICE_LOCKS = {device_id: asyncio.Lock() for device_id in DEVICE_IDS}
-
-    sim_task = asyncio.create_task(data_simulator(cache, app.state.DEVICE_LOCKS))
+    sim_task = asyncio.create_task(data_simulator(states))
     background_tasks.add(sim_task)
     sim_task.add_done_callback(background_tasks.discard)
 
-    ws_task = asyncio.create_task(broadcast_loop(cache))
+    ws_task = asyncio.create_task(broadcast_loop(states))
     background_tasks.add(ws_task)
     ws_task.add_done_callback(background_tasks.discard)
     logger.info(f"System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
@@ -187,7 +151,7 @@ async def lifespan(app: FastAPI):
     scheduler = AsyncIOScheduler(timezone="Asia/Taipei")
     scheduler.add_job(
         auto_advance_schedules, "interval", minutes=5,
-        kwargs={"cache": app.state.AICM_CACHE, "locks": app.state.DEVICE_LOCKS},
+        kwargs={"states": states},
     )
     scheduler.start()
     app.state.scheduler = scheduler
@@ -208,7 +172,7 @@ async def lifespan(app: FastAPI):
                 _start_schedule_by_id,
                 trigger="date",
                 run_date=start_aware,
-                kwargs={"schedule_id": s.id, "cache": app.state.AICM_CACHE, "locks": app.state.DEVICE_LOCKS},
+                kwargs={"schedule_id": s.id, "states": states},
                 id=f"sched_{s.id}",
                 replace_existing=True,
             )

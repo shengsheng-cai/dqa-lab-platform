@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod, Schedule, ScheduleStatus
 from .line import push_message
-from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions, parse_iso_utc
+from .utils import _now_utc, _now_utc_naive, _parse_conditions, parse_iso_utc
 from .auth import require_admin, current_user
 from .audit_log import log_audit
 from .constants import AMBIENT_TEMP
@@ -375,79 +375,63 @@ def get_latest(request: Request):
     }
 
 
-def _emergency_stop_db(device_id: str, device: dict, user_id, role):
+def _record_emergency_stop(db, device_id: str, device: dict, user_id, role):
     operator = device.get("operator", "") or "未填寫"
     sop_name = device.get("running_sop_name", "") or "未知測試"
-    with SessionLocal() as db:
-        db.add(
-            ErrorLog(
-                device_id=device_id,
-                error_type="EMERGENCY",
-                sop_id=device.get("running_sop_id"),
-                sop_name=device.get("running_sop_name"),
-                temperature=device.get("temperature"),
-                humidity=device.get("humidity"),
-                note=f"操作人員觸發緊急停止（{operator}）",
-                completed_steps=device.get("completed_steps", 0),
-                total_steps=device.get("total_steps", 0),
-                created_at=_now_utc_naive(),
-            )
+    db.add(
+        ErrorLog(
+            device_id=device_id,
+            error_type="EMERGENCY",
+            sop_id=device.get("running_sop_id"),
+            sop_name=device.get("running_sop_name"),
+            temperature=device.get("temperature"),
+            humidity=device.get("humidity"),
+            note=f"操作人員觸發緊急停止（{operator}）",
+            completed_steps=device.get("completed_steps", 0),
+            total_steps=device.get("total_steps", 0),
+            created_at=_now_utc_naive(),
         )
-        execution = db.query(SopExecution).filter(
-            SopExecution.device_id == device_id,
-            SopExecution.test_ended_at.is_(None),
-            SopExecution.test_started_at.isnot(None)
-        ).first()
-        if execution:
-            execution.test_ended_at = _now_utc_naive()
-        log_audit(db, str(user_id or "unknown"), role, "EMERGENCY_STOP", "device", device_id,
-                  f"操作人員：{operator}，測試：{sop_name}")
-        db.commit()
+    )
+    execution = db.query(SopExecution).filter(
+        SopExecution.device_id == device_id,
+        SopExecution.test_ended_at.is_(None),
+        SopExecution.test_started_at.isnot(None)
+    ).first()
+    if execution:
+        execution.test_ended_at = _now_utc_naive()
+    log_audit(db, str(user_id or "unknown"), role, "EMERGENCY_STOP", "device", device_id,
+              f"操作人員：{operator}，測試：{sop_name}")
 
 
 @router.post("/api/stop/{device_id}/emergency")
 async def emergency_stop(device_id: str, request: Request, _: None = Depends(require_admin)):
-    cache = request.app.state.AICM_CACHE
-    locks = request.app.state.DEVICE_LOCKS
-    device = _get_device(cache, device_id)
+    states = request.app.state.DEVICE_STATE
+    _get_device(states, device_id)
+    kson = getattr(request.app.state, "KSON_DEVICES", {}).get(device_id)
 
-    async with locks[device_id]:
-        if device.get("status") == "EMERGENCY":
-            return {
-                "status": "already_emergency",
-                "message": f"{device_id} 已在緊急停止狀態",
-            }
+    async def stop_hardware() -> None:
+        stopped = await kson.stop()
+        if not stopped:
+            logger.warning(f"[{device_id}] kson.stop() 未收到 ACK，仍繼續更新狀態")
 
-        # 真機模式：物理停機（Demo 模式 KSON_DEVICES 不存在，getattr 回 {} 直接跳過）
-        kson = getattr(request.app.state, "KSON_DEVICES", {}).get(device_id)
-        if kson:
-            stopped = await kson.stop()
-            if not stopped:
-                logger.warning(f"[{device_id}] kson.stop() 未收到 ACK，仍繼續更新狀態")
+    u = current_user(request)
 
-        operator = device.get("operator", "") or "未填寫"
-        sop_name = device.get("running_sop_name", "") or "未知測試"
-        u = current_user(request)
-        user_id = u.user_id
+    def record_emergency(db, device):
+        _record_emergency_stop(db, device_id, device, u.user_id, u.role)
 
-        await asyncio.to_thread(_emergency_stop_db, device_id, device, user_id, u.role)
-
-        device.update(
-            {
-                "status": "EMERGENCY",
-                "running_sop_id": None,
-                "running_sop_name": "🚨 緊急停止中 - 待確認安全",
-                "active_sop_json": None,
-                "completed_steps": 0,
-                "started_at": None,
-                "total_steps": 0,
-                "operator": "",
-                "operator_user_id": None,
-                "sim_phase": "idle",
-                "sim_cycle": 0,
-            }
-        )
-        _save_device_state(device_id, device)
+    result = await states.emergency(
+        device_id,
+        stop=stop_hardware if kson else None,
+        record=record_emergency,
+    )
+    if result.reason == "already_emergency":
+        return {
+            "status": "already_emergency",
+            "message": f"{device_id} 已在緊急停止狀態",
+        }
+    device = result.before
+    operator = device.get("operator", "") or "未填寫"
+    sop_name = device.get("running_sop_name", "") or "未知測試"
 
     logger.warning(f"[{device_id}] EMERGENCY STOP by {operator}")
     asyncio.create_task(
@@ -478,64 +462,48 @@ _VALID_PHASES = {
 @router.post("/api/devices/{device_id}/set-phase", include_in_schema=False)
 async def set_phase(device_id: str, payload: SetPhasePayload, request: Request, _: None = Depends(require_admin)):
     """管理員手動跳相位（用於 demo / 手動接管）"""
-    cache = request.app.state.AICM_CACHE
-    locks = request.app.state.DEVICE_LOCKS
-    device = _get_device(cache, device_id)
+    states = request.app.state.DEVICE_STATE
+    _get_device(states, device_id)
     if payload.phase not in _VALID_PHASES:
         raise HTTPException(status_code=400, detail=f"無效的 phase：{payload.phase}")
-    async with locks[device_id]:
-        if device.get("status") not in ("RUNNING", "PAUSED"):
-            raise HTTPException(status_code=400, detail="設備未在執行中")
-        device["sim_phase"] = payload.phase
-        _save_device_state(device_id, device)
+    result = await states.advance(
+        device_id,
+        sim_phase=payload.phase,
+        expected_statuses=("RUNNING", "PAUSED"),
+        checkpoint=True,
+    )
+    if result.reason == "stale_status":
+        raise HTTPException(status_code=400, detail="設備未在執行中")
     return {"status": "success", "sim_phase": payload.phase}
 
 
 @router.post("/api/devices/{device_id}/progress", include_in_schema=False)
 async def update_progress(device_id: str, payload: ProgressPayload, request: Request, _: None = Depends(require_admin)):
-    cache = request.app.state.AICM_CACHE
-    locks = request.app.state.DEVICE_LOCKS
-    device = _get_device(cache, device_id)
-    async with locks[device_id]:
-        device["completed_steps"] = payload.completed
-        _save_device_state(device_id, device)
+    states = request.app.state.DEVICE_STATE
+    _get_device(states, device_id)
+    await states.advance(
+        device_id,
+        completed_steps=payload.completed,
+        checkpoint=True,
+    )
     return {"status": "success", "completed_steps": payload.completed}
 
 
 @router.post("/api/stop/{device_id}/pause")
 async def pause_test(device_id: str, request: Request, _: None = Depends(require_admin)):
-    cache = request.app.state.AICM_CACHE
-    locks = request.app.state.DEVICE_LOCKS
-    device = _get_device(cache, device_id)
-    async with locks[device_id]:
-        if device["status"] not in ("RUNNING", "PAUSED"):
-            raise HTTPException(status_code=400, detail=f"{device_id} 非執行中狀態，無法暫停／繼續")
-        if device["status"] == "RUNNING":
-            device["status"] = "PAUSED"
-        else:
-            device["status"] = "RUNNING"
-        _save_device_state(device_id, device)
+    states = request.app.state.DEVICE_STATE
+    _get_device(states, device_id)
+    result = await states.pause(device_id)
+    if not result.changed:
+        raise HTTPException(status_code=400, detail=f"{device_id} 非執行中狀態，無法暫停／繼續")
     return {"status": "success"}
 
 
 @router.post("/api/stop/{device_id}/normal")
 async def normal_stop(device_id: str, request: Request, skip_push: bool = False, _: None = Depends(require_admin)):
-    cache = request.app.state.AICM_CACHE
-    locks = request.app.state.DEVICE_LOCKS
-    device = _get_device(cache, device_id)
-    async with locks[device_id]:
-        if device["status"] not in ("RUNNING", "PAUSED", "EMERGENCY"):
-            raise HTTPException(status_code=400, detail=f"{device_id} 非執行中狀態，無法停止")
-        device.update(
-            {
-                "status": "FINISHING",
-                "running_sop_name": "系統自動降溫收尾中...",
-                "completed_steps": 0,
-                "standard_id": None,
-                "sim_phase": "ramp_to_ambient",
-                "sim_cycle": 0,
-                "skip_push": skip_push,
-            }
-        )
-        _save_device_state(device_id, device)
+    states = request.app.state.DEVICE_STATE
+    _get_device(states, device_id)
+    result = await states.finish(device_id, notify=not skip_push)
+    if not result.changed:
+        raise HTTPException(status_code=400, detail=f"{device_id} 非執行中狀態，無法停止")
     return {"status": "success"}

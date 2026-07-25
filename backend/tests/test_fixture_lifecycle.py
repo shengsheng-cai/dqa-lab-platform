@@ -114,7 +114,7 @@ def test_schedule_reservation_rejects_negative_quantity(api_client):
 
     with api_client(
         schedules_module, schedules_router, role="admin", user_id=1, username="admin",
-        app_state={"AICM_CACHE": {}, "DEVICE_LOCKS": {}},
+        app_state={"AICM_CACHE": {}},
     ) as (client, Session):
         with Session() as db:
             db.add(Fixture(interface_type="USB", form_factor="Desktop", total_quantity=5, is_active=True))
