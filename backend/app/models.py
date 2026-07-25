@@ -470,7 +470,11 @@ class DeviceCalibration(Base):
     device_id: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     calibration_date: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     next_calibration_date: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
-    interval_days: Mapped[int] = mapped_column(Integer, default=365)
+    interval_days: Mapped[int] = mapped_column(
+        Integer,
+        default=365,
+        nullable=False,
+    )
     certificate_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     result: Mapped[str] = mapped_column(String(10), nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
