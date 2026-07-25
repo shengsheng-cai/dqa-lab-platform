@@ -34,7 +34,7 @@ def device_blocked_reason_now(device_id: str) -> Optional[str]:
 
     「有沒有封鎖」只看時段是否存在——reason 可為空（欄位 nullable、建立時可不填），
     不能拿它當有無封鎖的判準，否則沒填原因的維護時段會被當成沒封鎖而放行。
-    手動 start_sop 與自動 try_start_schedule 共用同一份判斷，維持
+    手動 start_sop 與排程 start_schedule 共用同一份判斷，維持
     「手動、自動一致尊重維護時段」。
     """
     now = _now_utc_naive()

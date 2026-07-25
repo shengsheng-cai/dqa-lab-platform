@@ -48,7 +48,7 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 ## 資料庫
 
 - 測試直接對 in-memory SQLite 操作，避免 mock/prod 行為不一致
-- 例外：`SessionLocal` 可用 `patch` 注入 in-memory session（`test_linkage.py` 的做法），DB 本身仍用真實資料
+- 跨模組流程用共用 `patched_session` 注入 in-memory session（參考 `test_schedule_start_consistency.py`），DB 本身仍走真實 SQLAlchemy 行為
 
 ## Frontend 單元測試（Vitest）
 

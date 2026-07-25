@@ -5,7 +5,6 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 import os
 import asyncio
-import datetime
 import time
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
@@ -157,7 +156,7 @@ async def lifespan(app: FastAPI):
     app.state.scheduler = scheduler
 
     # 重啟後重新註冊未來的 CONFIRMED 排程 date job
-    from .schedule_service import _start_schedule_by_id
+    from .schedule_service import _register_schedule_start_job
     from .models import Schedule, ScheduleStatus
     from .utils import _now_utc_naive
     _now_naive = _now_utc_naive()
@@ -167,14 +166,11 @@ async def lifespan(app: FastAPI):
             Schedule.start_time > _now_naive,
         ).all()
         for s in future_confirmed:
-            start_aware = s.start_time.replace(tzinfo=datetime.timezone.utc)
-            scheduler.add_job(
-                _start_schedule_by_id,
-                trigger="date",
-                run_date=start_aware,
-                kwargs={"schedule_id": s.id, "states": states},
-                id=f"sched_{s.id}",
-                replace_existing=True,
+            _register_schedule_start_job(
+                scheduler,
+                s.id,
+                states,
+                s.start_time,
             )
         if future_confirmed:
             logger.info(f"重新註冊 {len(future_confirmed)} 筆未來排程 date job")

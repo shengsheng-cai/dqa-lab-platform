@@ -8,14 +8,18 @@ import os
 import shutil
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Body, Request, UploadFile, File, Form
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Callable
 from .models import (
     SessionLocal, SopTemplate, SopExecution, StepRecord,
     User, Schedule, ScheduleStatus, DeviceBlockedPeriod,
 )
 from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .constants import DEVICE_IDS
-from .schedule_service import _activate_schedule_db, _earliest_confirmed_schedule_id
+from .schedule_service import (
+    ScheduleStartActor,
+    start_schedule as start_schedule_service,
+)
+from .schedules import _schedule_start_http_error
 from .utils import _now_utc, _now_utc_naive, _parse_conditions
 from . import device_state
 from .auth import require_admin, current_user
@@ -97,7 +101,7 @@ def _create_execution_id_db(
 ) -> Optional[int]:
     """在 DeviceStateManager.start 的同一 transaction 建 SopExecution。
 
-    start_sop（手動）與 auto_start_sop（排程）共用——兩條路徑的建立語意必須一致。
+    ad-hoc start_sop 與排程 start_schedule 共用——兩條路徑的建立語意必須一致。
     sync DB I/O 與 commit 都由 DeviceStateManager.start 在 worker thread 內處理。
     """
     execution = SopExecution(
@@ -120,6 +124,7 @@ async def _start_device_sop(
     std_data: dict,
     operator: str,
     operator_user_id: int | None,
+    before_commit: Callable[[Any, Any], None] | None = None,
 ) -> device_state.TransitionResult:
     started_at = _now_utc()
     execution_started_at = _now_utc_naive()
@@ -144,6 +149,7 @@ async def _start_device_sop(
             execution_started_at,
             operator_user_id,
         ),
+        before_commit=before_commit,
     )
 
 
@@ -153,7 +159,8 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     """啟動指定設備的 SOP 測試（admin 才可操作）"""
 
     operator: str = payload.get("operator", "")
-    operator_user_id = current_user(request).user_id
+    user = current_user(request)
+    operator_user_id = user.user_id
 
     states = request.app.state.DEVICE_STATE
     sop_id, device_id, _device = _validate_start_sop_input(payload, states)
@@ -164,11 +171,13 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     need_template_name = sop_name == sop_id
 
     def _load_start_context() -> dict:
-        """啟動前的唯讀檢查一次查完：進行中排程、操作者名稱、範本名稱、維護時段。
+        """啟動前一次查完：進行中排程、吻合的到期排程、操作者、範本與維護時段。
 
-        這四個都只是讀，沒必要各開一條連線——併成一次連線少三趟往返。
+        手動 ad-hoc SOP 只能認領「已到開始時間且目前條件相同」的排程；
+        未來或條件不同的排程必須保持已確認，不能被這次操作提早啟動。
         """
         with SessionLocal() as db:
+            now = _now_utc_naive()
             running = db.query(Schedule).filter(
                 Schedule.device_id == device_id,
                 Schedule.status == ScheduleStatus.RUNNING,
@@ -179,6 +188,31 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
                     "conditions": running.conditions,
                     "current_condition_index": running.current_condition_index,
                 }
+
+            matching_schedule_id = None
+            confirmed = (
+                db.query(
+                    Schedule.id,
+                    Schedule.conditions,
+                    Schedule.current_condition_index,
+                )
+                .filter(
+                    Schedule.device_id == device_id,
+                    Schedule.status == ScheduleStatus.CONFIRMED,
+                    Schedule.start_time <= now,
+                )
+                .order_by(Schedule.start_time.asc(), Schedule.id.asc())
+            )
+            for candidate_id, candidate_conditions, current_index in confirmed:
+                conditions = _parse_conditions(candidate_conditions)
+                index = current_index or 0
+                if (
+                    isinstance(conditions, list)
+                    and 0 <= index < len(conditions)
+                    and conditions[index] == sop_id
+                ):
+                    matching_schedule_id = candidate_id
+                    break
 
             display_name = None
             if not operator and operator_user_id:
@@ -192,12 +226,13 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
 
             blocked = db.query(DeviceBlockedPeriod).filter(
                 DeviceBlockedPeriod.device_id == device_id,
-                DeviceBlockedPeriod.start_time <= _now_utc_naive(),
-                DeviceBlockedPeriod.end_time > _now_utc_naive(),
+                DeviceBlockedPeriod.start_time <= now,
+                DeviceBlockedPeriod.end_time > now,
             ).first()
 
             return {
                 "running": running_info,
+                "matching_schedule_id": matching_schedule_id,
                 "display_name": display_name,
                 "template_name": template_name,
                 "blocked_reason": (blocked.reason or "已設定封鎖") if blocked else None,
@@ -220,13 +255,35 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     if ctx["template_name"]:
         sop_name = ctx["template_name"]
 
+    operator = operator.strip() if operator else ""
+    if ctx["matching_schedule_id"] is not None:
+        schedule_result = await start_schedule_service(
+            ctx["matching_schedule_id"],
+            ScheduleStartActor(
+                actor=str(operator_user_id or "unknown"),
+                role=user.role,
+                action="START",
+                operator=operator or user.username or "管理員",
+                operator_user_id=operator_user_id,
+            ),
+            states,
+        )
+        if not schedule_result.started:
+            raise _schedule_start_http_error(schedule_result)
+        logger.info(
+            "[%s] 透過排程 #%s 啟動 SOP: %s",
+            device_id,
+            ctx["matching_schedule_id"],
+            sop_id,
+        )
+        return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
+
     if ctx["blocked_reason"] is not None:
         raise HTTPException(
             status_code=409,
             detail=f"{device_id} 目前在不可用時段（{ctx['blocked_reason']}），無法啟動測試。"
         )
 
-    operator = operator.strip() if operator else ""
     result = await _start_device_sop(
         states,
         device_id,
@@ -247,73 +304,9 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
     if not result.changed:
         raise HTTPException(status_code=404, detail=f"設備 {device_id} 不存在")
 
-    # 同步排程狀態：手動啟動時，把該設備上「已確認」的排程一起推進成進行中，
-    # 讓管理者從排程頁看到的永遠是設備真實狀態。排程轉進行中 + 治具轉借 + 寫 audit
-    # 走排程層的共用原子函式（與自動排程同一支），三件事同一 transaction，不會中途分裂。
-    # 挑哪一筆已確認排程的規則也定在排程層，手動與自動共用同一套。
-    confirmed_schedule_id = await asyncio.to_thread(_earliest_confirmed_schedule_id, device_id)
-    if confirmed_schedule_id:
-        # 排程同步是次要動作：即使失敗也不該把「設備已啟動」翻成錯誤（設備確實在跑了）。
-        try:
-            activated = await asyncio.to_thread(
-                _activate_schedule_db, confirmed_schedule_id,
-                actor=str(operator_user_id or "unknown"), role="admin", action="START",
-            )
-            if activated:
-                logger.info(f"[{device_id}] 排程 {confirmed_schedule_id} CONFIRMED → RUNNING（手動啟動觸發）")
-        except Exception as e:
-            logger.warning(f"[{device_id}] 排程同步／治具轉借失敗：{e}")
-
     logger.info(f"[{device_id}] Started SOP: {sop_id} ({sop_name}) by {operator or '未填寫'}")
 
     return {"status": "success", "message": f"{device_id} 已啟動 {sop_name}"}
-
-
-async def auto_start_sop(
-    device_id: str,
-    sop_id: str,
-    states: device_state.DeviceStateManager,
-    operator: str = "排程系統",
-) -> bool:
-    """排程到達開始時間時自動啟動 SOP（供 schedule_service.try_start_schedule 呼叫）。
-
-    回傳設備是否真的進入 RUNNING；呼叫方需據此決定排程狀態，
-    否則排程會顯示「進行中」但設備其實沒啟動。
-
-    不處理治具：治具轉借需要 schedule_id 才不會借錯排程，由呼叫方負責。
-    """
-    device = states.get(device_id)
-    if not device:
-        logger.warning(f"[auto_start] 設備 {device_id} 不在 cache，跳過")
-        return False
-    if device.get("status") != "IDLE":
-        logger.info(f"[auto_start] {device_id} 狀態為 {device.get('status')}，非 IDLE，跳過自動啟動")
-        return False
-
-    std_data = STANDARDS_AND_SOPS.get(sop_id, {})
-    if not std_data:
-        logger.warning(f"[auto_start] sop_id={sop_id} 查無法規資料，跳過")
-        return False
-
-    sop_name = std_data.get("name", sop_id)
-    result = await _start_device_sop(
-        states,
-        device_id,
-        sop_id,
-        sop_name,
-        std_data,
-        operator,
-        None,
-    )
-    if result.reason == "execution_failed":
-        logger.error(f"[auto_start] {device_id} 建立執行紀錄失敗，維持待機、放棄本次啟動")
-        return False
-    if not result.changed:
-        logger.info(f"[auto_start] {device_id} 啟動被拒絕：{result.reason}")
-        return False
-
-    logger.info(f"[auto_start] {device_id} 自動啟動 SOP: {sop_id} ({sop_name})")
-    return True
 
 
 # SOP 執行紀錄路由

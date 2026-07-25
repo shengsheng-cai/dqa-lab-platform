@@ -1,22 +1,15 @@
 """
-T-04: 三模組連動核心邏輯測試
-- _get_emergency_devices / _get_stuck_devices（純 cache dict）
-- _activate_schedule_db（mock SessionLocal，驗證排程啟動時 reserved→loaned 治具轉借）
-- auto_start_sop（async，驗證 cache 狀態更新與 early-exit 路徑）
+T-04: 排程選機與停止連動核心邏輯測試
 """
 import asyncio
 import datetime
-from unittest.mock import patch, MagicMock
 
 from app.device_state import DeviceStateManager
-from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan
 from app.schedule_service import (
-    _activate_schedule_db,
     _force_normal_stop,
     _get_emergency_devices,
     _get_stuck_devices,
 )
-from app.sop import auto_start_sop
 
 UTC = datetime.timezone.utc
 
@@ -85,168 +78,9 @@ def test_force_normal_stop_sets_skip_push(patched_session):
     states = DeviceStateManager(cache)
 
     with patched_session("app.device_state"):
-        _run_async(_force_normal_stop("CH-01", states))
+        asyncio.run(_force_normal_stop("CH-01", states))
 
     device = states["CH-01"]
     assert device["status"] == "FINISHING"
     assert device["sim_phase"] == "ramp_to_ambient"
     assert device["skip_push"] is True
-
-
-# ── _activate_schedule_db：排程啟動時的治具轉借（reserved→loaned）─────────────
-
-
-def _mock_session_cm(session):
-    """建立 context manager mock 讓 SessionLocal() 回傳指定 session"""
-    cm = MagicMock()
-    cm.__enter__ = MagicMock(return_value=session)
-    cm.__exit__ = MagicMock(return_value=False)
-    return cm
-
-
-def _seed_loan(db, device_id: str, status: str = "reserved") -> FixtureLoan:
-    """建立測試用 Fixture + Schedule + FixtureLoan"""
-    f = Fixture(
-        interface_type="USB", form_factor="Desktop",
-        total_quantity=5,
-    )
-    db.add(f)
-    db.flush()
-
-    s = Schedule(
-        project_number="P001", sample_name="Sample",
-        standard="IEC", conditions='["sop1"]',
-        status=ScheduleStatus.CONFIRMED, device_id=device_id,
-        start_time=datetime.datetime.now(),
-        end_time=datetime.datetime.now() + datetime.timedelta(hours=5),
-    )
-    db.add(s)
-    db.flush()
-
-    loan = FixtureLoan(
-        fixture_id=f.id,
-        schedule_id=s.id,
-        borrower_name="測試人員",
-        quantity=1,
-        status=status,
-        loan_date=datetime.datetime.now(UTC),
-    )
-    db.add(loan)
-    db.commit()
-    return loan
-
-
-def test_activate_turns_reserved_into_loaned(db):
-    """排程啟動 → 該排程的 reserved 治具轉為 loaned"""
-    loan = _seed_loan(db, "CH-01", status="reserved")
-
-    with patch("app.schedule_service.SessionLocal", return_value=_mock_session_cm(db)):
-        _activate_schedule_db(loan.schedule_id)
-
-    db.refresh(loan)
-    assert loan.status == "loaned"
-
-
-def test_activate_does_not_affect_already_loaned(db):
-    """轉借只挑 reserved：已是 loaned 的不被觸動（status 維持 loaned，loan_date 不變）"""
-    original_date = datetime.datetime(2026, 1, 1)  # naive，SQLite 不存 tz
-    loan = _seed_loan(db, "CH-01", status="loaned")
-    loan.loan_date = original_date
-    db.commit()
-
-    with patch("app.schedule_service.SessionLocal", return_value=_mock_session_cm(db)):
-        _activate_schedule_db(loan.schedule_id)
-
-    db.refresh(loan)
-    assert loan.status == "loaned"
-    assert loan.loan_date == original_date
-
-
-def test_activate_only_affects_target_schedule(db):
-    """同設備多筆已確認排程：只轉借目標排程的預約治具，不誤借其他筆"""
-    loan_a = _seed_loan(db, "CH-01", status="reserved")
-    loan_b = _seed_loan(db, "CH-01", status="reserved")  # 同設備另一筆已確認排程
-
-    with patch("app.schedule_service.SessionLocal", return_value=_mock_session_cm(db)):
-        _activate_schedule_db(loan_a.schedule_id)
-
-    db.refresh(loan_a)
-    db.refresh(loan_b)
-    assert loan_a.status == "loaned"
-    assert loan_b.status == "reserved"  # 另一筆排程的預約未被誤轉
-
-
-# ── auto_start_sop ─────────────────────────────────────────────────────────
-
-_MOCK_SOP = {
-    "name": "Test SOP",
-    "ramp_rate": 2.0,
-    "dwell_time_hours": 1.0,
-    "cycles": 1,
-    "high_temperature": 85.0,
-    "low_temperature": None,
-    "steps": [{"id": 1}, {"id": 2}],
-}
-
-
-def _run_async(coro):
-    """在新 event loop 執行 coroutine（Python 3.9 相容）"""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
-
-def test_auto_start_sop_device_not_in_cache():
-    """設備不在 cache → 直接 return"""
-    states = DeviceStateManager({})
-    with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
-        assert _run_async(auto_start_sop("CH-01", "sop_test", states)) is False
-
-
-def test_auto_start_sop_device_not_idle():
-    """設備非 IDLE → 跳過"""
-    states = DeviceStateManager({"CH-01": {"status": "RUNNING"}})
-    with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
-        assert _run_async(auto_start_sop("CH-01", "sop_test", states)) is False
-    assert states["CH-01"]["status"] == "RUNNING"
-
-
-def test_auto_start_sop_unknown_sop_id():
-    """sop_id 不存在 → 跳過"""
-    states = DeviceStateManager({"CH-01": {"status": "IDLE"}})
-    with patch("app.sop.STANDARDS_AND_SOPS", {}):
-        assert _run_async(auto_start_sop("CH-01", "nonexistent", states)) is False
-
-
-def test_auto_start_sop_happy_path_updates_cache(patched_session):
-    """正常啟動 → cache 與 DeviceState DB 一起改為 RUNNING。"""
-    states = DeviceStateManager({"CH-01": {"status": "IDLE"}})
-    with patched_session("app.sop", "app.device_state"):
-        with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
-            assert _run_async(auto_start_sop("CH-01", "sop_test", states)) is True
-
-    assert states["CH-01"]["status"] == "RUNNING"
-    assert states["CH-01"]["running_sop_id"] == "sop_test"
-    assert states["CH-01"]["total_steps"] == 2
-
-
-def test_auto_start_sop_never_touches_fixtures(patched_session):
-    """auto_start_sop 不得自行轉借治具。
-
-    治具轉借一律由呼叫方依 schedule_id 精準處理（走 schedule_service._activate_schedule_db）——
-    auto_start_sop 本身只管把設備開起來、不碰治具。這裡放一筆 reserved 治具，
-    啟動後它必須維持 reserved。
-    """
-    states = DeviceStateManager({"CH-01": {"status": "IDLE"}})
-    with patched_session("app.sop", "app.device_state") as Session:
-        with Session() as db:
-            loan_id = _seed_loan(db, "CH-01", status="reserved").id
-        with patch("app.sop.STANDARDS_AND_SOPS", {"sop_test": _MOCK_SOP}):
-            _run_async(auto_start_sop("CH-01", "sop_test", states))
-        with Session() as db:
-            assert db.get(FixtureLoan, loan_id).status == "reserved", (
-                "auto_start_sop 不該碰治具"
-            )
-        assert states["CH-01"]["status"] == "RUNNING"

@@ -14,6 +14,7 @@ IDLE → RUNNING ↔ PAUSED → FINISHING → IDLE
 - EMERGENCY 需經正常停止進入 FINISHING，降回常溫後才回 IDLE
 - RUNNING 的測試自然完成時，simulator 已在 `ramp_to_ambient` 回到常溫，可由 `advance(complete=True)` 原子清回 IDLE
 - 所有狀態轉換只走 `DeviceStateManager` 的五個動詞：`start`、`finish`、`pause`、`emergency`、`advance`
+- 排程啟動一律走 `schedule_service.start_schedule`；不得由 route 先改排程狀態再另外啟動設備
 
 ## 模擬相位（sim_phase）
 

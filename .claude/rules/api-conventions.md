@@ -77,7 +77,9 @@ async def my_route(...):
 - 排除超時卡機設備：`est_end` 超過 1h 仍未回 IDLE（`_get_stuck_devices`）
 - Fallback：若所有設備都超時，改取全部中最早可用（避免無法申請）
 - APScheduler 每 5 分鐘：已確認 → 進行中（自動啟動第一條件）；進行中不再自動完成
-- 壞排程收斂：已確認排程若缺設備/條件（永遠無法啟動），`try_start_schedule` 轉「異常」、釋放預約治具並寫 audit、停止重試（`_mark_schedule_error_db`）；設備忙碌屬暫時性，仍維持已確認重試
-- 啟動失敗即不發布：`DeviceStateManager.start` 在同一 transaction 建立 SopExecution 與 DeviceState；三次建立皆失敗時 cache/DB 維持原狀，不推進排程也不轉借治具
-- 同設備多筆已確認排程時，手動啟動挑「預定開始時間最早」那筆（`_earliest_confirmed_schedule_id`）
-- 條件銜接由人員在排程頁面手動確認（`POST /api/schedules/{id}/confirm-condition`）
+- 單一啟動入口：APScheduler、fallback、立即開始、PATCH→RUNNING、吻合的手動 SOP、條件銜接一律呼叫 `start_schedule(schedule_id, actor, states)`，caller 不得自行傳入設備或條件快照
+- 啟動結果使用 `ScheduleStartResult`，由 `STARTED`、`DEVICE_BUSY`、`UNDER_MAINTENANCE`、`BROKEN` 等 code 表達原因；route 不得重新查 DB/cache 猜原因
+- 原子啟動：DeviceState、SopExecution、Schedule、FixtureLoan、AuditLog 在同一 transaction 寫入，commit 成功後才發布 cache
+- 壞排程收斂：排程若缺設備、條件或法規資料，`start_schedule` 轉「異常」、釋放治具並寫 audit、停止重試；設備忙碌與維護屬暫時性，維持原狀
+- 手動 ad-hoc SOP 只可認領「已到開始時間且目前條件相同」的已確認排程；未來或條件不同的排程不得異動
+- 條件銜接由人員在排程頁面確認後，再由同一個 `start_schedule(..., continuation=True)` 啟動下一條件

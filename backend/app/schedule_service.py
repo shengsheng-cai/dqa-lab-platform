@@ -8,6 +8,8 @@ import asyncio
 import datetime
 import json
 import logging
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Optional, List
 
 from .models import (
@@ -30,6 +32,58 @@ ACTIVE_STATUSES = [ScheduleStatus.PENDING, ScheduleStatus.CONFIRMED, ScheduleSta
 STABILIZATION_HOURS = 0.5
 
 
+class ScheduleStartCode(StrEnum):
+    STARTED = "started"
+    DEVICE_BUSY = "device_busy"
+    UNDER_MAINTENANCE = "under_maintenance"
+    BROKEN = "broken"
+    NOT_FOUND = "not_found"
+    NOT_STARTABLE = "not_startable"
+    RETRYABLE_FAILURE = "retryable_failure"
+
+
+@dataclass(frozen=True)
+class ScheduleStartActor:
+    actor: str
+    role: Optional[str] = None
+    action: str = "AUTO_START"
+    operator: str = "排程系統"
+    operator_user_id: Optional[int] = None
+
+
+SYSTEM_SCHEDULE_ACTOR = ScheduleStartActor(actor="system:scheduler")
+
+
+@dataclass(frozen=True)
+class ScheduleStartResult:
+    code: ScheduleStartCode
+    schedule_id: int
+    device_id: Optional[str] = None
+    sop_id: Optional[str] = None
+    detail: Optional[str] = None
+
+    @property
+    def started(self) -> bool:
+        return self.code == ScheduleStartCode.STARTED
+
+
+@dataclass(frozen=True)
+class _ScheduleStartPlan:
+    schedule_id: int
+    device_id: str
+    sop_id: str
+    condition_index: int
+    expected_status: str
+    std_data: dict
+
+
+class _ScheduleStartRejected(Exception):
+    def __init__(self, code: ScheduleStartCode, detail: str):
+        super().__init__(detail)
+        self.code = code
+        self.detail = detail
+
+
 # ── 排程完成 ─────────────────────────────────────────────────────────────────
 
 
@@ -49,20 +103,20 @@ def _return_loaned_fixtures(db, schedule_id: int, now: datetime.datetime) -> Non
 
 
 def _complete_schedule(db, schedule, now: datetime.datetime) -> None:
-    """排程標為已完成，並將借出治具改為已歸還（不 commit，由呼叫方負責）"""
+    """排程標為已完成並釋放全部治具占用（不 commit，由呼叫方負責）。"""
     schedule.status = ScheduleStatus.DONE
     schedule.updated_at = now
-    _return_loaned_fixtures(db, schedule.id, now)
+    _release_schedule_fixtures(db, schedule.id, now, return_loaned=True)
 
 
 def _release_schedule_fixtures(
     db, schedule_id: int, now: datetime.datetime, *, return_loaned: bool = False,
 ) -> None:
-    """排程走到終止狀態（取消／異常）時釋放它占用的治具（不 commit，由呼叫方負責）。
+    """排程走到完成／取消／異常時釋放它占用的治具（不 commit，由呼叫方負責）。
 
-    取消和異常曾經各寫各的，漏掉一邊就會讓治具永遠卡住、可借量收不回來。收成同一支
+    終止路徑若各寫各的，漏掉一邊就會讓治具永遠卡住、可借量收不回來。收成同一支
     避免日後再漂：還沒真正借出的「預約」一律刪掉；return_loaned=True 時，連已經借出的
-    也一併歸還（只有取消進行中排程需要，異常只會從已確認進來、不會有借出中的）。
+    也一併歸還。
     """
     db.query(FixtureLoan).filter(
         FixtureLoan.schedule_id == schedule_id,
@@ -385,144 +439,440 @@ async def _force_normal_stop(
     await states.finish(device_id, cancelled=True, notify=False)
 
 
-def _confirmed_schedules_db(schedule_id: Optional[int] = None) -> list[tuple]:
-    """待啟動的已確認排程 → [(id, device_id, conditions)]。
-    指定 schedule_id 取該筆；否則取所有已到開始時間的。"""
+def _confirmed_schedule_ids_db() -> list[int]:
+    """已到開始時間、待 fallback 啟動的排程 id。"""
     with SessionLocal() as db:
-        q = db.query(Schedule).filter(Schedule.status == ScheduleStatus.CONFIRMED)
-        if schedule_id is not None:
-            q = q.filter(Schedule.id == schedule_id)
-        else:
-            q = q.filter(Schedule.start_time <= _now_utc_naive())
-        return [(s.id, s.device_id, _parse_conditions(s.conditions)) for s in q.all()]
+        rows = (
+            db.query(Schedule.id)
+            .filter(
+                Schedule.status == ScheduleStatus.CONFIRMED,
+                Schedule.start_time <= _now_utc_naive(),
+            )
+            .order_by(
+                Schedule.start_time.asc(),
+                Schedule.id.asc(),
+            )
+            .all()
+        )
+        return [schedule_id for (schedule_id,) in rows]
 
 
-def _activate_schedule_db(
-    schedule_id: int, *,
-    actor: str = "system:scheduler", role: Optional[str] = None, action: str = "AUTO_START",
-) -> bool:
-    """設備確實啟動後：排程轉進行中 + 預約治具轉借出 + 寫 audit（單一 transaction）。
-
-    三件事必須同進同退——若分開 commit，中間失敗會讓排程已是進行中、治具卻永遠
-    卡在「已預約」（_complete_schedule 只歸還 loaned，reserved 不會被回收）。
-
-    自動（APScheduler）與手動（start_sop）兩條啟動路徑共用這一支，只有 audit 的
-    操作者不同：自動預設記 system:scheduler／AUTO_START，手動由呼叫端傳入 admin／START。
-    只在排程仍是「已確認」時動作；回傳是否真的啟動了（找不到或已非已確認回 False）。
-    """
+def _apply_schedule_error(
+    db,
+    schedule: Schedule,
+    reason: str,
+    actor: ScheduleStartActor,
+) -> None:
+    """在 caller 的 transaction 內把永久壞資料收斂為 ERROR。"""
     now = _now_utc_naive()
+    schedule.status = ScheduleStatus.ERROR
+    schedule.updated_at = now
+    _release_schedule_fixtures(
+        db,
+        schedule.id,
+        now,
+        return_loaned=True,
+    )
+    log_audit(
+        db,
+        actor.actor,
+        actor.role,
+        "ERROR",
+        "schedule",
+        schedule.id,
+        f"{schedule.project_number} / {schedule.sample_name}：{reason}",
+    )
+
+
+def _load_schedule_start_plan(
+    schedule_id: int,
+    *,
+    continuation: bool,
+    actor: ScheduleStartActor,
+) -> _ScheduleStartPlan | ScheduleStartResult:
+    """讀取不可變啟動計畫；永久壞資料在同一 transaction 直接收斂。"""
+    expected_status = ScheduleStatus.RUNNING if continuation else ScheduleStatus.CONFIRMED
+    with SessionLocal() as db:
+        s = db.get(Schedule, schedule_id)
+        if not s:
+            return ScheduleStartResult(
+                ScheduleStartCode.NOT_FOUND,
+                schedule_id,
+                detail="找不到排程",
+            )
+        if s.status != expected_status:
+            return ScheduleStartResult(
+                ScheduleStartCode.NOT_STARTABLE,
+                schedule_id,
+                device_id=s.device_id,
+                detail=f"排程目前為「{s.status}」，不能從這個入口啟動",
+            )
+
+        def broken(detail: str, *, sop_id: str | None = None) -> ScheduleStartResult:
+            result = ScheduleStartResult(
+                ScheduleStartCode.BROKEN,
+                schedule_id,
+                device_id=s.device_id,
+                sop_id=sop_id,
+                detail=detail,
+            )
+            _apply_schedule_error(db, s, detail, actor)
+            db.commit()
+            return result
+
+        conditions = _parse_conditions(s.conditions)
+        condition_index = s.current_condition_index or 0
+        if (
+            not s.device_id
+            or not isinstance(conditions, list)
+            or not conditions
+            or condition_index < 0
+            or condition_index >= len(conditions)
+        ):
+            return broken("缺少測試條件或設備")
+
+        sop_id = conditions[condition_index]
+        if not isinstance(sop_id, str):
+            return broken("測試條件格式錯誤")
+        std_data = get_standard(sop_id)
+        if not std_data:
+            return broken(f"找不到測試條件 {sop_id}", sop_id=sop_id)
+
+        return _ScheduleStartPlan(
+            schedule_id=s.id,
+            device_id=s.device_id,
+            sop_id=sop_id,
+            condition_index=condition_index,
+            expected_status=expected_status,
+            std_data=std_data,
+        )
+
+
+def _conditions_matching_plan(
+    schedule: Schedule,
+    plan: _ScheduleStartPlan,
+) -> list | None:
+    """回傳仍符合 optimistic plan 的條件；資料漂移時回 None。"""
+    conditions = _parse_conditions(schedule.conditions)
+    condition_index = schedule.current_condition_index or 0
+    if (
+        schedule.device_id != plan.device_id
+        or not isinstance(conditions, list)
+        or condition_index != plan.condition_index
+        or condition_index < 0
+        or condition_index >= len(conditions)
+        or conditions[condition_index] != plan.sop_id
+    ):
+        return None
+    return conditions
+
+
+def _mark_schedule_error_db(
+    plan: _ScheduleStartPlan,
+    reason: str,
+    actor: ScheduleStartActor = SYSTEM_SCHEDULE_ACTOR,
+) -> bool:
+    """依 optimistic plan 把永久無法啟動的排程轉「異常」並停止重試。
+
+    不同於「設備忙碌」（暫時性），設備不存在等永久缺陷重試也不會好。
+    CONFIRMED/RUNNING 皆可收斂為 ERROR、釋放治具，並寫 audit 供管理者追查。
+
+    plan 是讀取當下的 optimistic snapshot；資料若已被管理員修正就不套用舊判定。
+    """
     with SessionLocal() as db:
         s = db.query(Schedule).filter(
-            Schedule.id == schedule_id,
-            Schedule.status == ScheduleStatus.CONFIRMED,
+            Schedule.id == plan.schedule_id,
+            Schedule.status == plan.expected_status,
         ).first()
         if not s:
             return False
-        s.status = ScheduleStatus.RUNNING
-        s.updated_at = now
+        if _conditions_matching_plan(s, plan) is None:
+            return False
+        _apply_schedule_error(db, s, reason, actor)
+        db.commit()
+        return True
+
+
+async def _settle_broken_schedule(
+    result: ScheduleStartResult,
+    actor: ScheduleStartActor,
+    plan: _ScheduleStartPlan,
+) -> ScheduleStartResult:
+    """把永久壞資料收斂為 ERROR；收斂本身失敗時仍維持 typed result。"""
+    try:
+        settled = await asyncio.to_thread(
+            _mark_schedule_error_db,
+            plan,
+            result.detail or "排程資料不完整",
+            actor,
+        )
+    except Exception:
+        logger.exception(
+            "[scheduler] 排程 #%s 無法標記為異常",
+            result.schedule_id,
+        )
+        return ScheduleStartResult(
+            ScheduleStartCode.RETRYABLE_FAILURE,
+            result.schedule_id,
+            device_id=result.device_id,
+            sop_id=result.sop_id,
+            detail="排程資料異常，但目前無法完成錯誤收斂，請稍後重試",
+        )
+    if not settled:
+        return ScheduleStartResult(
+            ScheduleStartCode.NOT_STARTABLE,
+            result.schedule_id,
+            device_id=result.device_id,
+            sop_id=result.sop_id,
+            detail="排程資料已被其他操作變更，未套用舊的錯誤判定",
+        )
+    return result
+
+
+def _apply_schedule_start(
+    db,
+    plan: _ScheduleStartPlan,
+    actor: ScheduleStartActor,
+) -> None:
+    """在 DeviceStateManager.start 的 transaction 內推進排程、治具與 audit。"""
+    now = _now_utc_naive()
+    schedule = db.query(Schedule).filter(
+        Schedule.id == plan.schedule_id,
+        Schedule.status == plan.expected_status,
+    ).first()
+    if schedule is None:
+        raise _ScheduleStartRejected(
+            ScheduleStartCode.NOT_STARTABLE,
+            "排程狀態已被其他操作變更",
+        )
+
+    conditions = _conditions_matching_plan(schedule, plan)
+    if conditions is None:
+        raise _ScheduleStartRejected(
+            ScheduleStartCode.NOT_STARTABLE,
+            "排程的設備或目前條件已被其他操作變更",
+        )
+
+    blocked = db.query(DeviceBlockedPeriod).filter(
+        DeviceBlockedPeriod.device_id == plan.device_id,
+        DeviceBlockedPeriod.start_time <= now,
+        DeviceBlockedPeriod.end_time > now,
+    ).first()
+    if blocked is not None:
+        reason = blocked.reason or "已設定封鎖"
+        raise _ScheduleStartRejected(
+            ScheduleStartCode.UNDER_MAINTENANCE,
+            f"{plan.device_id} 在維護時段（{reason}）",
+        )
+
+    if plan.expected_status == ScheduleStatus.CONFIRMED:
+        schedule.status = ScheduleStatus.RUNNING
         db.query(FixtureLoan).filter(
-            FixtureLoan.schedule_id == schedule_id,
+            FixtureLoan.schedule_id == plan.schedule_id,
             FixtureLoan.status == "reserved",
         ).update(
             {"status": "loaned", "loan_date": now},
             synchronize_session=False,
         )
-        log_audit(db, actor, role, action, "schedule", schedule_id,
-                  f"{s.project_number} / {s.sample_name}")
-        db.commit()
-        return True
+
+    schedule.updated_at = now
+    detail = (
+        f"{schedule.project_number} / {schedule.sample_name}"
+        f" · 條件 {plan.condition_index + 1}/{len(conditions)}"
+    )
+    log_audit(
+        db,
+        actor.actor,
+        actor.role,
+        actor.action,
+        "schedule",
+        schedule.id,
+        detail,
+    )
 
 
-def _mark_schedule_error_db(schedule_id: int, reason: str) -> None:
-    """壞排程收斂：已確認但缺設備/條件、永遠無法啟動 → 轉「異常」並停止重試。
-
-    不同於「設備忙碌」（暫時性、應留 CONFIRMED 重試），缺設備/條件是資料層面的
-    永久缺陷，每 5 分鐘重試也不會好。轉為終止狀態 ERROR（退出 ACTIVE_STATUSES，
-    釋放設備時段占用），寫 audit 讓管理者在紀錄與排程頁看得到、可手動修復。
-    """
-    now = _now_utc_naive()
-    with SessionLocal() as db:
-        s = db.query(Schedule).filter(
-            Schedule.id == schedule_id,
-            Schedule.status == ScheduleStatus.CONFIRMED,
-        ).first()
-        if not s:
-            return
-        s.status = ScheduleStatus.ERROR
-        s.updated_at = now
-        # 轉「異常」＝排程永遠不會啟動，把它占用的治具放回去（比照「取消」），否則可借量卡死。
-        _release_schedule_fixtures(db, schedule_id, now)
-        log_audit(db, "system:scheduler", None, "ERROR", "schedule", schedule_id,
-                  f"{s.project_number} / {s.sample_name}：{reason}")
-        db.commit()
-
-
-def _earliest_confirmed_schedule_id(device_id: str) -> Optional[int]:
-    """該設備上最該先跑的「已確認」排程 id；沒有就回 None。
-
-    同一台設備上可能排了多筆已確認，手動啟動 SOP 時要推進哪一筆的規則就定在這裡：
-    預定開始時間最早的優先，同時間再用 id（建立先後）決勝，確保每次挑的都一樣。
-    沒有開始時間的（資料異常）排到最後，不要被誤挑中。
-    """
-    with SessionLocal() as db:
-        s = (
-            db.query(Schedule)
-            .filter(
-                Schedule.device_id == device_id,
-                Schedule.status == ScheduleStatus.CONFIRMED,
-            )
-            .order_by(
-                Schedule.start_time.is_(None),
-                Schedule.start_time.asc(),
-                Schedule.id.asc(),
-            )
-            .first()
-        )
-        return s.id if s else None
-
-
-async def try_start_schedule(
-    schedule_id: int, device_id: Optional[str], conditions: List[str],
+async def start_schedule(
+    schedule_id: int,
+    actor: ScheduleStartActor,
     states: device_state.DeviceStateManager,
-) -> bool:
-    """啟動排程的唯一入口：設備真的進入 RUNNING 才把排程標為進行中、治具才轉借出。
+    *,
+    continuation: bool = False,
+) -> ScheduleStartResult:
+    """排程啟動的唯一入口；所有 caller 只提供 id、actor 與啟動模式。
 
-    設備不可用時排程維持「已確認」，由 auto_advance_schedules 每 5 分鐘重試。
+    DeviceState、SopExecution、Schedule、FixtureLoan 與 AuditLog 在同一個
+    transaction 寫入；commit 成功後才發布 cache。暫時性阻擋不改排程狀態。
     """
-    from .sop import auto_start_sop
-    if not conditions or not device_id:
-        logger.warning(f"[scheduler] 排程 #{schedule_id} 缺少測試條件或設備，轉「異常」停止重試")
-        await asyncio.to_thread(_mark_schedule_error_db, schedule_id, "缺少測試條件或設備")
-        return False
+    from .sop import _start_device_sop
 
-    # 設備在維護（不可用）時段內不自動啟動，維持「已確認」等維護結束後重試。
-    # 維護是暫時性阻擋（會結束），與「設備忙碌」同類，故不轉「異常」。
-    blocked_reason = await asyncio.to_thread(device_blocked_reason_now, device_id)
-    if blocked_reason is not None:
-        logger.info(
-            f"[scheduler] 排程 #{schedule_id} 的 {device_id} 在維護時段"
-            f"（{blocked_reason}），維持「已確認」等待重試"
+    try:
+        plan_or_result = await asyncio.to_thread(
+            _load_schedule_start_plan,
+            schedule_id,
+            continuation=continuation,
+            actor=actor,
         )
-        return False
+    except Exception:
+        logger.exception("[scheduler] 排程 #%s 啟動計畫讀取失敗", schedule_id)
+        return ScheduleStartResult(
+            ScheduleStartCode.RETRYABLE_FAILURE,
+            schedule_id,
+            detail="暫時無法讀取排程資料，請稍後重試",
+        )
+    if isinstance(plan_or_result, ScheduleStartResult):
+        if plan_or_result.code == ScheduleStartCode.BROKEN:
+            logger.warning(
+                "[scheduler] 排程 #%s 無法啟動：%s，已轉「異常」",
+                schedule_id,
+                plan_or_result.detail,
+            )
+        return plan_or_result
 
-    if not await auto_start_sop(device_id, conditions[0], states):
-        logger.info(f"[scheduler] 排程 #{schedule_id} 的 {device_id} 非 IDLE，維持「已確認」等待重試")
-        return False
+    plan = plan_or_result
+    try:
+        blocked_reason = await asyncio.to_thread(
+            device_blocked_reason_now,
+            plan.device_id,
+        )
+    except Exception:
+        logger.exception("[scheduler] 排程 #%s 維護狀態讀取失敗", schedule_id)
+        return ScheduleStartResult(
+            ScheduleStartCode.RETRYABLE_FAILURE,
+            schedule_id,
+            device_id=plan.device_id,
+            sop_id=plan.sop_id,
+            detail="暫時無法確認設備維護狀態，請稍後重試",
+        )
+    if blocked_reason is not None:
+        return ScheduleStartResult(
+            ScheduleStartCode.UNDER_MAINTENANCE,
+            schedule_id,
+            device_id=plan.device_id,
+            sop_id=plan.sop_id,
+            detail=f"{plan.device_id} 在維護時段（{blocked_reason}）",
+        )
 
-    # 這裡不看 _activate_schedule_db 的回傳：設備已經真的啟動了，就算排程剛好被別人
-    # 搶先推進（回 False），對呼叫方而言「這次啟動成功」仍然成立。
-    await asyncio.to_thread(_activate_schedule_db, schedule_id)
-    return True
+    device = states.get(plan.device_id)
+    if device is None:
+        detail = f"設備 {plan.device_id} 不存在"
+        return await _settle_broken_schedule(
+            ScheduleStartResult(
+                ScheduleStartCode.BROKEN,
+                schedule_id,
+                device_id=plan.device_id,
+                sop_id=plan.sop_id,
+                detail=detail,
+            ),
+            actor,
+            plan,
+        )
+    if device.get("status") != "IDLE":
+        device_status = str(device.get("status", "未知"))
+        return ScheduleStartResult(
+            ScheduleStartCode.DEVICE_BUSY,
+            schedule_id,
+            device_id=plan.device_id,
+            sop_id=plan.sop_id,
+            detail=f"{plan.device_id} 目前為「{device_status}」，非待機狀態",
+        )
+
+    try:
+        transition = await _start_device_sop(
+            states,
+            plan.device_id,
+            plan.sop_id,
+            plan.std_data.get("name", plan.sop_id),
+            plan.std_data,
+            actor.operator,
+            actor.operator_user_id,
+            before_commit=lambda db, _state: _apply_schedule_start(db, plan, actor),
+        )
+    except _ScheduleStartRejected as error:
+        return ScheduleStartResult(
+            error.code,
+            schedule_id,
+            device_id=plan.device_id,
+            sop_id=plan.sop_id,
+            detail=error.detail,
+        )
+    except Exception:
+        logger.exception("[scheduler] 排程 #%s 啟動 transaction 失敗", schedule_id)
+        return ScheduleStartResult(
+            ScheduleStartCode.RETRYABLE_FAILURE,
+            schedule_id,
+            device_id=plan.device_id,
+            sop_id=plan.sop_id,
+            detail="啟動資料暫時無法寫入，請稍後重試",
+        )
+
+    if transition.reason == "invalid_status":
+        device_status = str(transition.before.get("status", "未知"))
+        return ScheduleStartResult(
+            ScheduleStartCode.DEVICE_BUSY,
+            schedule_id,
+            device_id=plan.device_id,
+            sop_id=plan.sop_id,
+            detail=f"{plan.device_id} 目前為「{device_status}」，非待機狀態",
+        )
+    if transition.reason == "execution_failed":
+        return ScheduleStartResult(
+            ScheduleStartCode.RETRYABLE_FAILURE,
+            schedule_id,
+            device_id=plan.device_id,
+            sop_id=plan.sop_id,
+            detail="無法建立 SOP 執行紀錄，請稍後重試",
+        )
+    if not transition.changed:
+        return ScheduleStartResult(
+            ScheduleStartCode.RETRYABLE_FAILURE,
+            schedule_id,
+            device_id=plan.device_id,
+            sop_id=plan.sop_id,
+            detail=f"設備啟動被拒絕：{transition.reason}",
+        )
+
+    logger.info(
+        "[scheduler] 排程 #%s 條件 %s 在 %s 啟動",
+        schedule_id,
+        plan.sop_id,
+        plan.device_id,
+    )
+    return ScheduleStartResult(
+        ScheduleStartCode.STARTED,
+        schedule_id,
+        device_id=plan.device_id,
+        sop_id=plan.sop_id,
+    )
 
 
 async def _start_schedule_by_id(
     schedule_id: int,
     states: device_state.DeviceStateManager,
-) -> None:
+) -> ScheduleStartResult | None:
     """排程到達 start_time 時由 APScheduler date job 精確觸發。"""
-    rows = await asyncio.to_thread(_confirmed_schedules_db, schedule_id)
-    if rows:
-        await try_start_schedule(*rows[0], states)
+    result = await start_schedule(schedule_id, SYSTEM_SCHEDULE_ACTOR, states)
+    if result.code in {ScheduleStartCode.NOT_FOUND, ScheduleStartCode.NOT_STARTABLE}:
+        return None
+    return result
+
+
+def _register_schedule_start_job(
+    scheduler,
+    schedule_id: int,
+    states: device_state.DeviceStateManager,
+    run_date: datetime.datetime,
+) -> None:
+    """以一致的 UTC date-job 規格註冊或更新排程啟動工作。"""
+    run_date_utc = _to_naive_utc(run_date)
+    assert run_date_utc is not None
+    scheduler.add_job(
+        _start_schedule_by_id,
+        trigger="date",
+        run_date=run_date_utc.replace(tzinfo=datetime.timezone.utc),
+        kwargs={"schedule_id": schedule_id, "states": states},
+        id=f"sched_{schedule_id}",
+        replace_existing=True,
+    )
 
 
 async def auto_advance_schedules(
@@ -532,13 +882,21 @@ async def auto_advance_schedules(
     if states is None:
         return
 
-    rows = await asyncio.to_thread(_confirmed_schedules_db)
-    if not rows:
+    schedule_ids = await asyncio.to_thread(_confirmed_schedule_ids_db)
+    if not schedule_ids:
         return
 
-    results = await asyncio.gather(
-        *(try_start_schedule(sid, dev, conds, states) for sid, dev, conds in rows)
-    )
-    started = sum(results)
+    # Query 已依 start_time/id 排序。同一設備若並行搶 lock，較晚排程反而可能先啟動；
+    # fallback 頻率低且設備數有限，逐筆執行才能保證「最早到期者先」。
+    results = []
+    for schedule_id in schedule_ids:
+        results.append(
+            await start_schedule(schedule_id, SYSTEM_SCHEDULE_ACTOR, states)
+        )
+    started = sum(result.started for result in results)
     if started:
-        logger.info(f"[scheduler] fallback 推進：{started}/{len(rows)} 筆→進行中")
+        logger.info(
+            "[scheduler] fallback 推進：%s/%s 筆→進行中",
+            started,
+            len(schedule_ids),
+        )

@@ -150,6 +150,69 @@ def test_start_state_and_execution_roll_back_together_on_commit_failure(
             assert db.query(SopExecution).count() == 0
 
 
+def test_start_repeated_cancellation_waits_for_commit_and_publishes_cache(
+    patched_session,
+):
+    with patched_session("app.device_state") as Session:
+        states = _manager()
+        entered = threading.Event()
+        release = threading.Event()
+
+        def create_execution(db):
+            execution = SopExecution(
+                sop_id="iec60068_ab_-40_16h",
+                device_id="CH-01",
+                operator="王小明",
+                test_started_at=datetime.datetime(2026, 7, 25),
+            )
+            db.add(execution)
+            db.flush()
+            return execution.id
+
+        def block_before_commit(_db, _state):
+            entered.set()
+            assert release.wait(timeout=2)
+
+        async def exercise():
+            start_task = asyncio.create_task(states.start(
+                "CH-01",
+                sop_id="iec60068_ab_-40_16h",
+                sop_name="低溫測試",
+                active_sop_json='{"x":1}',
+                total_steps=5,
+                operator="王小明",
+                operator_user_id=7,
+                started_at=datetime.datetime(2026, 7, 25, tzinfo=UTC),
+                create_execution=create_execution,
+                before_commit=block_before_commit,
+            ))
+            assert await asyncio.to_thread(entered.wait, 1)
+
+            start_task.cancel()
+            try:
+                await asyncio.sleep(0)
+                assert start_task.done() is False
+                start_task.cancel()
+                await asyncio.sleep(0)
+                assert start_task.done() is False
+            finally:
+                release.set()
+
+            with pytest.raises(asyncio.CancelledError):
+                await start_task
+
+        asyncio.run(exercise())
+
+        assert states["CH-01"]["status"] == "RUNNING"
+        assert states["CH-01"]["active_execution_id"] is not None
+        with Session() as db:
+            saved_state = db.get(DeviceState, "CH-01")
+            execution = db.query(SopExecution).one()
+            assert saved_state.status == "RUNNING"
+            assert saved_state.active_execution_id == execution.id
+            assert states["CH-01"]["active_execution_id"] == execution.id
+
+
 def test_pause_toggles_and_rejects_invalid_status(patched_session):
     with patched_session("app.device_state"):
         states = _manager("RUNNING")
