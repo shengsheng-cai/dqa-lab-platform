@@ -35,7 +35,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `reports.py` | PDF / CSV 報告生成 |
 | `sop.py` | SOP 執行流程、步驟確認、照片上傳 |
 | `auth.py` | 登入、token 驗證、middleware、rate limiting；`current_user(request)` 共用 helper（user_id / username / role） |
-| `audit.py` | 稽核日誌寫入與查詢 API |
+| `audit.py` | 稽核日誌查詢與 CSV 匯出 API |
+| `audit_log.py` | 供各業務模組共用的稽核日誌寫入 helper |
 | `ws.py` | WebSocket `/ws/devices` + ConnectionManager + broadcast_loop |
 | `line.py` | LINE push_message 推播 |
 | `utils.py` | 共用工具函式（時間、條件解析、維護時段查詢） |
@@ -66,7 +67,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `purchase_orders` | 治具採購單 |
 | `schedules` | 測試排程（甘特圖資料來源） |
 | `device_blocked_periods` | 設備不可用時段 |
-| `audit_logs` | 稽核日誌（who/what/when，所有寫入操作埋點，支援 CSV 匯出） |
+| `audit_logs` | 稽核日誌（who/what/when，關鍵業務寫入埋點，支援 CSV 匯出） |
 | `device_calibrations` | 設備校驗紀錄（校驗日期、下次校驗日期、證書號、結果） |
 | `device_maintenances` | 設備維護紀錄（維護日期、類型、說明、執行人員） |
 
@@ -128,8 +129,8 @@ make lint                      # ruff 檢查（line-length 120）
 make clean                     # 清理殘留程序
 
 # 資料庫遷移（backend/ 目錄下）
-alembic revision --autogenerate -m "描述"
-alembic upgrade head
+../venv/bin/alembic revision --autogenerate -m "描述"
+../venv/bin/alembic upgrade head
 
 # 後端單元測試
 cd backend && ../venv/bin/python -m pytest                        # 後端全套
@@ -153,7 +154,7 @@ cd backend && ../venv/bin/python -m pytest tests/test_auth.py -v  # 單一測試
 | 存取控制 | 2 層（admin/guest）、IP Rate Limiting |
 | LINE Bot | 推播時機：條件完成（等待人員確認）、測試完成、緊急停止（推播給管理者個人） |
 | 感測器 QC 控制圖 | DeviceCard 📊 按鈕開啟 Modal；24h 歷史 + UCL/LCL（mean ± 3σ）+ 異常點標記；溫度/濕度雙圖 |
-| 稽核日誌 | audit_logs 表記錄 who/what/when；排程/治具/設備所有寫入皆埋點；紀錄 Modal 第三 tab 顯示，支援 entity 過濾 + CSV 匯出 |
+| 稽核日誌 | audit_logs 表記錄 who/what/when；排程/治具/設備等主要業務寫入埋點；紀錄 Modal 第三 tab 顯示，支援 entity 過濾 + CSV 匯出 |
 | 維護 | device_calibrations + device_maintenances 兩表；CRUD API（admin 寫入）；維護 tab + LeftPanel 校驗狀態摘要（正常/即將到期/逾期/未知）；DeviceCard badge；Alembic migration |
 | WebSocket 即時監控 | `/ws/devices` endpoint + `ConnectionManager` + 1s `broadcast_loop`；前端 `useDeviceWebSocket` hook（指數退避重連）；取代原本 3s HTTP polling；`WS_BASE` 統一由 `api.js` export |
 
@@ -164,7 +165,7 @@ cd backend && ../venv/bin/python -m pytest tests/test_auth.py -v  # 單一測試
     ↓ [📅 申請此測試] 按鈕（streaming 末尾 META [APPLY:id1,id2] marker）
 ② 申請排程（條件預填 + 選設備 + 選治具）
     ↓
-③ 排程確認 → 治具自動預約（reserved）+ 設備立即啟動 SOP
+③ 排程確認 → 治具自動預約（reserved）；開始時間已到則立即啟動，未到則註冊 APScheduler date job
     ↓
 ④ 測試開始 → 設備 RUNNING + 治具自動借出（loaned）
     ↓
