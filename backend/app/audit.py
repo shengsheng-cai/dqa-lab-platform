@@ -9,29 +9,17 @@ from pydantic import BaseModel, ConfigDict
 
 from .models import SessionLocal, AuditLog
 from .auth import require_admin
-from .utils import _now_utc_naive
 
 router = APIRouter(prefix="/api/audit-logs", tags=["audit"])
 
 
-def log_audit(
-    db,
-    actor: str,
-    role: Optional[str],
-    action: str,
-    entity_type: str,
-    entity_id: str,
-    detail: Optional[str] = None,
-):
-    db.add(AuditLog(
-        timestamp=_now_utc_naive(),
-        actor=actor,
-        role=role,
-        action=action,
-        entity_type=entity_type,
-        entity_id=str(entity_id),
-        detail=detail,
-    ))
+def _csv_safe(value) -> str:
+    """防 CSV formula injection：值開頭是 = + - @ 或 tab/CR 時前置單引號，
+    避免試算表把匯出內容當公式執行。"""
+    s = "" if value is None else str(value)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
 
 
 class AuditLogOut(BaseModel):
@@ -72,12 +60,12 @@ def export_audit_logs(_: None = Depends(require_admin)):
     for log in logs:
         writer.writerow([
             log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-            log.actor,
-            log.role or "",
-            log.action,
-            log.entity_type,
-            log.entity_id,
-            log.detail or "",
+            _csv_safe(log.actor),
+            _csv_safe(log.role or ""),
+            _csv_safe(log.action),
+            _csv_safe(log.entity_type),
+            _csv_safe(log.entity_id),
+            _csv_safe(log.detail or ""),
         ])
 
     output.seek(0)

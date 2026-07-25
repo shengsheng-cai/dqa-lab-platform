@@ -20,7 +20,7 @@ from .utils import (
     _now_utc, _now_utc_naive, _save_device_state, _parse_conditions,
     parse_iso_utc, _to_naive_utc, device_blocked_reason_now,
 )
-from .audit import log_audit
+from .audit_log import log_audit
 
 logger = logging.getLogger("schedule_service")
 

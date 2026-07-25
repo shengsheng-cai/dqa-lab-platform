@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from .models import SessionLocal, User, DemoToken
 from .utils import _now_utc_naive
+from .audit_log import log_audit
 
 logger = logging.getLogger("auth")
 
@@ -256,7 +257,6 @@ def list_users(_: None = Depends(require_admin)):
 
 @router.post("/api/auth/users", status_code=201, response_model=UserMeResponse)
 def create_user(body: UserCreateBody, request: Request, _: None = Depends(require_admin)):
-    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
     if not body.role or not body.role.strip():
         raise HTTPException(status_code=400, detail="角色不能為空")
     u = current_user(request)
@@ -282,7 +282,6 @@ def create_user(body: UserCreateBody, request: Request, _: None = Depends(requir
 
 @router.patch("/api/auth/users/{user_id}")
 def update_user(user_id: int, body: UserUpdateBody, request: Request, _: None = Depends(require_admin)):
-    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
     u = current_user(request)
     with SessionLocal() as db:
         user = db.query(User).filter(User.id == user_id).first()
@@ -310,7 +309,6 @@ def update_user(user_id: int, body: UserUpdateBody, request: Request, _: None = 
 
 @router.delete("/api/auth/users/{user_id}")
 def delete_user(user_id: int, request: Request, _: None = Depends(require_admin)):
-    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
     u = current_user(request)
     # 取得當前登入者 ID，不允許刪除自己
     current_token = request.headers.get("X-User-Token", "")
@@ -391,7 +389,6 @@ def list_demo_tokens(_: None = Depends(require_admin)):
 
 @router.post("/api/auth/demo-tokens")
 def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(require_admin)):
-    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
     with SessionLocal() as db:
         expires_at = None
         if req.expires_days:
@@ -427,7 +424,6 @@ def create_demo_token(req: DemoTokenCreate, request: Request, _: None = Depends(
 
 @router.delete("/api/auth/demo-tokens/{token_id}")
 def delete_demo_token(token_id: int, request: Request, _: None = Depends(require_admin)):
-    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
     u = current_user(request)
     with SessionLocal() as db:
         t = db.query(DemoToken).filter(DemoToken.id == token_id).first()
@@ -442,7 +438,6 @@ def delete_demo_token(token_id: int, request: Request, _: None = Depends(require
 
 @router.patch("/api/auth/demo-tokens/{token_id}/toggle")
 def toggle_demo_token(token_id: int, request: Request, _: None = Depends(require_admin)):
-    from .audit import log_audit  # 區域 import：audit.py 反向 import auth，頂層互 import 會循環
     u = current_user(request)
     with SessionLocal() as db:
         t = db.query(DemoToken).filter(DemoToken.id == token_id).first()

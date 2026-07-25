@@ -17,7 +17,7 @@ from .models import (
 )
 from .utils import today_utc_window, _now_utc_naive
 from .auth import require_admin, current_user
-from .audit import log_audit
+from .audit_log import log_audit
 
 try:
     import pandas as pd
@@ -515,7 +515,7 @@ def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
-        log, _, _ = _apply_inventory_db(db, f, actual_quantity, user_id, counted_by)
+        log, _, _ = _apply_inventory_db(db, f, actual_quantity, user_id, counted_by, u.role)
         db.commit()
         db.refresh(log)
         return {
@@ -697,7 +697,8 @@ def list_damaged_lost_loans():
 
 @router.post("/loans")
 def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_admin)):
-    user_id = current_user(request).user_id
+    u = current_user(request)
+    user_id = u.user_id
     if body.quantity <= 0:
         raise HTTPException(status_code=400, detail="借出數量必須大於 0")
     with SessionLocal() as db:
@@ -728,7 +729,7 @@ def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_ad
         )
         db.add(loan)
         f.loan_count += 1
-        log_audit(db, str(user_id or "unknown"), "admin", "LOAN", "fixture", body.fixture_id,
+        log_audit(db, str(user_id or "unknown"), u.role, "LOAN", "fixture", body.fixture_id,
                   f"{f.interface_type} {f.form_factor} x{body.quantity}，借用人：{body.borrower_name}")
         db.commit()
         db.refresh(loan)
@@ -738,7 +739,8 @@ def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_ad
 
 @router.post("/loans/{loan_id}/return")
 def return_loan(loan_id: int, body: ReturnUpdate, request: Request, _: None = Depends(require_admin)):
-    user_id = current_user(request).user_id
+    u = current_user(request)
+    user_id = u.user_id
     with SessionLocal() as db:
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
         if not loan:
@@ -772,7 +774,7 @@ def return_loan(loan_id: int, body: ReturnUpdate, request: Request, _: None = De
         condition_label = {ReturnCondition.NORMAL: "正常", ReturnCondition.DAMAGED: "損壞", ReturnCondition.LOST: "遺失"}.get(
             body.return_condition, str(body.return_condition)
         )
-        log_audit(db, str(user_id or "unknown"), "admin", "RETURN", "fixture", loan.fixture_id,
+        log_audit(db, str(user_id or "unknown"), u.role, "RETURN", "fixture", loan.fixture_id,
                   f"loan#{loan_id}，狀態：{condition_label}")
         db.commit()
         return {"status": "success"}
@@ -959,7 +961,7 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request, _: None =
 # ---------- 月盤點 ----------
 
 
-def _apply_inventory_db(db, f: Fixture, actual_quantity: int, user_id, counted_by) -> tuple:
+def _apply_inventory_db(db, f: Fixture, actual_quantity: int, user_id, counted_by, role) -> tuple:
     # 守衛下沉到共用變動點：update_inventory 與 create_inventory_log 兩個 route 都經此，
     # 一道守衛守住兩門（0 為合法歸零，故用 < 0）。
     if actual_quantity < 0:
@@ -975,7 +977,7 @@ def _apply_inventory_db(db, f: Fixture, actual_quantity: int, user_id, counted_b
         counted_by=counted_by,
     )
     db.add(log)
-    log_audit(db, str(user_id or "unknown"), "admin", "INVENTORY", "fixture", f.id,
+    log_audit(db, str(user_id or "unknown"), role, "INVENTORY", "fixture", f.id,
               f"盤點：{previous} → {actual_quantity}（差：{diff:+d}）")
     return log, previous, diff
 
@@ -989,7 +991,7 @@ def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
-        _, previous, diff = _apply_inventory_db(db, f, actual_quantity, user_id, counted_by)
+        _, previous, diff = _apply_inventory_db(db, f, actual_quantity, user_id, counted_by, u.role)
         db.commit()
         return {
             "status": "success",
