@@ -19,7 +19,7 @@ from .schedule_service import (
     ScheduleStartActor,
     start_schedule as start_schedule_service,
 )
-from .schedules import _schedule_start_http_error
+from .schedule_api import schedule_start_http_error
 from .utils import _now_utc, _now_utc_naive, _parse_conditions
 from . import device_state
 from .auth import require_admin, current_user
@@ -269,7 +269,7 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
             states,
         )
         if not schedule_result.started:
-            raise _schedule_start_http_error(schedule_result)
+            raise schedule_start_http_error(schedule_result)
         logger.info(
             "[%s] 透過排程 #%s 啟動 SOP: %s",
             device_id,

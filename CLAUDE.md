@@ -26,6 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `models.py` | SQLAlchemy models + SessionLocal |
 | `simulator.py` | 溫濕度模擬（**真機版替換點**：換成 `kson_driver.py`） |
 | `schedules.py` | 排程 API routes（CRUD、確認、取消） |
+| `schedule_api.py` | 排程 service result 的共用 HTTP 錯誤轉換（供 routes 共用） |
 | `schedule_service.py` | 排程業務邏輯層（service layer）：時長計算、自動選機、排程推進；供 schedules.py / main.py / simulator.py 共用，可獨立 pytest |
 | `devices.py` | 設備狀態查詢、緊急停止、感測器歷史/統計 API |
 | `devices_maintenance.py` | 設備校驗 & 維護排程 CRUD API |
