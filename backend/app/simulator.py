@@ -226,7 +226,7 @@ def _try_complete_schedule_for_device(device_id: str) -> str | None:
         with SessionLocal() as db:
             schedule = db.query(Schedule).filter(
                 Schedule.device_id == device_id,
-                Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
+                Schedule.status == ScheduleStatus.RUNNING,
             ).first()
             if schedule:
                 proj, sample, dev = schedule.project_number, schedule.sample_name, schedule.device_id
@@ -290,7 +290,7 @@ def _advance_schedule_condition(device_id: str) -> dict | None:
     with SessionLocal() as db:
         schedule = db.query(Schedule).filter(
             Schedule.device_id == device_id,
-            Schedule.status.in_([ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]),
+            Schedule.status == ScheduleStatus.RUNNING,
         ).first()
         if schedule is None:
             return None

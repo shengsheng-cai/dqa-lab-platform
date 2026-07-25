@@ -7,6 +7,10 @@ T-05: 模擬器與排程連動邏輯測試
 import datetime
 
 from app.models import DeviceBlockedPeriod, Schedule, ScheduleStatus, Fixture, FixtureLoan
+from app.simulator import (
+    _advance_schedule_condition,
+    _try_complete_schedule_for_device,
+)
 
 
 def _now_naive() -> datetime.datetime:
@@ -117,6 +121,52 @@ def test_next_condition_not_in_list_returns_none():
 
 def test_next_condition_empty_list_returns_none():
     assert _find_next([], "sop_a") is None
+
+
+def _seed_future_confirmed_schedule(Session, device_id="CH-01") -> int:
+    with Session() as db:
+        schedule = Schedule(
+            project_number="FUTURE",
+            sample_name="Future sample",
+            standard="IEC",
+            conditions='["sop_a"]',
+            status=ScheduleStatus.CONFIRMED,
+            device_id=device_id,
+            start_time=_now_naive() + datetime.timedelta(days=7),
+            end_time=_now_naive() + datetime.timedelta(days=8),
+            current_condition_index=0,
+        )
+        db.add(schedule)
+        db.commit()
+        return schedule.id
+
+
+def test_ad_hoc_natural_completion_does_not_advance_future_schedule(patched_session):
+    """臨時 SOP 自然完成時，不得用 device_id 誤改同機台的未來排程。"""
+    with patched_session("app.simulator") as Session:
+        schedule_id = _seed_future_confirmed_schedule(Session)
+
+        result = _advance_schedule_condition("CH-01")
+
+        assert result is None
+        with Session() as db:
+            schedule = db.get(Schedule, schedule_id)
+            assert schedule.status == ScheduleStatus.CONFIRMED
+            assert schedule.current_condition_index == 0
+
+
+def test_ad_hoc_manual_stop_does_not_complete_future_schedule(patched_session):
+    """臨時 SOP 手動收尾時，不得把同機台的未來排程直接標成 DONE。"""
+    with patched_session("app.simulator") as Session:
+        schedule_id = _seed_future_confirmed_schedule(Session)
+
+        push_text = _try_complete_schedule_for_device("CH-01")
+
+        assert push_text is None
+        with Session() as db:
+            schedule = db.get(Schedule, schedule_id)
+            assert schedule.status == ScheduleStatus.CONFIRMED
+            assert schedule.current_condition_index == 0
 
 
 # ── 最後條件完成 → 排程標已完成 + 治具歸還 ────────────────────────────────────

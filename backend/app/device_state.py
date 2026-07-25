@@ -211,6 +211,35 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
         # 換掉整個 inner dict 是單一步驟；reader 不會撞在 clear/update 中間讀到空狀態。
         self._cache[device_id] = dict(item)
 
+    async def _persist_start(
+        self,
+        device_id: str,
+        item: Mapping[str, Any],
+        before_commit: Callable[[Session, DeviceState], None] | None = None,
+    ) -> None:
+        """設備啟動即使 caller 取消，也要等 transaction 收尾後再決定是否發布 cache。"""
+        persistence = asyncio.create_task(
+            self._persist(device_id, item, before_commit),
+        )
+        try:
+            await asyncio.shield(persistence)
+        except asyncio.CancelledError:
+            # cleanup 期間可能再次收到 cancel；持續 shield，不能讓 cancellation
+            # 傳進 persistence task，否則 to_thread 仍可能 commit、cache 卻不發布。
+            while not persistence.done():
+                try:
+                    await asyncio.shield(persistence)
+                except asyncio.CancelledError:
+                    continue
+            try:
+                persistence.result()
+            except (Exception, asyncio.CancelledError):
+                pass
+            else:
+                self._publish(device_id, item)
+            raise
+        self._publish(device_id, item)
+
     async def start(
         self,
         device_id: str,
@@ -223,8 +252,9 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
         operator_user_id: int | None,
         started_at: datetime.datetime,
         create_execution: Callable[[Session], int | None] | None = None,
+        before_commit: Callable[[Session, DeviceState], None] | None = None,
     ) -> TransitionResult:
-        """IDLE → RUNNING；可在同一把 lock 內建立並掛上 execution id。"""
+        """IDLE → RUNNING；可在同一 transaction 建 execution 並套用額外業務寫入。"""
         lock = self._lock_for(device_id)
         if lock is None:
             return self._result(False, "missing", {}, {})
@@ -248,27 +278,31 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
                 "operator_user_id": operator_user_id,
             }
 
-            if create_execution is not None:
-                def attach_execution(db: Session, state: DeviceState) -> None:
-                    try:
-                        execution_id = create_execution(db)
-                    except Exception as error:
-                        raise _ExecutionCreationFailed from error
-                    if execution_id is None:
-                        raise _ExecutionCreationFailed
-                    state.active_execution_id = execution_id
-                    running["active_execution_id"] = execution_id
+            if create_execution is not None or before_commit is not None:
+                def prepare_start(db: Session, state: DeviceState) -> None:
+                    if create_execution is not None:
+                        try:
+                            execution_id = create_execution(db)
+                        except Exception as error:
+                            raise _ExecutionCreationFailed from error
+                        if execution_id is None:
+                            raise _ExecutionCreationFailed
+                        state.active_execution_id = execution_id
+                        running["active_execution_id"] = execution_id
+                    if before_commit is not None:
+                        before_commit(db, state)
 
-                for attempt in range(3):
+                attempts = 3 if create_execution is not None else 1
+                for attempt in range(attempts):
                     try:
-                        await self._persist(
+                        await self._persist_start(
                             device_id,
                             running,
-                            before_commit=attach_execution,
+                            before_commit=prepare_start,
                         )
                         break
                     except _ExecutionCreationFailed:
-                        if attempt == 2:
+                        if attempt == attempts - 1:
                             return self._result(
                                 False,
                                 "execution_failed",
@@ -276,9 +310,8 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
                                 before,
                             )
             else:
-                await self._persist(device_id, running)
+                await self._persist_start(device_id, running)
 
-            self._publish(device_id, running)
             return self._result(True, "started", before, running)
 
     async def finish(

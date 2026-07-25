@@ -175,7 +175,7 @@ cd backend && ../venv/bin/python -m pytest tests/test_auth.py -v  # 單一測試
 
 連動實作關鍵：
 - `schedule_fixtures` 中間表 + `fixture_loans.schedule_id` 外鍵
-- 設備真的進入 RUNNING 後，才由 `_activate_schedule_db` 把排程推進成進行中、預約治具轉借出、寫 audit——三件事同一 transaction，自動與手動兩條啟動路徑共用
+- 所有排程啟動路徑共用 `schedule_service.start_schedule`；DeviceState、SopExecution、Schedule、FixtureLoan、AuditLog 同一 transaction，commit 後才發布 cache
 - 排程走到終止狀態（取消／異常／刪除）一律走 `_release_schedule_fixtures`：預約的丟掉、借出中的歸還並記時間；測試完成時同樣自動歸還
 
 ---

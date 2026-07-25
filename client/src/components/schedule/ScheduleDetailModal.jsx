@@ -73,8 +73,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
       const res = await api.patch(`/api/schedules/${schedule.id}`, payload);
       showToast("排程已確認", "success");
       onUpdated(res.data);
-      // 確認回應仍帶「已確認」；重抓列表以顯示後端啟動後的最終狀態
-      // （通常為「進行中」，設備忙碌或維護時仍會維持「已確認」；BUG-001）。
+      // 後端會回傳啟動嘗試後的最終狀態；仍重抓列表以同步其他排程與設備。
       onRefresh?.();
       setResultScreen({ type: "confirmed", data: res.data });
     } catch (e) {

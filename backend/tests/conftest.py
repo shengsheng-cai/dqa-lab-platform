@@ -19,7 +19,7 @@ def _make_memory_db():
 
     用 StaticPool 讓所有連線共用同一個 in-memory DB——否則 SQLite 預設是「一條執行緒
     一條連線」，跑在 asyncio.to_thread 裡的 DB 寫入會連到另一個空的 in-memory DB、看不到
-    建好的表（auto_start_sop 的執行紀錄就是走 to_thread）。
+    建好的表（start_schedule 的執行紀錄就是走 to_thread）。
     三個 fixture（db / api_client / patched_session）共用這一份建置，避免逐檔漂移。
     用完由呼叫端負責 Base.metadata.drop_all(engine)。
     """

@@ -92,20 +92,20 @@ def test_complete_schedule_returns_loaned_fixtures(db):
     assert loan.return_date is not None
 
 
-def test_complete_schedule_does_not_affect_non_loaned(db):
-    """reserved / returned 狀態治具 → 不被 _complete_schedule 異動"""
+def test_complete_schedule_releases_reserved_fixture(db):
+    """尚未借出的 reserved 治具也要釋放，避免直接完成舊資料時永久占用庫存。"""
     s = _seed_schedule(db)
     db.commit()
 
     reserved_loan = _seed_loan(db, s.id, "reserved")
+    reserved_loan_id = reserved_loan.id
     db.commit()
 
     now = datetime.datetime.now(UTC)
     _complete_schedule(db, s, now)
     db.commit()
 
-    db.refresh(reserved_loan)
-    assert reserved_loan.status == "reserved"
+    assert db.get(FixtureLoan, reserved_loan_id) is None
 
 
 def test_release_schedule_fixtures_sets_return_date_for_loaned(db):
