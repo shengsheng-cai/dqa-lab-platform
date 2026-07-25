@@ -17,7 +17,7 @@ from .constants import DEVICE_IDS
 from .auth import require_admin, current_user
 from .line import push_message
 from .utils import _now_utc, _now_utc_naive, _parse_conditions, device_blocked_reason_now
-from .audit import log_audit
+from .audit_log import log_audit
 from .schedule_service import (
     ACTIVE_STATUSES,
     _complete_schedule, _release_schedule_fixtures,
@@ -254,7 +254,8 @@ def create_schedule(body: ScheduleCreate, request: Request, _: None = Depends(re
     if any(fi.quantity <= 0 for fi in body.fixtures):
         raise HTTPException(status_code=400, detail="預約治具數量必須大於 0")
 
-    user_id = current_user(request).user_id
+    _cu = current_user(request)
+    user_id = _cu.user_id
     applicant_name = body.applicant_name
 
     # 從 DB 取 display_name（若未提供）
@@ -284,7 +285,7 @@ def create_schedule(body: ScheduleCreate, request: Request, _: None = Depends(re
                 fixture_id=fi.fixture_id,
                 quantity=fi.quantity,
             ))
-        log_audit(db, str(user_id or "unknown"), "admin", "CREATE", "schedule", s.id,
+        log_audit(db, str(user_id or "unknown"), _cu.role, "CREATE", "schedule", s.id,
                   f"{s.project_number} / {s.sample_name}")
         db.commit()
         db.refresh(s)
@@ -306,7 +307,7 @@ def _assert_no_overlap(db, schedule_id: int, device_id, start, end) -> None:
         )
 
 
-def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, cache: dict):
+def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, role, cache: dict):
     cancelled_device_id = None
     immediate_start = None
     conditions = None
@@ -409,7 +410,7 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, cache: 
                 ScheduleStatus.DONE: "DONE",
             }
             action = action_map.get(body.status, "UPDATE")
-            log_audit(db, str(user_id or "unknown"), "admin", action, "schedule", schedule_id,
+            log_audit(db, str(user_id or "unknown"), role, action, "schedule", schedule_id,
                       f"{s.project_number} / {s.sample_name}")
         db.commit()
         db.refresh(s)
@@ -437,13 +438,14 @@ async def patch_schedule(
     更新排程（admin only）。
     status=已確認 時若無指定設備，自動排程。
     """
-    user_id = current_user(request).user_id
+    u = current_user(request)
+    user_id = u.user_id
 
     _cache = getattr(request.app.state, "AICM_CACHE", {})
     _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     _scheduler = getattr(request.app.state, "scheduler", None)
 
-    out = await asyncio.to_thread(_patch_schedule_db, schedule_id, body, user_id, _cache)
+    out = await asyncio.to_thread(_patch_schedule_db, schedule_id, body, user_id, u.role, _cache)
 
     if out["immediate_start"] and out["conditions"] and out["device_id"]:
         # 設備忙碌時不會啟動；排程維持「已確認」，由 fallback 於設備空出後重試。
@@ -471,7 +473,7 @@ async def patch_schedule(
     return out["result"]
 
 
-def _delete_schedule_db(schedule_id: int, user_id):
+def _delete_schedule_db(schedule_id: int, user_id, role):
     with SessionLocal() as db:
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
@@ -487,7 +489,7 @@ def _delete_schedule_db(schedule_id: int, user_id):
             FixtureLoan.schedule_id == schedule_id,
         ).update({"schedule_id": None}, synchronize_session=False)
         db.delete(s)
-        log_audit(db, str(user_id or "unknown"), "admin", "DELETE", "schedule", schedule_id, detail)
+        log_audit(db, str(user_id or "unknown"), role, "DELETE", "schedule", schedule_id, detail)
         db.commit()
     return stop_device_id
 
@@ -497,9 +499,10 @@ async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(
     _cache = getattr(request.app.state, "AICM_CACHE", {})
     _locks = getattr(request.app.state, "DEVICE_LOCKS", {})
     _scheduler = getattr(request.app.state, "scheduler", None)
-    user_id = current_user(request).user_id
+    u = current_user(request)
+    user_id = u.user_id
 
-    stop_device_id = await asyncio.to_thread(_delete_schedule_db, schedule_id, user_id)
+    stop_device_id = await asyncio.to_thread(_delete_schedule_db, schedule_id, user_id, u.role)
 
     if _scheduler:
         try:
@@ -515,7 +518,7 @@ async def delete_schedule(schedule_id: int, request: Request, _: None = Depends(
 # ── 條件確認端點 ──────────────────────────────────────────────────────────────
 
 
-def _confirm_condition_db(schedule_id: int, now, user_id):
+def _confirm_condition_db(schedule_id: int, now, user_id, role):
     with SessionLocal() as db:
         schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not schedule:
@@ -529,13 +532,13 @@ def _confirm_condition_db(schedule_id: int, now, user_id):
         if idx < len(conditions):
             next_sop_id = conditions[idx]
             dev = schedule.device_id
-            log_audit(db, str(user_id or "unknown"), "admin", "CONFIRM_CONDITION", "schedule", schedule_id,
+            log_audit(db, str(user_id or "unknown"), role, "CONFIRM_CONDITION", "schedule", schedule_id,
                       f"條件 {idx}/{len(conditions)}，下一條：{next_sop_id}")
             db.commit()
             return {"completed": False, "next_sop_id": next_sop_id, "dev": dev, "push_msg": None}
         else:
             _complete_schedule(db, schedule, now)
-            log_audit(db, str(user_id or "unknown"), "admin", "COMPLETE", "schedule", schedule_id,
+            log_audit(db, str(user_id or "unknown"), role, "COMPLETE", "schedule", schedule_id,
                       f"{schedule.project_number} / {schedule.sample_name}")
             db.commit()
             return {
@@ -554,9 +557,10 @@ async def confirm_condition(schedule_id: int, request: Request, _: None = Depend
     from .sop import auto_start_sop
     cache = getattr(request.app.state, "AICM_CACHE", {})
     locks = getattr(request.app.state, "DEVICE_LOCKS", {})
-    user_id = current_user(request).user_id
+    u = current_user(request)
+    user_id = u.user_id
 
-    result = await asyncio.to_thread(_confirm_condition_db, schedule_id, _now_utc_naive(), user_id)
+    result = await asyncio.to_thread(_confirm_condition_db, schedule_id, _now_utc_naive(), user_id, u.role)
 
     if result["completed"]:
         asyncio.create_task(push_message(result["push_msg"]))

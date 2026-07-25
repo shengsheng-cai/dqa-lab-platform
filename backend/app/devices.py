@@ -11,7 +11,7 @@ from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBloc
 from .line import push_message
 from .utils import _now_utc, _now_utc_naive, _save_device_state, _parse_conditions, parse_iso_utc
 from .auth import require_admin, current_user
-from .audit import log_audit
+from .audit_log import log_audit
 from .constants import AMBIENT_TEMP
 from .constants import DEVICE_IDS
 
@@ -375,7 +375,7 @@ def get_latest(request: Request):
     }
 
 
-def _emergency_stop_db(device_id: str, device: dict, user_id):
+def _emergency_stop_db(device_id: str, device: dict, user_id, role):
     operator = device.get("operator", "") or "未填寫"
     sop_name = device.get("running_sop_name", "") or "未知測試"
     with SessionLocal() as db:
@@ -400,7 +400,7 @@ def _emergency_stop_db(device_id: str, device: dict, user_id):
         ).first()
         if execution:
             execution.test_ended_at = _now_utc_naive()
-        log_audit(db, str(user_id or "unknown"), "admin", "EMERGENCY_STOP", "device", device_id,
+        log_audit(db, str(user_id or "unknown"), role, "EMERGENCY_STOP", "device", device_id,
                   f"操作人員：{operator}，測試：{sop_name}")
         db.commit()
 
@@ -427,9 +427,10 @@ async def emergency_stop(device_id: str, request: Request, _: None = Depends(req
 
         operator = device.get("operator", "") or "未填寫"
         sop_name = device.get("running_sop_name", "") or "未知測試"
-        user_id = current_user(request).user_id
+        u = current_user(request)
+        user_id = u.user_id
 
-        await asyncio.to_thread(_emergency_stop_db, device_id, device, user_id)
+        await asyncio.to_thread(_emergency_stop_db, device_id, device, user_id, u.role)
 
         device.update(
             {

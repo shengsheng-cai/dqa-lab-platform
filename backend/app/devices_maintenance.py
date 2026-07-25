@@ -10,7 +10,7 @@ from .models import SessionLocal, DeviceCalibration, DeviceMaintenance
 from .auth import require_admin, current_user
 from .utils import _now_utc_naive, _to_naive_utc
 from .constants import DEVICE_IDS
-from .audit import log_audit
+from .audit_log import log_audit
 
 router = APIRouter(tags=["maintenance"])
 

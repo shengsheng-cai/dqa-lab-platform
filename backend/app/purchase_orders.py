@@ -4,7 +4,7 @@ from typing import Optional
 from .models import SessionLocal, PurchaseOrder, Fixture
 from .auth import require_admin, current_user
 from .utils import _now_utc_naive
-from .audit import log_audit
+from .audit_log import log_audit
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
 
@@ -148,7 +148,7 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Req
                 fixture.total_quantity = (fixture.total_quantity or 0) + arrived_qty
                 fixture.shortage = max(0, (fixture.shortage or 0) - arrived_qty)
             audit_detail = f"採購單 #{order_id} 到貨（+{arrived_qty} 入庫，治具 #{order.fixture_id}）"
-        elif body.status in ("pending", "cancelled") and body.status is not None:
+        elif body.status in ("pending", "cancelled"):
             order.status = body.status
             audit_detail = f"採購單 #{order_id} → {body.status}"
 
