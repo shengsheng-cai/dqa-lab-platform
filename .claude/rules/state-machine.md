@@ -4,7 +4,7 @@
 
 ```
 IDLE → RUNNING ↔ PAUSED → FINISHING → IDLE
-  │       └───────────────→ IDLE  （自然完成且已回常溫）
+  │       └───────────────→ IDLE  （自然完成：回常溫後再穩定 30 分鐘）
   └──────────────→ EMERGENCY → FINISHING → IDLE
 ```
 
@@ -12,7 +12,7 @@ IDLE → RUNNING ↔ PAUSED → FINISHING → IDLE
 - FINISHING 完成後自動回到 IDLE
 - 緊急停止（emergency_stop）可從任何非 EMERGENCY 狀態進入 EMERGENCY，觸發 LINE 推播
 - EMERGENCY 需經正常停止進入 FINISHING，降回常溫後才回 IDLE
-- RUNNING 的測試自然完成時，simulator 已在 `ramp_to_ambient` 回到常溫，可由 `advance(complete=True)` 原子清回 IDLE
+- RUNNING 的測試自然完成時，simulator 走完 `ramp_to_ambient` 回常溫、再經 `stabilize` 穩定 30 分鐘到 `done`，此時已在常溫，由 `advance(complete=True)` 原子清回 IDLE（期間全程維持 RUNNING、設備仍占用）
 - 所有狀態轉換只走 `DeviceStateManager` 的五個動詞：`start`、`finish`、`pause`、`emergency`、`advance`
 - 排程啟動一律走 `schedule_service.start_schedule`；不得由 route 先改排程狀態再另外啟動設備
 
