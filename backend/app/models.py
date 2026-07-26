@@ -350,6 +350,10 @@ class DeviceState(Base):
     dwell_high_start: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     dwell_low_start: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
 
+    # --- 暫停時間累計（估算結束時間要把暫停扣回去，否則暫停後排程會撞在一起）---
+    paused_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    pause_accum_seconds: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+
 
 # ---------- 異常紀錄 ----------
 class ErrorLog(Base):

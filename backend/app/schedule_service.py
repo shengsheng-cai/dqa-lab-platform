@@ -17,10 +17,11 @@ from .models import (
     ScheduleFixture, Fixture, FixtureLoan,
 )
 from .standards import get_standard
-from .constants import DEVICE_IDS
+from .constants import DEVICE_IDS, AMBIENT_TEMP
 from .utils import (
     _now_utc, _now_utc_naive, _parse_conditions,
     parse_iso_utc, _to_naive_utc, device_blocked_reason_now,
+    curve_total_minutes, total_pause_seconds,
 )
 from . import device_state
 from .audit_log import log_audit
@@ -211,26 +212,6 @@ def complete_running_schedule(
 # ── 時長計算 ──────────────────────────────────────────────────────────────────
 
 
-def _calc_ramp_minutes(
-    ramp_rate: float, dwell_min: float, cycles: int,
-    high_temp: float, low_temp: Optional[float], ambient: float = 25.0,
-) -> float:
-    """溫度曲線總分鐘數（不含常溫穩定段），三分支：低↔高循環 / 高+低同側 / 純高溫"""
-    if low_temp is not None and low_temp < ambient:
-        r_lo = abs(ambient - low_temp) / ramp_rate
-        r_hl = abs(high_temp - low_temp) / ramp_rate
-        if r_hl < 0.01:
-            return r_lo + dwell_min * cycles + r_lo
-        return r_lo + (r_hl + dwell_min) * 2 * cycles + r_lo
-    if low_temp is not None:
-        r_up = abs(high_temp - ambient) / ramp_rate
-        r_hl = abs(high_temp - low_temp) / ramp_rate
-        r_dn = abs(low_temp - ambient) / ramp_rate
-        return r_up + (dwell_min * 2 + r_hl * 2) * (cycles - 1) + (dwell_min * 2 + r_hl) + r_dn
-    r_up = abs(high_temp - ambient) / ramp_rate
-    return r_up + dwell_min + r_up
-
-
 def _calc_condition_hours(sop_id: str) -> float:
     """計算單一測試條件的完整時長（含回常溫 + 30min 常溫穩定），單位：小時"""
     std = get_standard(sop_id)
@@ -238,15 +219,13 @@ def _calc_condition_hours(sop_id: str) -> float:
         return 1.0
 
     ramp_rate = float(std.get("ramp_rate", 1.0))
-    if ramp_rate <= 0:
-        ramp_rate = 1.0
     dwell_min = float(std.get("dwell_time_hours", 1.0)) * 60.0
     cycles = int(std.get("cycles", 1))
-    high_temp = float(std.get("high_temperature") or std.get("target_temperature") or 25.0)
+    high_temp = float(std.get("high_temperature") or std.get("target_temperature") or AMBIENT_TEMP)
     raw_low = std.get("low_temperature")
     low_temp = float(raw_low) if raw_low is not None else None
 
-    return _calc_ramp_minutes(ramp_rate, dwell_min, cycles, high_temp, low_temp) / 60.0 + STABILIZATION_HOURS
+    return curve_total_minutes(ramp_rate, dwell_min, cycles, high_temp, low_temp) / 60.0 + STABILIZATION_HOURS
 
 
 def _calc_total_hours(conditions: List[str]) -> float:
@@ -265,19 +244,6 @@ def _est_end_from_device(device: dict) -> Optional[datetime.datetime]:
     if device.get("status") not in ("RUNNING", "PAUSED", "FINISHING"):
         return None
 
-    cached_end = device.get("estimated_end_at")
-    if cached_end:
-        try:
-            if isinstance(cached_end, str):
-                dt = parse_iso_utc(cached_end)
-            else:
-                dt = cached_end
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=datetime.timezone.utc)
-            return dt
-        except Exception:
-            pass
-
     started_at = device.get("started_at")
     active_sop_json = device.get("active_sop_json")
     if not started_at or not active_sop_json:
@@ -288,15 +254,13 @@ def _est_end_from_device(device: dict) -> Optional[datetime.datetime]:
         return None
 
     ramp_rate = float(sop.get("ramp_rate") or 1.0)
-    if ramp_rate <= 0:
-        ramp_rate = 1.0
     dwell_min = float(sop.get("dwell_time_hours") or 0.0) * 60.0
     cycles = int(sop.get("cycles") or 1)
-    high_temp = float(sop.get("high_temperature") or sop.get("target_temperature") or 25.0)
+    high_temp = float(sop.get("high_temperature") or sop.get("target_temperature") or AMBIENT_TEMP)
     raw_low = sop.get("low_temperature")
     low_temp = float(raw_low) if raw_low is not None else None
 
-    total_min = _calc_ramp_minutes(ramp_rate, dwell_min, cycles, high_temp, low_temp)
+    total_min = curve_total_minutes(ramp_rate, dwell_min, cycles, high_temp, low_temp)
 
     if isinstance(started_at, str):
         started_dt = parse_iso_utc(started_at)
@@ -304,7 +268,12 @@ def _est_end_from_device(device: dict) -> Optional[datetime.datetime]:
         started_dt = started_at
     if started_dt.tzinfo is None:
         started_dt = started_dt.replace(tzinfo=datetime.timezone.utc)
-    return started_dt + datetime.timedelta(minutes=total_min)
+    # 暫停期間模擬器凍結進度，估算也要把暫停時間加回去，下一筆排程才不會撞上暫停中的測試
+    return (
+        started_dt
+        + datetime.timedelta(minutes=total_min)
+        + datetime.timedelta(seconds=total_pause_seconds(device, _now_utc()))
+    )
 
 
 def _build_running_until(cache: dict) -> dict:
@@ -318,11 +287,17 @@ def _build_running_until(cache: dict) -> dict:
 
 
 def _get_stuck_devices(cache: dict) -> set:
-    """回傳超時超過 1 小時的設備 ID（估算結束時間已過，可能卡住，排除自動選機）"""
+    """回傳超時超過 1 小時的設備 ID（估算結束時間已過，可能卡住，排除自動選機）。
+
+    PAUSED 明確排除：暫停是人為刻意的，不是設備卡住。若一台在暫停前就已超時，暫停後
+    (now − est) 會凍結在當時的超時值、不會隨時間縮小（est 與 now 同速前進），沒有這層
+    排除就會把它誤判成卡機、踢出自動選機——所以這是真的守門，不是備援。
+    """
     now = _now_utc()
     return {
         did for did, dev in cache.items()
-        if (est := _est_end_from_device(dev)) and (now - est).total_seconds() > 3600
+        if dev.get("status") != "PAUSED"
+        and (est := _est_end_from_device(dev)) and (now - est).total_seconds() > 3600
     }
 
 

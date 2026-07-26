@@ -7,7 +7,10 @@ import datetime
 import json
 
 from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan
-from app.schedule_service import _complete_schedule, _build_running_until, _release_schedule_fixtures
+from app.schedule_service import (
+    _complete_schedule, _build_running_until, _release_schedule_fixtures,
+    _est_end_from_device,
+)
 
 UTC = datetime.timezone.utc
 
@@ -139,18 +142,21 @@ def test_build_running_until_idle_excluded():
     assert "CH-01" not in result
 
 
+def _running_sop_json() -> str:
+    return json.dumps({
+        "ramp_rate": 2.0, "dwell_time_hours": 1.0,
+        "cycles": 1, "high_temperature": 85.0, "low_temperature": None,
+    })
+
+
 def test_build_running_until_running_with_end_included():
-    """RUNNING 設備有 estimated_end_at → 出現在結果中"""
-    future = (datetime.datetime.now(UTC) + datetime.timedelta(hours=2)).isoformat()
+    """RUNNING 設備能算出結束時間 → 出現在結果中（走 started_at + active_sop_json 真路徑，
+    不再餵生產環境從不寫進 cache 的 estimated_end_at）"""
     cache = {
         "CH-01": {
             "status": "RUNNING",
-            "estimated_end_at": future,
             "started_at": datetime.datetime.now(UTC).isoformat(),
-            "active_sop_json": json.dumps({
-                "ramp_rate": 2.0, "dwell_time_hours": 1.0,
-                "cycles": 1, "high_temperature": 85.0, "low_temperature": None,
-            }),
+            "active_sop_json": _running_sop_json(),
         }
     }
     result = _build_running_until(cache)
@@ -160,17 +166,51 @@ def test_build_running_until_running_with_end_included():
 
 def test_build_running_until_multiple_devices():
     """混合 IDLE + RUNNING → 只有 RUNNING 出現"""
-    future = (datetime.datetime.now(UTC) + datetime.timedelta(hours=1)).isoformat()
     cache = {
         "CH-01": {"status": "IDLE"},
         "CH-02": {
             "status": "RUNNING",
-            "estimated_end_at": future,
+            "started_at": datetime.datetime.now(UTC).isoformat(),
+            "active_sop_json": _running_sop_json(),
         },
     }
     result = _build_running_until(cache)
     assert "CH-01" not in result
     assert "CH-02" in result
+
+
+# ── _est_end_from_device：暫停時間要扣回去 ──────────────────────────────────────
+
+# 曲線時長 = 2h（high==ambient 不升降溫，只有 2h dwell）
+_PAUSE_SOP = json.dumps({
+    "ramp_rate": 1.0, "dwell_time_hours": 2.0, "cycles": 1,
+    "high_temperature": 25.0, "low_temperature": None,
+})
+
+
+def test_est_end_settled_pause_pushes_end_out():
+    """已結算的暫停（pause_accum_seconds）要讓估算結束時間往後移一樣長"""
+    started = datetime.datetime.now(UTC) - datetime.timedelta(hours=1)
+    base = {"status": "RUNNING", "started_at": started.isoformat(), "active_sop_json": _PAUSE_SOP}
+    est_no_pause = _est_end_from_device(base)
+    est_with_pause = _est_end_from_device({**base, "pause_accum_seconds": 1800.0})
+    assert abs((est_with_pause - est_no_pause).total_seconds() - 1800.0) < 1.0
+
+
+def test_est_end_live_pause_grows_with_elapsed():
+    """目前仍在暫停：估算要加上這次尚未結算的暫停時間，才不會早排下一筆"""
+    now = datetime.datetime.now(UTC)
+    started = now - datetime.timedelta(hours=1)
+    base = {"status": "RUNNING", "started_at": started.isoformat(), "active_sop_json": _PAUSE_SOP}
+    est_running = _est_end_from_device(base)
+    paused = {
+        **base,
+        "status": "PAUSED",
+        "paused_at": (now - datetime.timedelta(minutes=20)).isoformat(),
+    }
+    est_paused = _est_end_from_device(paused)
+    # 已暫停約 20 分鐘 → 估算比未暫停版本晚約 20 分鐘
+    assert abs((est_paused - est_running).total_seconds() - 1200.0) < 5.0
 
 
 # ── 刪除排程：治具借出歷史要留著 ────────────────────────────────────────────

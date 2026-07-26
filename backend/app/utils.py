@@ -3,6 +3,7 @@
 import datetime
 import json
 from typing import Optional
+from .constants import AMBIENT_TEMP
 from .models import SessionLocal, DeviceBlockedPeriod
 
 
@@ -58,6 +59,59 @@ def _to_naive_utc(dt: Optional[datetime.datetime | str]) -> Optional[datetime.da
     if dt.tzinfo is not None:
         return dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
     return dt
+
+
+def curve_total_minutes(
+    ramp_rate: float,
+    dwell_min: float,
+    cycles: int,
+    high_temp: float,
+    low_temp: Optional[float],
+    ambient: float = AMBIENT_TEMP,
+) -> float:
+    """一條溫度曲線實際跑完的分鐘數（不含測試後的常溫穩定緩衝）。
+
+    「甘特／自動排程的預估」「設備卡 estimated_end」「排程 running_until」以前各抄一份
+    這段分支，連「單溫恆溫要不要乘 cycles」兩份答案都不同。收成這一支唯一來源後，預估與
+    模擬器實際推進讀同一份、不可能再分岔。單溫恆溫（high≈low，不分冷熱，或只有單一設定點）
+    一律升到設定點、dwell 一次、回常溫——cycles 只對雙溫循環有意義，這也是 simulator 實際
+    跑的行為。
+    """
+    if ramp_rate <= 0:
+        ramp_rate = 1.0
+    if low_temp is not None and abs(high_temp - low_temp) <= 0.1:
+        # 單溫恆溫（冷或熱）：升到設定點、dwell 一次、回常溫，cycles 不適用
+        r = abs(low_temp - ambient) / ramp_rate
+        return r + dwell_min + r
+    if low_temp is not None and low_temp < ambient:
+        r_lo = abs(ambient - low_temp) / ramp_rate
+        r_hl = abs(high_temp - low_temp) / ramp_rate
+        return r_lo + (r_hl + dwell_min) * 2 * cycles + r_lo
+    if low_temp is not None:
+        r_up = abs(high_temp - ambient) / ramp_rate
+        r_hl = abs(high_temp - low_temp) / ramp_rate
+        r_dn = abs(low_temp - ambient) / ramp_rate
+        return r_up + (dwell_min * 2 + r_hl * 2) * (cycles - 1) + (dwell_min * 2 + r_hl) + r_dn
+    r_up = abs(high_temp - ambient) / ramp_rate
+    return r_up + dwell_min + r_up
+
+
+def total_pause_seconds(item: dict, now: datetime.datetime) -> float:
+    """設備目前累計的暫停秒數：已結算的 pause_accum + 若此刻仍在暫停則加上尚未結算的這段。
+
+    估算「測試何時結束／設備何時空出來」要把暫停時間加回去，否則暫停多久、下一筆排程就會
+    早排多久、撞在暫停中的測試頭上。now 需為 aware UTC；估算與模擬器凍結進度的行為一致。
+    """
+    seconds = float(item.get("pause_accum_seconds") or 0.0)
+    if item.get("status") == "PAUSED":
+        paused_at = item.get("paused_at")
+        if paused_at is not None:
+            if isinstance(paused_at, str):
+                paused_at = parse_iso_utc(paused_at)
+            if paused_at.tzinfo is None:
+                paused_at = paused_at.replace(tzinfo=datetime.timezone.utc)
+            seconds += max(0.0, (now - paused_at).total_seconds())
+    return seconds
 
 
 def today_utc_window() -> tuple:
