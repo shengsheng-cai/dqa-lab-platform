@@ -40,7 +40,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `audit_log.py` | 供各業務模組共用的稽核日誌寫入 helper |
 | `ws.py` | WebSocket `/ws/devices` + ConnectionManager + broadcast_loop |
 | `line.py` | LINE push_message 推播 |
-| `utils.py` | 共用工具函式（時間、條件解析、維護時段查詢） |
+| `utils.py` | 共用工具函式（時間、條件解析、維護時段查詢、溫度曲線時長 `curve_total_minutes`、占用結束估算 `occupied_end`／`total_pause_seconds`） |
 | `constants.py` | 全域常數（`DEVICE_IDS`、AMBIENT_TEMP/HUMIDITY 等）；設備清單一律從這裡拿，不要各模組自己定義 |
 | `uncertainty.py` | GUM 量測不確定度計算（Type A/B/uc/U） |
 | `errors.py` | 異常紀錄 API |
@@ -144,7 +144,7 @@ cd backend && ../venv/bin/python -m pytest tests/test_auth.py -v  # 單一測試
 
 | 模組 | 說明 |
 |------|------|
-| 物理模擬引擎 | sim_phase 狀態機、多 cycle、重啟自動恢復 |
+| 物理模擬引擎 | sim_phase 狀態機、多 cycle、回常溫後常溫穩定 30 分鐘（設備仍占用）、重啟自動恢復 |
 | 環境測試標準 | 5 法規 78 條件，三層 STANDARD_TREE |
 | SOP 執行 | 自動確認步驟、自動存報告 |
 | ISO 17025 報告 | PDF 報告生成（含 GUM 量測不確定度 Type A/B/uc/U）、CSV 報告 |
