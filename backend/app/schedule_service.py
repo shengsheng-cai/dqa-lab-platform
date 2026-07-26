@@ -126,6 +126,88 @@ def _release_schedule_fixtures(
         _return_loaned_fixtures(db, schedule_id, now)
 
 
+# ── 排程推進（設備完成一個條件時，唯一的推進入口）─────────────────────────────
+
+
+@dataclass(frozen=True)
+class ConditionAdvance:
+    """設備自然完成一個條件後的結果；僅推進索引，排程續為進行中，等人員確認下一步。"""
+    schedule_id: int
+    new_index: int
+    total: int
+    project_number: str
+    sample_name: str
+
+
+@dataclass(frozen=True)
+class ScheduleCompletion:
+    """設備手動收尾後、排程被標為已完成的結果（治具已在同一 transaction 歸還）。"""
+    schedule_id: int
+    device_id: str
+    project_number: str
+    sample_name: str
+
+
+def _running_schedule_for_device(db, device_id: str) -> Optional[Schedule]:
+    """該設備目前進行中的排程。同機台理論上只有一筆 RUNNING，order_by 讓選取具決定性；
+    因為只挑 RUNNING，同機台未來的已確認排程（CONFIRMED）永遠不會被誤選。"""
+    return (
+        db.query(Schedule)
+        .filter(
+            Schedule.device_id == device_id,
+            Schedule.status == ScheduleStatus.RUNNING,
+        )
+        .order_by(Schedule.start_time.asc(), Schedule.id.asc())
+        .first()
+    )
+
+
+def advance_running_condition(device_id: str) -> Optional[ConditionAdvance]:
+    """設備自然完成目前條件：current_condition_index +1，等待人員確認下一步。
+
+    只推進索引，不完成排程、不歸還治具——最後一條也一樣，要由人員在排程頁面確認後
+    才走完成。無進行中排程時回 None（例如臨時 SOP，不得誤動同機台未來排程）。
+    """
+    with SessionLocal() as db:
+        schedule = _running_schedule_for_device(db, device_id)
+        if schedule is None:
+            return None
+        new_index = schedule.current_condition_index + 1
+        result = ConditionAdvance(
+            schedule_id=schedule.id,
+            new_index=new_index,
+            total=len(_parse_conditions(schedule.conditions)),
+            project_number=schedule.project_number,
+            sample_name=schedule.sample_name,
+        )
+        schedule.current_condition_index = new_index
+        db.commit()
+        return result
+
+
+def complete_running_schedule(
+    device_id: str, now: datetime.datetime
+) -> Optional[ScheduleCompletion]:
+    """設備手動收尾：把進行中排程標為已完成並歸還治具（同一 transaction）。
+
+    無進行中排程時回 None（臨時 SOP 收尾，不得把同機台未來排程直接標成已完成）。
+    """
+    with SessionLocal() as db:
+        schedule = _running_schedule_for_device(db, device_id)
+        if schedule is None:
+            return None
+        result = ScheduleCompletion(
+            schedule_id=schedule.id,
+            device_id=schedule.device_id,
+            project_number=schedule.project_number,
+            sample_name=schedule.sample_name,
+        )
+        _complete_schedule(db, schedule, now)
+        db.commit()
+        logger.info(f"[{device_id}] 排程 {result.schedule_id} 標為已完成")
+        return result
+
+
 # ── 時長計算 ──────────────────────────────────────────────────────────────────
 
 

@@ -7,11 +7,11 @@ import random
 from collections.abc import Mapping
 from typing import Optional
 
-from .models import SessionLocal, DeviceData, SopExecution, Schedule, ScheduleStatus
+from .models import SessionLocal, DeviceData, SopExecution
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc_naive
 from . import device_state
-from .schedule_service import _complete_schedule
+from .schedule_service import advance_running_condition, complete_running_schedule
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
 from .line import push_message
 
@@ -218,27 +218,6 @@ async def _sim_handle_running(
     _update_humidity(item, target_humi, new_temp, item.get("humidity", AMBIENT_HUMIDITY))
 
 
-def _try_complete_schedule_for_device(device_id: str) -> str | None:
-    """查找設備的進行中排程並立即標為已完成（含治具歸還）。
-    回傳推播訊息字串（有排程時），或 None（無排程時）。"""
-    try:
-        now = _now_utc_naive()
-        with SessionLocal() as db:
-            schedule = db.query(Schedule).filter(
-                Schedule.device_id == device_id,
-                Schedule.status == ScheduleStatus.RUNNING,
-            ).first()
-            if schedule:
-                proj, sample, dev = schedule.project_number, schedule.sample_name, schedule.device_id
-                _complete_schedule(db, schedule, now)
-                db.commit()
-                logger.info(f"[{device_id}] 排程 {schedule.id} 標為已完成")
-                return f"✅ 測試完成\n專案：{proj} / {sample}\n設備：{dev}"
-    except Exception as e:
-        logger.error(f"[{device_id}] 更新排程失敗：{e}", exc_info=True)
-    return None
-
-
 def _sim_handle_finishing(
     item: dict,
     current_temp: float,
@@ -284,27 +263,6 @@ def _mark_execution_ended(execution_id: int, now: datetime.datetime) -> None:
             SopExecution.test_ended_at.is_(None),
         ).update({"test_ended_at": now}, synchronize_session=False)
         db.commit()
-
-
-def _advance_schedule_condition(device_id: str) -> dict | None:
-    with SessionLocal() as db:
-        schedule = db.query(Schedule).filter(
-            Schedule.device_id == device_id,
-            Schedule.status == ScheduleStatus.RUNNING,
-        ).first()
-        if schedule is None:
-            return None
-        new_idx = schedule.current_condition_index + 1
-        total = len(json.loads(schedule.conditions)) if schedule.conditions else 0
-        schedule.current_condition_index = new_idx
-        db.commit()
-        return {
-            "schedule_id": schedule.id,
-            "new_idx": new_idx,
-            "total": total,
-            "project": schedule.project_number,
-            "sample": schedule.sample_name,
-        }
 
 
 def _record_device_data(
@@ -420,16 +378,16 @@ async def data_simulator(states: device_state.DeviceStateManager) -> None:
                                     logger.error(f"[{device_id}] 寫入 test_ended_at 三次失敗，放棄")
                     logger.info(f"[{device_id}] 測試自然完成，回待機。")
                     try:
-                        progress = await asyncio.to_thread(_advance_schedule_condition, device_id)
+                        progress = await asyncio.to_thread(advance_running_condition, device_id)
                         if progress:
                             asyncio.create_task(push_message(
-                                f"✅ 條件 {progress['new_idx']}/{progress['total']} 完成\n"
-                                f"專案：{progress['project']} / {progress['sample']}\n"
+                                f"✅ 條件 {progress.new_index}/{progress.total} 完成\n"
+                                f"專案：{progress.project_number} / {progress.sample_name}\n"
                                 f"設備：{device_id}\n請至排程頁面確認下一步"
                             ))
                             logger.info(
-                                f"[{device_id}] 排程 {progress['schedule_id']} "
-                                f"條件 {progress['new_idx']}/{progress['total']} 完成，等待人員確認"
+                                f"[{device_id}] 排程 {progress.schedule_id} "
+                                f"條件 {progress.new_index}/{progress.total} 完成，等待人員確認"
                             )
                     except Exception as e:
                         logger.error(f"[{device_id}] 更新排程條件進度失敗：{e}", exc_info=True)
@@ -453,7 +411,17 @@ async def data_simulator(states: device_state.DeviceStateManager) -> None:
                         dwell_elapsed_times.pop(_k, None)
                     logger.info(f"[{device_id}] 手動停止降溫完成，回待機。")
                     if not completion.before.get("skip_push", False):
-                        push_text = await asyncio.to_thread(_try_complete_schedule_for_device, device_id)
+                        push_text = None
+                        try:
+                            done = await asyncio.to_thread(complete_running_schedule, device_id, now)
+                            if done is not None:
+                                push_text = (
+                                    f"✅ 測試完成\n"
+                                    f"專案：{done.project_number} / {done.sample_name}\n"
+                                    f"設備：{done.device_id}"
+                                )
+                        except Exception as e:
+                            logger.error(f"[{device_id}] 完成排程失敗：{e}", exc_info=True)
                         if push_text is None:
                             sop_name = completion.before.get("running_sop_name") or "未知測試"
                             push_text = f"✅ 測試完成\n設備：{device_id}\n測試：{sop_name}"
