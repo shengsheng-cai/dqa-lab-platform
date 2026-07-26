@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from .constants import AMBIENT_HUMIDITY, AMBIENT_TEMP
 from .models import DeviceState, SessionLocal
-from .utils import _now_utc_naive, parse_iso_utc
+from .utils import _now_utc, _now_utc_naive, parse_iso_utc, total_pause_seconds
 
 _UNSET = object()
 
@@ -59,6 +59,8 @@ def _idle_patch() -> dict[str, Any]:
         "total_steps": 0,
         "active_execution_id": None,
         "skip_push": False,
+        "paused_at": None,
+        "pause_accum_seconds": 0.0,
     }
 
 
@@ -101,7 +103,7 @@ def _save(
         state.sim_cycle = item.get("sim_cycle", 0)
         state.dwell_half_fired = item.get("dwell_half_fired", False)
 
-        for field in ("dwell_high_start", "dwell_low_start"):
+        for field in ("dwell_high_start", "dwell_low_start", "paused_at"):
             value = item.get(field)
             if value is not None:
                 if isinstance(value, str):
@@ -109,6 +111,7 @@ def _save(
                 setattr(state, field, value.replace(tzinfo=None))
             else:
                 setattr(state, field, None)
+        state.pause_accum_seconds = float(item.get("pause_accum_seconds") or 0.0)
 
         if before_commit is not None:
             before_commit(db, state)
@@ -175,6 +178,9 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
                 "dwell_low_start": state.dwell_low_start.isoformat()
                 if state.dwell_low_start else None,
                 "skip_push": bool(state.skip_push),
+                "paused_at": state.paused_at.replace(tzinfo=datetime.timezone.utc)
+                if state.paused_at is not None else None,
+                "pause_accum_seconds": state.pause_accum_seconds or 0.0,
             }
         return cls(cache)
 
@@ -346,6 +352,9 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
             if not cancelled:
                 after["completed_steps"] = 0
                 after["standard_id"] = None
+            # 收尾前把最後一段暫停結算掉，FINISHING 期間估算才不會一直往後飄
+            after["pause_accum_seconds"] = total_pause_seconds(before, _now_utc())
+            after["paused_at"] = None
 
             await self._persist(device_id, after)
             self._publish(device_id, after)
@@ -362,10 +371,18 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
             status = before.get("status")
             if status not in ("RUNNING", "PAUSED"):
                 return self._result(False, "invalid_status", before, before)
-            after = {
-                **before,
-                "status": "PAUSED" if status == "RUNNING" else "RUNNING",
-            }
+            now = _now_utc()
+            if status == "RUNNING":
+                # 進入暫停：記下起點；模擬器同時凍結進度，估算才和實際一致
+                after = {**before, "status": "PAUSED", "paused_at": now}
+            else:
+                # 恢復執行：把這一段暫停結算進累計，估算結束時間才扣得到
+                after = {
+                    **before,
+                    "status": "RUNNING",
+                    "paused_at": None,
+                    "pause_accum_seconds": total_pause_seconds(before, now),
+                }
             await self._persist(device_id, after)
             self._publish(device_id, after)
             return self._result(True, "paused" if status == "RUNNING" else "resumed", before, after)
@@ -402,6 +419,8 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
                 "operator_user_id": None,
                 "sim_phase": "idle",
                 "sim_cycle": 0,
+                "paused_at": None,
+                "pause_accum_seconds": 0.0,
             }
 
             def include_record(db: Session, _state: DeviceState) -> None:

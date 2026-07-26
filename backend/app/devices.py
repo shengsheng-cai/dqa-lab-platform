@@ -9,7 +9,10 @@ from pydantic import BaseModel
 
 from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod, Schedule, ScheduleStatus
 from .line import push_message
-from .utils import _now_utc, _now_utc_naive, _parse_conditions, parse_iso_utc
+from .utils import (
+    _now_utc, _now_utc_naive, _parse_conditions, parse_iso_utc,
+    curve_total_minutes, total_pause_seconds,
+)
 from .auth import require_admin, current_user
 from .audit_log import log_audit
 from .constants import AMBIENT_TEMP
@@ -91,36 +94,18 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
         return None
 
     ramp_rate = sop.get("ramp_rate") or 1.0
-    dwell_hours = sop.get("dwell_time_hours") or 0.0
-    dwell_min = dwell_hours * 60.0
+    dwell_min = (sop.get("dwell_time_hours") or 0.0) * 60.0
     cycles = sop.get("cycles") or 1
     high_temp = sop.get("high_temperature") or sop.get("target_temperature") or AMBIENT_TEMP
     low_temp = sop.get("low_temperature")
-    ambient = AMBIENT_TEMP
 
-    if low_temp is not None and low_temp < ambient and abs(high_temp - low_temp) <= 0.1:
-        # 單溫冷測（high_temp == low_temp，如 Test Ab/Ad）：只有一段 dwell
-        ramp_ambient_to_low = abs(ambient - low_temp) / ramp_rate
-        total_min = ramp_ambient_to_low + dwell_min + ramp_ambient_to_low
-    elif low_temp is not None and low_temp < ambient:
-        ramp_ambient_to_low = abs(ambient - low_temp) / ramp_rate
-        ramp_low_to_high = abs(high_temp - low_temp) / ramp_rate
-        one_cycle_min = ramp_low_to_high + dwell_min + ramp_low_to_high + dwell_min
-        total_min = ramp_ambient_to_low + one_cycle_min * cycles + ramp_ambient_to_low
-    elif low_temp is not None:
-        ramp_up = abs(high_temp - ambient) / ramp_rate
-        ramp_hl = abs(high_temp - low_temp) / ramp_rate
-        ramp_down = abs(low_temp - ambient) / ramp_rate
-        full_cycle = dwell_min * 2 + ramp_hl * 2
-        last_cycle = dwell_min * 2 + ramp_hl
-        total_min = ramp_up + full_cycle * (cycles - 1) + last_cycle + ramp_down
-    else:
-        ramp_up = abs(high_temp - ambient) / ramp_rate
-        total_min = ramp_up + dwell_min + ramp_up
+    total_min = curve_total_minutes(ramp_rate, dwell_min, cycles, high_temp, low_temp)
 
     # ISO 17025 常溫穩定時間（測試後需要 30 分鐘常溫環境穩定）
     STABILIZATION_HOURS = 0.5
     total_seconds = (total_min + STABILIZATION_HOURS * 60) * 60.0
+    # 暫停期間進度凍結，卡片顯示的結束時間也要把暫停時間加回去
+    total_seconds += total_pause_seconds(item, _now_utc())
 
     if isinstance(started_at, str):
         started_dt = parse_iso_utc(started_at)

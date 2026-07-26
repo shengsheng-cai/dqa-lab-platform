@@ -231,6 +231,59 @@ def test_pause_toggles_and_rejects_invalid_status(patched_session):
         assert idle["CH-01"]["status"] == "IDLE"
 
 
+def test_pause_accumulation_persists_and_restores(patched_session):
+    """暫停→恢復把這段時間結算進累計，落盤且重啟後還原得回來"""
+    with patched_session("app.device_state") as Session:
+        states = _manager("RUNNING")
+        t0 = datetime.datetime(2026, 7, 26, 10, 0, tzinfo=UTC)
+        t1 = datetime.datetime(2026, 7, 26, 11, 0, tzinfo=UTC)  # 暫停 1 小時
+        with patch("app.device_state._now_utc", return_value=t0):
+            asyncio.run(states.pause("CH-01"))
+        assert states["CH-01"]["status"] == "PAUSED"
+        assert states["CH-01"]["paused_at"] == t0
+        with patch("app.device_state._now_utc", return_value=t1):
+            asyncio.run(states.pause("CH-01"))  # 恢復
+        assert states["CH-01"]["status"] == "RUNNING"
+        assert states["CH-01"]["paused_at"] is None
+        assert states["CH-01"]["pause_accum_seconds"] == 3600.0
+
+        with Session() as db:
+            row = db.get(DeviceState, "CH-01")
+            assert row.paused_at is None
+            assert row.pause_accum_seconds == 3600.0
+
+        restored = device_state.DeviceStateManager.restore(["CH-01"])
+        assert restored["CH-01"]["pause_accum_seconds"] == 3600.0
+        assert restored["CH-01"]["paused_at"] is None
+
+
+def test_pause_restores_paused_at_when_still_paused(patched_session):
+    """重啟時仍在暫停：paused_at 要還原，估算才知道暫停還在進行中"""
+    with patched_session("app.device_state"):
+        states = _manager("RUNNING")
+        t0 = datetime.datetime(2026, 7, 26, 10, 0, tzinfo=UTC)
+        with patch("app.device_state._now_utc", return_value=t0):
+            asyncio.run(states.pause("CH-01"))
+        restored = device_state.DeviceStateManager.restore(["CH-01"])
+        assert restored["CH-01"]["status"] == "PAUSED"
+        assert restored["CH-01"]["paused_at"] == t0
+
+
+def test_finish_from_paused_settles_pause(patched_session):
+    """從暫停中收尾：最後一段暫停要結算進累計、paused_at 清掉"""
+    with patched_session("app.device_state"):
+        states = _manager("RUNNING")
+        t0 = datetime.datetime(2026, 7, 26, 10, 0, tzinfo=UTC)
+        t1 = datetime.datetime(2026, 7, 26, 10, 30, tzinfo=UTC)  # 暫停 30 分鐘後收尾
+        with patch("app.device_state._now_utc", return_value=t0):
+            asyncio.run(states.pause("CH-01"))
+        with patch("app.device_state._now_utc", return_value=t1):
+            asyncio.run(states.finish("CH-01"))
+        assert states["CH-01"]["status"] == "FINISHING"
+        assert states["CH-01"]["paused_at"] is None
+        assert states["CH-01"]["pause_accum_seconds"] == 1800.0
+
+
 def test_finish_keeps_normal_and_cancelled_semantics(patched_session):
     with patched_session("app.device_state"):
         normal = _manager("RUNNING", completed_steps=3, standard_id="sop-1")
