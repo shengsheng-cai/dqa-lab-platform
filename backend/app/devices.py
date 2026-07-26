@@ -7,16 +7,16 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod, Schedule, ScheduleStatus
+from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod
 from .line import push_message
 from .utils import (
-    _now_utc, _now_utc_naive, _parse_conditions, parse_iso_utc,
-    curve_total_minutes, total_pause_seconds,
+    _now_utc, _now_utc_naive, _parse_conditions, parse_iso_utc, occupied_end,
 )
 from .auth import require_admin, current_user
 from .audit_log import log_audit
 from .constants import AMBIENT_TEMP
 from .constants import DEVICE_IDS
+from .schedule_service import list_running_schedules
 
 logger = logging.getLogger("app")
 
@@ -82,46 +82,18 @@ def _calc_estimated_end_at(item: dict) -> Optional[str]:
     if status not in ("RUNNING", "PAUSED"):
         return None
 
-    started_at = item.get("started_at")
-    active_sop_json = item.get("active_sop_json")
-    if not started_at or not active_sop_json:
-        return None
-
-    try:
-        sop = json.loads(active_sop_json)
-    except Exception as e:
-        logger.warning(f"[_calc_estimated_end_at] active_sop_json 解析失敗：{e}")
-        return None
-
-    ramp_rate = sop.get("ramp_rate") or 1.0
-    dwell_min = (sop.get("dwell_time_hours") or 0.0) * 60.0
-    cycles = sop.get("cycles") or 1
-    high_temp = sop.get("high_temperature") or sop.get("target_temperature") or AMBIENT_TEMP
-    low_temp = sop.get("low_temperature")
-
-    total_min = curve_total_minutes(ramp_rate, dwell_min, cycles, high_temp, low_temp)
-
-    # ISO 17025 常溫穩定時間（測試後需要 30 分鐘常溫環境穩定）
-    STABILIZATION_HOURS = 0.5
-    total_seconds = (total_min + STABILIZATION_HOURS * 60) * 60.0
-    # 暫停期間進度凍結，卡片顯示的結束時間也要把暫停時間加回去
-    total_seconds += total_pause_seconds(item, _now_utc())
-
-    if isinstance(started_at, str):
-        started_dt = parse_iso_utc(started_at)
-    else:
-        started_dt = started_at
-    if started_dt.tzinfo is None:
-        started_dt = started_dt.replace(tzinfo=datetime.timezone.utc)
-
-    estimated_end = started_dt + datetime.timedelta(seconds=total_seconds)
-    return estimated_end.isoformat()
+    # RUNNING/PAUSED 的占用結束（曲線 + 常溫穩定 + 暫停）與排程器同源，只在這裡轉成 ISO 字串
+    end = occupied_end(item, _now_utc())
+    return end.isoformat() if end else None
 
 
 # ── Response Schemas ────────────────────────────────────────────────────────
 
 DeviceStatus = Literal["IDLE", "RUNNING", "PAUSED", "FINISHING", "EMERGENCY", "OFFLINE"]
-SimPhase = Literal["idle", "ramp_to_low", "ramp_to_high", "dwell_high", "ramp_to_low2", "dwell_low", "ramp_to_ambient"]
+SimPhase = Literal[
+    "idle", "ramp_to_low", "ramp_to_high", "dwell_high",
+    "ramp_to_low2", "dwell_low", "ramp_to_ambient", "stabilize",
+]
 
 
 class DeviceBasicOut(BaseModel):
@@ -188,9 +160,7 @@ def build_device_list(cache: dict) -> list:
             # 否則列表在結束那一瞬還顯示「不可用」、啟動卻已放行，兩邊對不上。
             DeviceBlockedPeriod.end_time > now_dt,
         ).all()
-        running_schedules = db.query(Schedule).filter(
-            Schedule.status == ScheduleStatus.RUNNING,
-        ).all()
+        running_schedules = list_running_schedules(db)
     blocked_devices: dict[str, str] = {b.device_id: b.reason for b in active_blocks}
     for s in running_schedules:
         if s.device_id and s.device_id not in blocked_devices:

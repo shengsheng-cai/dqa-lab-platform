@@ -3,7 +3,7 @@
 import datetime
 import json
 from typing import Optional
-from .constants import AMBIENT_TEMP
+from .constants import AMBIENT_TEMP, STABILIZATION_MINUTES
 from .models import SessionLocal, DeviceBlockedPeriod
 
 
@@ -112,6 +112,44 @@ def total_pause_seconds(item: dict, now: datetime.datetime) -> float:
                 paused_at = paused_at.replace(tzinfo=datetime.timezone.utc)
             seconds += max(0.0, (now - paused_at).total_seconds())
     return seconds
+
+
+def occupied_end(item: dict, now: datetime.datetime) -> Optional[datetime.datetime]:
+    """從設備 cache dict 估算「測試占用結束」時間（aware UTC）：
+    started_at + 溫度曲線 + 常溫穩定 + 暫停時間。缺 started_at/active_sop_json 或無法解析回 None。
+
+    設備卡與排程器以前各抄一份這段（萃取 sop 參數→curve→加穩定與暫停→算結束時間），
+    差別只在回傳型別與 FINISHING 特例，收成這一支唯一來源；status 由呼叫端決定哪些適用，
+    FINISHING 的降溫特例也留在呼叫端，這裡只算「跑完測試該在何時空出來」。now 需為 aware UTC。
+    """
+    started_at = item.get("started_at")
+    active_sop_json = item.get("active_sop_json")
+    if not started_at or not active_sop_json:
+        return None
+    try:
+        sop = json.loads(active_sop_json) if isinstance(active_sop_json, str) else active_sop_json
+    except Exception:
+        return None
+
+    ramp_rate = float(sop.get("ramp_rate") or 1.0)
+    dwell_min = float(sop.get("dwell_time_hours") or 0.0) * 60.0
+    cycles = int(sop.get("cycles") or 1)
+    high_temp = float(sop.get("high_temperature") or sop.get("target_temperature") or AMBIENT_TEMP)
+    raw_low = sop.get("low_temperature")
+    low_temp = float(raw_low) if raw_low is not None else None
+    total_min = curve_total_minutes(ramp_rate, dwell_min, cycles, high_temp, low_temp)
+
+    if isinstance(started_at, str):
+        started_dt = parse_iso_utc(started_at)
+    else:
+        started_dt = started_at
+    if started_dt.tzinfo is None:
+        started_dt = started_dt.replace(tzinfo=datetime.timezone.utc)
+    return (
+        started_dt
+        + datetime.timedelta(minutes=total_min + STABILIZATION_MINUTES)
+        + datetime.timedelta(seconds=total_pause_seconds(item, now))
+    )
 
 
 def today_utc_window() -> tuple:

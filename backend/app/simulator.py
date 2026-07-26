@@ -12,7 +12,7 @@ from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc_naive
 from . import device_state
 from .schedule_service import advance_running_condition, complete_running_schedule
-from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY
+from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY, STABILIZATION_MINUTES
 from .line import push_message
 
 logger = logging.getLogger("app")
@@ -67,7 +67,8 @@ def _tick_dwell_half(item: dict, elapsed: float, dwell_seconds: float) -> None:
 def _accum_dwell_elapsed(
     dwell_key: str, dwell_start, now, elapsed_seconds: float, dwell_elapsed_times: dict
 ) -> float:
-    """首次進入 dwell 時以 wall-clock 播種，後續每 tick 累計 elapsed_seconds（已 cap 10s）。"""
+    """每 tick 累計 elapsed_seconds（已 cap 10s）。live 進 dwell 時 _set_dwell_start 已把
+    已 dwell 秒數釘為 0；只有重啟後（dwell_elapsed 尚未建立）才用 wall-clock 播種接回進度。"""
     if dwell_key not in dwell_elapsed_times:
         dwell_elapsed_times[dwell_key] = max(0.0, (now - dwell_start).total_seconds())
     else:
@@ -99,8 +100,15 @@ def _advance_sim_phase(
     new_temp = current_temp
 
     def _set_dwell_start(key_suffix: str, field: str):
-        dwell_start_times[f"{device_id}_{key_suffix}"] = now
+        key = f"{device_id}_{key_suffix}"
+        dwell_start_times[key] = now
         item[field] = now.isoformat()
+        # live 進 dwell 就把已 dwell 秒數釘為 0，之後只累加 RUNNING tick。
+        # 否則首個 dwell tick 會用 wall-clock (now - dwell_start) 播種，暫停剛好卡在
+        # 「翻成 dwell」到「第一個 dwell tick」之間時，會把暫停時間當成已 dwell、提早結束。
+        # 重啟復原走的是另一條路（dwell_start 從 DB 還原、dwell_elapsed 尚未建立），
+        # 仍由 _accum_dwell_elapsed 的 wall-clock 播種正確接手。
+        dwell_elapsed_times[key] = 0.0
 
     def _restore_dwell_start(key_suffix: str, field: str) -> datetime.datetime:
         # 重啟後從 DB 欄位恢復計時起點，避免 dwell 重算
@@ -118,6 +126,12 @@ def _advance_sim_phase(
             else:
                 _set_dwell_start(key_suffix, field)
         return dwell_start_times[key]
+
+    def _end_dwell(dwell_key: str, field: str):
+        # dwell/穩定結束的共同收尾：清掉計時累計與起點欄位（三個 hold 相位共用）
+        del dwell_elapsed_times[dwell_key]
+        dwell_start_times.pop(dwell_key, None)
+        item.pop(field, None)
 
     if sim_phase == "ramp_to_low":
         new_temp = _move_toward(current_temp, p.low_temp, max_change)
@@ -144,9 +158,7 @@ def _advance_sim_phase(
         elapsed = _accum_dwell_elapsed(dwell_key, dwell_start, now, p.elapsed_seconds, dwell_elapsed_times)
         _tick_dwell_half(item, elapsed, p.dwell_seconds)
         if elapsed >= p.dwell_seconds:
-            del dwell_elapsed_times[dwell_key]
-            dwell_start_times.pop(dwell_key, None)
-            item.pop("dwell_high_start", None)
+            _end_dwell(dwell_key, "dwell_high_start")
             item["dwell_half_fired"] = False
             # 兩溫循環：降至 low_temp；單溫：直接回常溫
             is_two_temp = p.low_temp is not None and abs(p.high_temp - p.low_temp) > 0.1
@@ -166,9 +178,7 @@ def _advance_sim_phase(
         elapsed = _accum_dwell_elapsed(dwell_key, dwell_start, now, p.elapsed_seconds, dwell_elapsed_times)
         _tick_dwell_half(item, elapsed, p.dwell_seconds)
         if elapsed >= p.dwell_seconds:
-            del dwell_elapsed_times[dwell_key]
-            dwell_start_times.pop(dwell_key, None)
-            item.pop("dwell_low_start", None)
+            _end_dwell(dwell_key, "dwell_low_start")
             item["dwell_half_fired"] = False
             item["sim_cycle"] = sim_cycle + 1
             item["sim_phase"] = "ramp_to_high" if item["sim_cycle"] < p.cycles else "ramp_to_ambient"
@@ -177,6 +187,17 @@ def _advance_sim_phase(
         new_temp = _move_toward(current_temp, ambient, max_change)
         if abs(new_temp - ambient) <= 0.1:
             new_temp = ambient
+            # 回到常溫不等於結束：常溫穩定 30 分鐘也是測試流程，期間設備仍占用
+            item["sim_phase"] = "stabilize"
+            _set_dwell_start("stab", "stab_start")
+
+    elif sim_phase == "stabilize":
+        new_temp = ambient
+        dwell_key = f"{device_id}_stab"
+        dwell_start = _restore_dwell_start("stab", "stab_start")
+        elapsed = _accum_dwell_elapsed(dwell_key, dwell_start, now, p.elapsed_seconds, dwell_elapsed_times)
+        if elapsed >= STABILIZATION_MINUTES * 60.0:
+            _end_dwell(dwell_key, "stab_start")
             item["sim_phase"] = "done"
 
     return new_temp
@@ -302,6 +323,7 @@ async def _apply_simulated_item_with_retry(
                 dwell_half_fired=item.get("dwell_half_fired", False),
                 dwell_high_start=item.get("dwell_high_start"),
                 dwell_low_start=item.get("dwell_low_start"),
+                stab_start=item.get("stab_start"),
                 expected_statuses=(expected_status,),
                 expected_sim_phase=expected_sim_phase,
                 complete=complete,
@@ -405,7 +427,7 @@ async def data_simulator(states: device_state.DeviceStateManager) -> None:
                     )
                     if completion is None or not completion.changed:
                         continue
-                    for _suffix in ("_high", "_low"):
+                    for _suffix in ("_high", "_low", "_stab"):
                         _k = f"{device_id}{_suffix}"
                         dwell_start_times.pop(_k, None)
                         dwell_elapsed_times.pop(_k, None)

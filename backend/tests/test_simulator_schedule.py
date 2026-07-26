@@ -13,80 +13,82 @@ import datetime
 
 from app.models import DeviceBlockedPeriod, Schedule, ScheduleStatus, Fixture, FixtureLoan
 from app.schedule_service import advance_running_condition, complete_running_schedule
+from app.utils import device_blocked_reason_now
 
 
 def _now_naive() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
 
 
-# ── DeviceBlockedPeriod 查詢邏輯 ──────────────────────────────────────────────
+# ── DeviceBlockedPeriod 可用性判斷（對真函式 device_blocked_reason_now 作證）──────
+# 以前這幾個測試打的是測試檔裡重抄的一段查詢，改壞真函式也照樣全綠。現在直接呼叫
+# utils.device_blocked_reason_now（它自己開 SessionLocal，故 patch app.utils）。
 
 
-def _query_blocked(db, device_id: str, now: datetime.datetime):
-    return (
-        db.query(DeviceBlockedPeriod)
-        .filter(
-            DeviceBlockedPeriod.device_id == device_id,
-            DeviceBlockedPeriod.start_time <= now,
-            DeviceBlockedPeriod.end_time > now,
+def _seed_block(Session, **fields) -> None:
+    with Session() as db:
+        db.add(DeviceBlockedPeriod(**fields))
+        db.commit()
+
+
+def test_blocked_period_covers_now(patched_session):
+    """now 落在封鎖時段內 → 回傳原因字串"""
+    with patched_session("app.utils") as Session:
+        now = _now_naive()
+        _seed_block(
+            Session, device_id="CH-01", reason="維修中",
+            start_time=now - datetime.timedelta(hours=1),
+            end_time=now + datetime.timedelta(hours=1),
         )
-        .first()
-    )
+        assert device_blocked_reason_now("CH-01") == "維修中"
 
 
-def test_blocked_period_covers_now(db):
-    """now 落在封鎖時段內 → 應被查到"""
-    now = _now_naive()
-    db.add(DeviceBlockedPeriod(
-        device_id="CH-01",
-        start_time=now - datetime.timedelta(hours=1),
-        end_time=now + datetime.timedelta(hours=1),
-        reason="維修中",
-    ))
-    db.commit()
-
-    result = _query_blocked(db, "CH-01", now)
-    assert result is not None
-    assert result.reason == "維修中"
+def test_blocked_period_empty_reason_still_blocked(patched_session):
+    """時段存在但沒填原因 → 仍算封鎖，回預設字串（reason 不能拿來當有無封鎖的判準）"""
+    with patched_session("app.utils") as Session:
+        now = _now_naive()
+        _seed_block(
+            Session, device_id="CH-01", reason=None,
+            start_time=now - datetime.timedelta(hours=1),
+            end_time=now + datetime.timedelta(hours=1),
+        )
+        assert device_blocked_reason_now("CH-01") == "已設定封鎖"
 
 
-def test_blocked_period_past_not_returned(db):
-    """封鎖時段已結束 → 不應被查到"""
-    now = _now_naive()
-    db.add(DeviceBlockedPeriod(
-        device_id="CH-01",
-        start_time=now - datetime.timedelta(hours=2),
-        end_time=now - datetime.timedelta(hours=1),
-    ))
-    db.commit()
-
-    assert _query_blocked(db, "CH-01", now) is None
-
-
-def test_blocked_period_future_not_returned(db):
-    """封鎖時段尚未開始 → 不應被查到"""
-    now = _now_naive()
-    db.add(DeviceBlockedPeriod(
-        device_id="CH-01",
-        start_time=now + datetime.timedelta(hours=1),
-        end_time=now + datetime.timedelta(hours=2),
-    ))
-    db.commit()
-
-    assert _query_blocked(db, "CH-01", now) is None
+def test_blocked_period_past_not_returned(patched_session):
+    """封鎖時段已結束 → None"""
+    with patched_session("app.utils") as Session:
+        now = _now_naive()
+        _seed_block(
+            Session, device_id="CH-01",
+            start_time=now - datetime.timedelta(hours=2),
+            end_time=now - datetime.timedelta(hours=1),
+        )
+        assert device_blocked_reason_now("CH-01") is None
 
 
-def test_blocked_period_different_device_not_returned(db):
-    """CH-02 的封鎖 → 查 CH-01 時不應被查到"""
-    now = _now_naive()
-    db.add(DeviceBlockedPeriod(
-        device_id="CH-02",
-        start_time=now - datetime.timedelta(hours=1),
-        end_time=now + datetime.timedelta(hours=1),
-    ))
-    db.commit()
+def test_blocked_period_future_not_returned(patched_session):
+    """封鎖時段尚未開始 → None"""
+    with patched_session("app.utils") as Session:
+        now = _now_naive()
+        _seed_block(
+            Session, device_id="CH-01",
+            start_time=now + datetime.timedelta(hours=1),
+            end_time=now + datetime.timedelta(hours=2),
+        )
+        assert device_blocked_reason_now("CH-01") is None
 
-    assert _query_blocked(db, "CH-01", now) is None
+
+def test_blocked_period_different_device_not_returned(patched_session):
+    """CH-02 的封鎖 → 查 CH-01 時 None"""
+    with patched_session("app.utils") as Session:
+        now = _now_naive()
+        _seed_block(
+            Session, device_id="CH-02",
+            start_time=now - datetime.timedelta(hours=1),
+            end_time=now + datetime.timedelta(hours=1),
+        )
+        assert device_blocked_reason_now("CH-01") is None
 
 
 # ── 排程推進：只挑 RUNNING，不誤動未來的已確認排程 ────────────────────────────
