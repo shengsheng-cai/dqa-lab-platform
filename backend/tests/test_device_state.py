@@ -269,6 +269,30 @@ def test_pause_restores_paused_at_when_still_paused(patched_session):
         assert restored["CH-01"]["paused_at"] == t0
 
 
+def test_advance_persists_stab_start(patched_session):
+    """常溫穩定的計時起點 stab_start 要經 advance 落盤並能還原。
+
+    以前 advance 沒有 stab_start 參數，模擬器算出來的起點在 advance 被丟掉、DB 永遠是
+    None，重啟到一半會重跑整個 30 分鐘。這裡守住它有真的流過 advance→cache→DB→restore。
+    """
+    with patched_session("app.device_state") as Session:
+        states = _manager("RUNNING", sim_phase="ramp_to_ambient")
+        stab = datetime.datetime(2026, 7, 26, 10, 0, tzinfo=UTC)
+        result = asyncio.run(states.advance(
+            "CH-01",
+            sim_phase="stabilize",
+            stab_start=stab,
+            expected_statuses=("RUNNING",),
+            checkpoint=True,
+        ))
+        assert result.changed
+        assert states["CH-01"]["stab_start"] == stab
+        with Session() as db:
+            assert db.get(DeviceState, "CH-01").stab_start is not None
+        restored = device_state.DeviceStateManager.restore(["CH-01"])
+        assert restored["CH-01"]["stab_start"] is not None
+
+
 def test_finish_from_paused_settles_pause(patched_session):
     """從暫停中收尾：最後一段暫停要結算進累計、paused_at 清掉"""
     with patched_session("app.device_state"):

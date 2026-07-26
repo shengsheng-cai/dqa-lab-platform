@@ -10,7 +10,7 @@ T-12: curve_total_minutes 單一時長來源測試
 """
 import datetime
 
-from app.constants import AMBIENT_TEMP
+from app.constants import AMBIENT_TEMP, STABILIZATION_MINUTES
 from app.simulator import _SimParams, _advance_sim_phase
 from app.utils import curve_total_minutes
 
@@ -110,22 +110,55 @@ def _run_sim_minutes(
     return elapsed / 60.0
 
 
+# 模擬器跑到 done 含「回常溫後的常溫穩定 30 分鐘」，故實跑總占用 = 曲線 + STABILIZATION_MINUTES；
+# 這也正是設備卡與排程器估算的「真正可再用時間」，三者必須對得上。
+
+
 def test_estimate_matches_simulator_single_cold_cycles():
     """以前會分岔的輸入：單溫 -20°C、cycles=3。模擬器只 dwell 一次，預估必須對得上。"""
-    est = curve_total_minutes(5.0, 30.0, 3, -20.0, -20.0)
+    est = curve_total_minutes(5.0, 30.0, 3, -20.0, -20.0) + STABILIZATION_MINUTES
     actual = _run_sim_minutes(high=-20.0, low=-20.0, dwell_min=30.0, cycles=3, ramp_rate=5.0)
     assert abs(actual - est) < 3.0  # 離散化誤差 < 幾個 tick，遠小於「多 dwell 兩次」的 60 分鐘
 
 
 def test_estimate_matches_simulator_two_temp_cycle():
-    """雙溫循環也對得上模擬器實跑"""
-    est = curve_total_minutes(6.0, 20.0, 2, 60.0, -20.0)
+    """雙溫循環也對得上模擬器實跑（含常溫穩定）"""
+    est = curve_total_minutes(6.0, 20.0, 2, 60.0, -20.0) + STABILIZATION_MINUTES
     actual = _run_sim_minutes(high=60.0, low=-20.0, dwell_min=20.0, cycles=2, ramp_rate=6.0)
     assert abs(actual - est) < 3.0
 
 
 def test_estimate_matches_simulator_single_hot_cycles():
     """單溫熱測、cycles=3：模擬器只 dwell 一次，預估必須對得上（熱的那半以前沒守）。"""
-    est = curve_total_minutes(5.0, 30.0, 3, 60.0, 60.0)
+    est = curve_total_minutes(5.0, 30.0, 3, 60.0, 60.0) + STABILIZATION_MINUTES
     actual = _run_sim_minutes(high=60.0, low=60.0, dwell_min=30.0, cycles=3, ramp_rate=5.0)
     assert abs(actual - est) < 3.0
+
+
+def test_dwell_timer_ignores_pause_gap():
+    """暫停剛好卡在 dwell 入口：恢復後不該把暫停那段 wall-clock 算成已 dwell，
+    否則實際會提早結束、又和「有把暫停加回去」的估算對不上。"""
+    item = {"temperature": AMBIENT_TEMP, "sim_phase": "idle", "sim_cycle": 0}
+    dwell_start: dict = {}
+    dwell_elapsed: dict = {}
+    now = datetime.datetime(2024, 1, 1, tzinfo=UTC)
+    tick = 5.0
+    p = _SimParams(
+        high_temp=60.0, low_temp=None, dwell_seconds=600.0,
+        cycles=1, max_ramp_rate=5.0, elapsed_seconds=tick,
+    )
+    # 驅動到「剛翻成 dwell_high」那一刻
+    for _ in range(10_000):
+        item["temperature"] = _advance_sim_phase("CH-T", item, now, dwell_start, dwell_elapsed, p)
+        now += datetime.timedelta(seconds=tick)
+        if item["sim_phase"] == "dwell_high":
+            break
+    # live 進 dwell：已 dwell 秒數被釘為 0（不是等第一個 dwell tick 才用 wall-clock 播種）
+    assert dwell_elapsed["CH-T_high"] == 0.0
+
+    # 模擬暫停：wall-clock 前進 1 小時，但這段沒有任何 RUNNING tick
+    now += datetime.timedelta(hours=1)
+    item["temperature"] = _advance_sim_phase("CH-T", item, now, dwell_start, dwell_elapsed, p)
+
+    # 恢復後只該累加這一個 tick，不該把暫停那 1 小時算進 dwell
+    assert dwell_elapsed["CH-T_high"] < 2 * tick

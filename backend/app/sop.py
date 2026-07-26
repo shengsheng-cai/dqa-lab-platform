@@ -17,6 +17,7 @@ from .standards import STANDARDS_AND_SOPS, get_standard_tree
 from .constants import DEVICE_IDS
 from .schedule_service import (
     ScheduleStartActor,
+    running_schedule_for_device,
     start_schedule as start_schedule_service,
 )
 from .schedule_api import schedule_start_http_error
@@ -178,10 +179,7 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
         """
         with SessionLocal() as db:
             now = _now_utc_naive()
-            running = db.query(Schedule).filter(
-                Schedule.device_id == device_id,
-                Schedule.status == ScheduleStatus.RUNNING,
-            ).first()
+            running = running_schedule_for_device(db, device_id)
             running_info = None
             if running:
                 running_info = {

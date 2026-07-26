@@ -54,6 +54,7 @@ def _idle_patch() -> dict[str, Any]:
         "sim_cycle": 0,
         "dwell_high_start": None,
         "dwell_low_start": None,
+        "stab_start": None,
         "dwell_half_fired": False,
         "completed_steps": 0,
         "total_steps": 0,
@@ -103,7 +104,7 @@ def _save(
         state.sim_cycle = item.get("sim_cycle", 0)
         state.dwell_half_fired = item.get("dwell_half_fired", False)
 
-        for field in ("dwell_high_start", "dwell_low_start", "paused_at"):
+        for field in ("dwell_high_start", "dwell_low_start", "stab_start", "paused_at"):
             value = item.get(field)
             if value is not None:
                 if isinstance(value, str):
@@ -177,6 +178,8 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
                 if state.dwell_high_start else None,
                 "dwell_low_start": state.dwell_low_start.isoformat()
                 if state.dwell_low_start else None,
+                "stab_start": state.stab_start.isoformat()
+                if state.stab_start else None,
                 "skip_push": bool(state.skip_push),
                 "paused_at": state.paused_at.replace(tzinfo=datetime.timezone.utc)
                 if state.paused_at is not None else None,
@@ -446,6 +449,7 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
         dwell_half_fired: bool | object = _UNSET,
         dwell_high_start: datetime.datetime | str | None | object = _UNSET,
         dwell_low_start: datetime.datetime | str | None | object = _UNSET,
+        stab_start: datetime.datetime | str | None | object = _UNSET,
         completed_steps: int | object = _UNSET,
         expected_statuses: Sequence[str] | None = None,
         expected_sim_phase: str | None | object = _UNSET,
@@ -476,6 +480,7 @@ class DeviceStateManager(Mapping[str, Mapping[str, Any]]):
                 "dwell_half_fired": dwell_half_fired,
                 "dwell_high_start": dwell_high_start,
                 "dwell_low_start": dwell_low_start,
+                "stab_start": stab_start,
                 "completed_steps": completed_steps,
             }
             for field, value in values.items():

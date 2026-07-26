@@ -349,6 +349,8 @@ class DeviceState(Base):
     dwell_half_fired: Mapped[bool] = mapped_column(Boolean, default=False)
     dwell_high_start: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     dwell_low_start: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    # 回常溫後的常溫穩定計時起點；重啟後接回剩餘穩定時間，不從頭再穩定 30 分鐘
+    stab_start: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
 
     # --- 暫停時間累計（估算結束時間要把暫停扣回去，否則暫停後排程會撞在一起）---
     paused_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)

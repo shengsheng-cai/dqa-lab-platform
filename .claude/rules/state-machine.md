@@ -19,9 +19,10 @@ IDLE → RUNNING ↔ PAUSED → FINISHING → IDLE
 ## 模擬相位（sim_phase）
 
 ```
-idle → ramp_to_low → ramp_to_high → dwell_high → ramp_to_low2 → dwell_low → ramp_to_ambient
+idle → ramp_to_low → ramp_to_high → dwell_high → ramp_to_low2 → dwell_low → ramp_to_ambient → stabilize
 ```
 
-- RUNNING 內自然完成的 `ramp_to_ambient` 結束後直接回 IDLE
-- FINISHING 內手動停止的 `ramp_to_ambient` 結束後回 IDLE
-- 重啟後自動從 device_states 恢復 sim_phase，不從頭開始
+- RUNNING 內自然完成：`ramp_to_ambient` 回到常溫後，再經 `stabilize`（常溫穩定 30 分鐘，`STABILIZATION_MINUTES`，期間設備仍占用）才回 IDLE，不在回常溫瞬間就 IDLE
+- 常溫穩定時間三處共用：設備卡 estimated_end、排程器 `_est_end_from_device`、模擬器 `stabilize` 相位一律以「曲線 + 30 分鐘」為真正可再用時間
+- FINISHING 內手動停止（取消／緊急收尾）的 `ramp_to_ambient` 結束後直接回 IDLE，不走 `stabilize`（中止非完成，不需穩定）
+- 重啟後自動從 device_states 恢復 sim_phase（含 `stab_start`），不從頭開始

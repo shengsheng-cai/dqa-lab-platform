@@ -6,7 +6,6 @@ simulator.py 共同使用。所有函式均不依賴 FastAPI context，可直接
 """
 import asyncio
 import datetime
-import json
 import logging
 from dataclasses import dataclass
 from enum import StrEnum
@@ -17,11 +16,11 @@ from .models import (
     ScheduleFixture, Fixture, FixtureLoan,
 )
 from .standards import get_standard
-from .constants import DEVICE_IDS, AMBIENT_TEMP
+from .constants import DEVICE_IDS, AMBIENT_TEMP, STABILIZATION_MINUTES
 from .utils import (
     _now_utc, _now_utc_naive, _parse_conditions,
-    parse_iso_utc, _to_naive_utc, device_blocked_reason_now,
-    curve_total_minutes, total_pause_seconds,
+    _to_naive_utc, device_blocked_reason_now,
+    curve_total_minutes, occupied_end,
 )
 from . import device_state
 from .audit_log import log_audit
@@ -30,7 +29,7 @@ logger = logging.getLogger("schedule_service")
 
 INTER_CONDITION_BUFFER_HOURS = 0.5
 ACTIVE_STATUSES = [ScheduleStatus.PENDING, ScheduleStatus.CONFIRMED, ScheduleStatus.RUNNING]
-STABILIZATION_HOURS = 0.5
+STABILIZATION_HOURS = STABILIZATION_MINUTES / 60.0
 
 
 class ScheduleStartCode(StrEnum):
@@ -149,7 +148,7 @@ class ScheduleCompletion:
     sample_name: str
 
 
-def _running_schedule_for_device(db, device_id: str) -> Optional[Schedule]:
+def running_schedule_for_device(db, device_id: str) -> Optional[Schedule]:
     """該設備目前進行中的排程。同機台理論上只有一筆 RUNNING，order_by 讓選取具決定性；
     因為只挑 RUNNING，同機台未來的已確認排程（CONFIRMED）永遠不會被誤選。"""
     return (
@@ -163,6 +162,12 @@ def _running_schedule_for_device(db, device_id: str) -> Optional[Schedule]:
     )
 
 
+def list_running_schedules(db) -> list[Schedule]:
+    """所有進行中（status=RUNNING）的排程。與 running_schedule_for_device 共用同一個
+    RUNNING 判準——「進行中」的定義收在 service 層一處，不散在 route 各自內聯查詢。"""
+    return db.query(Schedule).filter(Schedule.status == ScheduleStatus.RUNNING).all()
+
+
 def advance_running_condition(device_id: str) -> Optional[ConditionAdvance]:
     """設備自然完成目前條件：current_condition_index +1，等待人員確認下一步。
 
@@ -170,7 +175,7 @@ def advance_running_condition(device_id: str) -> Optional[ConditionAdvance]:
     才走完成。無進行中排程時回 None（例如臨時 SOP，不得誤動同機台未來排程）。
     """
     with SessionLocal() as db:
-        schedule = _running_schedule_for_device(db, device_id)
+        schedule = running_schedule_for_device(db, device_id)
         if schedule is None:
             return None
         new_index = schedule.current_condition_index + 1
@@ -194,7 +199,7 @@ def complete_running_schedule(
     無進行中排程時回 None（臨時 SOP 收尾，不得把同機台未來排程直接標成已完成）。
     """
     with SessionLocal() as db:
-        schedule = _running_schedule_for_device(db, device_id)
+        schedule = running_schedule_for_device(db, device_id)
         if schedule is None:
             return None
         result = ScheduleCompletion(
@@ -240,40 +245,13 @@ def _calc_total_hours(conditions: List[str]) -> float:
 
 
 def _est_end_from_device(device: dict) -> Optional[datetime.datetime]:
-    """從 AICM_CACHE 設備 dict 估算測試結束時間（UTC）；設備不在執行中則回傳 None"""
+    """從 AICM_CACHE 設備 dict 估算測試占用結束時間（aware UTC）；設備不在執行中則回傳 None。
+
+    RUNNING/PAUSED/FINISHING 都走共用的 occupied_end（曲線 + 常溫穩定 + 暫停），與設備卡同源。
+    """
     if device.get("status") not in ("RUNNING", "PAUSED", "FINISHING"):
         return None
-
-    started_at = device.get("started_at")
-    active_sop_json = device.get("active_sop_json")
-    if not started_at or not active_sop_json:
-        return None
-    try:
-        sop = json.loads(active_sop_json) if isinstance(active_sop_json, str) else active_sop_json
-    except Exception:
-        return None
-
-    ramp_rate = float(sop.get("ramp_rate") or 1.0)
-    dwell_min = float(sop.get("dwell_time_hours") or 0.0) * 60.0
-    cycles = int(sop.get("cycles") or 1)
-    high_temp = float(sop.get("high_temperature") or sop.get("target_temperature") or AMBIENT_TEMP)
-    raw_low = sop.get("low_temperature")
-    low_temp = float(raw_low) if raw_low is not None else None
-
-    total_min = curve_total_minutes(ramp_rate, dwell_min, cycles, high_temp, low_temp)
-
-    if isinstance(started_at, str):
-        started_dt = parse_iso_utc(started_at)
-    else:
-        started_dt = started_at
-    if started_dt.tzinfo is None:
-        started_dt = started_dt.replace(tzinfo=datetime.timezone.utc)
-    # 暫停期間模擬器凍結進度，估算也要把暫停時間加回去，下一筆排程才不會撞上暫停中的測試
-    return (
-        started_dt
-        + datetime.timedelta(minutes=total_min)
-        + datetime.timedelta(seconds=total_pause_seconds(device, _now_utc()))
-    )
+    return occupied_end(device, _now_utc())
 
 
 def _build_running_until(cache: dict) -> dict:
