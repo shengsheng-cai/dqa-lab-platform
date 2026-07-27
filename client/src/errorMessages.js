@@ -113,19 +113,3 @@ export function getRecoveryHint(translatedMessage) {
   }
   return null;
 }
-
-/**
- * 從 axios error 物件中安全地提取並轉譯錯誤訊息
- * @param {Error} error - axios error 物件
- * @param {string} fallback - 預設訊息
- * @returns {string} 使用者友善的訊息
- */
-export function getErrorMessage(error, fallback = "操作失敗，請稍後重試") {
-  const technicalMessage =
-    error?.response?.data?.detail ||
-    error?.response?.data?.message ||
-    error?.message ||
-    "";
-
-  return translateErrorMessage(technicalMessage, fallback);
-}

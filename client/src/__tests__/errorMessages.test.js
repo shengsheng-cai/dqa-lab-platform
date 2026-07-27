@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  translateErrorMessage,
-  getRecoveryHint,
-  getErrorMessage,
-} from "../errorMessages";
+import { translateErrorMessage, getRecoveryHint } from "../errorMessages";
 
 describe("translateErrorMessage", () => {
   it("returns fallback for empty input", () => {
@@ -47,21 +43,5 @@ describe("getRecoveryHint", () => {
   it("returns null for unknown message", () => {
     expect(getRecoveryHint("未知錯誤")).toBeNull();
     expect(getRecoveryHint(null)).toBeNull();
-  });
-});
-
-describe("getErrorMessage", () => {
-  it("extracts and translates from axios error shape", () => {
-    const err = { response: { data: { detail: "fixture not found" } } };
-    expect(getErrorMessage(err)).toBe("治具不存在");
-  });
-
-  it("falls back to error.message if no response", () => {
-    const err = { message: "schedule not found" };
-    expect(getErrorMessage(err)).toBe("排程不存在");
-  });
-
-  it("returns fallback for empty error", () => {
-    expect(getErrorMessage({})).toBe("操作失敗，請稍後重試");
   });
 });

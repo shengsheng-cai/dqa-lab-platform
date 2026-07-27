@@ -203,7 +203,7 @@ def get_gantt(request: Request):
         fixtures_map = _build_schedule_fixtures_map(db, [s.id for s in schedules])
 
         return {
-            "schedules": [_enrich(s, db, fixtures_map) for s in schedules],
+            "schedules": [_enrich(s, fixtures_map) for s in schedules],
             "blocked_periods": [
                 {
                     "id": b.id,
@@ -228,7 +228,7 @@ def list_schedules(request: Request, status: Optional[str] = None):
             q = q.filter(Schedule.status == status)
         schedules = q.order_by(Schedule.created_at.desc()).limit(200).all()
         fixtures_map = _build_schedule_fixtures_map(db, [s.id for s in schedules])
-        return [_enrich(s, db, fixtures_map) for s in schedules]
+        return [_enrich(s, fixtures_map) for s in schedules]
 
 
 @router.get("/{schedule_id}", response_model=ScheduleOut)
@@ -237,7 +237,7 @@ def get_schedule(schedule_id: int):
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
             raise HTTPException(status_code=404, detail="找不到排程")
-        return _enrich(s, db)
+        return _enrich(s, _build_schedule_fixtures_map(db, [s.id]))
 
 
 @router.post("", response_model=ScheduleOut, status_code=201)
@@ -291,7 +291,7 @@ def create_schedule(body: ScheduleCreate, request: Request, _: None = Depends(re
                   f"{s.project_number} / {s.sample_name}")
         db.commit()
         db.refresh(s)
-        return _enrich(s, db)
+        return _enrich(s, _build_schedule_fixtures_map(db, [s.id]))
 
 
 def _slot_changed(body: "SchedulePatch") -> bool:
@@ -470,7 +470,10 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, role, c
                           f"{s.project_number} / {s.sample_name}")
             db.commit()
             db.refresh(s)
-        result = None if immediate_start or explicit_start else _enrich(s, db)
+        result = (
+            None if immediate_start or explicit_start
+            else _enrich(s, _build_schedule_fixtures_map(db, [s.id]))
+        )
 
     return {
         "result": result,

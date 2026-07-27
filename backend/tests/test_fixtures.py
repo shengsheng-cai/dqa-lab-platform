@@ -1,12 +1,12 @@
 """
 T-06: fixtures 模組純函數測試
 - _calc_replacement_date（純函數）
-- _calc_loan_qty（需要 db fixture）
-- _fixture_to_out（需要 db fixture）
+- _build_loan_qty_map（需要 db fixture）
+- _fixture_to_out（純函數，數量來自 _build_loan_qty_map）
 """
 import datetime
 from app.models import Fixture, FixtureLoan
-from app.fixtures import _calc_replacement_date, _calc_loan_qty, _fixture_to_out
+from app.fixtures import _calc_replacement_date, _build_loan_qty_map, _fixture_to_out
 
 
 def _make_fixture(**kwargs) -> Fixture:
@@ -60,14 +60,11 @@ def test_replacement_date_invalid_string():
     assert _calc_replacement_date(f) is None
 
 
-# ── _calc_loan_qty ─────────────────────────────────────────────────────────
+# ── _build_loan_qty_map ────────────────────────────────────────────────────
 
 
 def _seed_fixture(db, total_quantity=10) -> Fixture:
-    f = Fixture(
-        interface_type="USB", form_factor="Desktop",
-        total_quantity=total_quantity, shortage=0,
-    )
+    f = _make_fixture(total_quantity=total_quantity)
     db.add(f)
     db.flush()
     return f
@@ -85,28 +82,41 @@ def _seed_loan(db, fixture_id: int, quantity: int, status: str):
     db.flush()
 
 
-def test_calc_loan_qty_no_loans(db):
+def test_loan_qty_map_no_loans(db):
     f = _seed_fixture(db)
-    assert _calc_loan_qty(db, f.id, "loaned") == 0
+    assert _build_loan_qty_map(db, [f.id]) == {}
 
 
-def test_calc_loan_qty_sums_correctly(db):
+def test_loan_qty_map_sums_correctly(db):
     f = _seed_fixture(db)
     _seed_loan(db, f.id, 2, "loaned")
     _seed_loan(db, f.id, 3, "loaned")
-    assert _calc_loan_qty(db, f.id, "loaned") == 5
+    assert _build_loan_qty_map(db, [f.id])[(f.id, "loaned")] == 5
 
 
-def test_calc_loan_qty_filters_by_status(db):
+def test_loan_qty_map_separates_status(db):
     f = _seed_fixture(db)
     _seed_loan(db, f.id, 2, "loaned")
     _seed_loan(db, f.id, 1, "reserved")
-    assert _calc_loan_qty(db, f.id, "loaned") == 2
-    assert _calc_loan_qty(db, f.id, "reserved") == 1
+    qty_map = _build_loan_qty_map(db, [f.id])
+    assert qty_map[(f.id, "loaned")] == 2
+    assert qty_map[(f.id, "reserved")] == 1
 
 
-def test_calc_loan_qty_nonexistent_fixture(db):
-    assert _calc_loan_qty(db, 9999, "loaned") == 0
+def test_loan_qty_map_separates_fixtures(db):
+    """一次查多個治具，數量不會互相混到"""
+    f1 = _seed_fixture(db)
+    f2 = _seed_fixture(db)
+    _seed_loan(db, f1.id, 2, "loaned")
+    _seed_loan(db, f2.id, 7, "loaned")
+    qty_map = _build_loan_qty_map(db, [f1.id, f2.id])
+    assert qty_map[(f1.id, "loaned")] == 2
+    assert qty_map[(f2.id, "loaned")] == 7
+
+
+def test_loan_qty_map_empty_ids(db):
+    """空 id 清單直接回 {}，不打 DB"""
+    assert _build_loan_qty_map(db, []) == {}
 
 
 # ── _fixture_to_out ────────────────────────────────────────────────────────
@@ -119,7 +129,7 @@ def test_fixture_to_out_available_quantity(db):
     _seed_loan(db, f.id, 1, "reserved")
     db.flush()
 
-    result = _fixture_to_out(db, f)
+    result = _fixture_to_out(f, _build_loan_qty_map(db, [f.id]))
     assert result["total_quantity"] == 10
     assert result["loaned_quantity"] == 2
     assert result["reserved_quantity"] == 1
@@ -132,7 +142,7 @@ def test_fixture_to_out_available_not_negative(db):
     _seed_loan(db, f.id, 3, "loaned")
     db.flush()
 
-    result = _fixture_to_out(db, f)
+    result = _fixture_to_out(f, _build_loan_qty_map(db, [f.id]))
     assert result["available_quantity"] == 0
 
 
@@ -140,7 +150,7 @@ def test_fixture_to_out_no_loans(db):
     """沒有借出紀錄 → available 等於 total"""
     f = _seed_fixture(db, total_quantity=5)
 
-    result = _fixture_to_out(db, f)
+    result = _fixture_to_out(f, _build_loan_qty_map(db, [f.id]))
     assert result["available_quantity"] == 5
     assert result["loaned_quantity"] == 0
     assert result["reserved_quantity"] == 0
