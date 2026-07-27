@@ -50,7 +50,7 @@ export function parseDateOnlyLocal(dateStr) {
  * 將 Date 物件或日期字串轉換為本地時間字串
  *
  * @param {Date|string} date - Date 物件或日期字串
- * @param {string} format - 格式選項：'date' | 'time' | 'datetime'（預設：'datetime'）
+ * @param {string} format - 'date' | 'time' | 'datetime' | 'datetimeSec'（預設：'datetime'，認不得的值也退回 datetime）
  * @param {string} locale - 地區碼（預設：'zh-TW'）
  * @returns {string} 格式化的本地時間字串
  */
@@ -72,49 +72,4 @@ export function formatLocal(date, format = "datetime", locale = "zh-TW") {
   };
 
   return new Intl.DateTimeFormat(locale, options[format] || options.datetime).format(d);
-}
-
-/**
- * 計算兩個日期之間相差的分鐘數
- *
- * @param {Date|string} startDate - 開始時間
- * @param {Date|string} endDate - 結束時間
- * @returns {number} 相差分鐘數（若解析失敗返回 null）
- */
-export function diffMinutes(startDate, endDate) {
-  const start = typeof startDate === "string" ? parseUTC(startDate) : startDate;
-  const end = typeof endDate === "string" ? parseUTC(endDate) : endDate;
-
-  if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) {
-    return null;
-  }
-
-  return Math.round((end - start) / 60000);
-}
-
-/**
- * 判斷日期是否在範圍內
- *
- * @param {Date|string} date - 要檢查的日期
- * @param {Date|string} rangeStart - 範圍開始
- * @param {Date|string} rangeEnd - 範圍結束
- * @returns {boolean}
- */
-export function isInRange(date, rangeStart, rangeEnd) {
-  const d = typeof date === "string" ? parseUTC(date) : date;
-  const start = typeof rangeStart === "string" ? parseUTC(rangeStart) : rangeStart;
-  const end = typeof rangeEnd === "string" ? parseUTC(rangeEnd) : rangeEnd;
-
-  return d >= start && d <= end;
-}
-
-/**
- * 檢查日期是否已過期
- *
- * @param {Date|string} date - 要檢查的日期
- * @returns {boolean}
- */
-export function isExpired(date) {
-  const d = typeof date === "string" ? parseUTC(date) : date;
-  return d ? d < new Date() : true;
 }

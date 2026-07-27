@@ -8,8 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "TZ=Asia/Taipei vitest run",
+    "test:watch": "TZ=Asia/Taipei vitest"
   },
   "dependencies": {
     "axios": "^1.13.5",
