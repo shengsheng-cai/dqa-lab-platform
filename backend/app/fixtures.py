@@ -154,15 +154,6 @@ class ExtensionRequest(BaseModel):
 # ---------- Helper ----------
 
 
-def _calc_loan_qty(db, fixture_id: int, status: str) -> int:
-    result = (
-        db.query(func.sum(FixtureLoan.quantity))
-        .filter(FixtureLoan.fixture_id == fixture_id, FixtureLoan.status == status)
-        .scalar()
-    )
-    return result or 0
-
-
 def _build_loan_qty_map(db, fixture_ids: list) -> dict:
     """一次 GROUP BY 查回所有 fixture 的借用數量，回傳 {(fixture_id, status): qty}"""
     if not fixture_ids:
@@ -191,15 +182,10 @@ def _calc_replacement_date(f: Fixture) -> Optional[str]:
         return None
 
 
-def _fixture_to_out(db, f: Fixture, loan_map: Optional[dict] = None) -> dict:
-    if loan_map is not None:
-        loaned = loan_map.get((f.id, "loaned"), 0)
-        reserved = loan_map.get((f.id, "reserved"), 0)
-        damaged = loan_map.get((f.id, "damaged"), 0)
-    else:
-        loaned = _calc_loan_qty(db, f.id, "loaned")
-        reserved = _calc_loan_qty(db, f.id, "reserved")
-        damaged = _calc_loan_qty(db, f.id, "damaged")
+def _fixture_to_out(f: Fixture, loan_map: dict) -> dict:
+    loaned = loan_map.get((f.id, "loaned"), 0)
+    reserved = loan_map.get((f.id, "reserved"), 0)
+    damaged = loan_map.get((f.id, "damaged"), 0)
     available = max(0, f.total_quantity - loaned - reserved - damaged)
     return {
         "id": f.id,
@@ -254,7 +240,7 @@ def list_fixtures(
 
         result = []
         for f in fixtures:
-            data = _fixture_to_out(db, f, loan_map)
+            data = _fixture_to_out(f, loan_map)
             if status:
                 avail = data["available_quantity"]
                 total = data["total_quantity"]
@@ -275,10 +261,8 @@ def get_summary():
     with SessionLocal() as db:
         now, today_start, today_end = today_utc_window()
 
-        from sqlalchemy import func as _func
-
         total_loaned = (
-            db.query(_func.sum(FixtureLoan.quantity))
+            db.query(func.sum(FixtureLoan.quantity))
             .filter(FixtureLoan.status == "loaned")
             .scalar()
         ) or 0
@@ -576,7 +560,7 @@ def get_fixture(fixture_id: int):
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
         loan_map = _build_loan_qty_map(db, [f.id])
-        return _fixture_to_out(db, f, loan_map)
+        return _fixture_to_out(f, loan_map)
 
 
 # ---------- 借出 ----------
@@ -1032,7 +1016,7 @@ def create_fixture(body: FixtureUpsert, request: Request, _: None = Depends(requ
         db.commit()
         db.refresh(f)
         loan_map = _build_loan_qty_map(db, [f.id])
-        return _fixture_to_out(db, f, loan_map)
+        return _fixture_to_out(f, loan_map)
 
 
 # ---------- 編輯治具 ----------
@@ -1068,7 +1052,7 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request, _: No
                   f"編輯治具 #{fixture_id}")
         db.commit()
         loan_map = _build_loan_qty_map(db, [f.id])
-        return _fixture_to_out(db, f, loan_map)
+        return _fixture_to_out(f, loan_map)
 
 
 # ---------- 刪除治具（軟刪除）----------

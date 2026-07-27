@@ -298,10 +298,6 @@ def _get_condition_names(conditions: List[str]) -> List[str]:
 # ── DB 查詢工具 ───────────────────────────────────────────────────────────────
 
 
-def _get_schedule_fixtures(schedule_id: int, db) -> list:
-    return _build_schedule_fixtures_map(db, [schedule_id]).get(schedule_id, [])
-
-
 def _build_schedule_fixtures_map(db, schedule_ids: list) -> dict:
     """一次取回所有排程的治具資料，回傳 {schedule_id: [fixture dicts]}"""
     if not schedule_ids:
@@ -325,8 +321,12 @@ def _build_schedule_fixtures_map(db, schedule_ids: list) -> dict:
     return result
 
 
-def _enrich(s: Schedule, db=None, fixtures_map=None) -> dict:
-    """Schedule ORM → dict，附加計算欄位"""
+def _enrich(s: Schedule, fixtures_map: dict) -> dict:
+    """Schedule ORM → dict，附加計算欄位。
+
+    fixtures_map 由 caller 用 `_build_schedule_fixtures_map` 先備好：清單類 caller
+    一次查完整批，單筆 caller 查自己那一筆，避免在迴圈裡逐筆打 DB。
+    """
     conditions = _parse_conditions(s.conditions)
     return {
         "id": s.id,
@@ -349,9 +349,7 @@ def _enrich(s: Schedule, db=None, fixtures_map=None) -> dict:
         "updated_at": s.updated_at,
         "total_hours": _calc_total_hours(conditions),
         "condition_names": _get_condition_names(conditions),
-        "fixtures": fixtures_map.get(s.id, []) if fixtures_map is not None else (
-            _get_schedule_fixtures(s.id, db) if db is not None else []
-        ),
+        "fixtures": fixtures_map.get(s.id, []),
     }
 
 
