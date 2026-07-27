@@ -108,10 +108,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 情境 | 要跑的 |
 |------|--------|
-| 任何 `.py` / `.jsx` 邏輯改動（含單檔、含只改一行邏輯） | `/simplify` → `/review` → `/code-review` → push |
+| 任何 `.py` / `.jsx` 邏輯改動（含單檔、含只改一行邏輯） | **四關**（見下） → push |
 | 小改動（typo、config、純顯示、純文件、純測試斷言微調） | 直接 push |
 
-> 規則自動套用，不詢問「要不要跑 X？」。**只要動到邏輯，三個一律都跑，不得用「單檔」「感覺小」「有把握」當理由跳過 `/simplify`。** `/simplify` 管品質重構（reuse / simplify / efficiency / altitude，會實際改碼）；`/review` 管品質 checklist；`/code-review` 管正確性（bug / 邏輯 / 安全）。三者互補，不互代。
+**四關，缺一不可**（對外一律講「四關」，不要講成三關）：
+
+| # | 關卡 | 管什麼 |
+|---|------|--------|
+| 1 | `/simplify` | 品質重構：reuse / simplify / efficiency / altitude，會實際改碼 |
+| 2 | `/review` | 品質 checklist |
+| 3 | `mattpocock-skills:code-review` | Standards（照不照 repo 規範）+ Spec（照不照原始需求） |
+| 4 | 正確性審查（自己讀 diff） | bug / 邏輯 / 安全 |
+
+> 規則自動套用，不詢問「要不要跑 X？」。**只要動到邏輯，四關一律都跑，不得用「單檔」「感覺小」「有把握」當理由跳過 `/simplify`。**
+> 第 3、4 關容易被誤當成同一關：`/code-review` 這個名字底下其實是兩件事——Matt 那套 skill **只做** Standards + Spec，不獵 bug，所以跑完它還要自己補一遍正確性審查。四關互補，不互代。
+> （原生 `/code-review ultra`＝ultrareview 是使用者才能觸發、會計費的雲端審查，AI 發不動，不屬這四關。）
 
 **Commit 前自我檢查（必做）**：`git commit` 前先列出「本次已執行：X / 跳過 Y 原因：Z」，確認符合上表再 commit。不得在未執行對應 skill 的情況下直接 commit。
 
