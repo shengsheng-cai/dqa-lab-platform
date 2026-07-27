@@ -5,7 +5,10 @@
 ```
 App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, MaintenancePage, UsersPage, ErrorLog, ExecutionList]
 ├─ ai/         [ChatArea, MarkdownRenderer, MessageBubble, useAIChat, aiStorage, markdownUtils, messageBubbleConstants]   ← src/ai/（非 components/）
-├─ constants.js   ← src/ 根目錄，全域共用常數（DEVICE_IDS、SESSION_DURATION）
+├─ constants.js   ← src/ 根目錄，全域共用常數（DEVICE_IDS、SESSION_DURATION）；另把 timezone 的 parseUTC 改名成 parseUtcDate 轉出去
+├─ utils/      [timezone（parseUTC/parseDateOnlyLocal/formatLocal）, download（downloadBlob/buildReportFilename）]   ← 純邏輯共用函式放這，新增前先看有沒有現成的
+├─ errorMessages.js   ← src/ 根目錄，錯誤訊息轉譯表，由 api.js 的攔截器統一套用
+├─ __tests__/  ← 單元測試（見 .claude/rules/testing.md）
 └─ components/
    ├─ [ConfirmModal, Toast, ToastContext, useToast]   ← components/ 根目錄，全站共用
    ├─ sop/     [ConditionCard, ControlPanel, ExecutionInfoPanel, ExecutionPanel, MonitorSide, SafetyChecklist, SelectGroup, StepList, TempChart, generateSP]
