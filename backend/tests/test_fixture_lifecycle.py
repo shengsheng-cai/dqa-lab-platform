@@ -8,7 +8,7 @@ import pytest
 
 import app.fixtures as fixtures_module
 from app.fixtures import router as fixtures_router
-from app.models import Fixture
+from app.models import Fixture, FixtureLoan
 
 
 @pytest.fixture()
@@ -89,6 +89,34 @@ def test_loan_over_stock_is_rejected(admin_client):
 
     assert resp.status_code == 400
     assert _available(client, fid) == 5
+
+
+def test_loan_guard_counts_reserved_and_damaged(admin_client):
+    """借出守門要跟總表算同一套：預約中與損壞也占用庫存。
+
+    總表顯示與借出檢查曾經各寫一份算式，改動時只改到一邊就會出現
+    「畫面說借得到、按下去被擋」。這條同時對兩邊作證：總表報幾件，
+    就真的能借幾件，多一件要被擋。
+    """
+    client, Session = admin_client
+    fid = _seed_fixture(Session, total=10)
+    with Session() as db:
+        db.add(FixtureLoan(fixture_id=fid, borrower_name="預約", quantity=3, status="reserved"))
+        db.add(FixtureLoan(fixture_id=fid, borrower_name="壞掉", quantity=2, status="damaged"))
+        db.commit()
+
+    assert _available(client, fid) == 5
+
+    over = client.post("/api/fixtures/loans", json={
+        "fixture_id": fid, "borrower_name": "貪心", "quantity": 6,
+    })
+    assert over.status_code == 400, "總表說只剩 5 件，借 6 件卻沒被擋——兩邊算式不一致"
+
+    ok = client.post("/api/fixtures/loans", json={
+        "fixture_id": fid, "borrower_name": "剛好", "quantity": 5,
+    })
+    assert ok.status_code == 200, "總表說剩 5 件，借 5 件卻被擋——兩邊算式不一致"
+    assert _available(client, fid) == 0
 
 
 def test_return_restores_available(admin_client):

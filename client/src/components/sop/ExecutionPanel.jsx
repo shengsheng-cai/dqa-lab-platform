@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { downloadBlob } from "../../utils/download";
+import { downloadBlob, buildReportFilename } from "../../utils/download";
 import api from "../../api";
 import { useToast } from "../useToast";
 
@@ -20,11 +20,8 @@ const ExecutionPanel = ({
   const [downloadingCsv, setDownloadingCsv] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  const _filename = (execId, ext) => {
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const sopId = (activeSop?.sop_id || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
-    return `${selectedDevice}_${sopId}_${date}_${execId}.${ext}`;
-  };
+  const _filename = (execId, ext) =>
+    buildReportFilename(activeSop?.sop_id, execId, ext, { device: selectedDevice });
 
   const downloadReport = async (execId) => {
     if (downloadingCsv) return;

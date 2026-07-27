@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseUTC, parseDateOnlyLocal, formatLocal } from "../utils/timezone";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { parseUTC, parseDateOnlyLocal, formatLocal, localDateStamp } from "../utils/timezone";
 
 // 這整組測試建立在「執行時時區是 Asia/Taipei」上（vite.config.js 的 test.env.TZ）。
 // 先確認這件事，否則下面的期望值會以看不懂的字串差異形式失敗。
@@ -108,5 +108,38 @@ describe("formatLocal", () => {
 
   it("直接吃 Date 物件", () => {
     expect(formatLocal(new Date("2026-07-27T02:30:45Z"), "date")).toBe("2026/07/27");
+  });
+});
+
+describe("localDateStamp", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function freezeAt(iso) {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(iso));
+  }
+
+  it("取本地當天，不是 UTC 當天", () => {
+    // 台北 7/28 00:30 = UTC 7/27 16:30。用 toISOString() 會得到 20260727。
+    freezeAt("2026-07-27T16:30:00Z");
+    expect(localDateStamp()).toBe("20260728");
+  });
+
+  it("月與日補足兩位數", () => {
+    freezeAt("2026-01-05T03:00:00Z"); // getMonth() 是 0 起算，這裡要的是 01
+    expect(localDateStamp()).toBe("20260105");
+  });
+
+  it("跨年邊界", () => {
+    freezeAt("2026-12-31T16:30:00Z"); // 台北已是 2027-01-01
+    expect(localDateStamp()).toBe("20270101");
+  });
+
+  it("可指定分隔符", () => {
+    freezeAt("2026-07-27T02:30:00Z");
+    expect(localDateStamp("-")).toBe("2026-07-27");
+    expect(localDateStamp("/")).toBe("2026/07/27");
   });
 });

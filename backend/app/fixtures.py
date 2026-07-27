@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import io
 import re
+from dataclasses import dataclass
 from typing import Optional, List
 from sqlalchemy import func
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
@@ -167,6 +168,36 @@ def _build_loan_qty_map(db, fixture_ids: list) -> dict:
     return {(fid, st): qty for fid, st, qty in rows}
 
 
+@dataclass(frozen=True)
+class StockCounts:
+    """一支治具的數量拆解：借出中 / 預約中 / 損壞 / 還能借"""
+    loaned: int
+    reserved: int
+    damaged: int
+    available: int
+
+
+def _stock_counts(f: Fixture, loan_map: dict) -> StockCounts:
+    """算出這支治具各狀態的數量。
+
+    還能借 = 總數扣掉借出中、預約中、損壞，最低 0。治具總表顯示的數字與
+    借出前的庫存檢查都走這個函式，避免兩邊各改各的、畫面說借得到但按下去被擋。
+
+    注意：這裡只收斂「算式」。狀態字串本身（loaned / reserved / damaged / lost）
+    仍散在各模組裡當裸字串用，要新增一種占用庫存的狀態時，除了改這裡還得
+    自己找出其他地方——收成 enum 是另一件事，見 CLAUDE.local.md 待補。
+    """
+    loaned = loan_map.get((f.id, "loaned"), 0)
+    reserved = loan_map.get((f.id, "reserved"), 0)
+    damaged = loan_map.get((f.id, "damaged"), 0)
+    return StockCounts(
+        loaned=loaned,
+        reserved=reserved,
+        damaged=damaged,
+        available=max(0, f.total_quantity - loaned - reserved - damaged),
+    )
+
+
 def _calc_replacement_date(f: Fixture) -> Optional[str]:
     """根據 replacement_years 與 created_at 計算預估汰換日期"""
     if not f.replacement_years or not f.created_at:
@@ -183,10 +214,7 @@ def _calc_replacement_date(f: Fixture) -> Optional[str]:
 
 
 def _fixture_to_out(f: Fixture, loan_map: dict) -> dict:
-    loaned = loan_map.get((f.id, "loaned"), 0)
-    reserved = loan_map.get((f.id, "reserved"), 0)
-    damaged = loan_map.get((f.id, "damaged"), 0)
-    available = max(0, f.total_quantity - loaned - reserved - damaged)
+    qty = _stock_counts(f, loan_map)
     return {
         "id": f.id,
         "priority": f.priority,
@@ -196,10 +224,10 @@ def _fixture_to_out(f: Fixture, loan_map: dict) -> dict:
         "purpose": f.purpose,
         "total_quantity": f.total_quantity,
         "shortage": f.shortage,
-        "available_quantity": available,
-        "loaned_quantity": loaned,
-        "reserved_quantity": reserved,
-        "damaged_quantity": damaged,
+        "available_quantity": qty.available,
+        "loaned_quantity": qty.loaned,
+        "reserved_quantity": qty.reserved,
+        "damaged_quantity": qty.damaged,
         "usage_frequency": f.usage_frequency,
         "replacement_years": f.replacement_years,
         "estimated_replacement_date": _calc_replacement_date(f),
@@ -690,11 +718,7 @@ def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_ad
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
 
-        qty_map = _build_loan_qty_map(db, [f.id])
-        loaned = qty_map.get((f.id, "loaned"), 0)
-        reserved = qty_map.get((f.id, "reserved"), 0)
-        damaged = qty_map.get((f.id, "damaged"), 0)
-        available = max(0, f.total_quantity - loaned - reserved - damaged)
+        available = _stock_counts(f, _build_loan_qty_map(db, [f.id])).available
         if available < body.quantity:
             raise HTTPException(
                 status_code=400, detail=f"庫存不足，目前可借：{available} 件"

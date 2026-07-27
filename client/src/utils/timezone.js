@@ -8,24 +8,34 @@
  */
 
 /**
- * 安全地將 naive UTC 字串轉換為 Date 物件
- * 如果字串已包含時區資訊（Z 或 +/-HH:MM），直接使用
- * 否則補 Z 告訴瀏覽器這是 UTC
+ * 將 naive UTC 字串轉換為 Date 物件。
+ * 字串已含時區資訊（Z 或 ±HH:MM）就直接用，否則補 Z 告訴瀏覽器這是 UTC。
  *
- * @param {string} dateStr - ISO format 日期字串（naive UTC）
- * @returns {Date} 正確解析為 UTC 的 Date 物件
+ * @param {string|Date} dateStr - ISO format 日期字串（naive UTC），或已是 Date
+ * @returns {Date|null} 空值回傳 null；字串無法解析時回傳 Invalid Date
+ *   （`new Date()` 不會丟例外，只會給 Invalid Date）。呼叫端要自己檢查，
+ *   例如用 `isNaN(d?.getTime())`，或改用會擋掉的 formatLocal。
  */
 export function parseUTC(dateStr) {
   if (!dateStr) return null;
   if (dateStr instanceof Date) return dateStr;
-  try {
-    // 檢查是否已有時區資訊
-    const hasTimezone = /Z$|[+-]\d{2}:?\d{2}$/.test(dateStr);
-    const safeStr = hasTimezone ? dateStr : dateStr + "Z";
-    return new Date(safeStr);
-  } catch {
-    return null;
-  }
+  const hasTimezone = /Z$|[+-]\d{2}:?\d{2}$/.test(dateStr);
+  return new Date(hasTimezone ? dateStr : dateStr + "Z");
+}
+
+/**
+ * 今天的日期（本地時區），給檔名或日期輸入框用。
+ *
+ * 不要用 `new Date().toISOString().slice(0, 10)` ——那是 UTC 日期，
+ * 台北凌晨 8 點前會標成前一天。
+ *
+ * @param {string} sep - 年月日之間的分隔符，預設不加
+ * @returns {string} 例如 "20260727"；sep 給 "-" 時是 "2026-07-27"
+ */
+export function localDateStamp(sep = "") {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return [d.getFullYear(), pad(d.getMonth() + 1), pad(d.getDate())].join(sep);
 }
 
 /**
