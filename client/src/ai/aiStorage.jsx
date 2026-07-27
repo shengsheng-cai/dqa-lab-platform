@@ -1,4 +1,5 @@
 // 對話儲存與管理（localStorage 存取、對話紀錄遷移、對話刪除等）
+import { localDateStamp } from "../utils/timezone";
 
 const STORAGE_KEY = "dqa_ai_chats_v2";
 const LEGACY_KEY = "dqa_ai_chat_history";
@@ -188,7 +189,7 @@ export const exportChat = (messages, title = "對話紀錄") => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `dqa_chat_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.txt`;
+  a.download = `dqa_chat_${localDateStamp()}.txt`;
   a.click();
   // A6 fix: 延遲 1 秒再 revoke，避免部分瀏覽器下載來不及觸發
   setTimeout(() => URL.revokeObjectURL(url), 1000);

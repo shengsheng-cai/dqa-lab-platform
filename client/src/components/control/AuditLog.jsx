@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import api from "../../api.js";
 import { downloadBlob } from "../../utils/download.js";
+import { localDateStamp } from "../../utils/timezone.js";
 import { parseUtcDate } from "../../constants";
 
 const ACTION_LABELS = {
@@ -67,7 +68,7 @@ export default function AuditLog({ active }) {
   const filtered = filter === "all" ? logs : logs.filter((l) => l.entity_type === filter);
 
   const handleExport = () => {
-    downloadBlob("/api/audit-logs/export", `audit_${new Date().toISOString().slice(0, 10)}.csv`);
+    downloadBlob("/api/audit-logs/export", `audit_${localDateStamp("-")}.csv`);
   };
 
   return (
