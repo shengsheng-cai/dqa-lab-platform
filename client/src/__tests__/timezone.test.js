@@ -142,4 +142,12 @@ describe("localDateStamp", () => {
     expect(localDateStamp("-")).toBe("2026-07-27");
     expect(localDateStamp("/")).toBe("2026/07/27");
   });
+
+  it("可指定日期，一樣以本地時區為準", () => {
+    // 台北 7/28 00:30。借出登記的預設到期日是本地 7 天後 = 8/4，不是 8/3。
+    freezeAt("2026-07-27T16:30:00Z");
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    expect(localDateStamp("-", d)).toBe("2026-08-04");
+  });
 });

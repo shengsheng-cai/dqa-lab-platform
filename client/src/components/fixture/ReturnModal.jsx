@@ -5,6 +5,7 @@ import { useToast } from "../useToast";
 import DatePicker from "./DatePicker";
 import ModalShell from "./ModalShell";
 import { inputStyle } from "./modalStyles";
+import { localDateStamp } from "../../utils/timezone";
 
 const CONDITIONS = [
   ["normal", "正常"],
@@ -16,9 +17,7 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
   const { showToast } = useToast();
   const [condition, setCondition] = useState("normal");
   const [note, setNote] = useState("");
-  const [returnDate, setReturnDate] = useState(
-    new Date().toISOString().slice(0, 10)
-  );
+  const [returnDate, setReturnDate] = useState(localDateStamp("-"));
   const [loading, setLoading] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 

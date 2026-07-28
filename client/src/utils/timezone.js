@@ -24,18 +24,18 @@ export function parseUTC(dateStr) {
 }
 
 /**
- * 今天的日期（本地時區），給檔名或日期輸入框用。
+ * 日期（本地時區），給檔名或日期輸入框用，預設是今天。
  *
  * 不要用 `new Date().toISOString().slice(0, 10)` ——那是 UTC 日期，
  * 台北凌晨 8 點前會標成前一天。
  *
  * @param {string} sep - 年月日之間的分隔符，預設不加
+ * @param {Date} date - 要格式化的日期，預設當下（例如「一週後」就自己算好再傳進來）
  * @returns {string} 例如 "20260727"；sep 給 "-" 時是 "2026-07-27"
  */
-export function localDateStamp(sep = "") {
-  const d = new Date();
+export function localDateStamp(sep = "", date = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
-  return [d.getFullYear(), pad(d.getMonth() + 1), pad(d.getDate())].join(sep);
+  return [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join(sep);
 }
 
 /**
