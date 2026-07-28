@@ -12,7 +12,11 @@ from .models import (
     SessionLocal, Schedule, ScheduleStatus, DeviceBlockedPeriod,
     User, ScheduleFixture, FixtureLoan,
 )
-from .fixtures import _assert_stock_available
+from .fixture_lifecycle import (
+    assert_stock_available,
+    create_schedule_reservation,
+    sync_schedule_reservations,
+)
 from .standards import STANDARD_TREE, get_standard
 from .constants import DEVICE_IDS
 from .auth import require_admin, current_user
@@ -312,13 +316,7 @@ def _assert_no_overlap(db, schedule_id: int, device_id, start, end) -> None:
 
 def _sync_reserved_fixture_assignment(db, schedule_id: int, device_id, due_date) -> None:
     """排程改機台或時段時，同步尚未借出的治具預約資訊。"""
-    db.query(FixtureLoan).filter(
-        FixtureLoan.schedule_id == schedule_id,
-        FixtureLoan.status == "reserved",
-    ).update(
-        {"device_id": device_id, "due_date": due_date},
-        synchronize_session=False,
-    )
+    sync_schedule_reservations(db, schedule_id, device_id, due_date)
 
 
 def _reserve_schedule_fixtures(db, s: Schedule, device_id, due_date) -> None:
@@ -326,7 +324,7 @@ def _reserve_schedule_fixtures(db, s: Schedule, device_id, due_date) -> None:
 
     排程確認以前沒有守門：兩張排程各自預約同一支治具、加起來超過庫存時兩張都能
     確認成功，可借量被扣到 0，到現場才發現治具不夠分。這裡與手動借出共用
-    fixtures._assert_stock_available，兩條路的判準一致。
+    fixture_lifecycle.assert_stock_available，兩條路的判準一致。
     """
     rows = db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == s.id).all()
     if not rows:
@@ -336,10 +334,12 @@ def _reserve_schedule_fixtures(db, s: Schedule, device_id, due_date) -> None:
     needed: dict[int, int] = {}
     for sf in rows:
         needed[sf.fixture_id] = needed.get(sf.fixture_id, 0) + sf.quantity
-    _assert_stock_available(db, needed)
+    assert_stock_available(db, needed)
 
     for sf in rows:
-        db.add(FixtureLoan(
+        create_schedule_reservation(
+            db,
+            schedule_id=s.id,
             fixture_id=sf.fixture_id,
             borrower_name=s.applicant_name or "排程系統",
             borrower_user_id=s.applicant_user_id,
@@ -347,10 +347,7 @@ def _reserve_schedule_fixtures(db, s: Schedule, device_id, due_date) -> None:
             project_name=f"{s.project_number} / {s.sample_name}",
             quantity=sf.quantity,
             due_date=due_date,
-            status="reserved",
-            loan_date=None,
-            schedule_id=s.id,
-        ))
+        )
 
 
 def _schedule_start_actor(user, action: str) -> ScheduleStartActor:

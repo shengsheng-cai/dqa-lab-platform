@@ -20,6 +20,7 @@ from .rag import warmup_rag
 from .line import router as line_router
 from .auth import router as auth_router, require_admin
 from .fixtures import router as fixtures_router
+from .fixture_excel import router as fixture_excel_router
 from .purchase_orders import router as purchase_orders_router
 from .schedules import (
     router as schedules_router, blocked_router as device_blocked_router,
@@ -245,6 +246,7 @@ app.include_router(errors_router)
 app.include_router(ai_router)
 app.include_router(line_router)
 app.include_router(auth_router)
+app.include_router(fixture_excel_router)
 app.include_router(fixtures_router)
 app.include_router(purchase_orders_router)
 app.include_router(schedules_router)

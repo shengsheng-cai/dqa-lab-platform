@@ -35,6 +35,15 @@ export default function AddEditModal({ fixture, onClose, onSuccess }) {
       setError("介面和型態為必填");
       return;
     }
+    if (
+      !Number.isInteger(Number(form.total_quantity)) ||
+      Number(form.total_quantity) < 0 ||
+      !Number.isInteger(Number(form.shortage)) ||
+      Number(form.shortage) < 0
+    ) {
+      setError("現有數量與缺貨數必須是 0 以上的整數");
+      return;
+    }
     setLoading(true);
     setError("");
     try {

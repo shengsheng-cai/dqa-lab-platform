@@ -14,7 +14,7 @@ export default function SetKeeperModal({ fixture, onClose, onSubmit }) {
 
   useEffect(() => {
     api
-      .get("/api/fixtures/users")
+      .get("/api/auth/users?active_only=true")
       .then((r) => setUsers(r.data))
       .catch(() => setUsers([]));
   }, []);

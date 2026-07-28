@@ -59,7 +59,7 @@ async def my_route(...):
     return result
 ```
 
-實作參考：`sop.py`、`schedules.py`（`_patch_schedule_db` 等）、`fixtures.py`（`_run_import_db`）。設備狀態寫入則一律呼叫 `DeviceStateManager` 的五個 async 動詞，由 manager 在內部持 lock 並用 `asyncio.to_thread` 落盤。
+實作參考：`sop.py`、`schedules.py`（`_patch_schedule_db` 等）、`fixture_excel.py`（`_run_import_db`）。設備狀態寫入則一律呼叫 `DeviceStateManager` 的五個 async 動詞，由 manager 在內部持 lock 並用 `asyncio.to_thread` 落盤。
 
 ## Datetime 慣例
 

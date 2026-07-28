@@ -147,6 +147,7 @@ _schedule_context_cache: dict = {"data": "", "expires_at": None}
 def _query_fixture_context() -> str:
     """查詢治具即時狀態（借出中 + 逾期 + 庫存不足），注入 AI context。結果快取 5 分鐘。"""
     from .models import SessionLocal, Fixture, FixtureLoan
+    from .fixture_lifecycle import LOAN_LOANED
 
     now = _now_utc()
     if _fixture_context_cache["data"] and _fixture_context_cache["expires_at"] > now:
@@ -159,7 +160,10 @@ def _query_fixture_context() -> str:
             loaned_rows = (
                 db.query(FixtureLoan, Fixture)
                 .join(Fixture, FixtureLoan.fixture_id == Fixture.id)
-                .filter(FixtureLoan.status == "loaned", FixtureLoan.return_date.is_(None))
+                .filter(
+                    FixtureLoan.status == LOAN_LOANED,
+                    FixtureLoan.return_date.is_(None),
+                )
                 .all()
             )
             if loaned_rows:
