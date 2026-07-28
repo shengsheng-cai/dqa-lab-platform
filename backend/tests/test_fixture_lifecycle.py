@@ -4,17 +4,56 @@
 核心不變式：available = total_quantity − loaned − reserved − damaged，且恆 ≥ 0；
 任何借出/歸還操作都不得讓 available 被灌大或讓庫存被超借。
 """
+import datetime
+
 import pytest
 
 import app.fixtures as fixtures_module
+import app.schedules as schedules_module
 from app.fixtures import router as fixtures_router
-from app.models import Fixture, FixtureLoan
+from app.schedules import router as schedules_router
+from app.models import Fixture, FixtureLoan, Schedule, ScheduleStatus
 
 
 @pytest.fixture()
 def admin_client(api_client):
     with api_client(fixtures_module, fixtures_router, role="admin", user_id=1, username="admin") as (client, Session):
         yield client, Session
+
+
+@pytest.fixture()
+def schedule_client(api_client):
+    """排程 router 的 admin client——治具預約是從「確認排程」這條路建立的。"""
+    with api_client(
+        schedules_module, schedules_router, role="admin", user_id=1, username="admin",
+        app_state={"AICM_CACHE": {}},
+    ) as (client, Session):
+        yield client, Session
+
+
+def _post_schedule(client, fixture_id: int, quantity: int, project: str = "P-1"):
+    return client.post("/api/schedules", json={
+        "project_number": project, "sample_name": "s", "standard": "IEC 60068",
+        "conditions": ["iec60068_ab_-40_16h"],
+        "fixtures": [{"fixture_id": fixture_id, "quantity": quantity}],
+    })
+
+
+def _apply_schedule(client, fixture_id: int, quantity: int, project: str = "P-1") -> int:
+    resp = _post_schedule(client, fixture_id, quantity, project)
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
+
+
+def _confirm_schedule(client, schedule_id: int, device_id: str):
+    """確認排程並指定未來時段——時間到了才啟動，這裡只驗預約階段。"""
+    start = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(days=1)
+    return client.patch(f"/api/schedules/{schedule_id}", json={
+        "status": ScheduleStatus.CONFIRMED.value,
+        "device_id": device_id,
+        "start_time": start.isoformat(),
+        "end_time": (start + datetime.timedelta(hours=20)).isoformat(),
+    })
 
 
 def _seed_fixture(Session, total=5) -> int:
@@ -135,26 +174,46 @@ def test_return_restores_available(admin_client):
     assert _available(client, fid) == 5
 
 
-def test_schedule_reservation_rejects_negative_quantity(api_client):
+def test_schedule_reservation_rejects_negative_quantity(schedule_client):
     """排程預約治具的負數量必須被拒——否則轉為 reserved 借出時同樣灌大庫存，繞過 create_loan 守衛。"""
-    import app.schedules as schedules_module
-    from app.schedules import router as schedules_router
+    client, Session = schedule_client
+    with Session() as db:
+        db.add(Fixture(interface_type="USB", form_factor="Desktop", total_quantity=5, is_active=True))
+        db.commit()
 
-    with api_client(
-        schedules_module, schedules_router, role="admin", user_id=1, username="admin",
-        app_state={"AICM_CACHE": {}},
-    ) as (client, Session):
-        with Session() as db:
-            db.add(Fixture(interface_type="USB", form_factor="Desktop", total_quantity=5, is_active=True))
-            db.commit()
+    resp = _post_schedule(client, fixture_id=1, quantity=-5)
 
-        resp = client.post("/api/schedules", json={
-            "project_number": "P-1", "sample_name": "s", "standard": "IEC 60068",
-            "conditions": ["iec60068_ab_-40_16h"],
-            "fixtures": [{"fixture_id": 1, "quantity": -5}],
-        })
+    assert resp.status_code == 400, f"負數預約應被拒，實際 {resp.status_code}"
 
-        assert resp.status_code == 400, f"負數預約應被拒，實際 {resp.status_code}"
+
+def test_schedule_confirm_rejects_reservation_over_stock(schedule_client):
+    """兩張排程預約同一支治具、加起來超過庫存時，第二張確認要被擋。
+
+    手動借出有守門，排程確認以前沒有：兩張都確認成功，可借量被扣到 0，
+    真正缺料是到了現場才發現。這條同時驗「剛好用完可以」與「多一件被擋」。
+    """
+    client, Session = schedule_client
+    with Session() as db:
+        db.add(Fixture(interface_type="USB", form_factor="Desktop", total_quantity=2, is_active=True))
+        db.commit()
+
+    first = _apply_schedule(client, fixture_id=1, quantity=2, project="P-1")
+    second = _apply_schedule(client, fixture_id=1, quantity=1, project="P-2")
+
+    ok = _confirm_schedule(client, first, "CH-01")
+    assert ok.status_code == 200, f"庫存剛好夠的排程被擋：{ok.text}"
+
+    over = _confirm_schedule(client, second, "CH-02")
+    assert over.status_code == 400, "庫存已用完，第二張排程仍確認成功——預約沒有守門"
+    assert "USB" in over.json()["detail"], "錯誤訊息要說是哪支治具不夠"
+
+    with Session() as db:
+        assert db.get(Schedule, second).status == ScheduleStatus.PENDING, "被擋下的排程不得留在已確認"
+        assert db.query(FixtureLoan).filter(FixtureLoan.schedule_id == second).count() == 0, (
+            "被擋下的排程不得留下預約紀錄"
+        )
+        reserved = db.query(FixtureLoan).filter(FixtureLoan.schedule_id == first).all()
+        assert [loan.quantity for loan in reserved] == [2], "先確認的排程應保留 2 件預約"
 
 
 def test_double_return_is_rejected(admin_client):
