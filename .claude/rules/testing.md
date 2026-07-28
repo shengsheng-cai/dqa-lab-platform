@@ -58,5 +58,5 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 - 碰 DOM 或網路的不測（如 `download.js` 的 `downloadBlob`，它建 `<a>` 點下去）；React 元件渲染也不測（無 jsdom 設定），元件正確性透過瀏覽器手動驗證
 - 時區固定在 `Asia/Taipei`，釘在 `package.json` 的 test script（`TZ=...` 前綴）。`formatLocal` / `parseDateOnlyLocal` 的正確性就是「UTC 轉本地」，不釘的話本機（+08）跟 CI（UTC）會得到不同字串。`vite.config.js` 的 `test.env.TZ` 是給繞過 npm script 的跑法補的，但它只在 vitest 預設的 forks 模式有效，別把它當唯一保險。`timezone.test.js` 第一條就在確認時區，它紅了代表釘子鬆了，去修釘子、不要改後面的期望值
 - `Intl` 輸出的日期時間分隔符不是一般空格（目前 ICU 是 U+2009），且會隨 Node 版本變。斷言前先用 `s.replace(/\s/g, " ")` 正規化，不然會出現「看起來一模一樣卻不相等」的紅字
-- **不要順手升 CI workflow 裡的 `node-version`**。時區測試斷言了 `Intl` 的輸出字串，而那字串綁在 Node 內建的 ICU 版本上（目前 CI 的 Node 20 與開發機的 Node 25 剛好同為 ICU 78.2 才對得上）。真要升，預期時區那幾條會紅，要重新確認期望字串再改。這跟「升 GitHub Action 版本」是兩回事，別混在一起改
+- **不要順手升 CI workflow 裡的 `node-version`**。時區測試斷言了 `Intl` 的輸出字串，而那字串綁在 Node 內建的 ICU 版本上（目前 CI 的 Node 24 是 ICU 78.3、開發機的 Node 25 是 78.2，兩邊輸出相同才對得上）。真要升，先在暫存目錄下載目標版本跑一次 `npm test`，綠了才改 workflow；紅了代表期望字串要重新確認，不是改斷言了事。這跟「升 GitHub Action 版本」是兩回事，別混在一起改
 - 判斷一支 utility 有沒有人用，不能只 grep 原名：`constants.js` 會把 `parseUTC` 改名成 `parseUtcDate` 再轉出去。要連別名一起找，確認真的零引用才動它
