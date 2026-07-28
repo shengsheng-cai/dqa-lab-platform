@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import api from "./api";
 import { downloadBlob } from "./utils/download";
-import { formatLocal, parseUTC, parseDateOnlyLocal } from "./utils/timezone";
+import { formatLocal, parseUTC, parseDateOnlyLocal, localDateStamp } from "./utils/timezone";
 import { useToast } from "./components/useToast";
 import ImportModal from "./components/fixture/ImportModal";
 import LoanModal from "./components/fixture/LoanModal";
@@ -88,7 +88,7 @@ function ReturnButtonGroup({ loanId, onSuccess }) {
             try {
               await api.post(`/api/fixtures/loans/${loanId}/return`, {
                 return_condition: condition,
-                returned_at: new Date().toISOString().slice(0, 10),
+                returned_at: localDateStamp("-"),
               });
               onSuccess();
             } catch (e) {

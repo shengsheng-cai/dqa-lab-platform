@@ -4,6 +4,7 @@ import { useToast } from "../useToast";
 import DatePicker from "./DatePicker";
 import ModalShell from "./ModalShell";
 import { inputStyle } from "./modalStyles";
+import { localDateStamp } from "../../utils/timezone";
 import { DEVICE_IDS } from "../../constants";
 
 export default function LoanModal({ onClose, onSubmit, fixtures }) {
@@ -16,7 +17,7 @@ export default function LoanModal({ onClose, onSubmit, fixtures }) {
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
-    return d.toISOString().slice(0, 10);
+    return localDateStamp("-", d);
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
