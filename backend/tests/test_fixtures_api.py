@@ -8,7 +8,7 @@ import datetime
 import pytest
 
 from app.fixtures import router as fixtures_router
-from app.models import Fixture, FixtureLoan
+from app.models import Fixture, FixtureInventoryLog, FixtureLoan
 from app.utils import _now_utc_naive
 
 
@@ -145,7 +145,7 @@ def test_inventory_allows_zero(admin_client):
 
 
 def test_inventory_log_rejects_negative(admin_client):
-    """第二道門：POST /inventory-logs 負數也要被 _apply_inventory_db 守住 → 400，庫存不變"""
+    """第二道門：POST /inventory-logs 也要經生命週期守衛 → 400，庫存不變。"""
     client, Session = admin_client
     fixture_id = _seed_plain_fixture(Session, total_quantity=5)
 
@@ -158,3 +158,51 @@ def test_inventory_log_rejects_negative(admin_client):
     with Session() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         assert f.total_quantity == 5
+
+
+def test_inventory_log_patch_rejects_negative(admin_client):
+    """編輯既有盤點紀錄也必須走同一道守衛，不能把主檔寫成負庫存。"""
+    client, Session = admin_client
+    fixture_id = _seed_plain_fixture(Session, total_quantity=5)
+    with Session() as db:
+        log = FixtureInventoryLog(
+            fixture_id=fixture_id,
+            previous_quantity=5,
+            counted_quantity=5,
+            difference=0,
+            counted_by="admin",
+        )
+        db.add(log)
+        db.commit()
+        log_id = log.id
+
+    resp = client.patch(
+        f"/api/fixtures/inventory-logs/{log_id}?actual_quantity=-1"
+    )
+
+    assert resp.status_code == 400
+    assert "不可為負數" in resp.json()["detail"]
+    with Session() as db:
+        fixture = db.query(Fixture).filter(Fixture.id == fixture_id).first()
+        log = db.query(FixtureInventoryLog).filter(
+            FixtureInventoryLog.id == log_id
+        ).first()
+        assert fixture.total_quantity == 5
+        assert log.counted_quantity == 5
+
+
+def test_create_fixture_rejects_negative_stock(admin_client):
+    """新增／編輯 schema 也要擋負數，不能只靠畫面上的 input min。"""
+    client, _ = admin_client
+
+    resp = client.post(
+        "/api/fixtures/",
+        json={
+            "interface_type": "USB",
+            "form_factor": "Adapter",
+            "total_quantity": -1,
+            "shortage": 0,
+        },
+    )
+
+    assert resp.status_code == 422

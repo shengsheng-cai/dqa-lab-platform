@@ -6,8 +6,25 @@ T-07: purchase_orders 模組純函數與業務邏輯測試
 """
 import datetime
 from types import SimpleNamespace
+
+import pytest
+
 from app.models import Fixture, PurchaseOrder
-from app.purchase_orders import _fmt_dt, _order_to_dict
+from app.purchase_orders import _fmt_dt, _order_to_dict, router as purchase_orders_router
+
+
+@pytest.fixture()
+def admin_client(api_client):
+    import app.purchase_orders as purchase_orders_module
+
+    with api_client(
+        purchase_orders_module,
+        purchase_orders_router,
+        role="admin",
+        user_id=1,
+        username="admin",
+    ) as (client, Session):
+        yield client, Session
 
 
 # ── _fmt_dt ────────────────────────────────────────────────────────────────
@@ -172,3 +189,49 @@ def test_arrived_twice_not_double_counted(db):
     _apply_arrived(db, o)  # 已是 arrived，早期 return
     db.refresh(f)
     assert f.total_quantity == 10  # 沒有被累加
+
+
+def test_arrived_order_cannot_reopen_and_add_stock_twice(admin_client):
+    """真實 route：已到貨是終態，不能切回 pending 後再次入庫。"""
+    client, Session = admin_client
+    with Session() as db:
+        fixture = _seed_fixture(db, total_quantity=10, shortage=0)
+        order = _seed_order(db, fixture.id, quantity=3)
+        db.commit()
+        fixture_id, order_id = fixture.id, order.id
+
+    first_arrival = client.patch(
+        f"/api/purchase-orders/{order_id}",
+        json={"status": "arrived"},
+    )
+    reopen = client.patch(
+        f"/api/purchase-orders/{order_id}",
+        json={"status": "pending"},
+    )
+    repeat_arrival = client.patch(
+        f"/api/purchase-orders/{order_id}",
+        json={"status": "arrived"},
+    )
+
+    assert first_arrival.status_code == 200
+    assert reopen.status_code == 409
+    assert repeat_arrival.status_code == 200
+    with Session() as db:
+        fixture = db.query(Fixture).filter(Fixture.id == fixture_id).first()
+        assert fixture.total_quantity == 13
+
+
+def test_arrival_rejects_nonpositive_quantity(admin_client):
+    client, Session = admin_client
+    with Session() as db:
+        fixture = _seed_fixture(db, total_quantity=10, shortage=0)
+        order = _seed_order(db, fixture.id, quantity=3)
+        db.commit()
+        order_id = order.id
+
+    resp = client.patch(
+        f"/api/purchase-orders/{order_id}",
+        json={"status": "arrived", "arrived_quantity": -1},
+    )
+
+    assert resp.status_code == 400

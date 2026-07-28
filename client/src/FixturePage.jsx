@@ -897,6 +897,19 @@ function BatchTable({ rows, setLogs, allFixtures }) {
   };
 
   const handleSaveAll = async () => {
+    const invalidExisting = rows.some((row) => {
+      if (deleted.has(row.id)) return false;
+      const quantity = Number(drafts[row.id]);
+      return !Number.isInteger(quantity) || quantity < 0;
+    });
+    const invalidNew = newRows.some((row) => {
+      const quantity = Number(row.qty);
+      return !Number.isInteger(quantity) || quantity < 0;
+    });
+    if (invalidExisting || invalidNew) {
+      showToast("盤點數量必須是 0 以上的整數", "error");
+      return;
+    }
     setSaving(true);
     try {
       // 刪除

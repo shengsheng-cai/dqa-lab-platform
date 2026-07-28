@@ -26,7 +26,7 @@ export default function LoanModal({ onClose, onSubmit, fixtures }) {
 
   useEffect(() => {
     api
-      .get("/api/fixtures/users")
+      .get("/api/auth/users?active_only=true")
       .then((r) => { setUsers(r.data); setUsersError(""); })
       .catch((e) => {
         const msg = e.response?.data?.detail || `載入失敗（${e.response?.status || "網路錯誤"}）`;

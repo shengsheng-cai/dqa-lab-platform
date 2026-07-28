@@ -5,8 +5,15 @@ from .models import SessionLocal, PurchaseOrder, Fixture
 from .auth import require_admin, current_user
 from .utils import _now_utc_naive
 from .audit_log import log_audit
+from .fixture_lifecycle import adjust_fixture_quantity
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
+
+PURCHASE_PENDING = "pending"
+PURCHASE_ARRIVED = "arrived"
+PURCHASE_CANCELLED = "cancelled"
+PURCHASE_STATUSES = (PURCHASE_PENDING, PURCHASE_ARRIVED, PURCHASE_CANCELLED)
+PURCHASE_TERMINAL_STATUSES = (PURCHASE_ARRIVED, PURCHASE_CANCELLED)
 
 
 class PurchaseOrderOut(BaseModel):
@@ -97,7 +104,7 @@ def create_purchase_order(body: PurchaseOrderCreate, request: Request, _: None =
             unit_price=body.unit_price,
             total_price=total_price,
             note=body.note,
-            status="pending",
+            status=PURCHASE_PENDING,
         )
         db.add(order)
         db.flush()
@@ -125,6 +132,16 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Req
         order = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="採購單不存在")
+        if body.status is not None and body.status not in PURCHASE_STATUSES:
+            raise HTTPException(status_code=400, detail="無效的採購單狀態")
+        if (
+            order.status in PURCHASE_TERMINAL_STATUSES
+            and body.status is not None
+            and body.status != order.status
+        ):
+            raise HTTPException(status_code=409, detail="已結案的採購單不可重新開啟")
+        if body.arrived_quantity is not None and body.arrived_quantity <= 0:
+            raise HTTPException(status_code=400, detail="到貨數量必須大於 0")
 
         if body.vendor is not None:
             order.vendor = body.vendor
@@ -135,20 +152,20 @@ def update_purchase_order(order_id: int, body: PurchaseOrderUpdate, request: Req
             order.note = body.note
 
         audit_detail = f"更新採購單 #{order_id}"
-        if body.status == "arrived" and order.status != "arrived":
-            order.status = "arrived"
+        if body.status == PURCHASE_ARRIVED and order.status != PURCHASE_ARRIVED:
+            order.status = PURCHASE_ARRIVED
             order.arrived_at = _now_utc_naive()
             # 累加庫存
             arrived_qty = (
-                body.arrived_quantity if body.arrived_quantity and body.arrived_quantity > 0
+                body.arrived_quantity if body.arrived_quantity is not None
                 else order.quantity
             )
             fixture = db.query(Fixture).filter(Fixture.id == order.fixture_id).first()
             if fixture:
-                fixture.total_quantity = (fixture.total_quantity or 0) + arrived_qty
+                adjust_fixture_quantity(fixture, arrived_qty)
                 fixture.shortage = max(0, (fixture.shortage or 0) - arrived_qty)
             audit_detail = f"採購單 #{order_id} 到貨（+{arrived_qty} 入庫，治具 #{order.fixture_id}）"
-        elif body.status in ("pending", "cancelled"):
+        elif body.status in (PURCHASE_PENDING, PURCHASE_CANCELLED):
             order.status = body.status
             audit_detail = f"採購單 #{order_id} → {body.status}"
 
@@ -169,8 +186,8 @@ def delete_purchase_order(order_id: int, request: Request, _: None = Depends(req
         order = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="採購單不存在")
-        if order.status == "arrived":
-            raise HTTPException(status_code=400, detail="已到貨的採購單不可刪除")
+        if order.status != PURCHASE_PENDING:
+            raise HTTPException(status_code=400, detail="只有待採購的採購單可以刪除")
         db.delete(order)
         log_audit(db, str(u.user_id or "unknown"), u.role, "DELETE", "purchase_order", order_id,
                   f"刪除採購單 #{order_id}")

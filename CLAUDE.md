@@ -30,7 +30,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `schedule_service.py` | 排程業務邏輯層（service layer）：時長計算、自動選機、排程推進；供 schedules.py / main.py / simulator.py 共用，可獨立 pytest |
 | `devices.py` | 設備狀態查詢、緊急停止、感測器歷史/統計 API |
 | `devices_maintenance.py` | 設備校驗 & 維護排程 CRUD API |
-| `fixtures.py` | 治具借還、盤點、採購、Excel 匯入 CRUD API |
+| `fixtures.py` | 治具總表、盤點與借還 HTTP routes |
+| `fixture_lifecycle.py` | 治具庫存唯一 owner：可借量、非負數守衛、預約／借出／歸還狀態轉換 |
+| `fixture_excel.py` | 治具 Excel 範本、匯入、匯出 adapter |
 | `purchase_orders.py` | 採購單 CRUD API |
 | `ai.py` + `rag.py` | Gemini 整合 + RAG 向量檢索 |
 | `reports.py` | PDF / CSV 報告生成 |

@@ -13,7 +13,7 @@ from typing import Optional, List
 
 from .models import (
     SessionLocal, Schedule, ScheduleStatus, DeviceBlockedPeriod,
-    ScheduleFixture, Fixture, FixtureLoan,
+    ScheduleFixture, Fixture,
 )
 from .standards import get_standard
 from .constants import DEVICE_IDS, AMBIENT_TEMP, STABILIZATION_MINUTES
@@ -24,6 +24,7 @@ from .utils import (
 )
 from . import device_state
 from .audit_log import log_audit
+from .fixture_lifecycle import activate_schedule_loans, release_schedule_loans
 
 logger = logging.getLogger("schedule_service")
 
@@ -87,21 +88,6 @@ class _ScheduleStartRejected(Exception):
 # ── 排程完成 ─────────────────────────────────────────────────────────────────
 
 
-def _return_loaned_fixtures(db, schedule_id: int, now: datetime.datetime) -> None:
-    """把該排程「借出中」的治具標為已歸還並記下歸還時間（不 commit，由呼叫方負責）。
-
-    完成與取消都會歸還治具，寫的欄位必須一樣——分開寫過就發生過「取消還回來的治具
-    查不到歸還時間」。歸還要寫什麼只定義在這裡一處。
-    """
-    db.query(FixtureLoan).filter(
-        FixtureLoan.schedule_id == schedule_id,
-        FixtureLoan.status == "loaned",
-    ).update(
-        {"status": "returned", "return_date": now},
-        synchronize_session=False,
-    )
-
-
 def _complete_schedule(db, schedule, now: datetime.datetime) -> None:
     """排程標為已完成並釋放全部治具占用（不 commit，由呼叫方負責）。"""
     schedule.status = ScheduleStatus.DONE
@@ -118,12 +104,12 @@ def _release_schedule_fixtures(
     避免日後再漂：還沒真正借出的「預約」一律刪掉；return_loaned=True 時，連已經借出的
     也一併歸還。
     """
-    db.query(FixtureLoan).filter(
-        FixtureLoan.schedule_id == schedule_id,
-        FixtureLoan.status == "reserved",
-    ).delete(synchronize_session=False)
-    if return_loaned:
-        _return_loaned_fixtures(db, schedule_id, now)
+    release_schedule_loans(
+        db,
+        schedule_id,
+        now,
+        return_loaned=return_loaned,
+    )
 
 
 # ── 排程推進（設備完成一個條件時，唯一的推進入口）─────────────────────────────
@@ -700,13 +686,7 @@ def _apply_schedule_start(
 
     if plan.expected_status == ScheduleStatus.CONFIRMED:
         schedule.status = ScheduleStatus.RUNNING
-        db.query(FixtureLoan).filter(
-            FixtureLoan.schedule_id == plan.schedule_id,
-            FixtureLoan.status == "reserved",
-        ).update(
-            {"status": "loaned", "loan_date": now},
-            synchronize_session=False,
-        )
+        activate_schedule_loans(db, plan.schedule_id, now)
 
     schedule.updated_at = now
     detail = (

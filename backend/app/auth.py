@@ -240,9 +240,17 @@ class UserUpdateBody(BaseModel):
 
 
 @router.get("/api/auth/users", response_model=list[UserOut])
-def list_users(_: None = Depends(require_admin)):
+def list_users(
+    active_only: bool = False,
+    _: None = Depends(require_admin),
+):
     with SessionLocal() as db:
-        users = db.query(User).order_by(User.created_at.asc()).all()
+        query = db.query(User)
+        if active_only:
+            query = query.filter(User.is_active).order_by(User.display_name.asc())
+        else:
+            query = query.order_by(User.created_at.asc())
+        users = query.all()
         return [
             {
                 "id": u.id,

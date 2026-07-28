@@ -1,13 +1,9 @@
-import asyncio
 import datetime
-import io
 import re
-from dataclasses import dataclass
 from typing import Optional, List
 from sqlalchemy import func
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 from .models import (
     SessionLocal,
     Fixture,
@@ -19,44 +15,22 @@ from .models import (
 from .utils import today_utc_window, _now_utc_naive, _to_naive_utc
 from .auth import require_admin, current_user
 from .audit_log import log_audit
-
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
+from .fixture_lifecycle import (
+    ACTIVE_LOAN_STATUSES,
+    LOAN_DAMAGED,
+    LOAN_LOANED,
+    LOAN_LOST,
+    create_manual_loan,
+    fetch_fixtures_map as _fetch_fixtures_map,
+    finish_manual_loan,
+    record_inventory_count,
+    set_fixture_quantity,
+    stock_counts as _stock_counts,
+    update_inventory_log_count,
+    build_loan_qty_map as _build_loan_qty_map,
+)
 
 router = APIRouter(prefix="/api/fixtures", tags=["fixtures"])
-
-# 欄位別名對應表（中英文都接受，不分大小寫）
-COLUMN_ALIASES = {
-    "interface_type": ["介面", "interface", "interface_type", "接口"],
-    "form_factor": ["型態", "form factor", "form_factor", "formfactor"],
-    "priority": ["優先度", "priority"],
-    "size": ["尺寸", "size"],
-    "purpose": ["用途", "purpose"],
-    "estimated_usage": ["預估用量", "estimated usage", "estimated_usage"],
-    "total_quantity": [
-        "現有數量",
-        "數量",
-        "quantity",
-        "total_quantity",
-        "total quantity",
-    ],
-    "shortage": ["缺貨數", "shortage"],
-    "usage_frequency": ["使用頻率", "使用率", "usage frequency", "usage_frequency"],
-    "replacement_years": [
-        "汰換年限",
-        "汰換時間",
-        "replacement years",
-        "replacement_years",
-    ],
-    "note": ["備註", "note"],
-    "keeper_name": ["保管人", "keeper", "keeper_name"],
-    "deputy_name": ["代理人", "deputy", "deputy_name"],
-    "vendor": ["廠商", "vendor"],
-    "model_number": ["型號", "model", "model_number", "model number"],
-    "unit_price": ["單價", "price", "unit price", "unit_price"],
-}
 
 
 # ---------- Pydantic Schemas ----------
@@ -110,8 +84,8 @@ class FixtureUpsert(BaseModel):
     priority: Optional[int] = None
     size: Optional[str] = None
     purpose: Optional[str] = None
-    total_quantity: int = 0
-    shortage: int = 0
+    total_quantity: int = Field(default=0, ge=0)
+    shortage: int = Field(default=0, ge=0)
     usage_frequency: Optional[int] = None
     replacement_years: Optional[str] = None
     note: Optional[str] = None
@@ -155,49 +129,6 @@ class ExtensionRequest(BaseModel):
 # ---------- Helper ----------
 
 
-def _build_loan_qty_map(db, fixture_ids: list) -> dict:
-    """一次 GROUP BY 查回所有 fixture 的借用數量，回傳 {(fixture_id, status): qty}"""
-    if not fixture_ids:
-        return {}
-    rows = (
-        db.query(FixtureLoan.fixture_id, FixtureLoan.status, func.sum(FixtureLoan.quantity))
-        .filter(FixtureLoan.fixture_id.in_(fixture_ids))
-        .group_by(FixtureLoan.fixture_id, FixtureLoan.status)
-        .all()
-    )
-    return {(fid, st): qty for fid, st, qty in rows}
-
-
-@dataclass(frozen=True)
-class StockCounts:
-    """一支治具的數量拆解：借出中 / 預約中 / 損壞 / 還能借"""
-    loaned: int
-    reserved: int
-    damaged: int
-    available: int
-
-
-def _stock_counts(f: Fixture, loan_map: dict) -> StockCounts:
-    """算出這支治具各狀態的數量。
-
-    還能借 = 總數扣掉借出中、預約中、損壞，最低 0。治具總表顯示的數字與
-    借出前的庫存檢查都走這個函式，避免兩邊各改各的、畫面說借得到但按下去被擋。
-
-    注意：這裡只收斂「算式」。狀態字串本身（loaned / reserved / damaged / lost）
-    仍散在各模組裡當裸字串用，要新增一種占用庫存的狀態時，除了改這裡還得
-    自己找出其他地方——收成 enum 是另一件事，見 CLAUDE.local.md 待補。
-    """
-    loaned = loan_map.get((f.id, "loaned"), 0)
-    reserved = loan_map.get((f.id, "reserved"), 0)
-    damaged = loan_map.get((f.id, "damaged"), 0)
-    return StockCounts(
-        loaned=loaned,
-        reserved=reserved,
-        damaged=damaged,
-        available=max(0, f.total_quantity - loaned - reserved - damaged),
-    )
-
-
 def _calc_replacement_date(f: Fixture) -> Optional[str]:
     """根據 replacement_years 與 created_at 計算預估汰換日期"""
     if not f.replacement_years or not f.created_at:
@@ -213,8 +144,23 @@ def _calc_replacement_date(f: Fixture) -> Optional[str]:
         return None
 
 
-def _fixture_to_out(f: Fixture, loan_map: dict) -> dict:
+def _keeper_name_map(db, fixtures: list[Fixture]) -> dict[int, str]:
+    user_ids = {fixture.keeper_user_id for fixture in fixtures if fixture.keeper_user_id}
+    if not user_ids:
+        return {}
+    return {
+        user.id: user.display_name
+        for user in db.query(User).filter(User.id.in_(user_ids)).all()
+    }
+
+
+def _fixture_to_out(
+    f: Fixture,
+    loan_map: dict,
+    keeper_names: Optional[dict[int, str]] = None,
+) -> dict:
     qty = _stock_counts(f, loan_map)
+    keeper_name = (keeper_names or {}).get(f.keeper_user_id, f.keeper_name)
     return {
         "id": f.id,
         "priority": f.priority,
@@ -232,7 +178,7 @@ def _fixture_to_out(f: Fixture, loan_map: dict) -> dict:
         "replacement_years": f.replacement_years,
         "estimated_replacement_date": _calc_replacement_date(f),
         "note": f.note,
-        "keeper_name": f.keeper_name,
+        "keeper_name": keeper_name,
         "keeper_user_id": f.keeper_user_id,
         "deputy_name": f.deputy_name,
         "vendor": f.vendor,
@@ -265,10 +211,11 @@ def list_fixtures(
 
         fixture_ids = [f.id for f in fixtures]
         loan_map = _build_loan_qty_map(db, fixture_ids)
+        keeper_names = _keeper_name_map(db, fixtures)
 
         result = []
         for f in fixtures:
-            data = _fixture_to_out(f, loan_map)
+            data = _fixture_to_out(f, loan_map, keeper_names)
             if status:
                 avail = data["available_quantity"]
                 total = data["total_quantity"]
@@ -302,14 +249,14 @@ def get_summary(
 
         total_loaned = (
             db.query(func.sum(FixtureLoan.quantity))
-            .filter(FixtureLoan.status == "loaned")
+            .filter(FixtureLoan.status == LOAN_LOANED)
             .scalar()
         ) or 0
 
         due_today = (
             db.query(FixtureLoan)
             .filter(
-                FixtureLoan.status == "loaned",
+                FixtureLoan.status == LOAN_LOANED,
                 FixtureLoan.due_date <= window_end,
                 FixtureLoan.due_date >= window_start,
             )
@@ -319,7 +266,7 @@ def get_summary(
         overdue = (
             db.query(FixtureLoan)
             .filter(
-                FixtureLoan.status == "loaned",
+                FixtureLoan.status == LOAN_LOANED,
                 FixtureLoan.due_date < now,
             )
             .count()
@@ -364,126 +311,6 @@ def get_interface_types():
         return sorted([r[0] for r in rows if r[0]])
 
 
-@router.get("/users")
-def list_users(_: None = Depends(require_admin)):
-    """回傳使用者清單（供借出登記下拉選單用，admin only）"""
-    with SessionLocal() as db:
-        users = (
-            db.query(User)
-            .filter(User.is_active)
-            .order_by(User.display_name.asc())
-            .all()
-        )
-        return [
-            {"id": u.id, "display_name": u.display_name, "role": u.role} for u in users
-        ]
-
-
-@router.get("/template")
-def download_template():
-    """下載治具匯入標準 Excel 範本"""
-    if pd is None:
-        raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
-
-    columns = [
-        "介面",
-        "型態",
-        "現有數量",
-        "缺貨數",
-        "優先度",
-        "尺寸",
-        "用途",
-        "預估用量",
-        "使用頻率",
-        "汰換年限",
-        "備註",
-        "保管人",
-        "代理人",
-        "廠商",
-        "型號",
-        "單價",
-    ]
-    example = [
-        "USB-C",
-        "轉接頭",
-        10,
-        0,
-        1,
-        "",
-        "連接測試設備",
-        "",
-        "",
-        "5年",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-    ]
-    df = pd.DataFrame([example], columns=columns)
-
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="治具資料")
-    buf.seek(0)
-
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=\"fixture_template.xlsx\""},
-    )
-
-
-@router.get("/export")
-def export_fixtures(_: None = Depends(require_admin)):
-    """匯出所有治具為 Excel"""
-    if pd is None:
-        raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
-
-    with SessionLocal() as db:
-        fixtures = (
-            db.query(Fixture)
-            .filter(Fixture.is_active)
-            .order_by(Fixture.interface_type)
-            .all()
-        )
-        rows = []
-        for f in fixtures:
-            rows.append(
-                {
-                    "介面": f.interface_type,
-                    "型態": f.form_factor,
-                    "現有數量": f.total_quantity,
-                    "缺貨數": f.shortage,
-                    "優先度": f.priority or "",
-                    "尺寸": f.size or "",
-                    "用途": f.purpose or "",
-                    "預估用量": f.estimated_usage or "",
-                    "使用頻率": f.usage_frequency or "",
-                    "汰換年限": f.replacement_years or "",
-                    "備註": f.note or "",
-                    "保管人": f.keeper_name or "",
-                    "代理人": f.deputy_name or "",
-                    "廠商": f.vendor or "",
-                    "型號": f.model_number or "",
-                    "單價": f.unit_price or "",
-                }
-            )
-        df = pd.DataFrame(rows)
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, sheet_name="治具資料")
-        buf.seek(0)
-        return StreamingResponse(
-            buf,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": "attachment; filename=\"fixtures_export.xlsx\""
-            },
-        )
-
-
 @router.patch("/inventory-logs/{log_id}")
 def patch_inventory_log(log_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
     u = current_user(request)
@@ -498,9 +325,7 @@ def patch_inventory_log(log_id: int, actual_quantity: int, request: Request, _: 
         f = db.query(Fixture).filter(Fixture.id == log.fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
-        f.total_quantity = actual_quantity
-        log.counted_quantity = actual_quantity
-        log.difference = actual_quantity - log.previous_quantity
+        update_inventory_log_count(f, log, actual_quantity)
         log_audit(db, str(u.user_id or "unknown"), u.role, "INVENTORY_LOG_UPDATE", "fixture", log.fixture_id,
                   f"修改盤點紀錄 #{log_id}：庫存改為 {actual_quantity}")
         db.commit()
@@ -538,7 +363,14 @@ def create_inventory_log(fixture_id: int, actual_quantity: int, request: Request
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
-        log, _, _ = _apply_inventory_db(db, f, actual_quantity, user_id, counted_by, u.role)
+        log, _, _ = record_inventory_count(
+            db,
+            f,
+            actual_quantity,
+            user_id,
+            counted_by,
+            u.role,
+        )
         db.commit()
         db.refresh(log)
         return {
@@ -599,42 +431,10 @@ def get_fixture(fixture_id: int):
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
         loan_map = _build_loan_qty_map(db, [f.id])
-        return _fixture_to_out(f, loan_map)
+        return _fixture_to_out(f, loan_map, _keeper_name_map(db, [f]))
 
 
 # ---------- 借出 ----------
-
-
-def _fetch_fixtures_map(db, fixture_ids) -> dict:
-    """一次撈出這些 id 的 Fixture，回傳 {id: fixture}。"""
-    ids = set(fixture_ids)
-    if not ids:
-        return {}
-    return {f.id: f for f in db.query(Fixture).filter(Fixture.id.in_(ids)).all()}
-
-
-def _assert_stock_available(db, needed: dict) -> None:
-    """借得夠不夠：不夠就擋下，並說是哪一支治具、差多少。
-
-    `needed` 是 {治具 id: 需要的數量}。手動借出與排程預約是兩條不同的路，
-    可借量的算式已經收在 _stock_counts，「不夠就擋」這一步也收在這裡，
-    才不會一邊擋、另一邊默默放行到超借。
-    """
-    if not needed:
-        return
-    loan_map = _build_loan_qty_map(db, list(needed))
-    fixtures = _fetch_fixtures_map(db, needed)
-    for fixture_id, quantity in needed.items():
-        f = fixtures.get(fixture_id)
-        if not f:
-            raise HTTPException(status_code=404, detail=f"治具不存在（#{fixture_id}）")
-        available = _stock_counts(f, loan_map).available
-        if available < quantity:
-            raise HTTPException(
-                status_code=400,
-                detail=f"治具庫存不足：{f.interface_type} {f.form_factor} "
-                       f"需要 {quantity} 件，目前可借 {available} 件",
-            )
 
 
 @router.get("/loans/active")
@@ -642,7 +442,7 @@ def list_active_loans():
     with SessionLocal() as db:
         loans = (
             db.query(FixtureLoan)
-            .filter(FixtureLoan.status.in_(["loaned", "reserved"]))
+            .filter(FixtureLoan.status.in_(ACTIVE_LOAN_STATUSES))
             .order_by(FixtureLoan.due_date.asc())
             .all()
         )
@@ -676,7 +476,7 @@ def list_overdue_loans():
         loans = (
             db.query(FixtureLoan)
             .filter(
-                FixtureLoan.status == "loaned",
+                FixtureLoan.status == LOAN_LOANED,
                 FixtureLoan.due_date < now_naive,
             )
             .order_by(FixtureLoan.due_date.asc())
@@ -711,7 +511,7 @@ def list_damaged_lost_loans():
     with SessionLocal() as db:
         loans = (
             db.query(FixtureLoan)
-            .filter(FixtureLoan.status.in_(["damaged", "lost"]))
+            .filter(FixtureLoan.status.in_((LOAN_DAMAGED, LOAN_LOST)))
             .order_by(FixtureLoan.return_date.desc())
             .all()
         )
@@ -753,21 +553,17 @@ def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_ad
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
 
-        _assert_stock_available(db, {f.id: body.quantity})
-
-        loan = FixtureLoan(
-            fixture_id=body.fixture_id,
+        loan = create_manual_loan(
+            db,
+            f,
             borrower_name=body.borrower_name,
             borrower_user_id=body.borrower_user_id,
             device_id=body.device_id,
             project_name=body.project_name,
             quantity=body.quantity,
             due_date=body.due_date,
-            status="loaned",
             loan_date=_now_utc_naive(),
         )
-        db.add(loan)
-        f.loan_count += 1
         log_audit(db, str(user_id or "unknown"), u.role, "LOAN", "fixture", body.fixture_id,
                   f"{f.interface_type} {f.form_factor} x{body.quantity}，借用人：{body.borrower_name}")
         db.commit()
@@ -784,31 +580,22 @@ def return_loan(loan_id: int, body: ReturnUpdate, request: Request, _: None = De
         loan = db.query(FixtureLoan).filter(FixtureLoan.id == loan_id).first()
         if not loan:
             raise HTTPException(status_code=404, detail="借出紀錄不存在")
-        if loan.status not in ("loaned", "reserved"):
-            raise HTTPException(status_code=400, detail="此紀錄已結束")
 
         if body.returned_at:
             try:
                 d = datetime.date.fromisoformat(body.returned_at)
-                loan.return_date = datetime.datetime(
-                    d.year, d.month, d.day
-                )
+                return_date = datetime.datetime(d.year, d.month, d.day)
             except ValueError:
-                loan.return_date = _now_utc_naive()
+                return_date = _now_utc_naive()
         else:
-            loan.return_date = _now_utc_naive()
-        loan.return_condition = body.return_condition
+            return_date = _now_utc_naive()
         loan.keeper_note = body.keeper_note
-
-        if body.return_condition == ReturnCondition.NORMAL:
-            loan.status = "returned"
-        elif body.return_condition == ReturnCondition.DAMAGED:
-            loan.status = "damaged"
-        elif body.return_condition == ReturnCondition.LOST:
-            loan.status = "lost"
-            f = db.query(Fixture).filter(Fixture.id == loan.fixture_id).first()
-            if f:
-                f.total_quantity = max(0, f.total_quantity - loan.quantity)
+        finish_manual_loan(
+            db,
+            loan,
+            body.return_condition,
+            return_date,
+        )
 
         condition_label = {ReturnCondition.NORMAL: "正常", ReturnCondition.DAMAGED: "損壞", ReturnCondition.LOST: "遺失"}.get(
             body.return_condition, str(body.return_condition)
@@ -837,138 +624,6 @@ def extend_loan(loan_id: int, body: ExtensionRequest, request: Request, _: None 
         return {"status": "success"}
 
 
-# ---------- Excel 匯入 ----------
-
-
-def _run_import_db(df, col_map, actor, role):
-    def safe_str(row, field):
-        col = col_map.get(field)
-        if col is None:
-            return None
-        try:
-            val = row[col]
-            if pd.isna(val):
-                return None
-            s = str(val).strip()
-            return s if s and s.lower() != "nan" else None
-        except (KeyError, TypeError):
-            return None
-
-    def safe_int(row, field, default=None):
-        col = col_map.get(field)
-        if col is None:
-            return default
-        try:
-            val = row[col]
-            if pd.isna(val):
-                return default
-            return int(float(val))
-        except (KeyError, ValueError, TypeError):
-            return default
-
-    def safe_float(row, field):
-        col = col_map.get(field)
-        if col is None:
-            return None
-        try:
-            val = row[col]
-            if pd.isna(val):
-                return None
-            return float(val)
-        except (KeyError, ValueError, TypeError):
-            return None
-
-    imported = 0
-    updated = 0
-    skipped = 0
-
-    with SessionLocal() as db:
-        try:
-            for _, row in df.iterrows():
-                interface_type = safe_str(row, "interface_type") or ""
-                form_factor = safe_str(row, "form_factor") or ""
-
-                if not interface_type or not form_factor:
-                    skipped += 1
-                    continue
-
-                existing = (
-                    db.query(Fixture)
-                    .filter(
-                        Fixture.interface_type == interface_type,
-                        Fixture.form_factor == form_factor,
-                        Fixture.is_active,
-                    )
-                    .first()
-                )
-
-                fields = dict(
-                    priority=safe_int(row, "priority"),
-                    size=safe_str(row, "size"),
-                    purpose=safe_str(row, "purpose"),
-                    estimated_usage=safe_float(row, "estimated_usage"),
-                    total_quantity=safe_int(row, "total_quantity", 0),
-                    shortage=safe_int(row, "shortage", 0),
-                    usage_frequency=safe_int(row, "usage_frequency"),
-                    replacement_years=safe_str(row, "replacement_years"),
-                    note=safe_str(row, "note"),
-                    keeper_name=safe_str(row, "keeper_name"),
-                    deputy_name=safe_str(row, "deputy_name"),
-                    vendor=safe_str(row, "vendor"),
-                    model_number=safe_str(row, "model_number"),
-                    unit_price=safe_float(row, "unit_price"),
-                )
-
-                if existing:
-                    for k, v in fields.items():
-                        setattr(existing, k, v)
-                    updated += 1
-                else:
-                    db.add(
-                        Fixture(
-                            interface_type=interface_type, form_factor=form_factor, **fields
-                        )
-                    )
-                    imported += 1
-
-            log_audit(db, actor, role, "IMPORT", "fixture", "import",
-                      f"Excel 匯入治具：新增 {imported}、更新 {updated}、略過 {skipped}")
-            db.commit()
-            return {
-                "status": "success",
-                "imported": imported,
-                "updated": updated,
-                "skipped": skipped,
-            }
-        except Exception as e:
-            db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/import")
-async def import_fixtures(request: Request, file: UploadFile = File(...), _: None = Depends(require_admin)):
-    """從 Excel 匯入治具資料（admin only）"""
-    if pd is None:
-        raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
-
-    u = current_user(request)
-    contents = await file.read()
-    df = pd.read_excel(io.BytesIO(contents), header=0)
-
-    col_map = {}
-    normalized_cols = {str(c).strip().lower(): c for c in df.columns}
-    for field, aliases in COLUMN_ALIASES.items():
-        for alias in aliases:
-            key = alias.strip().lower()
-            if key in normalized_cols:
-                col_map[field] = normalized_cols[key]
-                break
-
-    return await asyncio.to_thread(
-        _run_import_db, df, col_map, str(u.user_id or "unknown"), u.role
-    )
-
-
 # ---------- 設定保管人 ----------
 
 
@@ -986,8 +641,9 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request, _: None =
         # 同步更新 keeper_name（方便顯示，不需要 join）
         if body.keeper_user_id:
             u = db.query(User).filter(User.id == body.keeper_user_id).first()
-            if u:
-                f.keeper_name = u.display_name
+            if not u:
+                raise HTTPException(status_code=404, detail="使用者不存在")
+            f.keeper_name = u.display_name
         else:
             f.keeper_name = None
 
@@ -1000,27 +656,6 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request, _: None =
 # ---------- 月盤點 ----------
 
 
-def _apply_inventory_db(db, f: Fixture, actual_quantity: int, user_id, counted_by, role) -> tuple:
-    # 守衛下沉到共用變動點：update_inventory 與 create_inventory_log 兩個 route 都經此，
-    # 一道守衛守住兩門（0 為合法歸零，故用 < 0）。
-    if actual_quantity < 0:
-        raise HTTPException(status_code=400, detail="盤點數量不可為負數")
-    previous = f.total_quantity
-    diff = actual_quantity - previous
-    f.total_quantity = actual_quantity
-    log = FixtureInventoryLog(
-        fixture_id=f.id,
-        previous_quantity=previous,
-        counted_quantity=actual_quantity,
-        difference=diff,
-        counted_by=counted_by,
-    )
-    db.add(log)
-    log_audit(db, str(user_id or "unknown"), role, "INVENTORY", "fixture", f.id,
-              f"盤點：{previous} → {actual_quantity}（差：{diff:+d}）")
-    return log, previous, diff
-
-
 @router.post("/{fixture_id}/inventory")
 def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _: None = Depends(require_admin)):
     u = current_user(request)
@@ -1030,7 +665,14 @@ def update_inventory(fixture_id: int, actual_quantity: int, request: Request, _:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
-        _, previous, diff = _apply_inventory_db(db, f, actual_quantity, user_id, counted_by, u.role)
+        _, previous, diff = record_inventory_count(
+            db,
+            f,
+            actual_quantity,
+            user_id,
+            counted_by,
+            u.role,
+        )
         db.commit()
         return {
             "status": "success",
@@ -1053,7 +695,7 @@ def create_fixture(body: FixtureUpsert, request: Request, _: None = Depends(requ
             priority=body.priority,
             size=body.size,
             purpose=body.purpose,
-            total_quantity=body.total_quantity,
+            total_quantity=0,
             shortage=body.shortage,
             usage_frequency=body.usage_frequency,
             replacement_years=body.replacement_years,
@@ -1064,6 +706,7 @@ def create_fixture(body: FixtureUpsert, request: Request, _: None = Depends(requ
             model_number=body.model_number,
             unit_price=body.unit_price,
         )
+        set_fixture_quantity(f, body.total_quantity)
         db.add(f)
         db.flush()
         log_audit(db, str(u.user_id or "unknown"), u.role, "CREATE", "fixture", f.id,
@@ -1071,7 +714,7 @@ def create_fixture(body: FixtureUpsert, request: Request, _: None = Depends(requ
         db.commit()
         db.refresh(f)
         loan_map = _build_loan_qty_map(db, [f.id])
-        return _fixture_to_out(f, loan_map)
+        return _fixture_to_out(f, loan_map, _keeper_name_map(db, [f]))
 
 
 # ---------- 編輯治具 ----------
@@ -1093,7 +736,7 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request, _: No
         f.priority = body.priority
         f.size = body.size
         f.purpose = body.purpose
-        f.total_quantity = body.total_quantity
+        set_fixture_quantity(f, body.total_quantity)
         f.shortage = body.shortage
         f.usage_frequency = body.usage_frequency
         f.replacement_years = body.replacement_years
@@ -1107,7 +750,7 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request, _: No
                   f"編輯治具 #{fixture_id}")
         db.commit()
         loan_map = _build_loan_qty_map(db, [f.id])
-        return _fixture_to_out(f, loan_map)
+        return _fixture_to_out(f, loan_map, _keeper_name_map(db, [f]))
 
 
 # ---------- 刪除治具（軟刪除）----------
@@ -1128,7 +771,7 @@ def delete_fixture(fixture_id: int, request: Request, _: None = Depends(require_
             db.query(FixtureLoan)
             .filter(
                 FixtureLoan.fixture_id == fixture_id,
-                FixtureLoan.status.in_(["loaned", "reserved"]),
+                FixtureLoan.status.in_(ACTIVE_LOAN_STATUSES),
             )
             .count()
         )
