@@ -3,9 +3,28 @@
 import pandas as pd
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from app.fixture_excel import _run_import_db
 from app.models import Fixture
+
+
+def test_full_app_template_route_precedes_fixture_id(monkeypatch):
+    """Production app 必須先匹配 /template，不可落到 /{fixture_id}。"""
+    import app.auth as auth_module
+    import app.main as main_module
+
+    monkeypatch.setattr(auth_module, "DEMO_PASSWORD", "")
+    client = TestClient(main_module.app)
+    try:
+        response = client.get("/api/fixtures/template")
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 
 def test_import_rejects_negative_stock(patched_session):

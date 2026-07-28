@@ -26,3 +26,16 @@ idle → ramp_to_low → ramp_to_high → dwell_high → ramp_to_low2 → dwell_
 - 常溫穩定時間三處共用：設備卡 estimated_end、排程器 `_est_end_from_device`、模擬器 `stabilize` 相位一律以「曲線 + 30 分鐘」為真正可再用時間
 - FINISHING 內手動停止（取消／緊急收尾）的 `ramp_to_ambient` 結束後直接回 IDLE，不走 `stabilize`（中止非完成，不需穩定）
 - 重啟後自動從 device_states 恢復 sim_phase（含 `stab_start`），不從頭開始
+
+## 採購單狀態
+
+```
+pending ──→ arrived
+   │
+   └────→ cancelled
+```
+
+- `arrived` 與 `cancelled` 都是終態，不可重新切回 `pending` 或改成另一個終態。
+- 只有 `pending` 採購單可以刪除；取消單保留作結案與稽核紀錄。
+- 第一次轉為 `arrived` 時才把到貨數量加入治具庫存；重複送出 `arrived` 不得再次入庫。
+- 指定 `arrived_quantity` 時必須大於 0；未指定時使用採購單原始數量。

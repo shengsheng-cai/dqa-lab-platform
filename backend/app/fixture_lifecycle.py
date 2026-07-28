@@ -1,7 +1,15 @@
 """治具庫存與借還生命週期的唯一業務邊界。
 
-Routes 與排程服務可以查資料，但不得自行拼湊可借量公式或直接改借還狀態。
-所有庫存數量守衛、reserved → loaned → returned 轉換都集中在這裡。
+這個模組同時提供兩種不同層級的函式：
+
+- 排程 service 可用的 transaction primitives 不依賴 FastAPI，包含
+  ``activate_schedule_loans`` 與 ``release_schedule_loans``。
+- route workflows 與 guards 會以 ``HTTPException`` 回報輸入或狀態錯誤，
+  包含 ``assert_stock_available``、數量寫入及手動借還函式。
+
+背景排程不得呼叫會丟出 ``HTTPException`` 的 route helpers；若要共用新的
+守衛，應先回傳 domain result 或丟出 domain exception，再由 route 轉成 HTTP。
+所有呼叫端都不得自行拼湊可借量公式或直接改借還狀態。
 """
 
 import datetime
@@ -20,8 +28,6 @@ LOAN_DAMAGED = "damaged"
 LOAN_LOST = "lost"
 
 ACTIVE_LOAN_STATUSES = (LOAN_LOANED, LOAN_RESERVED)
-UNAVAILABLE_LOAN_STATUSES = (LOAN_LOANED, LOAN_RESERVED, LOAN_DAMAGED)
-CLOSED_LOAN_STATUSES = (LOAN_RETURNED, LOAN_DAMAGED, LOAN_LOST)
 
 
 @dataclass(frozen=True)
@@ -71,7 +77,7 @@ def fetch_fixtures_map(db, fixture_ids) -> dict[int, Fixture]:
 
 
 def assert_stock_available(db, needed: dict[int, int]) -> None:
-    """確認每支治具都借得夠，不足時中止整筆操作。"""
+    """HTTP route guard：確認每支治具都借得夠，不足時中止整筆操作。"""
     if not needed:
         return
     loan_map = build_loan_qty_map(db, list(needed))
@@ -94,6 +100,7 @@ def assert_stock_available(db, needed: dict[int, int]) -> None:
 
 
 def require_nonnegative_quantity(quantity: int, label: str = "庫存數量") -> int:
+    """HTTP route guard：拒絕負數數量並回傳通過驗證的值。"""
     if quantity < 0:
         raise HTTPException(status_code=400, detail=f"{label}不可為負數")
     return quantity

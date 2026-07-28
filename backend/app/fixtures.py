@@ -145,6 +145,7 @@ def _calc_replacement_date(f: Fixture) -> Optional[str]:
 
 
 def _keeper_name_map(db, fixtures: list[Fixture]) -> dict[int, str]:
+    """批次取得保管人的即時顯示名稱；Fixture.keeper_name 僅作快照備援。"""
     user_ids = {fixture.keeper_user_id for fixture in fixtures if fixture.keeper_user_id}
     if not user_ids:
         return {}
@@ -638,7 +639,7 @@ def set_keeper(fixture_id: int, body: SetKeeperBody, request: Request, _: None =
 
         f.keeper_user_id = body.keeper_user_id
 
-        # 同步更新 keeper_name（方便顯示，不需要 join）
+        # 保存當下姓名作快照備援；讀取時仍以 User.display_name 反映後續改名。
         if body.keeper_user_id:
             u = db.query(User).filter(User.id == body.keeper_user_id).first()
             if not u:

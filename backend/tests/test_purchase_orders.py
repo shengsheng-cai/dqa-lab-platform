@@ -221,7 +221,45 @@ def test_arrived_order_cannot_reopen_and_add_stock_twice(admin_client):
         assert fixture.total_quantity == 13
 
 
-def test_arrival_rejects_nonpositive_quantity(admin_client):
+def test_cancelled_order_is_terminal_and_cannot_be_deleted(admin_client):
+    """取消單保留作結案紀錄，不可重開或刪除。"""
+    client, Session = admin_client
+    with Session() as db:
+        fixture = _seed_fixture(db)
+        order = _seed_order(db, fixture.id, quantity=3, status="cancelled")
+        db.commit()
+        order_id = order.id
+
+    reopen = client.patch(
+        f"/api/purchase-orders/{order_id}",
+        json={"status": "pending"},
+    )
+    delete = client.delete(f"/api/purchase-orders/{order_id}")
+
+    assert reopen.status_code == 409
+    assert delete.status_code == 400
+    with Session() as db:
+        assert db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()
+
+
+def test_update_rejects_invalid_status(admin_client):
+    client, Session = admin_client
+    with Session() as db:
+        fixture = _seed_fixture(db)
+        order = _seed_order(db, fixture.id, quantity=3)
+        db.commit()
+        order_id = order.id
+
+    response = client.patch(
+        f"/api/purchase-orders/{order_id}",
+        json={"status": "unknown"},
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize("arrived_quantity", [0, -1])
+def test_arrival_rejects_nonpositive_quantity(admin_client, arrived_quantity):
     client, Session = admin_client
     with Session() as db:
         fixture = _seed_fixture(db, total_quantity=10, shortage=0)
@@ -231,7 +269,7 @@ def test_arrival_rejects_nonpositive_quantity(admin_client):
 
     resp = client.patch(
         f"/api/purchase-orders/{order_id}",
-        json={"status": "arrived", "arrived_quantity": -1},
+        json={"status": "arrived", "arrived_quantity": arrived_quantity},
     )
 
     assert resp.status_code == 400
