@@ -9,6 +9,7 @@ import pytest
 
 from app.fixtures import router as fixtures_router
 from app.models import Fixture, FixtureLoan
+from app.utils import _now_utc_naive
 
 
 @pytest.fixture()
@@ -40,6 +41,56 @@ def _seed_fixture_with_loan(Session, loan_status: str) -> int:
         )
         db.commit()
         return fixture.id
+
+
+def _seed_loan_due_at(Session, fixture_id: int, due: datetime.datetime, borrower: str) -> None:
+    with Session() as db:
+        db.add(FixtureLoan(
+            fixture_id=fixture_id,
+            borrower_name=borrower,
+            quantity=1,
+            status="loaned",
+            loan_date=datetime.datetime.now(),
+            due_date=due,
+        ))
+        db.commit()
+
+
+def test_summary_due_today_uses_caller_day_window(admin_client):
+    """「今日到期」要照呼叫端給的日界算，不是照 UTC 當天。
+
+    後端存 naive UTC、也不知道使用者在哪個時區。台北凌晨 0–8 點時 UTC 還是前一天，
+    用 UTC 日界會把昨天到期的算成今天的。
+    """
+    client, Session = admin_client
+    fixture_id = _seed_fixture_with_loan(Session, "reserved")
+
+    # 刻意用一個不是「今天」的日期：台北 2026-01-15 整天 = UTC 1/14 16:00 起算 24 小時。
+    # 這樣後端若忽略參數、改用 UTC 當日，這條就會抓到 0 筆而失敗。
+    day_start = datetime.datetime(2026, 1, 14, 16, 0, 0)
+    day_end = datetime.datetime(2026, 1, 15, 15, 59, 59, 999000)
+    _seed_loan_due_at(Session, fixture_id, datetime.datetime(2026, 1, 15, 15, 0, 0), "台北 1/15 到期")
+    _seed_loan_due_at(Session, fixture_id, datetime.datetime(2026, 1, 14, 15, 0, 0), "台北 1/14 到期")
+
+    resp = client.get("/api/fixtures/summary", params={
+        "due_from": day_start.isoformat() + "Z",
+        "due_to": day_end.isoformat() + "Z",
+    })
+
+    assert resp.status_code == 200
+    assert resp.json()["due_today"] == 1, "本地日界內只有一筆到期，前一天那筆不該被算進來"
+
+
+def test_summary_without_window_falls_back_to_utc_day(admin_client):
+    """沒帶日界時退回 UTC 當日，舊呼叫端不會壞掉。"""
+    client, Session = admin_client
+    fixture_id = _seed_fixture_with_loan(Session, "reserved")
+    _seed_loan_due_at(Session, fixture_id, _now_utc_naive(), "UTC 今天到期")
+
+    resp = client.get("/api/fixtures/summary")
+
+    assert resp.status_code == 200
+    assert resp.json()["due_today"] == 1
 
 
 def test_delete_fixture_blocks_reserved_loan(admin_client):

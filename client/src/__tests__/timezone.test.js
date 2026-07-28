@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { parseUTC, parseDateOnlyLocal, formatLocal, localDateStamp, endOfLocalDay } from "../utils/timezone";
+import { parseUTC, parseDateOnlyLocal, formatLocal, localDateStamp, endOfLocalDay, localDayWindow } from "../utils/timezone";
 
 // 這整組測試建立在「執行時時區是 Asia/Taipei」上（vite.config.js 的 test.env.TZ）。
 // 先確認這件事，否則下面的期望值會以看不懂的字串差異形式失敗。
@@ -163,5 +163,29 @@ describe("endOfLocalDay", () => {
     expect(endOfLocalDay("")).toBeNull();
     expect(endOfLocalDay(null)).toBeNull();
     expect(endOfLocalDay("不是日期")).toBeNull();
+  });
+
+  it("吃 Date 也可以，而且不會改到傳進來的那個物件", () => {
+    const d = new Date(2026, 7, 4, 9, 30, 0); // 本地 8/4 09:30
+    expect(endOfLocalDay(d).toISOString()).toBe("2026-08-04T15:59:59.999Z");
+    expect(d.getHours()).toBe(9); // 呼叫端的 Date 原封不動
+  });
+});
+
+describe("localDayWindow", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("台北凌晨取到的是本地今天，不是 UTC 的昨天", () => {
+    // 此刻是台北 7/28 00:30（UTC 還在 7/27 16:30）。
+    // 用 UTC 日界會抓到 7/27 整天，看到的就是前一天到期的東西。
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-07-27T16:30:00Z"));
+
+    const { start, end } = localDayWindow();
+
+    expect(start.toISOString()).toBe("2026-07-27T16:00:00.000Z"); // 台北 7/28 00:00
+    expect(end.toISOString()).toBe("2026-07-28T15:59:59.999Z");   // 台北 7/28 23:59:59.999
   });
 });
