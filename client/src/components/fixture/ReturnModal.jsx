@@ -46,10 +46,10 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
 
   return (
     <ModalShell width={380} gap={12} onClose={onClose}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>
           歸還確認
         </div>
-        <div style={{ fontSize: 13, color: "#8b949e" }}>
+        <div style={{ fontSize: 13, color: C.textMuted }}>
           {loan.fixture_interface} — {loan.fixture_form_factor}
           <br />
           借用人：{loan.borrower_name}
@@ -69,16 +69,16 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
                 background:
                   condition === v
                     ? v === "normal"
-                      ? "#1a2d1a"
+                      ? C.successBgMid
                       : C.errorSurface
                     : "transparent",
                 color:
                   condition === v
                     ? v === "normal"
-                      ? "#3fb950"
-                      : "#f85149"
-                    : "#8b949e",
-                border: `1px solid ${condition === v ? (v === "normal" ? "#238636" : "#f85149") : "#30363d"}`,
+                      ? C.success
+                      : C.error
+                    : C.textMuted,
+                border: `1px solid ${condition === v ? (v === "normal" ? C.successDark : C.error) : C.border}`,
               }}
             >
               {l}
@@ -86,7 +86,7 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
           ))}
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 4 }}>
+          <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>
             實際歸還日期
           </div>
           <DatePicker
@@ -109,8 +109,8 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
               padding: "8px",
               borderRadius: 6,
               background: "transparent",
-              color: "#8b949e",
-              border: "1px solid #30363d",
+              color: C.textMuted,
+              border: `1px solid ${C.border}`,
               cursor: "pointer",
               fontSize: 13,
             }}
@@ -124,9 +124,9 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
               flex: 1,
               padding: "8px",
               borderRadius: 6,
-              background: confirmed ? "#b62324" : "#238636",
-              color: "#fff",
-              border: confirmed ? "1px solid #f85149" : "none",
+              background: confirmed ? C.errorDark : C.successDark,
+              color: C.white,
+              border: confirmed ? `1px solid ${C.error}` : "none",
               cursor: "pointer",
               fontSize: 13,
               fontWeight: 600,
