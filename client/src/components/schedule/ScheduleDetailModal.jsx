@@ -35,7 +35,7 @@ function ResultScreen({ title, message, fields, onClose }) {
   );
 }
 
-export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {}, onClose, onUpdated, onDeleted, onRefresh }) {
+export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {}, onClose, onUpdated, onDeleted, onMutation }) {
   const { showToast } = useToast();
   const [deviceId, setDeviceId] = useState(schedule.device_id || "");
   const [note, setNote] = useState(schedule.note || "");
@@ -74,7 +74,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
       showToast("排程已確認", "success");
       onUpdated(res.data);
       // 後端會回傳啟動嘗試後的最終狀態；仍重抓列表以同步其他排程與設備。
-      onRefresh?.();
+      await onMutation();
       setResultScreen({ type: "confirmed", data: res.data });
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
@@ -95,6 +95,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
       });
       showToast("排程已取消", "success");
       onUpdated(res.data);
+      await onMutation();
       onClose();
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
@@ -130,8 +131,8 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
       } else {
         showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
         onUpdated({ ...schedule });
-        onRefresh?.();
       }
+      await onMutation();
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
       showToast(e.response?.data?.detail || "操作失敗", "error", 4000, e.response?.data?.hint);
@@ -146,7 +147,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
     try {
       await api.post(`/api/schedules/${schedule.id}/start`);
       showToast("排程已立即啟動", "success");
-      onRefresh?.();
+      await onMutation();
       onClose();
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
@@ -165,6 +166,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
     try {
       await api.delete(`/api/schedules/${schedule.id}`);
       onDeleted(schedule.id);
+      await onMutation();
     } catch (e) {
       setError(e.response?.data?.detail || "刪除失敗");
       showToast(e.response?.data?.detail || "刪除失敗", "error", 4000, e.response?.data?.hint);

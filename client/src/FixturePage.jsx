@@ -107,7 +107,7 @@ function Badge({ status }) {
   );
 }
 
-export default function FixturePage({ active, role }) {
+export default function FixturePage({ active, role, onFixtureChanged }) {
   const { showToast } = useToast();
   const [fixtures, setFixtures] = useState([]);
   const [activeLoans, setActiveLoans] = useState([]);
@@ -138,16 +138,6 @@ export default function FixturePage({ active, role }) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("asc"); }
   };
-  const handleDeleteFixture = async () => {
-    try {
-      await api.delete(`/api/fixtures/${deleteFixtureTarget.id}`);
-      setDeleteFixtureTarget(null);
-      fetchAll();
-    } catch (e) {
-      showToast(e.response?.data?.detail || "刪除失敗", "error");
-    }
-  };
-
   const fetchAll = useCallback(async () => {
     if (!active) return;
     setLoading(true);
@@ -167,6 +157,21 @@ export default function FixturePage({ active, role }) {
     }
   }, [active]);
 
+  const refreshAfterMutation = useCallback(
+    () => Promise.all([fetchAll(), onFixtureChanged()]),
+    [fetchAll, onFixtureChanged],
+  );
+
+  const handleDeleteFixture = async () => {
+    try {
+      await api.delete(`/api/fixtures/${deleteFixtureTarget.id}`);
+      setDeleteFixtureTarget(null);
+      await refreshAfterMutation();
+    } catch (e) {
+      showToast(e.response?.data?.detail || "刪除失敗", "error");
+    }
+  };
+
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
@@ -178,7 +183,7 @@ export default function FixturePage({ active, role }) {
     if (isNaN(num) || num < 0) return;
     try {
       await api.post(`/api/fixtures/${fixtureId}/inventory?actual_quantity=${num}`);
-      fetchAll();
+      await refreshAfterMutation();
       showToast("盤點記錄已保存", "success");
     } catch (e) {
       const msg = e.response?.data?.detail || "盤點失敗";
@@ -672,14 +677,14 @@ export default function FixturePage({ active, role }) {
             ))}
           </div>
           {recordsSubTab === "damaged" && <DamagedList />}
-          {recordsSubTab === "inv_log" && <InventoryLogTab refreshKey={invLogRefreshKey} allFixtures={fixtures} />}
+          {recordsSubTab === "inv_log" && <InventoryLogTab refreshKey={invLogRefreshKey} allFixtures={fixtures} onChanged={refreshAfterMutation} />}
           <div style={{ marginTop: 24, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 12, letterSpacing: "0.03em" }}>採購清單</div>
             <PurchaseTab
               orders={purchaseOrders}
               canOperate={canOperate}
               role={role}
-              onRefresh={fetchAll}
+              onRefresh={refreshAfterMutation}
               onNew={() => { setPurchasePreFill(null); setShowPurchaseModal(true); }}
             />
           </div>
@@ -689,14 +694,14 @@ export default function FixturePage({ active, role }) {
       {showImportModal && (
         <ImportModal
           onClose={() => setShowImportModal(false)}
-          onSuccess={fetchAll}
+          onSuccess={refreshAfterMutation}
         />
       )}
       {editTarget !== null && (
         <AddEditModal
           fixture={editTarget || null}
           onClose={() => setEditTarget(null)}
-          onSuccess={fetchAll}
+          onSuccess={refreshAfterMutation}
         />
       )}
       {showLoanModal && (
@@ -705,7 +710,7 @@ export default function FixturePage({ active, role }) {
           onClose={() => setShowLoanModal(false)}
           onSubmit={() => {
             setShowLoanModal(false);
-            fetchAll();
+            refreshAfterMutation();
           }}
         />
       )}
@@ -715,7 +720,7 @@ export default function FixturePage({ active, role }) {
           onClose={() => setReturnTarget(null)}
           onSubmit={() => {
             setReturnTarget(null);
-            fetchAll();
+            refreshAfterMutation();
           }}
         />
       )}
@@ -725,7 +730,7 @@ export default function FixturePage({ active, role }) {
           onClose={() => setKeeperTarget(null)}
           onSubmit={() => {
             setKeeperTarget(null);
-            fetchAll();
+            refreshAfterMutation();
           }}
         />
       )}
@@ -737,7 +742,7 @@ export default function FixturePage({ active, role }) {
           onSubmit={() => {
             setShowPurchaseModal(false);
             setPurchasePreFill(null);
-            fetchAll();
+            refreshAfterMutation();
           }}
         />
       )}
@@ -747,7 +752,7 @@ export default function FixturePage({ active, role }) {
           onClose={() => setShowStocktakeModal(false)}
           onComplete={() => {
             setShowStocktakeModal(false);
-            fetchAll();
+            refreshAfterMutation();
             setInvLogRefreshKey((k) => k + 1);
           }}
         />
@@ -869,7 +874,7 @@ function DamagedList() {
 const batchInputStyle = { width: 80, padding: "5px 8px", borderRadius: 4, border: `1px solid ${C.border}`, background: C.bg, color: C.textPrimary, fontSize: 13, textAlign: "center" };
 const batchSelectStyle = { padding: "5px 8px", borderRadius: 4, border: `1px solid ${C.border}`, background: C.bg, color: C.textPrimary, fontSize: 13, width: "100%" };
 
-function BatchTable({ rows, setLogs, allFixtures }) {
+function BatchTable({ rows, setLogs, allFixtures, onChanged }) {
   const { showToast } = useToast();
   const [editMode, setEditMode] = useState(false);
   const [drafts, setDrafts] = useState({});
@@ -939,6 +944,7 @@ function BatchTable({ rows, setLogs, allFixtures }) {
       setDrafts({});
       setDeleted(new Set());
       setNewRows([]);
+      await onChanged();
       showToast(`已更新`, "success");
     } catch {
       showToast("更新失敗", "error");
@@ -1020,7 +1026,7 @@ function BatchTable({ rows, setLogs, allFixtures }) {
   );
 }
 
-function InventoryLogTab({ refreshKey, allFixtures }) {
+function InventoryLogTab({ refreshKey, allFixtures, onChanged }) {
   const { showToast } = useToast();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1042,6 +1048,7 @@ function InventoryLogTab({ refreshKey, allFixtures }) {
       await Promise.all(batchRows.map((r) => api.delete(`/api/fixtures/inventory-logs/${r.id}`)));
       const deletedIds = new Set(batchRows.map((r) => r.id));
       setLogs((prev) => prev.filter((l) => !deletedIds.has(l.id)));
+      await onChanged();
       showToast(`已刪除 ${batchRows.length} 筆紀錄`, "success");
     } catch {
       showToast("刪除失敗", "error");
@@ -1116,7 +1123,7 @@ function InventoryLogTab({ refreshKey, allFixtures }) {
               </button>
               <span style={{ color: C.textDim, fontSize: 12 }}>{isOpen ? "▲" : "▼"}</span>
             </div>
-            {isOpen && <BatchTable rows={rows} setLogs={setLogs} allFixtures={allFixtures} />}
+            {isOpen && <BatchTable rows={rows} setLogs={setLogs} allFixtures={allFixtures} onChanged={onChanged} />}
           </div>
         );
       })}

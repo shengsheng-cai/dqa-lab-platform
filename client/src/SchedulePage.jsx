@@ -12,7 +12,7 @@ import {
 } from "./components/schedule/scheduleUtils";
 import { C } from "./styles/theme";
 
-export default function SchedulePage({ active, role, initConditions, onInitCondsConsumed, liveDeviceStatuses = {} }) {
+export default function SchedulePage({ active, role, initConditions, onInitCondsConsumed, onScheduleChanged, liveDeviceStatuses = {} }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
@@ -89,6 +89,11 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
     setRefreshing(true);
     fetchAll();
   };
+
+  const refreshAfterMutation = useCallback(
+    () => Promise.all([fetchAll(), onScheduleChanged()]),
+    [fetchAll, onScheduleChanged],
+  );
 
   useEffect(() => {
     if (active) fetchAll();
@@ -326,6 +331,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
             setSchedules((prev) => [s, ...prev]);
             setShowNewModal(false);
             setPendingInitConds(null);
+            onScheduleChanged();
           }}
         />
       )}
@@ -348,7 +354,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
           role={role}
           deviceStatuses={{ ...deviceStatuses, ...liveDeviceStatuses }}
           onClose={() => setSelectedSchedule(null)}
-          onRefresh={fetchAll}
+          onMutation={refreshAfterMutation}
           onUpdated={(updated) => {
             setSchedules((prev) => prev.map((s) => s.id === updated.id ? updated : s));
             setSelectedSchedule(updated);

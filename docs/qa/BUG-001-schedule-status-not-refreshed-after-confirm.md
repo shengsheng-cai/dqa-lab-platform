@@ -103,8 +103,10 @@ already **進行中**.
 - **Fixed.** By the time the confirm request returns, the backend has already
   transitioned the schedule to **進行中** (it awaits the device start), so the
   frontend simply re-fetches the schedule list once on a successful confirm.
-  The row now shows **進行中** on its own, no manual refresh. Change:
-  `ScheduleDetailModal.confirm()` now calls `onRefresh()`.
+  The row now shows **進行中** on its own, no manual refresh. The original fix
+  re-fetched the list through `onRefresh()`; the current implementation calls
+  the required `onMutation()` callback, which refreshes the schedule list and
+  the global schedule/fixture summaries.
 - **Regression test.** `schedule-flow.spec.js` no longer clicks **重新整理**; it
   asserts the row turns **進行中** by itself after confirmation. The test fails if
   the auto-refresh is ever removed.
