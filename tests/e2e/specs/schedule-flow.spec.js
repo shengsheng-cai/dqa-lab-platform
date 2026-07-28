@@ -14,9 +14,17 @@ test.beforeAll(resetBackend);
 const PROJECT_NO = "E2E-SCHED-001";
 const SAMPLE_NAME = "E2E 測試樣品";
 
+async function pendingBadgeCount(page) {
+  const badge = page.getByRole("button", { name: /^排程/ }).locator("span");
+  return await badge.count() ? Number((await badge.innerText()).trim()) : 0;
+}
+
 test("申請排程並確認後，系統會自動選機並把設備開起來", async ({ page }) => {
   await loginAsAdmin(page);
   await page.getByRole("button", { name: /^排程/ }).click();
+  // seed 固定有待審核排程；先等初始摘要載完，避免首次載入被誤當成寫入後失效。
+  await expect.poll(() => pendingBadgeCount(page)).toBeGreaterThan(0);
+  const pendingBefore = await pendingBadgeCount(page);
 
   await test.step("送出申請", async () => {
     await page.getByRole("button", { name: "+ 申請排程" }).click();
@@ -34,6 +42,10 @@ test("申請排程並確認後，系統會自動選機並把設備開起來", as
     await expect(row).toContainText("待審核");
   });
 
+  await test.step("排程 badge 立即加 1，不等 60 秒輪詢", async () => {
+    await expect.poll(() => pendingBadgeCount(page)).toBe(pendingBefore + 1);
+  });
+
   await test.step("確認排程，系統要自動分配到一台設備", async () => {
     await row.click();
     await page.getByRole("button", { name: "確認排程" }).click();
@@ -44,6 +56,7 @@ test("申請排程並確認後，系統會自動選機並把設備開起來", as
 
     // 設備欄不該還是「—」，代表自動選機真的有選到
     await expect(row).toContainText(/CH-0\d/);
+    await expect.poll(() => pendingBadgeCount(page)).toBe(pendingBefore);
   });
 
   await test.step("確認的當下，被指派的那台設備就要真的開始跑", async () => {

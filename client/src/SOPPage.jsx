@@ -44,7 +44,7 @@ function restoreSelectionFromSopId(sopId, standardTree) {
 }
 
 
-const SOPPage = ({ active = true, externalDevice, onOpenExecutions, liveDevices = [] }) => {
+const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleChanged, liveDevices = [] }) => {
   const { showToast } = useToast();
   const [selectedDevice, setSelectedDevice] = useState(externalDevice || DEVICE_IDS[0]);
   const [pendingSchedule, setPendingSchedule] = useState(null);
@@ -497,6 +497,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, liveDevices 
         completedSteps: {},
         savedExecutionId: null,
       });
+      await onScheduleChanged();
       showToast("測試已啟動", "success");
     } catch (err) {
       const msg = err?.response?.data?.detail || err?.message || "未知錯誤";
@@ -769,6 +770,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, liveDevices 
                           } else {
                             showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
                           }
+                          await onScheduleChanged();
                           setPendingSchedule(null);
                         } catch (e) {
                           showToast(e.response?.data?.detail || "操作失敗", "error");

@@ -68,7 +68,7 @@ const TABS = [
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange }) {
+function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange, onFixtureChanged, onScheduleChanged }) {
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
@@ -117,11 +117,12 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
             active={activeTab === "device"}
             externalDevice={selectedDevice}
             onOpenExecutions={onOpenExecutions}
+            onScheduleChanged={onScheduleChanged}
             liveDevices={devices}
           />
         </div>
         <div style={{ display: activeTab === "fixture" ? "block" : "none", height: "100%" }}>
-          <FixturePage active={activeTab === "fixture"} role={role} />
+          <FixturePage active={activeTab === "fixture"} role={role} onFixtureChanged={onFixtureChanged} />
         </div>
         <div style={{ display: activeTab === "schedule" ? "block" : "none", height: "100%" }}>
           <SchedulePage
@@ -129,6 +130,7 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
             role={role}
             initConditions={scheduleInitConds}
             onInitCondsConsumed={handleInitCondsConsumed}
+            onScheduleChanged={onScheduleChanged}
             liveDeviceStatuses={Object.fromEntries(devices.map(d => [d.device_id, (d.is_blocked && d.status === IDLE_STATUS) ? "BLOCKED" : d.status]))}
           />
         </div>
@@ -165,12 +167,49 @@ export default function ControlCenter({ role, displayName, onLogout }) {
   const [runtimeWarnings, setRuntimeWarnings] = useState([]);
   const handleInitCondsConsumed = useCallback(() => setScheduleInitConds(null), []);
   const { showToast } = useToast();
+  const [scheduleCounts, setScheduleCounts] = useState({ pending: 0, confirmed: 0, running: 0, done: 0, error: 0 });
+  const scheduleCountsRef = useRef(null);
 
   const handleApplySchedule = useCallback((sop_ids) => {
     setActiveTab("schedule");
     setScheduleInitConds(sop_ids);
     showToast(`已帶入 ${sop_ids.length} 個條件，請至排程頁面確認`, "info");
   }, [showToast, setActiveTab]);
+
+  const fetchScheduleCounts = useCallback(async () => {
+    try {
+      const res = await api.get("/api/schedules");
+      const all = res.data;
+      const next = {
+        pending: all.filter(s => s.status === "待審核").length,
+        confirmed: all.filter(s => s.status === "已確認").length,
+        running: all.filter(s => s.status === "進行中").length,
+        done: all.filter(s => s.status === "已完成").length,
+        error: all.filter(s => s.status === "異常").length,
+      };
+      const json = JSON.stringify(next);
+      if (json !== scheduleCountsRef.current) {
+        scheduleCountsRef.current = json;
+        setScheduleCounts(next);
+      }
+    } catch { /* polling fallback will retry */ }
+  }, []);
+
+  const fetchFixtureSummary = useCallback(async () => {
+    try {
+      // 「今日到期」要用本地日界：後端存 UTC，不知道使用者時區，日界由這裡給
+      const { start, end } = localDayWindow();
+      const res = await api.get("/api/fixtures/summary", {
+        params: { due_from: start.toISOString(), due_to: end.toISOString() },
+      });
+      setFixtureSummary(res.data);
+    } catch { /* polling fallback will retry */ }
+  }, []);
+
+  const refreshScheduleOverview = useCallback(
+    () => Promise.all([fetchScheduleCounts(), fetchFixtureSummary()]),
+    [fetchScheduleCounts, fetchFixtureSummary],
+  );
 
   // 輪詢進行中排程（3s），建 device_id → schedule map
   useEffect(() => {
@@ -199,57 +238,34 @@ export default function ControlCenter({ role, displayName, onLogout }) {
       } else {
         showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
       }
-      const r = await api.get("/api/schedules?status=進行中");
+      const [r] = await Promise.all([
+        api.get("/api/schedules?status=進行中"),
+        refreshScheduleOverview(),
+      ]);
       const map = toDeviceMap(r.data);
       pendingJsonRef.current = JSON.stringify(map);
       setPendingByDevice(map);
     } catch (e) {
       showToast(e.response?.data?.detail || "操作失敗", "error", 3000, e.response?.data?.hint);
     }
-  }, [showToast]);
-
-  const [scheduleCounts, setScheduleCounts] = useState({ pending: 0, confirmed: 0, running: 0, done: 0, error: 0 });
-  const scheduleCountsRef = useRef(null);
+  }, [refreshScheduleOverview, showToast]);
 
   useEffect(() => {
-    const fetch = () => {
-      api.get("/api/schedules").then((res) => {
-        const all = res.data;
-        const next = {
-          pending: all.filter(s => s.status === "待審核").length,
-          confirmed: all.filter(s => s.status === "已確認").length,
-          running: all.filter(s => s.status === "進行中").length,
-          done: all.filter(s => s.status === "已完成").length,
-          error: all.filter(s => s.status === "異常").length,
-        };
-        const json = JSON.stringify(next);
-        if (json !== scheduleCountsRef.current) {
-          scheduleCountsRef.current = json;
-          setScheduleCounts(next);
-        }
-      }).catch(() => {});
-    };
-    fetch();
-    const timer = setInterval(fetch, POLL_GENERAL_MS);
+    // fetchScheduleCounts 先 await API 才 setState，不是 effect 內同步串接 render。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchScheduleCounts();
+    const timer = setInterval(fetchScheduleCounts, POLL_GENERAL_MS);
     return () => clearInterval(timer);
-  }, [role]);
+  }, [fetchScheduleCounts, role]);
 
   // 輪詢治具摘要（30s）
   useEffect(() => {
-    const fetchSummary = async () => {
-      try {
-        // 「今日到期」要用本地日界：後端存 UTC，不知道使用者時區，日界由這裡給
-        const { start, end } = localDayWindow();
-        const res = await api.get("/api/fixtures/summary", {
-          params: { due_from: start.toISOString(), due_to: end.toISOString() },
-        });
-        setFixtureSummary(res.data);
-      } catch { /* ignore */ }
-    };
-    fetchSummary();
-    const t = setInterval(fetchSummary, POLL_FIXTURE_MS);
+    // fetchFixtureSummary 先 await API 才 setState，不是 effect 內同步串接 render。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchFixtureSummary();
+    const t = setInterval(fetchFixtureSummary, POLL_FIXTURE_MS);
     return () => clearInterval(t);
-  }, []);
+  }, [fetchFixtureSummary]);
 
   // 輪詢校驗狀態（60s）
   const fetchCalStatus = useCallback(async () => {
@@ -318,6 +334,8 @@ export default function ControlCenter({ role, displayName, onLogout }) {
           scheduleCounts={scheduleCounts}
           onOpenExecutions={() => { setRecordsOpen(true); setRecordsSubTab("executions"); }}
           onCalibrationChange={fetchCalStatus}
+          onFixtureChanged={fetchFixtureSummary}
+          onScheduleChanged={refreshScheduleOverview}
         />
       </div>
 

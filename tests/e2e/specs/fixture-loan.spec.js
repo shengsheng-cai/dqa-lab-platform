@@ -51,18 +51,29 @@ async function expandLoans(page, iface) {
 // 巢狀表格會讓 hasText:"Admin" 同時命中外層 row；借出日/到期日又會隨當天變動。
 const adminLoanRow = (page) => page.getByRole("row", { name: /^Admin/ });
 
+async function topBarLoanedCount(page) {
+  const stat = page.locator("span").filter({ hasText: /^治具借出：/ }).first();
+  await expect(stat).not.toContainText("—");
+  return Number((await stat.locator("span").innerText()).trim());
+}
+
 test("治具借出後庫存扣減，歸還後恢復", async ({ page }) => {
   await loginAsAdmin(page);
   await page.getByRole("button", { name: "治具", exact: true }).click();
 
   const IFACE = "M.2";
   const before = await availableQty(page, IFACE);
+  const beforeLoaned = await topBarLoanedCount(page);
   expect(before).toBeGreaterThan(0); // 沒得借就測不下去
 
   await test.step("借出一件給 Admin", () => borrowOneToAdmin(page, IFACE));
 
   await test.step("可借數少 1", async () => {
     await expect.poll(() => availableQty(page, IFACE)).toBe(before - 1);
+  });
+
+  await test.step("TopBar 借出數立即加 1，不等 30 秒輪詢", async () => {
+    await expect.poll(() => topBarLoanedCount(page)).toBe(beforeLoaned + 1);
   });
 
   await test.step("展開該治具，借出列表看得到 Admin", async () => {
@@ -77,6 +88,7 @@ test("治具借出後庫存扣減，歸還後恢復", async ({ page }) => {
     await expect(page.getByText("治具歸還成功")).toBeVisible();
 
     await expect.poll(() => availableQty(page, IFACE)).toBe(before);
+    await expect.poll(() => topBarLoanedCount(page)).toBe(beforeLoaned);
   });
 });
 
