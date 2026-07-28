@@ -13,15 +13,22 @@
 
 ### 使用者身份取用
 
-路由 handler 內需要 user_id / username / role 時，統一使用 `current_user(request)` helper（定義於 `auth.py`）：
+管理者寫入端點統一從 `require_admin` dependency 取得已驗證的 actor；同一個 dependency
+同時回答「可不可以寫」與「是誰在寫」，供業務資料與 audit 共用：
 
 ```python
-from .auth import require_admin, current_user
+from .auth import require_admin
 
-# 單欄位
-user_id = current_user(request).user_id
+def admin_write(body, actor=Depends(require_admin)):
+    user_id, role = actor.user_id, actor.role
+```
 
-# 多欄位
+非管理者端點若只需要讀取目前身分，才使用 `current_user(request)` helper（定義於
+`auth.py`）：
+
+```python
+from .auth import current_user
+
 u = current_user(request)
 user_id, role = u.user_id, u.role
 ```

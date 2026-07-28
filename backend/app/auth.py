@@ -223,9 +223,12 @@ def current_user(request) -> SimpleNamespace:
     )
 
 
-def require_admin(request: Request):
-    if current_user(request).role != "admin":
+def require_admin(request: Request) -> SimpleNamespace:
+    """驗證管理者權限，並回傳已驗證的操作者供寫入與 audit 共用。"""
+    actor = current_user(request)
+    if actor.role != "admin":
         raise HTTPException(status_code=403, detail="需要管理者權限")
+    return actor
 
 
 class UserCreateBody(BaseModel):

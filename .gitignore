@@ -40,6 +40,7 @@ pnpm-lock.yaml
 docs/private/
 docs/business-strategy.md
 docs/dqa-lab-platform.md
+docs/architecture-review-*.html
 dqa-lab-platform.pptx
 .local/
 CLAUDE.local.md
