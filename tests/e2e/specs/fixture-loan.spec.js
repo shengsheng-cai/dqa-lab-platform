@@ -20,6 +20,37 @@ async function availableQty(page, iface) {
   return Number((await row.locator("td").nth(6).innerText()).trim());
 }
 
+// 借一件給 Admin。借的必須是傳進來的那個 IFACE，不能用固定 index——不然
+// 「借哪台」跟「量哪台」只是剛好對上，demo 資料一改順序就會借了別台。
+async function borrowOneToAdmin(page, iface) {
+  await page.getByRole("button", { name: "+ 借出登記" }).click();
+
+  const fixtureSelect = page.locator("select")
+    .filter({ has: page.locator("option", { hasText: "選擇治具" }) });
+  const ifaceValue = await fixtureSelect.locator("option", { hasText: iface })
+    .first().getAttribute("value");
+  await fixtureSelect.selectOption(ifaceValue);
+  await page.locator("select").filter({ has: page.locator("option", { hasText: "選擇借用人" }) })
+    .selectOption({ label: "Admin（admin）" });
+  await page.getByPlaceholder("數量").fill("1");
+  // 改年份就會讓 DatePicker 送出日期，due_date 才有值（未來日）
+  await page.locator("select").filter({ has: page.locator("option", { hasText: "2027" }) })
+    .selectOption("2027");
+
+  await page.getByRole("button", { name: "確認借出" }).click();
+  await expect(page.getByText("治具借出成功")).toBeVisible();
+}
+
+// 展開借出子列。展開只綁在「借出」那格（td 第 4 欄，就是有 ▼ 的數字），點整列不會展開
+async function expandLoans(page, iface) {
+  await page.getByRole("row").filter({ hasText: iface }).first()
+    .locator("td").nth(4).click();
+}
+
+// 展開後的借出子列。用 accessible name「以 Admin 開頭」定位，避開兩個坑：
+// 巢狀表格會讓 hasText:"Admin" 同時命中外層 row；借出日/到期日又會隨當天變動。
+const adminLoanRow = (page) => page.getByRole("row", { name: /^Admin/ });
+
 test("治具借出後庫存扣減，歸還後恢復", async ({ page }) => {
   await loginAsAdmin(page);
   await page.getByRole("button", { name: "治具", exact: true }).click();
@@ -28,47 +59,58 @@ test("治具借出後庫存扣減，歸還後恢復", async ({ page }) => {
   const before = await availableQty(page, IFACE);
   expect(before).toBeGreaterThan(0); // 沒得借就測不下去
 
-  await test.step("借出一件給 Admin", async () => {
-    await page.getByRole("button", { name: "+ 借出登記" }).click();
-
-    // 借的必須是同一個 IFACE，不能用固定 index——不然「借哪台」跟上面「量哪台」
-    // 只是剛好對上，demo 資料一改順序就會借了別台、卻檢查 M.2 的數字。
-    const fixtureSelect = page.locator("select")
-      .filter({ has: page.locator("option", { hasText: "選擇治具" }) });
-    const ifaceValue = await fixtureSelect.locator("option", { hasText: IFACE })
-      .first().getAttribute("value");
-    await fixtureSelect.selectOption(ifaceValue);
-    await page.locator("select").filter({ has: page.locator("option", { hasText: "選擇借用人" }) })
-      .selectOption({ label: "Admin（admin）" });
-    await page.getByPlaceholder("數量").fill("1");
-    // 改年份就會讓 DatePicker 送出日期，due_date 才有值（未來日）
-    await page.locator("select").filter({ has: page.locator("option", { hasText: "2027" }) })
-      .selectOption("2027");
-
-    await page.getByRole("button", { name: "確認借出" }).click();
-    await expect(page.getByText("治具借出成功")).toBeVisible();
-  });
+  await test.step("借出一件給 Admin", () => borrowOneToAdmin(page, IFACE));
 
   await test.step("可借數少 1", async () => {
     await expect.poll(() => availableQty(page, IFACE)).toBe(before - 1);
   });
 
-  // 展開的借出子列。用 accessible name「以 Admin 開頭」定位，避開兩個坑：
-  // 巢狀表格會讓 hasText:"Admin" 同時命中外層 row；借出日/到期日又會隨當天變動。
-  const adminLoan = page.getByRole("row", { name: /^Admin/ });
-
   await test.step("展開該治具，借出列表看得到 Admin", async () => {
-    // 展開只綁在「借出」那格（td 第 4 欄，就是有 ▼ 的數字），點整列不會展開
-    await page.getByRole("row").filter({ hasText: IFACE }).first()
-      .locator("td").nth(4).click();
-    await expect(adminLoan).toBeVisible();
+    await expandLoans(page, IFACE);
+    await expect(adminLoanRow(page)).toBeVisible();
   });
 
   await test.step("歸還後可借數恢復", async () => {
-    // 歸還走原生 window.confirm，先掛好自動點確定
-    page.on("dialog", (d) => d.accept());
-    await adminLoan.getByRole("button", { name: "正常" }).click();
+    // 歸還開 Modal：狀態預設「正常」、歸還日預設今天，直接按確認就好
+    await adminLoanRow(page).getByRole("button", { name: "歸還" }).click();
+    await page.getByRole("button", { name: "確認歸還" }).click();
+    await expect(page.getByText("治具歸還成功")).toBeVisible();
 
     await expect.poll(() => availableQty(page, IFACE)).toBe(before);
+  });
+});
+
+// 歸還 Modal 才有的兩件事：標記損壞要二次確認、備註要留得下來。
+// 這個 Modal 曾經因為沒有任何入口而變成死碼（總表只有三顆直接送出的按鈕），
+// 沒被發現的原因就是沒人測它。這條就是那個入口的守門。
+test("歸還標記損壞需二次確認，備註會留進損壞／遺失紀錄", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "治具", exact: true }).click();
+
+  const IFACE = "M.2";
+  const NOTE = "外殼裂痕，待評估是否可續用";
+  const before = await availableQty(page, IFACE);
+
+  await test.step("借出一件給 Admin", () => borrowOneToAdmin(page, IFACE));
+
+  await test.step("開歸還 Modal，選損壞並填備註", async () => {
+    await expandLoans(page, IFACE);
+    await adminLoanRow(page).getByRole("button", { name: "歸還" }).click();
+    await page.getByRole("button", { name: "損壞" }).click();
+    await page.getByPlaceholder("備註（選填）").fill(NOTE);
+
+    // 第一次按只會把按鈕變成警告字樣，要再按一次才真的送出
+    await page.getByRole("button", { name: "確認歸還" }).click();
+    await page.getByRole("button", { name: /確定標記為損壞/ }).click();
+    await expect(page.getByText("治具歸還成功")).toBeVisible();
+  });
+
+  await test.step("損壞品仍占用庫存，可借數不恢復", async () => {
+    await expect.poll(() => availableQty(page, IFACE)).toBe(before - 1);
+  });
+
+  await test.step("記錄頁的損壞／遺失清單看得到備註", async () => {
+    await page.getByRole("button", { name: "記錄", exact: true }).click();
+    await expect(page.getByText(NOTE)).toBeVisible();
   });
 });

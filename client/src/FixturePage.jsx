@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import api from "./api";
 import { downloadBlob } from "./utils/download";
-import { formatLocal, parseUTC, parseDateOnlyLocal, localDateStamp } from "./utils/timezone";
+import { formatLocal, parseUTC, parseDateOnlyLocal } from "./utils/timezone";
 import { useToast } from "./components/useToast";
 import ImportModal from "./components/fixture/ImportModal";
 import LoanModal from "./components/fixture/LoanModal";
@@ -67,49 +67,6 @@ function ResizableTh({ children, defaultWidth, style, onClick }) {
         }}
       />
     </th>
-  );
-}
-
-const RETURN_CONDITIONS = [
-  { condition: "normal",  label: "正常", color: C.success, bg: C.successBgMid, border: C.successDark },
-  { condition: "damaged", label: "損壞", color: C.warning, bg: C.warningBg,    border: C.warning },
-  { condition: "lost",    label: "遺失", color: C.error,   bg: C.errorBg,      border: C.error },
-];
-
-function ReturnButtonGroup({ loanId, onSuccess }) {
-  const { showToast } = useToast();
-  return (
-    <>
-      {RETURN_CONDITIONS.map(({ condition, label, color, bg, border }) => (
-        <button
-          key={condition}
-          onClick={async () => {
-            if (!window.confirm(`確定標記為「${label}」歸還？`)) return;
-            try {
-              await api.post(`/api/fixtures/loans/${loanId}/return`, {
-                return_condition: condition,
-                returned_at: localDateStamp("-"),
-              });
-              onSuccess();
-            } catch (e) {
-              showToast(e.response?.data?.detail || "歸還失敗", "error");
-            }
-          }}
-          style={{
-            marginRight: 4,
-            padding: "3px 8px",
-            borderRadius: 4,
-            background: bg,
-            color,
-            border: `1px solid ${border}`,
-            cursor: "pointer",
-            fontSize: 11,
-          }}
-        >
-          {label}
-        </button>
-      ))}
-    </>
   );
 }
 
@@ -674,7 +631,16 @@ export default function FixturePage({ active, role }) {
                                         {loan.due_date ? formatLocal(loan.due_date, "date") : "—"}
                                         {isOverdue && <span style={{ marginLeft: 4, fontSize: 10 }}>逾期{overdueDays > 0 ? ` ${overdueDays}天` : ""}</span>}
                                       </td>
-                                      {canOperate && <td style={{ ...tdStyle, fontSize: 12 }}><ReturnButtonGroup loanId={loan.id} onSuccess={fetchAll} /></td>}
+                                      {canOperate && (
+                                        <td style={{ ...tdStyle, fontSize: 12 }}>
+                                          <button
+                                            onClick={() => setReturnTarget(loan)}
+                                            style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${C.success}44`, background: "transparent", color: C.success, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
+                                          >
+                                            歸還
+                                          </button>
+                                        </td>
+                                      )}
                                     </tr>
                                   );
                                   });
