@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7
 # ─────────────────────────────────────────────────────────────
 # DQA Lab Platform — Hugging Face Space 單容器部署
-# - Stage 1: Node 20 build 前端（Vite）→ client/dist/
+# - Stage 1: Node 24 build 前端（Vite）→ client/dist/
 # - Stage 2: Python 3.13 + FastAPI runtime，整合前端 dist 為 static
 # HF Space 強制 port 7860、UID 1000（user）、/tmp 可寫
 # ─────────────────────────────────────────────────────────────
 
 # ═══ Stage 1: 前端 build ═══
-FROM node:20-alpine AS frontend-build
+FROM node:24-alpine AS frontend-build
 WORKDIR /build
 
 # 只先 copy package.json 利用 Docker layer cache
