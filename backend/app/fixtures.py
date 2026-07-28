@@ -16,7 +16,7 @@ from .models import (
     User,
     ReturnCondition,
 )
-from .utils import today_utc_window, _now_utc_naive
+from .utils import today_utc_window, _now_utc_naive, _to_naive_utc
 from .auth import require_admin, current_user
 from .audit_log import log_audit
 
@@ -285,9 +285,20 @@ def list_fixtures(
 
 
 @router.get("/summary")
-def get_summary():
+def get_summary(
+    due_from: Optional[datetime.datetime] = None,
+    due_to: Optional[datetime.datetime] = None,
+):
+    """治具摘要計數。
+
+    due_from / due_to 是前端算好的「今天」日界（ISO）。後端存的是 UTC、也不知道
+    使用者在哪個時區，沒帶就退回 UTC 當日——那會讓台北凌晨 0–8 點的「今日到期」
+    顯示成前一天的筆數。
+    """
     with SessionLocal() as db:
-        now, today_start, today_end = today_utc_window()
+        now, utc_day_start, utc_day_end = today_utc_window()
+        window_start = _to_naive_utc(due_from) or utc_day_start
+        window_end = _to_naive_utc(due_to) or utc_day_end
 
         total_loaned = (
             db.query(func.sum(FixtureLoan.quantity))
@@ -299,8 +310,8 @@ def get_summary():
             db.query(FixtureLoan)
             .filter(
                 FixtureLoan.status == "loaned",
-                FixtureLoan.due_date <= today_end,
-                FixtureLoan.due_date >= today_start,
+                FixtureLoan.due_date <= window_end,
+                FixtureLoan.due_date >= window_start,
             )
             .count()
         )

@@ -18,6 +18,7 @@ import { conditionLabel } from "./components/control/deviceCardUtils";
 import TabBadge from "./components/control/TabBadge";
 import LeftPanel from "./components/control/LeftPanel";
 import { DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, IDLE_STATUS } from "./constants";
+import { localDayWindow } from "./utils/timezone";
 import { C } from "./styles/theme";
 
 const TAB_TO_PATH = {
@@ -237,7 +238,11 @@ export default function ControlCenter({ role, displayName, onLogout }) {
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const res = await api.get("/api/fixtures/summary");
+        // 「今日到期」要用本地日界：後端存 UTC，不知道使用者時區，日界由這裡給
+        const { start, end } = localDayWindow();
+        const res = await api.get("/api/fixtures/summary", {
+          params: { due_from: start.toISOString(), due_to: end.toISOString() },
+        });
         setFixtureSummary(res.data);
       } catch { /* ignore */ }
     };

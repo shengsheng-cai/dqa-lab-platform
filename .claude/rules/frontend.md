@@ -6,8 +6,9 @@
 App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, MaintenancePage, UsersPage, ErrorLog, ExecutionList]
 ├─ ai/         [ChatArea, MarkdownRenderer, MessageBubble, useAIChat, aiStorage, markdownUtils, messageBubbleConstants]   ← src/ai/（非 components/）
 ├─ constants.js   ← src/ 根目錄，全域共用常數（DEVICE_IDS、SESSION_DURATION）；另把 timezone 的 parseUTC 改名成 parseUtcDate 轉出去
-├─ utils/      [timezone（parseUTC/parseDateOnlyLocal/formatLocal/localDateStamp/endOfLocalDay）, download（downloadBlob/buildReportFilename）]   ← 純邏輯共用函式放這，新增前先看有沒有現成的
+├─ utils/      [timezone（parseUTC/parseDateOnlyLocal/formatLocal/localDateStamp/endOfLocalDay/localDayWindow）, download（downloadBlob/buildReportFilename）]   ← 純邏輯共用函式放這，新增前先看有沒有現成的
 │                 送「到期日」這種以天為單位的期限用 endOfLocalDay，它給的是本地當天 23:59；送午夜會讓台北早上 8 點就判逾期
+│                 要後端照「本地的今天」查（如今日到期）就用 localDayWindow 把日界算好傳過去，後端只認 UTC
 │                 取日期用 localDateStamp（第二個參數可指定日期，預設今天），不要寫 toISOString().slice(0,10)（那是 UTC，台北凌晨會少一天）
 ├─ errorMessages.js   ← src/ 根目錄，錯誤訊息轉譯表，由 api.js 的攔截器統一套用
 ├─ __tests__/  ← 單元測試（見 .claude/rules/testing.md）

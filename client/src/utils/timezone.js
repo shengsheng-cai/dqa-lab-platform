@@ -57,19 +57,34 @@ export function parseDateOnlyLocal(dateStr) {
 }
 
 /**
- * 把 YYYY-MM-DD 轉成「本地時區當天結束」的 Date（23:59:59.999）。
+ * 取「本地時區當天結束」的 Date（23:59:59.999）。
  *
  * 到期日的語意是「那天結束前要還」。直接送 `new Date("2026-08-04")` 會被當成
  * UTC 午夜，存進 DB 後在台北就是當天早上 8 點，還在期限內的治具會被標成逾期。
  *
- * @param {string} dateStr - YYYY-MM-DD
+ * @param {string|Date} date - YYYY-MM-DD 字串或 Date；傳進來的 Date 不會被改到
  * @returns {Date|null} 空值或格式不對回傳 null
  */
-export function endOfLocalDay(dateStr) {
-  const d = parseDateOnlyLocal(dateStr);
+export function endOfLocalDay(date) {
+  const d = parseDateOnlyLocal(date);
   if (!d || isNaN(d.getTime())) return null;
-  d.setHours(23, 59, 59, 999);
-  return d;
+  const end = new Date(d);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+/**
+ * 今天在本地時區的頭尾（00:00:00.000 與 23:59:59.999）。
+ *
+ * 給「今日到期」這類以天為單位的查詢用。後端存的是 UTC、也不知道使用者在哪個
+ * 時區，日界由前端算好傳過去；否則在台北凌晨 0–8 點會抓到前一天的資料。
+ *
+ * @returns {{start: Date, end: Date}}
+ */
+export function localDayWindow() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  return { start, end: endOfLocalDay(start) }; // start 一定有效，end 不會是 null
 }
 
 /**
