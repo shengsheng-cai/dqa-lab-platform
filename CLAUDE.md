@@ -31,7 +31,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `devices.py` | 設備狀態查詢、緊急停止、感測器歷史/統計 API |
 | `devices_maintenance.py` | 設備校驗 & 維護排程 CRUD API |
 | `fixtures.py` | 治具總表、盤點與借還 HTTP routes |
-| `fixture_lifecycle.py` | 治具庫存唯一 owner：可借量、非負數守衛、預約／借出／歸還狀態轉換 |
+| `fixture_lifecycle.py` | 治具庫存唯一 owner：共用可借量公式與借還狀態轉換；HTTP route guards 和 scheduler-safe transaction primitives 明確分層 |
 | `fixture_excel.py` | 治具 Excel 範本、匯入、匯出 adapter |
 | `purchase_orders.py` | 採購單 CRUD API |
 | `ai.py` + `rag.py` | Gemini 整合 + RAG 向量檢索 |

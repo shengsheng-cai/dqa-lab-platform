@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import api from "./api";
 import { downloadBlob } from "./utils/download";
 import { formatLocal, parseUTC, parseDateOnlyLocal } from "./utils/timezone";
+import { isNonnegativeInteger } from "./utils/validation";
 import { useToast } from "./components/useToast";
 import ImportModal from "./components/fixture/ImportModal";
 import LoanModal from "./components/fixture/LoanModal";
@@ -899,13 +900,9 @@ function BatchTable({ rows, setLogs, allFixtures }) {
   const handleSaveAll = async () => {
     const invalidExisting = rows.some((row) => {
       if (deleted.has(row.id)) return false;
-      const quantity = Number(drafts[row.id]);
-      return !Number.isInteger(quantity) || quantity < 0;
+      return !isNonnegativeInteger(drafts[row.id]);
     });
-    const invalidNew = newRows.some((row) => {
-      const quantity = Number(row.qty);
-      return !Number.isInteger(quantity) || quantity < 0;
-    });
+    const invalidNew = newRows.some((row) => !isNonnegativeInteger(row.qty));
     if (invalidExisting || invalidNew) {
       showToast("盤點數量必須是 0 以上的整數", "error");
       return;
@@ -915,12 +912,12 @@ function BatchTable({ rows, setLogs, allFixtures }) {
       // 刪除
       await Promise.all([...deleted].map((id) => api.delete(`/api/fixtures/inventory-logs/${id}`)));
       // 修改
-      const changed = rows.filter((r) => !deleted.has(r.id) && parseInt(drafts[r.id]) !== r.counted_quantity);
-      await Promise.all(changed.map((r) => api.patch(`/api/fixtures/inventory-logs/${r.id}?actual_quantity=${parseInt(drafts[r.id])}`)));
+      const changed = rows.filter((r) => !deleted.has(r.id) && Number(drafts[r.id]) !== r.counted_quantity);
+      await Promise.all(changed.map((r) => api.patch(`/api/fixtures/inventory-logs/${r.id}?actual_quantity=${Number(drafts[r.id])}`)));
       // 新增
       const addedRes = await Promise.all(
         newRows.filter((nr) => nr.fixture_id).map((nr) =>
-          api.post(`/api/fixtures/inventory-logs?fixture_id=${nr.fixture_id}&actual_quantity=${parseInt(nr.qty) || 0}`)
+          api.post(`/api/fixtures/inventory-logs?fixture_id=${nr.fixture_id}&actual_quantity=${Number(nr.qty)}`)
         )
       );
 
@@ -928,8 +925,8 @@ function BatchTable({ rows, setLogs, allFixtures }) {
         let updated = prev
           .filter((l) => !deleted.has(l.id))
           .map((l) => {
-            if (drafts[l.id] !== undefined && parseInt(drafts[l.id]) !== l.counted_quantity) {
-              const newQty = parseInt(drafts[l.id]);
+            if (drafts[l.id] !== undefined && Number(drafts[l.id]) !== l.counted_quantity) {
+              const newQty = Number(drafts[l.id]);
               return { ...l, counted_quantity: newQty, difference: newQty - l.previous_quantity };
             }
             return l;
@@ -978,7 +975,7 @@ function BatchTable({ rows, setLogs, allFixtures }) {
           <tbody>
             {rows.filter((r) => !deleted.has(r.id)).map((log) => {
               const draftVal = drafts[log.id];
-              const diff = editMode ? (parseInt(draftVal || 0) - log.previous_quantity) : log.difference;
+              const diff = editMode ? (Number(draftVal) - log.previous_quantity) : log.difference;
               return (
                 <tr key={log.id}
                   onMouseEnter={(e) => (e.currentTarget.style.background = C.surfaceAlt)}

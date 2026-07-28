@@ -246,6 +246,8 @@ app.include_router(errors_router)
 app.include_router(ai_router)
 app.include_router(line_router)
 app.include_router(auth_router)
+# Excel 的 /template、/export 必須先於 fixtures 的 /{fixture_id} 掛載，
+# 否則固定路徑會被當成 fixture_id 解析並回 422。
 app.include_router(fixture_excel_router)
 app.include_router(fixtures_router)
 app.include_router(purchase_orders_router)

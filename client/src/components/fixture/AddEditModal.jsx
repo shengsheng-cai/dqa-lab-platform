@@ -1,5 +1,6 @@
 import { useState } from "react";
 import api from "../../api";
+import { isNonnegativeInteger } from "../../utils/validation";
 import { useToast } from "../useToast";
 import ModalShell from "./ModalShell";
 import { inputStyle } from "./modalStyles";
@@ -36,10 +37,8 @@ export default function AddEditModal({ fixture, onClose, onSuccess }) {
       return;
     }
     if (
-      !Number.isInteger(Number(form.total_quantity)) ||
-      Number(form.total_quantity) < 0 ||
-      !Number.isInteger(Number(form.shortage)) ||
-      Number(form.shortage) < 0
+      !isNonnegativeInteger(form.total_quantity) ||
+      !isNonnegativeInteger(form.shortage)
     ) {
       setError("現有數量與缺貨數必須是 0 以上的整數");
       return;
