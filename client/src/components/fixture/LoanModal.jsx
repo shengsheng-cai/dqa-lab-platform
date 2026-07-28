@@ -4,7 +4,7 @@ import { useToast } from "../useToast";
 import DatePicker from "./DatePicker";
 import ModalShell from "./ModalShell";
 import { inputStyle } from "./modalStyles";
-import { localDateStamp } from "../../utils/timezone";
+import { localDateStamp, endOfLocalDay } from "../../utils/timezone";
 import { DEVICE_IDS } from "../../constants";
 
 export default function LoanModal({ onClose, onSubmit, fixtures }) {
@@ -51,7 +51,8 @@ export default function LoanModal({ onClose, onSubmit, fixtures }) {
         device_id: deviceId || null,
         project_name: project || null,
         quantity: parseInt(quantity),
-        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        // 到期日＝那天結束前要還，送當天 23:59；送午夜的話台北早上 8 點就被判逾期
+        due_date: endOfLocalDay(dueDate)?.toISOString() ?? null,
       });
       showToast("治具借出成功", "success");
       onSubmit();
