@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { parseUTC, parseDateOnlyLocal, formatLocal, localDateStamp } from "../utils/timezone";
+import { parseUTC, parseDateOnlyLocal, formatLocal, localDateStamp, endOfLocalDay } from "../utils/timezone";
 
 // 這整組測試建立在「執行時時區是 Asia/Taipei」上（vite.config.js 的 test.env.TZ）。
 // 先確認這件事，否則下面的期望值會以看不懂的字串差異形式失敗。
@@ -149,5 +149,19 @@ describe("localDateStamp", () => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
     expect(localDateStamp("-", d)).toBe("2026-08-04");
+  });
+});
+
+describe("endOfLocalDay", () => {
+  it("回傳本地當天的最後一刻", () => {
+    // 台北 8/4 23:59:59.999 = UTC 8/4 15:59:59.999。
+    // 送 UTC 午夜的話，台北早上 8 點就會被判逾期。
+    expect(endOfLocalDay("2026-08-04").toISOString()).toBe("2026-08-04T15:59:59.999Z");
+  });
+
+  it("空值與格式不對回傳 null", () => {
+    expect(endOfLocalDay("")).toBeNull();
+    expect(endOfLocalDay(null)).toBeNull();
+    expect(endOfLocalDay("不是日期")).toBeNull();
   });
 });
