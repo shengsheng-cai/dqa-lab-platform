@@ -18,7 +18,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: client/package-lock.json
       - run: pip install -r backend/requirements.txt
@@ -38,7 +38,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: |
             client/package-lock.json
