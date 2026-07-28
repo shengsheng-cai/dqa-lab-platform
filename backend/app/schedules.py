@@ -695,6 +695,13 @@ def _blocked_period_dict(b: DeviceBlockedPeriod) -> dict:
     }
 
 
+def _blocked_period_label(b: DeviceBlockedPeriod) -> str:
+    return (
+        f"{b.device_id} {b.start_time.isoformat()}～{b.end_time.isoformat()}"
+        f"（{b.reason or '未填原因'}）"
+    )
+
+
 @blocked_router.get("", response_model=list[BlockedPeriodOut])
 def list_blocked_periods():
     with SessionLocal() as db:
@@ -703,34 +710,44 @@ def list_blocked_periods():
 
 
 @blocked_router.post("", response_model=BlockedPeriodOut, status_code=201)
-def create_blocked_period(body: BlockedPeriodCreate, request: Request, _: None = Depends(require_admin)):
+def create_blocked_period(body: BlockedPeriodCreate, actor=Depends(require_admin)):
     if body.end_time <= body.start_time:
         raise HTTPException(status_code=400, detail="結束時間必須晚於開始時間")
 
     if body.device_id not in DEVICE_IDS:
         raise HTTPException(status_code=400, detail=f"無效的設備 ID：{body.device_id}")
 
-    user_id = current_user(request).user_id
     with SessionLocal() as db:
         b = DeviceBlockedPeriod(
             device_id=body.device_id,
             start_time=body.start_time,
             end_time=body.end_time,
             reason=body.reason,
-            created_by=user_id,
+            created_by=actor.user_id,
         )
         db.add(b)
+        db.flush()
+        log_audit(
+            db,
+            str(actor.user_id or "unknown"),
+            actor.role,
+            "CREATE",
+            "device_blocked_period",
+            b.id,
+            f"新增設備不可用時段：{_blocked_period_label(b)}",
+        )
         db.commit()
         db.refresh(b)
         return _blocked_period_dict(b)
 
 
 @blocked_router.patch("/{period_id}", response_model=BlockedPeriodOut)
-def update_blocked_period(period_id: int, body: BlockedPeriodPatch, _: None = Depends(require_admin)):
+def update_blocked_period(period_id: int, body: BlockedPeriodPatch, actor=Depends(require_admin)):
     with SessionLocal() as db:
         b = db.query(DeviceBlockedPeriod).filter(DeviceBlockedPeriod.id == period_id).first()
         if not b:
             raise HTTPException(status_code=404, detail="找不到紀錄")
+        before = _blocked_period_label(b)
         if body.device_id is not None:
             if body.device_id not in DEVICE_IDS:
                 raise HTTPException(status_code=400, detail=f"無效的設備 ID：{body.device_id}")
@@ -743,17 +760,37 @@ def update_blocked_period(period_id: int, body: BlockedPeriodPatch, _: None = De
             b.reason = body.reason
         if b.end_time <= b.start_time:
             raise HTTPException(status_code=400, detail="結束時間必須晚於開始時間")
+        after = _blocked_period_label(b)
+        log_audit(
+            db,
+            str(actor.user_id or "unknown"),
+            actor.role,
+            "UPDATE",
+            "device_blocked_period",
+            period_id,
+            f"更新設備不可用時段：{before} → {after}",
+        )
         db.commit()
         db.refresh(b)
         return _blocked_period_dict(b)
 
 
 @blocked_router.delete("/{period_id}")
-def delete_blocked_period(period_id: int, _: None = Depends(require_admin)):
+def delete_blocked_period(period_id: int, actor=Depends(require_admin)):
     with SessionLocal() as db:
         b = db.query(DeviceBlockedPeriod).filter(DeviceBlockedPeriod.id == period_id).first()
         if not b:
             raise HTTPException(status_code=404, detail="找不到紀錄")
+        detail = f"刪除設備不可用時段：{_blocked_period_label(b)}"
         db.delete(b)
+        log_audit(
+            db,
+            str(actor.user_id or "unknown"),
+            actor.role,
+            "DELETE",
+            "device_blocked_period",
+            period_id,
+            detail,
+        )
         db.commit()
     return {"ok": True}

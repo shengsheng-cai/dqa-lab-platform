@@ -4,7 +4,7 @@
 |---|---|
 | **Plan type** | Release-baseline regression plan |
 | **Target** | Simulated-device Demo on `main` |
-| **Last updated** | 2026-07-25 |
+| **Last updated** | 2026-07-28 |
 | **Related strategy** | [Test Strategy](test-strategy.md) |
 
 ## 1. Objective
@@ -28,9 +28,9 @@ execution, and fixture states.
 
 | ID | Failure mode | Impact | Likelihood | Priority | Automated evidence | Residual risk |
 |---|---|---:|---:|---:|---|---|
-| **R-01** | Guest performs an admin write | High | Medium | P0 | `test_guest_authorization.py`, `guest-readonly.spec.js` | New routes could omit the shared guard; route enumeration is the regression net |
+| **R-01** | Guest performs an admin write | High | Medium | P0 | `test_guest_authorization.py`, `test_blocked_period_audit.py`, `guest-readonly.spec.js` | New routes could omit the shared guard; route enumeration is the regression net |
 | **R-02** | Test starts while device is busy or in maintenance | High | Medium | P0 | `test_schedule_start_consistency.py`, `maintenance-block.spec.js` | Real hardware interlock is out of scope |
-| **R-03** | Device, schedule, SOP execution, fixture, audit, or cache states diverge | High | High | P0 | `test_device_state.py`, `test_schedule_start_consistency.py`, `test_linkage.py`, `test_schedules_complete.py`, `schedule-flow.spec.js` | Process interruption outside tested transaction boundaries |
+| **R-03** | Device, schedule, SOP execution, fixture, audit, or cache states diverge | High | High | P0 | `test_device_state.py`, `test_schedule_start_consistency.py`, `test_blocked_period_audit.py`, `test_linkage.py`, `test_schedules_complete.py`, `schedule-flow.spec.js` | Process interruption outside tested transaction boundaries |
 | **R-04** | UI shows stale status and offers an invalid action | Medium | High | P1 | `schedule-flow.spec.js` | A transient refresh/network failure can still require manual retry |
 | **R-05** | Overlap, delayed start, confirmed-time edit, restart, or bad input leaves schedules stuck or starts the wrong job | High | Medium | P1 | `test_schedule_conflict.py`, `test_schedules_slot.py`, `test_simulator_schedule.py`, `test_schedule_start_consistency.py` (including exact date-job replacement) | Long-running clock drift and production scheduler load are not exercised |
 | **R-06** | Fixture stock becomes negative, over-committed by schedule reservations, double-returned, permanently reserved, or linked to the wrong schedule | High | Medium | P1 | `test_fixture_lifecycle.py`, `test_fixtures_api.py`, `test_linkage.py`, `fixture-loan.spec.js` | Concurrent multi-user borrowing is not load-tested |
