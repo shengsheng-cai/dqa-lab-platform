@@ -12,6 +12,7 @@ from .models import (
     SessionLocal, Schedule, ScheduleStatus, DeviceBlockedPeriod,
     User, ScheduleFixture, FixtureLoan,
 )
+from .fixtures import _assert_stock_available
 from .standards import STANDARD_TREE, get_standard
 from .constants import DEVICE_IDS
 from .auth import require_admin, current_user
@@ -320,6 +321,38 @@ def _sync_reserved_fixture_assignment(db, schedule_id: int, device_id, due_date)
     )
 
 
+def _reserve_schedule_fixtures(db, s: Schedule, device_id, due_date) -> None:
+    """把排程預約的治具落地成 reserved 借出；庫存不夠就整筆擋下。
+
+    排程確認以前沒有守門：兩張排程各自預約同一支治具、加起來超過庫存時兩張都能
+    確認成功，可借量被扣到 0，到現場才發現治具不夠分。這裡與手動借出共用
+    fixtures._assert_stock_available，兩條路的判準一致。
+    """
+    rows = db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == s.id).all()
+    if not rows:
+        return
+
+    # 同一支治具在一張排程裡可能有多筆，要加總後才比得出夠不夠
+    needed: dict[int, int] = {}
+    for sf in rows:
+        needed[sf.fixture_id] = needed.get(sf.fixture_id, 0) + sf.quantity
+    _assert_stock_available(db, needed)
+
+    for sf in rows:
+        db.add(FixtureLoan(
+            fixture_id=sf.fixture_id,
+            borrower_name=s.applicant_name or "排程系統",
+            borrower_user_id=s.applicant_user_id,
+            device_id=device_id,
+            project_name=f"{s.project_number} / {s.sample_name}",
+            quantity=sf.quantity,
+            due_date=due_date,
+            status="reserved",
+            loan_date=None,
+            schedule_id=s.id,
+        ))
+
+
 def _schedule_start_actor(user, action: str) -> ScheduleStartActor:
     return ScheduleStartActor(
         actor=str(user.user_id or "unknown"),
@@ -383,19 +416,7 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, role, c
             # 一律先落地為「已確認 + 治具已預約」。即時啟動的排程由 start_schedule
             # 在設備真的進入 RUNNING 後，才推進狀態並把預約治具轉為借出。
             s.status = ScheduleStatus.CONFIRMED
-            for sf in db.query(ScheduleFixture).filter(ScheduleFixture.schedule_id == s.id).all():
-                db.add(FixtureLoan(
-                    fixture_id=sf.fixture_id,
-                    borrower_name=s.applicant_name or "排程系統",
-                    borrower_user_id=s.applicant_user_id,
-                    device_id=device_id,
-                    project_name=f"{s.project_number} / {s.sample_name}",
-                    quantity=sf.quantity,
-                    due_date=end,
-                    status="reserved",
-                    loan_date=None,
-                    schedule_id=s.id,
-                ))
+            _reserve_schedule_fixtures(db, s, device_id, end)
 
         elif body.status == ScheduleStatus.RUNNING:
             if s.status != ScheduleStatus.CONFIRMED:

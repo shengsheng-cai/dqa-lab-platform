@@ -594,12 +594,36 @@ def get_fixture(fixture_id: int):
 # ---------- 借出 ----------
 
 
-def _fetch_fixtures_map(db, loans) -> dict:
-    """一次撈出 loans 相關的所有 Fixture，回傳 {id: fixture}。"""
-    ids = {loan.fixture_id for loan in loans}
+def _fetch_fixtures_map(db, fixture_ids) -> dict:
+    """一次撈出這些 id 的 Fixture，回傳 {id: fixture}。"""
+    ids = set(fixture_ids)
     if not ids:
         return {}
     return {f.id: f for f in db.query(Fixture).filter(Fixture.id.in_(ids)).all()}
+
+
+def _assert_stock_available(db, needed: dict) -> None:
+    """借得夠不夠：不夠就擋下，並說是哪一支治具、差多少。
+
+    `needed` 是 {治具 id: 需要的數量}。手動借出與排程預約是兩條不同的路，
+    可借量的算式已經收在 _stock_counts，「不夠就擋」這一步也收在這裡，
+    才不會一邊擋、另一邊默默放行到超借。
+    """
+    if not needed:
+        return
+    loan_map = _build_loan_qty_map(db, list(needed))
+    fixtures = _fetch_fixtures_map(db, needed)
+    for fixture_id, quantity in needed.items():
+        f = fixtures.get(fixture_id)
+        if not f:
+            raise HTTPException(status_code=404, detail=f"治具不存在（#{fixture_id}）")
+        available = _stock_counts(f, loan_map).available
+        if available < quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"治具庫存不足：{f.interface_type} {f.form_factor} "
+                       f"需要 {quantity} 件，目前可借 {available} 件",
+            )
 
 
 @router.get("/loans/active")
@@ -611,7 +635,7 @@ def list_active_loans():
             .order_by(FixtureLoan.due_date.asc())
             .all()
         )
-        fixtures = _fetch_fixtures_map(db, loans)
+        fixtures = _fetch_fixtures_map(db, {loan.fixture_id for loan in loans})
         return [
             {
                 "id": loan.id,
@@ -647,7 +671,7 @@ def list_overdue_loans():
             .order_by(FixtureLoan.due_date.asc())
             .all()
         )
-        fixtures = _fetch_fixtures_map(db, loans)
+        fixtures = _fetch_fixtures_map(db, {loan.fixture_id for loan in loans})
         return [
             {
                 "id": loan.id,
@@ -680,7 +704,7 @@ def list_damaged_lost_loans():
             .order_by(FixtureLoan.return_date.desc())
             .all()
         )
-        fixtures = _fetch_fixtures_map(db, loans)
+        fixtures = _fetch_fixtures_map(db, {loan.fixture_id for loan in loans})
         return [
             {
                 "id": loan.id,
@@ -718,11 +742,7 @@ def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_ad
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
 
-        available = _stock_counts(f, _build_loan_qty_map(db, [f.id])).available
-        if available < body.quantity:
-            raise HTTPException(
-                status_code=400, detail=f"庫存不足，目前可借：{available} 件"
-            )
+        _assert_stock_available(db, {f.id: body.quantity})
 
         loan = FixtureLoan(
             fixture_id=body.fixture_id,
