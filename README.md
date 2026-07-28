@@ -83,7 +83,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 - **[測試策略](docs/qa/test-strategy.md)** — 範圍、風險分層、進出場條件、缺陷生命週期
 - **[風險導向測試計畫](docs/qa/risk-based-test-plan.md)** — 風險登記表 × 對應的自動化證據
 - **[追溯表](docs/qa/traceability.md)** — 需求 ↔ 風險 ↔ 測試 ↔ 缺陷
-- **真實 bug 報告**：[BUG-001](docs/qa/BUG-001-schedule-status-not-refreshed-after-confirm.md)（確認後畫面沒更新）、[BUG-002](docs/qa/BUG-002-maintenance-device-auto-started.md)（維護中設備被自動啟動）、[BUG-003](docs/qa/BUG-003-execution-insert-failure-left-zombie-running-state.md)（啟動失敗留下殭屍狀態）——測試時真的抓到的，都走完「發現 → 記錄 → 修 → 回歸驗證」
+- **真實 bug 報告**：[BUG-001](docs/qa/BUG-001-schedule-status-not-refreshed-after-confirm.md)（確認後畫面沒更新）、[BUG-002](docs/qa/BUG-002-maintenance-device-auto-started.md)（維護中設備被自動啟動）、[BUG-003](docs/qa/BUG-003-execution-insert-failure-left-zombie-running-state.md)（啟動失敗留下殭屍狀態）、[BUG-004](docs/qa/BUG-004-fixture-dates-stored-one-day-early.md)（凌晨送出的日期早一天存進資料庫）、[BUG-005](docs/qa/BUG-005-fixture-day-deadlines-evaluated-in-utc.md)（以天為單位的期限用 UTC 日界判斷）——測試時真的抓到的，都走完「發現 → 記錄 → 修 → 回歸驗證」
 
 > **誠實揭露**：本專案大量使用 AI coding agent（Claude Code／Codex）協作。我負責定義需求、判斷風險、決定測什麼與如何斷言、判讀 bug 與驗收；不宣稱已獨立精通每個框架，也不掛 SDET 頭銜。定位是約 9 年硬體 DQA／可靠度驗證背景，延伸到實驗室流程軟體化與測試自動化，不是純軟體或純 AI。
 
@@ -118,7 +118,7 @@ Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-a
 
 ## 快速啟動
 
-**前置需求：** Python 3.13+、Node.js 20+、macOS / Linux / WSL2
+**前置需求：** Python 3.13+、Node.js 22+（CI 與部署映像使用 24）、macOS / Linux / WSL2
 
 ```bash
 make install                  # 安裝所有依賴

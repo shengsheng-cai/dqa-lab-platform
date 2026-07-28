@@ -28,7 +28,7 @@ operator is unlikely to re-check.
 | Path | Value | Consequence |
 |---|---|---|
 | `FixturePage.jsx` — inline 正常/損壞/遺失 return buttons | `returned_at` sent to `POST /api/fixtures/loans/{id}/return` | The stored return date is one day early; the operator is never shown the value and cannot correct it |
-| `ReturnModal.jsx` | default 實際歸還日期 | Same stored value, but pre-filled in a visible field the operator can correct. Currently unreachable in the UI (see Notes) |
+| `ReturnModal.jsx` | default 實際歸還日期 | Same stored value, but pre-filled in a visible field the operator can correct. Was unreachable in the UI when this report was written (see Notes) |
 | `LoanModal.jsx` | default 到期日 (today + 7 days) | The loan is due six days out instead of seven, so the fixture is flagged overdue a day early |
 
 ## Preconditions
@@ -120,8 +120,9 @@ UTC semantics, and no fixture screen constructs a date string by other means.
 
 ## Notes
 
-`ReturnModal` is currently unreachable from the UI: `setReturnTarget` is only
-ever called with `null`, and the 治具總表 expanded row uses the inline
-`ReturnButtonGroup` instead. It was fixed here to keep the file consistent, but
-whether the richer modal should be re-wired or removed is a separate decision
-recorded in `CLAUDE.local.md`.
+When this report was written, `ReturnModal` was unreachable from the UI:
+`setReturnTarget` was only ever called with `null`, and the 治具總表 expanded row
+used an inline `ReturnButtonGroup` instead. Its date default was fixed here to
+keep the file consistent, and the modal was re-wired to the 歸還 button in a
+follow-up change, which also added the browser test that would have caught the
+dead entry point.
