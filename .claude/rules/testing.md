@@ -44,11 +44,13 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 - conftest.py 使用 in-memory SQLite（StaticPool，跨執行緒共用同一個 DB），測試間互相隔離
 - 共用 fixture：`db`（單一 session）、`api_client`（掛 router 的 TestClient + 角色注入）、`patched_session`（一次 patch 多個模組的 SessionLocal）
 - 跨模組寫 DB 的流程（如啟動排程會動到 schedule_service / sop / device_state / utils / schedules）一律用 `patched_session` 把相關模組一次 patch 完——漏一個那模組就會寫進真實的 aicm.db
+- **唯一的例外是 `test_schema_migrations.py`**：它要驗 Alembic 真的跑得動，得對檔案型 SQLite 下 DDL，in-memory 那顆引擎進不去；而且指定 DB 位置不能用 `patched_session`——`alembic/env.py` 是自己 `from app.models import SQLALCHEMY_DATABASE_URL` 再塞進 `sqlalchemy.url`，所以要蓋的是那個常數（另加 `DATABASE_URL` 當第二道保險）。新增測試不要照抄這個寫法，除非同樣是在驗 migration 本身
 
 ## 資料庫
 
 - 測試直接對 in-memory SQLite 操作，避免 mock/prod 行為不一致
 - 跨模組流程用共用 `patched_session` 注入 in-memory session（參考 `test_schedule_start_consistency.py`），DB 本身仍走真實 SQLAlchemy 行為
+- schema 的權威只有 Alembic（見 `CLAUDE.md`）：`test_schema_migrations.py` 在暫存 DB 實跑整條 migration chain，再比對 model 的每張表與每個欄位。加欄位只改 model、忘了寫 migration 會直接紅
 
 ## Frontend 單元測試（Vitest）
 

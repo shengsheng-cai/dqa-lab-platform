@@ -9,9 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     false,
-    inspect,
 )
-from sqlalchemy.schema import CreateColumn
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Mapped, mapped_column
 from enum import StrEnum
 import datetime
@@ -545,24 +543,11 @@ def ensure_admin_user():
 
 
 def init_db():
+    """建立缺少的資料表並確保 admin 帳號存在。
+
+    只負責「全新的資料庫」。既有資料庫要補欄位一律跑 `alembic upgrade head`——
+    create_all 不會替既有資料表加欄，這裡也刻意不自己補，避免同一份 schema
+    出現兩個權威、各自漏欄還互相以為對方有蓋到。
+    """
     Base.metadata.create_all(bind=engine)
-    _ensure_device_state_columns()
     ensure_admin_user()
-
-
-def _ensure_device_state_columns() -> None:
-    """create_all 不會替既有資料表補欄；為舊 SQLite/Postgres DB 補上新增狀態欄位。"""
-    table = DeviceState.__table__
-    with engine.begin() as connection:
-        existing = {
-            column["name"]
-            for column in inspect(connection).get_columns(table.name)
-        }
-        quoted_table = engine.dialect.identifier_preparer.quote(table.name)
-        for name in ("total_steps", "operator", "operator_user_id", "skip_push"):
-            if name in existing:
-                continue
-            column_sql = str(CreateColumn(table.c[name]).compile(dialect=engine.dialect))
-            connection.exec_driver_sql(
-                f"ALTER TABLE {quoted_table} ADD COLUMN {column_sql}"
-            )
