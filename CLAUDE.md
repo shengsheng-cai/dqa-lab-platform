@@ -74,6 +74,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `device_calibrations` | 設備校驗紀錄（校驗日期、下次校驗日期、證書號、結果） |
 | `device_maintenances` | 設備維護紀錄（維護日期、類型、說明、執行人員） |
 
+**schema 只有 Alembic 一個權威**：`init_db()` 只服務全新資料庫（`create_all` + 建 admin），
+不補既有資料表的欄位，也不得再加「啟動時自己 ALTER TABLE」的補丁；既有資料庫一律
+`alembic upgrade head`。`tests/test_schema_migrations.py` 會在暫存 DB 實跑整條 migration
+chain，再比對 model 的每張表與每個欄位；只改 model 忘了寫 migration 會直接紅
+（只比對表與欄位的有無，型別／nullable 漂移仍要自己顧）。
+
 ### 狀態機與模擬
 
 @.claude/rules/state-machine.md

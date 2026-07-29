@@ -7,11 +7,10 @@ import threading
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy import create_engine, event, inspect as inspect_database, text
+from sqlalchemy import event, text
 from sqlalchemy.exc import OperationalError
 
 from app import device_state
-from app import models
 from app.models import DeviceState, ErrorLog, SopExecution
 
 UTC = datetime.timezone.utc
@@ -688,29 +687,3 @@ def test_advance_rejects_stale_simulator_phase(patched_session):
     assert stale_tick.changed is False
     assert stale_tick.reason == "stale_sim_phase"
     assert states["CH-01"]["sim_phase"] == "ramp_down"
-
-
-def test_existing_device_state_table_gets_new_columns():
-    old_engine = create_engine("sqlite:///:memory:")
-    with old_engine.begin() as connection:
-        connection.exec_driver_sql(
-            "CREATE TABLE device_states (device_id VARCHAR PRIMARY KEY, status VARCHAR)"
-        )
-        connection.exec_driver_sql(
-            "INSERT INTO device_states (device_id, status) VALUES ('CH-01', 'RUNNING')"
-        )
-
-    with patch("app.models.engine", old_engine):
-        models._ensure_device_state_columns()
-        models._ensure_device_state_columns()
-
-    columns = {
-        column["name"]
-        for column in inspect_database(old_engine).get_columns("device_states")
-    }
-    assert {"total_steps", "operator", "operator_user_id", "skip_push"} <= columns
-    with old_engine.connect() as connection:
-        row = connection.exec_driver_sql(
-            "SELECT total_steps, skip_push FROM device_states WHERE device_id = 'CH-01'"
-        ).one()
-    assert row == (0, 0)
