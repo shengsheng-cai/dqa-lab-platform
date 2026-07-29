@@ -13,8 +13,8 @@
 
 ### 使用者身份取用
 
-管理者寫入端點統一從 `require_admin` dependency 取得已驗證的 actor；同一個 dependency
-同時回答「可不可以寫」與「是誰在寫」，供業務資料與 audit 共用：
+**新增**的管理者寫入端點從 `require_admin` dependency 取得已驗證的 actor；同一個
+dependency 同時回答「可不可以寫」與「是誰在寫」，供業務資料與 audit 共用：
 
 ```python
 from .auth import require_admin
@@ -23,7 +23,11 @@ def admin_write(body, actor=Depends(require_admin)):
     user_id, role = actor.user_id, actor.role
 ```
 
-非管理者端點若只需要讀取目前身分，才使用 `current_user(request)` helper（定義於
+既有端點多數寫成 `_: None = Depends(require_admin)` 再 `current_user(request)` 取身分。
+兩者結果相同（`require_admin` 內部就是呼叫 `current_user`），沒有使用者可見差異，
+因此**不做機械式全面遷移**；改到哪個檔案就順著那個檔案原本的寫法，不要為了統一而動別的端點。
+
+非管理者端點若只需要讀取目前身分，使用 `current_user(request)` helper（定義於
 `auth.py`）：
 
 ```python
