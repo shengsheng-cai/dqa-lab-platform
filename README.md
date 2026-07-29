@@ -8,215 +8,217 @@ app_port: 7860
 pinned: false
 license: mit
 datasets: []
-short_description: Environmental test lab management (FastAPI + React + AI)
+short_description: Environmental lab workflow and QA automation portfolio
 ---
 
 # DQA Lab Platform
 
+**環境試驗室流程平台，也是風險導向測試與 QA Automation 作品。**
+
+Environmental test lab workflow and QA automation portfolio built with FastAPI and React.
+
 [![Tests](https://github.com/shengsheng-cai/dqa-lab-platform/actions/workflows/test.yml/badge.svg)](https://github.com/shengsheng-cai/dqa-lab-platform/actions/workflows/test.yml)
-![Playwright](https://img.shields.io/badge/E2E-Playwright-2EAD33?logo=playwright&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
-![Gemini](https://img.shields.io/badge/AI-Gemini%20%2B%20RAG-4285F4?logo=google&logoColor=white)
-![APScheduler](https://img.shields.io/badge/APScheduler-Precision%20Scheduling-FF6B35)
-![LINE](https://img.shields.io/badge/LINE-Bot%20Alerts-00C300?logo=line&logoColor=white)
-![ISO 17025](https://img.shields.io/badge/ISO%2017025-GUM%20Uncertainty-blueviolet)
-![License](https://img.shields.io/badge/License-MIT-green)
+[![License](https://img.shields.io/badge/License-MIT-green)](./LICENSE)
 
-**Environmental test lab management platform** built with FastAPI + React.  
-Automates SOP execution, ISO 17025 report generation, fixture tracking, and AI-assisted scheduling for temperature/humidity chambers.
+[🚀 開啟 Live Demo](https://huggingface.co/spaces/sshengsheng/dqa-lab-platform) ·
+[🧪 查看 QA 證據](#qa-與自動化測試) ·
+[⚙️ 本機執行](#本機執行)
 
-| | |
+<img
+  src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/control-center.png"
+  alt="DQA Lab 控制中心：設備狀態、溫度趨勢與低溫冷測 SOP 執行畫面"
+  width="100%"
+/>
+
+_控制中心整合設備監控、即時趨勢與可追蹤的 SOP 執行步驟。_
+
+DQA Lab 把溫濕度試驗室的設備監控、SOP、排程、治具與報告串成一條可追蹤的流程，
+並以它作為受測系統，示範如何從風險分析一路做到自動化測試、缺陷報告與 CI 擋關。
+
+## 這個專案在解決什麼
+
+環境試驗流程常散落在紙本 SOP、Excel、設備面板與人工通知中。DQA Lab 將它們收斂到同一個平台：
+
+- **實驗室流程**：從測試申請、設備排程、SOP 執行到報告輸出。
+- **資產連動**：治具隨排程自動預約、借出與歸還，保留完整異動紀錄。
+- **品質證據**：以風險導向測試、分層自動化與真實缺陷報告驗證核心流程。
+
+## QA 與自動化測試
+
+這不只是功能展示，而是一個刻意建立的受測系統。測試重點放在狀態一致性、跨模組交易、權限邊界、日期時區與失敗回滾，而不是單純追求測試數量。
+
+| 測試層級 | 工具 | 驗證重點 |
+|---|---|---|
+| 後端單元／整合 | pytest + in-memory SQLite | API、設備狀態機、排程、治具生命週期、交易回滾 |
+| 前端邏輯 | Vitest | 日期時區、驗證、錯誤訊息與下載檔名 |
+| 瀏覽器流程 | Playwright | 排程、權限、治具、維護與 AI 帶入排程 |
+| 持續整合 | GitHub Actions | lint、後端、前端與 E2E 全數通過後才部署 Demo |
+
+### 真實缺陷與回歸證據
+
+五份報告都走完「發現 → 記錄 → 修復 → 回歸驗證」：
+
+| 缺陷 | 使用者影響 | 回歸重點 |
+|---|---|---|
+| [BUG-001](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-001-schedule-status-not-refreshed-after-confirm.md) | 排程確認後畫面仍顯示舊狀態 | 寫入後的跨區塊刷新 |
+| [BUG-002](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-002-maintenance-device-auto-started.md) | 維護中的設備被排程自動啟動 | 啟動前的設備可用性判斷 |
+| [BUG-003](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-003-execution-insert-failure-left-zombie-running-state.md) | 啟動失敗後設備留下殭屍狀態 | 原子交易與失敗回滾 |
+| [BUG-004](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-004-fixture-dates-stored-one-day-early.md) | 台北凌晨送出的日期少一天 | 本地日期與 UTC 邊界 |
+| [BUG-005](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-005-fixture-day-deadlines-evaluated-in-utc.md) | 以天為期限的治具提早被判逾期 | 本地日界與截止時間 |
+
+[測試策略](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/test-strategy.md) ·
+[風險導向測試計畫](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/risk-based-test-plan.md) ·
+[需求與測試追溯表](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/traceability.md) ·
+[全部 QA 文件](https://github.com/shengsheng-cai/dqa-lab-platform/tree/main/docs/qa)
+
+## 核心流程
+
+```text
+AI 推薦測試條件
+        ↓
+申請與確認排程 ──→ 治具預約
+        ↓
+設備啟動 + SOP 執行 ──→ 治具借出
+        ↓
+條件完成，等待人員確認
+        ↓
+下一條件／測試完成 ──→ 治具歸還 + PDF／CSV 報告
+```
+
+## 核心能力
+
+| 能力 | 說明 |
 |---|---|
-| **Automated test suite** | Device state machine · Schedule calculation · Fixture lifecycle · Three-module integration · SOP validation · Measurement uncertainty · Calibration & maintenance CRUD · Frontend utility (Vitest) · Browser E2E (Playwright) |
-| **GitHub Actions CI/CD** | Push-triggered gate — backend + frontend + browser E2E; deploy to HF Spaces is blocked if any layer fails |
-| **RAG + backend validation** | Gemini Flash-Lite with retrieval-augmented generation — AI output validated server-side before DB write |
-| **Three-module integration** | AI → Schedule → Fixture fully automated (reserve → loan → return) |
+| 即時設備監控 | WebSocket 推播溫濕度、設備狀態、倒數與感測器 QC 控制圖 |
+| SOP 與報告 | 依標準與條件執行 SOP，輸出 CSV、PDF 與 GUM 量測不確定度 |
+| 排程與治具 | 自動選機、衝突檢查、不可用時段，以及治具預約／借出／歸還連動 |
+| AI 法規諮詢 | Gemini + RAG 查詢測試條件，推薦結果可帶入排程申請 |
+| 稽核與維護 | 管理員／訪客權限、稽核日誌、設備校驗與維護紀錄 |
+| LINE Bot | 主動推播條件完成、測試完成與緊急停止；支援設備總覽與單機狀態查詢 |
 
-- 78 built-in test conditions across 5 international standards (IEC 60068 / EN 50155 / IEC 61850-3 / IEC 60945 / DNV)
-- GUM-compliant measurement uncertainty analysis (Type A/B → U, k=2)
-- AI advisor (Gemini + RAG) — recommend conditions → one-click scheduling
-- LINE Bot integration for emergency alerts
+### LINE Bot 通知範例
 
-**[🚀 Live Demo](https://huggingface.co/spaces/sshengsheng/dqa-lab-platform)** · [中文說明如下](#核心功能)
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-1.png"
+    width="320"
+    alt="LINE Bot 緊急停止推播與環境試驗設備狀態查詢"
+  >
+</p>
 
-基於 FastAPI + React 的環境測試實驗室管理平台，整合設備模擬引擎、SOP 執行管理、治具借還追蹤與 AI 法規諮詢，目標取代實驗室紙本作業流程。
+<p align="center"><sub>緊急停止即時推播；輸入「狀態」或點選快速回覆，可查看設備總覽與單機溫濕度、執行中測試。</sub></p>
 
----
+## 支援的測試標準
 
-## 核心功能
+內建 5 套國際標準、共 78 項測試條件：
 
-| 模組 | 功能摘要 |
-|------|---------|
-| 🖥️ **控制中心** | 多台溫箱即時監控（溫濕度、狀態、倒數計時）；WebSocket server push 1s 推播取代輪詢；左側欄依分頁顯示排程概況 / 治具摘要 / 人員摘要 / 校驗狀態摘要；📊 感測器 QC 控制圖（24h 歷史 + UCL/LCL mean ± 3σ + 異常點標記）|
-| 🔧 **SOP 執行引擎** | 三步驟選法規 → 版本 → 條件，步驟自動確認、admin 手動接管、ISO 17025 報告下載（CSV + PDF） |
-| 📊 **量測不確定度** | GUM 合規自動計算：Type A（穩定段重複測量）＋ Type B（感測器解析度）→ 組合 uc → 擴充 U（k=2, 95%），輸出於 PDF 報告 Section 5 |
-| 🗄️ **治具借還管理** | 借出 / 歸還 / 逾期追蹤、損壞遺失清單、月盤點、採購閉環、Excel 批次匯入；盤點紀錄批次摺疊 / 整批刪除 / 逐條編輯；排程聯動（預約→自動借出→自動歸還） |
-| 🤖 **AI 法規諮詢** | 自然語言查詢、RAG 法規檢索、多輪對話；推薦測試後可直接「📅 申請此測試」預填排程；即時 DB context 注入（設備狀態 / 進行中排程 / 治具借出逾期），不切頁面直接查詢 |
-| 🗓️ **排程系統** | 甘特圖永遠可見（固定區塊）、自動排程（排除超時卡機 / EMERGENCY 設備）、審核前即時預覽時段、不可用時段管理；排程確認後 APScheduler date job 精確觸發啟動（每 5 分鐘 fallback）；條件銜接改為人員確認制；確認後治具自動預約 |
-| 🚨 **LINE Bot 通知** | 條件完成（等待人員確認）、全部完成、緊急停止 — 主動推播給管理者個人 |
-| 👥 **人員管理** | 人員名冊（左）+ 訪客 Token 管理（右）；Token 表支援「隱藏已失效」一鍵過濾 |
-| 🔐 **存取控制** | 管理員登入 + 訪客唯讀模式，bcrypt 密碼雜湊，IP Rate Limiting |
-| 📋 **稽核日誌** | 主要業務寫入（排程 / 治具 / 設備等）記錄 who/what/when；紀錄 Modal 內嵌稽核紀錄 tab，支援 entity 過濾與 CSV 匯出（ISO 17025 外部稽核用） |
-| 🔧 **維護** | 設備校驗紀錄（日期、證書號、結果）& 維護紀錄（預防性 / 矯正性 / 例行點檢）；左側欄即時顯示各台設備校驗狀態（正常 / 即將到期 / 逾期 / 未知）；DeviceCard badge 警示 |
+| 標準 | 版本／範圍 | 條件數 |
+|---|---|---:|
+| IEC 60068 | 2-1、2-2、2-14、2-30、2-78 | 17 |
+| EN 50155 | 2017、2007 | 21 |
+| IEC 61850-3 | Ed.2:2013、Ed.1:2002 | 19 |
+| IEC 60945 | 2002 | 7 |
+| DNV | CG-0339:2015、Std.Cert.2.4 | 14 |
 
-<img src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-1.png" width="260"> <img src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-2.png" width="260"> <img src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-3.png" width="260">
+> 系統參數僅供開發與流程驗證；正式測試應以合法取得的原始標準文件為準。
 
----
+## 5 分鐘 Demo 導覽
 
-## 🧪 測試與品質保證（Testing & QA）
+1. 開啟 [Live Demo](https://huggingface.co/spaces/sshengsheng/dqa-lab-platform)，選擇「一鍵訪客體驗」。
+2. 在控制中心查看 CH-01／CH-02 的即時狀態與溫濕度曲線。
+3. 切到排程頁，查看甘特圖、進行中排程與設備占用。
+4. 切到治具頁，查看排程連動產生的預約與借出紀錄。
+5. 打開右下角 AI 助理，詢問：「工業乙太網設備要選哪個測試標準？」
 
-這個平台也是我的**軟體測試作品**：把它當成「受測系統」，示範一套完整的 QA 流程，重點是測試深度而不是功能數量。
-
-**分層自動化測試** — 每次 push 由 GitHub Actions 擋關，任一層沒過就不會部署到 Demo：
-
-| 層級 | 工具 | 顧什麼 |
-|------|------|--------|
-| 後端單元／整合 | pytest（真 in-memory SQLite） | API、狀態機、跨模組一致性、失敗注入與回滾 |
-| 前端單元 | Vitest | 純邏輯工具函式 |
-| 瀏覽器 E2E | Playwright | 高風險使用者流程（排程、權限、治具、維護、AI 帶入排程）；失敗自動保留截圖與 trace |
-
-**QA 文件（[`docs/qa/`](docs/qa/)）：**
-
-- **[測試策略](docs/qa/test-strategy.md)** — 範圍、風險分層、進出場條件、缺陷生命週期
-- **[風險導向測試計畫](docs/qa/risk-based-test-plan.md)** — 風險登記表 × 對應的自動化證據
-- **[追溯表](docs/qa/traceability.md)** — 需求 ↔ 風險 ↔ 測試 ↔ 缺陷
-- **真實 bug 報告**：[BUG-001](docs/qa/BUG-001-schedule-status-not-refreshed-after-confirm.md)（確認後畫面沒更新）、[BUG-002](docs/qa/BUG-002-maintenance-device-auto-started.md)（維護中設備被自動啟動）、[BUG-003](docs/qa/BUG-003-execution-insert-failure-left-zombie-running-state.md)（啟動失敗留下殭屍狀態）、[BUG-004](docs/qa/BUG-004-fixture-dates-stored-one-day-early.md)（凌晨送出的日期早一天存進資料庫）、[BUG-005](docs/qa/BUG-005-fixture-day-deadlines-evaluated-in-utc.md)（以天為單位的期限用 UTC 日界判斷）——測試時真的抓到的，都走完「發現 → 記錄 → 修 → 回歸驗證」
-
-> **誠實揭露**：本專案大量使用 AI coding agent（Claude Code／Codex）協作。我負責定義需求、判斷風險、決定測什麼與如何斷言、判讀 bug 與驗收；不宣稱已獨立精通每個框架，也不掛 SDET 頭銜。定位是約 9 年硬體 DQA／可靠度驗證背景，延伸到實驗室流程軟體化與測試自動化，不是純軟體或純 AI。
-
----
-
-## 支援的國際測試標準
-
-內建 **78 項精確測試條件**：
-
-| 標準 | 版本 | 涵蓋項目 | 條件數 |
-|------|------|---------|--------|
-| **IEC 60068** | 2-1、2-2、2-14、2-30、2-78 | 冷測、乾熱、溫度循環、濕熱循環 | 17 |
-| **EN 50155** | 2017、2007 | 高低溫、隧道溫變、濕熱循環、高溫通電 | 21 |
-| **IEC 61850-3** | Ed.2:2013、Ed.1:2002 | 乾熱、冷測、濕熱、高溫高濕穩態 | 19 |
-| **IEC 60945** | 2002 | 乾熱儲存/工作、濕熱、低溫儲存/工作 | 7 |
-| **DNV** | CG-0339:2015、Std.Cert.2.4 | 穩態/循環濕熱、乾熱 | 14 |
-
-> ⚠️ 系統參數僅供開發驗證，實際測試應以原始法規文件為準。
-
----
-
-## 5 分鐘體驗完整流程
-
-1. 點 Live Demo → 訪客模式 → 🚀 一鍵訪客體驗
-2. 左側看 CH-01/CH-02 正在跑（溫度曲線即時更新）
-3. 切換「排程」tab → 看甘特圖與進行中排程
-4. 右下角 🤖 → 問「工業乙太網設備要選哪個測試標準？」
-5. AI 推薦後按「📅 申請此測試」（需管理員登入才能提交）
-6. 切換「治具」tab → 看借出中治具與排程聯動
-
----
-
-## 快速啟動
-
-**前置需求：** Python 3.13+、Node.js 22+（CI 與部署映像使用 24）、macOS / Linux / WSL2
-
-```bash
-make install                  # 安裝所有依賴
-venv/bin/python backend/init_db.py  # 重建並重灌 demo 資料（會清空既有資料）
-make dev                      # 啟動全部服務（含 HF 本地預覽）
-make test                     # 執行後端 + 前端測試
-make test-e2e                 # E2E 瀏覽器測試（自己開測試後端）
-```
-
-| 服務 | 網址 |
-|------|------|
-| 前端 | http://localhost:5173 |
-| 後端 API | http://localhost:8000 |
-| HF 本地預覽 | http://localhost:7861 |
-| API 文件 | http://localhost:8000/docs |
-
-`make dev` 會同時啟動：
-- 一般開發模式（`5173` 前端 + `8000` 後端）
-- HF 類環境本地預覽（`7861`，使用 `/tmp/dqa-hf-preview.db`，由 `backend/init_db.py` 重新 seed）
-
-HF 本地預覽登入帳密預設跟 `backend/.env` 相同（`ADMIN_PASSWORD` / `DEMO_PASSWORD`），若未設定則 fallback 為 `hf_preview_admin` / `hf_preview_guest`。
-
-複製專案根目錄的 `.env.example` 為 `backend/.env`（後端啟動時讀取）：
-
-```bash
-cp .env.example backend/.env
-```
-
-Docker / Hugging Face Spaces 部署時不依賴 `backend/.env`，改由平台 Secrets 或環境變數提供相同設定。
-
-**必須設置（可選功能會自動跳過）：**
-- `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com) 免費申請（Embedding + Flash-Lite）；免費方案每日限制 20 次 AI 諮詢請求
-- `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN` — LINE Developers 後台取得（推播功能）
-
-> ⚠️ **AI 諮詢功能限制**：線上版使用 Gemini 免費方案，每日限制 20 次請求，額度用完後顯示提示並隔日自動恢復。完整 demo 建議以本地端執行。
-> ⚠️ **Live Demo（HF Spaces）限制**：資料庫使用 `/tmp/demo.db`（重啟會清空）；若未設定 LINE secrets，推播通知功能不啟用。
-
-**可選（RAG 對比測試）：**
-- `RAG_EMBED_PROVIDER=gemini`（預設）或 `sentence_transformers`
-- `RAG_ST_MODEL=intfloat/multilingual-e5-small`（僅 sentence-transformers 模式）
-
----
-
-## 技術堆棧
-
-| 層級 | 技術 |
-|------|------|
-| **後端** | FastAPI、SQLAlchemy 2.0、SQLite、Alembic、APScheduler |
-| **前端** | React 19、Vite、Recharts、Axios、react-router-dom |
-| **AI** | Gemini API（Flash-Lite）；RAG 檢索自建（Gemini embedding + numpy 餘弦相似度，無向量資料庫框架；embedding 可切換 Gemini / sentence-transformers） |
-| **通知** | LINE Messaging API（條件完成 / 測試完成 / 緊急停止推播）|
-| **品質** | pytest（後端）· Vitest（前端）· Playwright（E2E）· GitHub Actions CI/CD · Alembic 版本控制遷移 |
-
----
+訪客模式可瀏覽完整 Demo 資料；新增、修改與送出排程需要管理員權限。
 
 ## 系統架構
 
-```
-瀏覽器（React 19）
-    │  HTTP / Axios（資料寫入 / 報告下載）
-    │  WebSocket /ws/devices（設備狀態 1s server push）
-    ▼
-FastAPI（後端）
-    ├── SQLite（SQLAlchemy 2.0 + Alembic）
-    ├── 物理模擬引擎（sim_phase 狀態機，APScheduler 精確排程觸發）
-    ├── schedule_service（業務邏輯層：時長計算、自動選機、排程推進）
-    ├── AI 諮詢（Gemini Flash-Lite + RAG Embedding）
-    └── LINE Messaging API（Webhook 接收 + push_message 推播）
-```
-
-資料流向：
-```
-AI 推薦條件 → [申請此測試] → 排程確認 → 治具預約
-                                    ↓
-                              SOP 自動啟動
-                                    ↓
-                     治具借出 → 測試完成 → 治具歸還 + PDF 報告
+```text
+React 19
+  ├─ HTTP / Axios ───────────────┐
+  └─ WebSocket /ws/devices ─────┤
+                                 ↓
+FastAPI
+  ├─ schedule_service：排程與跨模組交易
+  ├─ DeviceStateManager：設備狀態唯一 owner
+  ├─ simulator：溫濕度與測試相位模擬
+  ├─ Gemini + RAG：法規諮詢
+  └─ LINE Messaging API：主動推播與設備查詢
+                                 ↓
+                   SQLite + SQLAlchemy + Alembic
 ```
 
----
+| 層級 | 技術 |
+|---|---|
+| Backend | Python 3.13、FastAPI、SQLAlchemy 2.0、APScheduler |
+| Frontend | React 19、Vite、Recharts、Axios |
+| AI | Gemini Flash-Lite、自建 RAG retrieval |
+| Reports | ReportLab、pandas、openpyxl |
+| Quality | pytest、Vitest、Playwright、Ruff、GitHub Actions |
+
+## 本機執行
+
+需求：Python 3.13、Node.js 24，以及 macOS／Linux／WSL2。
+
+```bash
+python3.13 -m venv venv
+make install
+cp .env.example backend/.env
+venv/bin/python backend/init_db.py  # 會重建本機 demo 資料
+make dev
+```
+
+啟動後可使用：
+
+| 服務 | 網址 |
+|---|---|
+| 前端 | http://localhost:5173 |
+| 後端 API | http://localhost:8000 |
+| API 文件 | http://localhost:8000/docs |
+| HF 本地預覽 | http://localhost:7861 |
+
+```bash
+make test       # pytest + Vitest
+make test-e2e   # Playwright，會自行啟動隔離的測試後端
+make lint       # Ruff
+```
+
+### 可選整合
+
+| 功能 | 環境變數 |
+|---|---|
+| Gemini 諮詢與 embedding | `GEMINI_API_KEY` |
+| LINE 主動推播 | `LINE_CHANNEL_ACCESS_TOKEN`、`LINE_USER_ID` |
+| LINE 設備查詢（Webhook） | `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN` |
+| 本機 sentence-transformers embedding | `RAG_EMBED_PROVIDER=sentence_transformers` |
+
+外部 AI 服務的免費額度與速率限制以供應商當下政策為準；未設定可選整合時，核心 Demo 仍可執行。
+
+## Demo 限制
+
+- `main` 是純模擬 Demo，不控制真實環境試驗設備。
+- Hugging Face Spaces 使用 `/tmp` SQLite，容器重啟後會重新建立示範資料。
+- Live Demo 未設定 LINE secrets，因此不會真的發送 LINE 通知。
 
 ## 後續規劃
 
-- [x] WebSocket 即時監控（取代前端 polling）
-- [ ] 真實設備通訊 / 設備驅動整合（Phase 3）
+取得實機與通訊協定後，將於獨立分支進行真實設備通訊與驅動整合（Phase 3）；
+目前的 `main` 維持可穩定展示的純模擬版本。
 
----
+## 作者角色與 AI 協作
+
+我以約 9 年硬體 DQA／可靠度驗證經驗定義領域需求、風險與驗收標準，
+並使用 Claude Code、Codex 等 AI coding agent 協助實作與審查。
+我負責決定測什麼、如何斷言、判讀缺陷，以及確認修正是否符合實驗室流程。
+
+不宣稱已獨立精通每個框架，也不掛 SDET 頭銜。定位是硬體 DQA／可靠度驗證背景
+延伸到實驗室流程軟體化與測試自動化，不是純軟體或純 AI。
 
 ## Contributing
 
-本專案目前為個人作品集專案，暫不接受外部 PR。
+問題與功能建議歡迎開 Issue；商業合作請透過 GitHub 聯絡。
 
-若有問題或功能建議，歡迎開 Issue 討論。商業合作請透過 GitHub 聯絡作者。
-
----
-
-## 授權
+## License
 
 [MIT License](./LICENSE)
-
-本專案採用 MIT 授權。
