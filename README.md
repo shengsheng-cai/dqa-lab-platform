@@ -101,12 +101,22 @@ AI 推薦測試條件
 <p align="center">
   <img
     src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-1.png"
-    width="320"
-    alt="LINE Bot 緊急停止推播與環境試驗設備狀態查詢"
-  >
+    width="30%"
+    alt="LINE Bot 緊急停止推播與設備狀態查詢"
+  />
+  <img
+    src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-2.png"
+    width="30%"
+    alt="LINE Bot 設備總覽與單機狀態查詢"
+  />
+  <img
+    src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/line-3.png"
+    width="30%"
+    alt="LINE Bot 排程取消與自動降溫收尾通知"
+  />
 </p>
 
-<p align="center"><sub>緊急停止即時推播；輸入「狀態」或點選快速回覆，可查看設備總覽與單機溫濕度、執行中測試。</sub></p>
+<p align="center"><sub>左：緊急停止推播與狀態查詢｜中：設備總覽與單機狀態｜右：排程取消與自動降溫收尾通知</sub></p>
 
 ## 支援的測試標準
 
