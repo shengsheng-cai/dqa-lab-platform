@@ -85,7 +85,7 @@ async def my_route(...):
 
 - 總時長 = 條件時長 + 0.5h 常溫穩定 + 0.5h 條件間緩衝（`_calc_total_hours`）
 - 設備選擇：遍歷 CH-01~CH-05，取最早可用（`_auto_assign`）
-- 排除超時卡機設備：`est_end` 超過 1h 仍未回 IDLE（`_get_stuck_devices`）
+- 排除超時卡機設備：`est_end` 超過 1h 仍未回 IDLE（`_get_stuck_devices`）；降溫收尾中的設備估算永遠落在未來，不會被判成卡機
 - Fallback：若所有設備都超時，改取全部中最早可用（避免無法申請）
 - 未來的已確認排程以 `sched_{id}` APScheduler date job 精確啟動；確認或修改設備／時段時都用 `replace_existing=True` 更新同一 job
 - 每 5 分鐘 fallback 只補抓漏觸發或當時被暫時阻擋的排程；進行中不再自動完成

@@ -9,8 +9,8 @@ import json
 from app.models import Schedule, ScheduleStatus, Fixture, FixtureLoan
 from app.schedule_service import (
     _complete_schedule, _build_running_until, _release_schedule_fixtures,
-    _est_end_from_device,
 )
+from app.utils import device_free_at
 
 UTC = datetime.timezone.utc
 
@@ -179,7 +179,7 @@ def test_build_running_until_multiple_devices():
     assert "CH-02" in result
 
 
-# ── _est_end_from_device：暫停時間要扣回去 ──────────────────────────────────────
+# ── device_free_at：暫停時間要扣回去 ──────────────────────────────────────────
 
 # 曲線時長 = 2h（high==ambient 不升降溫，只有 2h dwell）
 _PAUSE_SOP = json.dumps({
@@ -190,10 +190,11 @@ _PAUSE_SOP = json.dumps({
 
 def test_est_end_settled_pause_pushes_end_out():
     """已結算的暫停（pause_accum_seconds）要讓估算結束時間往後移一樣長"""
-    started = datetime.datetime.now(UTC) - datetime.timedelta(hours=1)
+    now = datetime.datetime.now(UTC)
+    started = now - datetime.timedelta(hours=1)
     base = {"status": "RUNNING", "started_at": started.isoformat(), "active_sop_json": _PAUSE_SOP}
-    est_no_pause = _est_end_from_device(base)
-    est_with_pause = _est_end_from_device({**base, "pause_accum_seconds": 1800.0})
+    est_no_pause = device_free_at(base, now)
+    est_with_pause = device_free_at({**base, "pause_accum_seconds": 1800.0}, now)
     assert abs((est_with_pause - est_no_pause).total_seconds() - 1800.0) < 1.0
 
 
@@ -202,15 +203,64 @@ def test_est_end_live_pause_grows_with_elapsed():
     now = datetime.datetime.now(UTC)
     started = now - datetime.timedelta(hours=1)
     base = {"status": "RUNNING", "started_at": started.isoformat(), "active_sop_json": _PAUSE_SOP}
-    est_running = _est_end_from_device(base)
+    est_running = device_free_at(base, now)
     paused = {
         **base,
         "status": "PAUSED",
         "paused_at": (now - datetime.timedelta(minutes=20)).isoformat(),
     }
-    est_paused = _est_end_from_device(paused)
+    est_paused = device_free_at(paused, now)
     # 已暫停約 20 分鐘 → 估算比未暫停版本晚約 20 分鐘
     assert abs((est_paused - est_running).total_seconds() - 1200.0) < 5.0
+
+
+# ── device_free_at：降溫中的設備要算「還要降多久」 ────────────────────────────
+
+# 整條曲線 9.5h（升溫 1h + dwell 8h + 降溫 1h，再加 0.5h 常溫穩定）
+_LONG_SOP = json.dumps({
+    "ramp_rate": 1.0, "dwell_time_hours": 8.0, "cycles": 1,
+    "high_temperature": 85.0, "low_temperature": None,
+})
+
+
+def test_est_end_finishing_counts_remaining_ramp_not_whole_curve():
+    """測試中途被停：只算剩下的降溫時間，不能拿整條曲線去估（會晚好幾小時）"""
+    now = datetime.datetime.now(UTC)
+    item = {
+        "status": "FINISHING",
+        "started_at": (now - datetime.timedelta(minutes=10)).isoformat(),
+        "active_sop_json": _LONG_SOP,
+        "temperature": 35.0,
+    }
+    # 35→25°C、1°C/min → 10 分鐘後空出來
+    assert device_free_at(item, now) == now + datetime.timedelta(minutes=10)
+
+
+def test_est_end_finishing_after_emergency_is_not_treated_as_free():
+    """緊急停止清掉了 started_at 與 active_sop_json，但設備還在降溫，不能算成現在有空"""
+    now = datetime.datetime.now(UTC)
+    item = {
+        "status": "FINISHING",
+        "started_at": None,
+        "active_sop_json": None,
+        "temperature": 85.0,
+    }
+    # 沒有 sop 資料時用預設 1°C/min：85→25 還要 60 分鐘
+    assert device_free_at(item, now) == now + datetime.timedelta(minutes=60)
+
+
+def test_build_running_until_includes_finishing_device():
+    """降溫中的設備要進占用表，_find_earliest_slot 才不會把新排程排到「現在」"""
+    cache = {
+        "CH-01": {
+            "status": "FINISHING", "started_at": None,
+            "active_sop_json": None, "temperature": 85.0,
+        },
+        "CH-02": {"status": "IDLE"},
+    }
+    running_until = _build_running_until(cache)
+    assert "CH-01" in running_until
+    assert "CH-02" not in running_until
 
 
 # ── 刪除排程：治具借出歷史要留著 ────────────────────────────────────────────

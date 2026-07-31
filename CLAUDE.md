@@ -42,7 +42,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `audit_log.py` | 供各業務模組共用的稽核日誌寫入 helper |
 | `ws.py` | WebSocket `/ws/devices` + ConnectionManager + broadcast_loop |
 | `line.py` | LINE push_message 推播 |
-| `utils.py` | 共用工具函式（時間、條件解析、維護時段查詢、溫度曲線時長 `curve_total_minutes`、占用結束估算 `occupied_end`／`total_pause_seconds`） |
+| `utils.py` | 共用工具函式（時間、條件解析、維護時段查詢、溫度曲線時長 `curve_total_minutes`、設備何時空出來 `device_free_at`＝`occupied_end`／`finishing_end`、暫停累計 `total_pause_seconds`、降溫速率 `ramp_rate_from_sop`） |
 | `constants.py` | 全域常數（`DEVICE_IDS`、AMBIENT_TEMP/HUMIDITY 等）；設備清單一律從這裡拿，不要各模組自己定義 |
 | `uncertainty.py` | GUM 量測不確定度計算（Type A/B/uc/U） |
 | `errors.py` | 異常紀錄 API |
