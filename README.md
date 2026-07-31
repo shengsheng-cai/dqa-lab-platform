@@ -56,7 +56,7 @@ DQA Lab 把溫濕度試驗室的設備監控、SOP、排程、治具與報告串
 
 ### 真實缺陷與回歸證據
 
-五份報告都走完「發現 → 記錄 → 修復 → 回歸驗證」：
+六份報告都走完「發現 → 記錄 → 修復 → 回歸驗證」：
 
 | 缺陷 | 使用者影響 | 回歸重點 |
 |---|---|---|
@@ -65,6 +65,7 @@ DQA Lab 把溫濕度試驗室的設備監控、SOP、排程、治具與報告串
 | [BUG-003](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-003-execution-insert-failure-left-zombie-running-state.md) | 啟動失敗後設備留下殭屍狀態 | 原子交易與失敗回滾 |
 | [BUG-004](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-004-fixture-dates-stored-one-day-early.md) | 台北凌晨送出的日期少一天 | 本地日期與 UTC 邊界 |
 | [BUG-005](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-005-fixture-day-deadlines-evaluated-in-utc.md) | 以天為期限的治具提早被判逾期 | 本地日界與截止時間 |
+| [BUG-006](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-006-cooling-device-treated-as-available.md) | 降溫中的設備被當成可立即排程 | 設備可用時間的單一估算來源 |
 
 [測試策略](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/test-strategy.md) ·
 [風險導向測試計畫](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/risk-based-test-plan.md) ·

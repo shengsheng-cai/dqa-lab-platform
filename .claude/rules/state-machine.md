@@ -23,7 +23,9 @@ idle → ramp_to_low → ramp_to_high → dwell_high → ramp_to_low2 → dwell_
 ```
 
 - RUNNING 內自然完成：`ramp_to_ambient` 回到常溫後，再經 `stabilize`（常溫穩定 30 分鐘，`STABILIZATION_MINUTES`，期間設備仍占用）才回 IDLE，不在回常溫瞬間就 IDLE
-- 常溫穩定時間三處共用：設備卡 estimated_end、排程器 `_est_end_from_device`、模擬器 `stabilize` 相位一律以「曲線 + 30 分鐘」為真正可再用時間
+- 常溫穩定時間三處共用：設備卡 estimated_end、排程器占用表、模擬器 `stabilize` 相位一律以「曲線 + 30 分鐘」為真正可再用時間
+- 「設備何時空出來」只有 `device_free_at`（`utils.py`）這一份對應表：RUNNING/PAUSED 走 `occupied_end`（曲線 + 常溫穩定 + 暫停），FINISHING 走 `finishing_end`（從當前溫度降回常溫，不是整條曲線重跑）。設備卡與排程器共用它，不得各自再依 status 分支
+- 降溫速率只有 `ramp_rate_from_sop`（`utils.py`）一份：模擬器實際降溫與「還要降多久」的估算讀同一個來源
 - FINISHING 內手動停止（取消／緊急收尾）的 `ramp_to_ambient` 結束後直接回 IDLE，不走 `stabilize`（中止非完成，不需穩定）
 - 重啟後自動從 device_states 恢復 sim_phase（含 `stab_start`），不從頭開始
 

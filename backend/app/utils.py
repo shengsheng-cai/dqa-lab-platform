@@ -114,13 +114,42 @@ def total_pause_seconds(item: dict, now: datetime.datetime) -> float:
     return seconds
 
 
+def ramp_rate_from_sop(active_sop_json) -> float:
+    """從 active_sop_json 取升降溫速率（°C/min）；取不到或不是正數時退回 1.0。
+
+    模擬器實際降溫與「還要降多久」的估算讀同一份，兩邊不會分岔。緊急停止會把
+    active_sop_json 清成 None，這時只能用預設速率估。
+    """
+    try:
+        sop = json.loads(active_sop_json or "{}")
+        rate = float(sop.get("ramp_rate") or 1.0)
+    except Exception:
+        return 1.0
+    return rate if rate > 0 else 1.0
+
+
+def finishing_end(item: dict, now: datetime.datetime) -> datetime.datetime:
+    """降溫收尾中的設備何時回到常溫（aware UTC）：從當前溫度按 ramp_rate 降到 25°C。
+
+    FINISHING 不能用 occupied_end——那算的是「整條曲線從頭跑完 + 常溫穩定」，測試中途被停
+    時會高估好幾小時。緊急停止後更糟：started_at 與 active_sop_json 已被清空，occupied_end
+    直接回 None，排程器會把還在降溫的設備當成現在就有空，新排程排到「現在」卻要等降溫跑完
+    才啟動。now 需為 aware UTC。
+    """
+    raw_temp = item.get("temperature")
+    # 不能用 `or AMBIENT_TEMP`：低溫測試的 0°C 是合法讀值，會被誤當成沒有值
+    current_temp = AMBIENT_TEMP if raw_temp is None else float(raw_temp)
+    ramp_rate = ramp_rate_from_sop(item.get("active_sop_json"))
+    return now + datetime.timedelta(minutes=abs(current_temp - AMBIENT_TEMP) / ramp_rate)
+
+
 def occupied_end(item: dict, now: datetime.datetime) -> Optional[datetime.datetime]:
     """從設備 cache dict 估算「測試占用結束」時間（aware UTC）：
     started_at + 溫度曲線 + 常溫穩定 + 暫停時間。缺 started_at/active_sop_json 或無法解析回 None。
 
     設備卡與排程器以前各抄一份這段（萃取 sop 參數→curve→加穩定與暫停→算結束時間），
-    差別只在回傳型別與 FINISHING 特例，收成這一支唯一來源；status 由呼叫端決定哪些適用，
-    FINISHING 的降溫特例也留在呼叫端，這裡只算「跑完測試該在何時空出來」。now 需為 aware UTC。
+    差別只在回傳型別與 FINISHING 特例，收成這一支唯一來源。這裡只算「跑完測試該在何時空
+    出來」，哪個狀態適用由 device_free_at 決定。now 需為 aware UTC。
     """
     started_at = item.get("started_at")
     active_sop_json = item.get("active_sop_json")
@@ -150,6 +179,20 @@ def occupied_end(item: dict, now: datetime.datetime) -> Optional[datetime.dateti
         + datetime.timedelta(minutes=total_min + STABILIZATION_MINUTES)
         + datetime.timedelta(seconds=total_pause_seconds(item, now))
     )
+
+
+def device_free_at(item: dict, now: datetime.datetime) -> Optional[datetime.datetime]:
+    """設備何時空出來（aware UTC）；沒有在占用中的狀態回 None。
+
+    「哪個狀態用哪種估算」只有這一份。以前設備卡與排程器各寫一份這張對應表，FINISHING
+    一邊算剩餘降溫、一邊算整條曲線跑完，兩邊估算就分岔了。now 需為 aware UTC。
+    """
+    status = item.get("status")
+    if status == "FINISHING":
+        return finishing_end(item, now)
+    if status in ("RUNNING", "PAUSED"):
+        return occupied_end(item, now)
+    return None
 
 
 def today_utc_window() -> tuple:

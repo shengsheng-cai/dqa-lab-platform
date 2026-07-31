@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-import json
 import logging
 from typing import Literal, Optional
 
@@ -10,11 +9,10 @@ from pydantic import BaseModel
 from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod
 from .line import push_message
 from .utils import (
-    _now_utc, _now_utc_naive, _parse_conditions, parse_iso_utc, occupied_end,
+    _now_utc, _now_utc_naive, _parse_conditions, parse_iso_utc, device_free_at,
 )
 from .auth import require_admin, current_user
 from .audit_log import log_audit
-from .constants import AMBIENT_TEMP
 from .constants import DEVICE_IDS
 from .schedule_service import list_running_schedules
 
@@ -65,25 +63,8 @@ def _make_description(status: str, sop_name: str) -> str:
 
 
 def _calc_estimated_end_at(item: dict) -> Optional[str]:
-    status = item.get("status")
-
-    # FINISHING：從當前溫度算降回 25°C 的剩餘時間
-    if status == "FINISHING":
-        current_temp = item.get("temperature", AMBIENT_TEMP)
-        ramp_rate = 1.0
-        try:
-            sop = json.loads(item.get("active_sop_json") or "{}")
-            ramp_rate = sop.get("ramp_rate") or 1.0
-        except Exception:
-            pass
-        remaining_min = abs(current_temp - AMBIENT_TEMP) / ramp_rate
-        return (_now_utc() + datetime.timedelta(minutes=remaining_min)).isoformat()
-
-    if status not in ("RUNNING", "PAUSED"):
-        return None
-
-    # RUNNING/PAUSED 的占用結束（曲線 + 常溫穩定 + 暫停）與排程器同源，只在這裡轉成 ISO 字串
-    end = occupied_end(item, _now_utc())
+    """設備卡顯示用：占用結束時間轉成 ISO 字串。估算本身與排程器共用 device_free_at。"""
+    end = device_free_at(item, _now_utc())
     return end.isoformat() if end else None
 
 

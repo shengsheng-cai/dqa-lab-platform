@@ -20,7 +20,7 @@ from .constants import DEVICE_IDS, AMBIENT_TEMP, STABILIZATION_MINUTES
 from .utils import (
     _now_utc, _now_utc_naive, _parse_conditions,
     _to_naive_utc, device_blocked_reason_now,
-    curve_total_minutes, occupied_end,
+    curve_total_minutes, device_free_at,
 )
 from . import device_state
 from .audit_log import log_audit
@@ -230,21 +230,12 @@ def _calc_total_hours(conditions: List[str]) -> float:
 # ── 設備狀態工具 ──────────────────────────────────────────────────────────────
 
 
-def _est_end_from_device(device: dict) -> Optional[datetime.datetime]:
-    """從 AICM_CACHE 設備 dict 估算測試占用結束時間（aware UTC）；設備不在執行中則回傳 None。
-
-    RUNNING/PAUSED/FINISHING 都走共用的 occupied_end（曲線 + 常溫穩定 + 暫停），與設備卡同源。
-    """
-    if device.get("status") not in ("RUNNING", "PAUSED", "FINISHING"):
-        return None
-    return occupied_end(device, _now_utc())
-
-
 def _build_running_until(cache: dict) -> dict:
     """從 AICM_CACHE 建立 {device_id: estimated_end} dict，只含正在執行的設備"""
+    now = _now_utc()
     result = {}
     for did, dev in cache.items():
-        est = _est_end_from_device(dev)
+        est = device_free_at(dev, now)
         if est:
             result[did] = est
     return result
@@ -256,12 +247,15 @@ def _get_stuck_devices(cache: dict) -> set:
     PAUSED 明確排除：暫停是人為刻意的，不是設備卡住。若一台在暫停前就已超時，暫停後
     (now − est) 會凍結在當時的超時值、不會隨時間縮小（est 與 now 同速前進），沒有這層
     排除就會把它誤判成卡機、踢出自動選機——所以這是真的守門，不是備援。
+
+    FINISHING 不會被這裡判成卡機：它的估算是「從當前溫度還要降多久」，永遠落在未來。
+    這道守門本來就是為「該跑完卻還沒回 IDLE」的 RUNNING 設備設的。
     """
     now = _now_utc()
     return {
         did for did, dev in cache.items()
         if dev.get("status") != "PAUSED"
-        and (est := _est_end_from_device(dev)) and (now - est).total_seconds() > 3600
+        and (est := device_free_at(dev, now)) and (now - est).total_seconds() > 3600
     }
 
 

@@ -1,7 +1,6 @@
 import asyncio
 import dataclasses
 import datetime
-import json
 import logging
 import random
 from collections.abc import Mapping
@@ -9,7 +8,7 @@ from typing import Optional
 
 from .models import SessionLocal, DeviceData, SopExecution
 from .standards import get_ramp_rate, get_standard
-from .utils import _now_utc_naive
+from .utils import _now_utc_naive, ramp_rate_from_sop
 from . import device_state
 from .schedule_service import advance_running_condition, complete_running_schedule
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY, STABILIZATION_MINUTES
@@ -246,12 +245,8 @@ def _sim_handle_finishing(
     elapsed_seconds: float = 1.0,
 ) -> bool:
     """推進降溫；到達常溫時回 True，由 data_simulator 透過 state interface 完成清場。"""
-    try:
-        finishing_sop = json.loads(item.get("active_sop_json") or "{}")
-        ramp_rate = finishing_sop.get("ramp_rate") or 1.0
-    except Exception:
-        ramp_rate = 1.0
-    finishing_ramp = ramp_rate / 60.0 * elapsed_seconds
+    # 與「還要降多久」的估算共用同一份速率，模擬與估算不會分岔
+    finishing_ramp = ramp_rate_from_sop(item.get("active_sop_json")) / 60.0 * elapsed_seconds
 
     diff = AMBIENT_TEMP - current_temp
     if abs(diff) > 0.5:
