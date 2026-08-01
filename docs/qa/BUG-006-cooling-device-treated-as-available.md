@@ -1,5 +1,7 @@
 # BUG-006 — A chamber still returning to ambient was treated as available for scheduling
 
+English · [繁體中文](BUG-006-cooling-device-treated-as-available.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | **Bug ID** | BUG-006 |

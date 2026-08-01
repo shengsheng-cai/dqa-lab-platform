@@ -1,5 +1,7 @@
 # DQA Lab Platform — Minimal Traceability
 
+English · [繁體中文](traceability.zh-TW.md)
+
 This matrix connects critical behavior to risk, automated evidence, and known
 defects. It intentionally covers the high-risk Demo baseline rather than every
 route or UI element.

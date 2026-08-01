@@ -1,5 +1,7 @@
 # BUG-001 — Confirmed schedule keeps showing "已確認", then a contradictory error on manual start
 
+English · [繁體中文](BUG-001-schedule-status-not-refreshed-after-confirm.zh-TW.md)
+
 | Field | Value |
 |-------|-------|
 | **Bug ID** | BUG-001 |

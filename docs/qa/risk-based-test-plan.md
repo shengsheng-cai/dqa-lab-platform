@@ -1,5 +1,7 @@
 # DQA Lab Platform — Risk-Based Test Plan
 
+English · [繁體中文](risk-based-test-plan.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | **Plan type** | Release-baseline regression plan |
