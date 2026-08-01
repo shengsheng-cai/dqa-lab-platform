@@ -1,5 +1,7 @@
 # BUG-002 — Automatic scheduler started a device during an active maintenance window
 
+English · [繁體中文](BUG-002-maintenance-device-auto-started.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | **Bug ID** | BUG-002 |

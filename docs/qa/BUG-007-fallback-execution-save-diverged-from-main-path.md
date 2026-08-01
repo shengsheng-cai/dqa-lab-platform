@@ -1,5 +1,7 @@
 # BUG-007 — The fallback execution save dropped fields the main save sends, producing reports with no measurement data
 
+English · [繁體中文](BUG-007-fallback-execution-save-diverged-from-main-path.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | **Bug ID** | BUG-007 |

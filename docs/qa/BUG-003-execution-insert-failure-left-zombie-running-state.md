@@ -1,5 +1,7 @@
 # BUG-003 — Execution-record failure left a zombie RUNNING device
 
+English · [繁體中文](BUG-003-execution-insert-failure-left-zombie-running-state.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | **Bug ID** | BUG-003 |

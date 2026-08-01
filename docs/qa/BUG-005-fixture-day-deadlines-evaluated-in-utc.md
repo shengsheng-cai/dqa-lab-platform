@@ -1,5 +1,7 @@
 # BUG-005 — Whole-day fixture deadlines were evaluated against the UTC day
 
+English · [繁體中文](BUG-005-fixture-day-deadlines-evaluated-in-utc.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | **Bug ID** | BUG-005 |

@@ -1,5 +1,7 @@
 # BUG-004 — Fixture dates submitted before 08:00 local time are stored one day early
 
+English · [繁體中文](BUG-004-fixture-dates-stored-one-day-early.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | **Bug ID** | BUG-004 |

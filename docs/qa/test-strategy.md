@@ -1,5 +1,7 @@
 # DQA Lab Platform — Test Strategy
 
+English · [繁體中文](test-strategy.zh-TW.md)
+
 | Field | Value |
 |---|---|
 | **Document status** | Active |

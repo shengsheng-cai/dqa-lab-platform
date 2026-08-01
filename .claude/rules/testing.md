@@ -1,11 +1,15 @@
 # 測試規範
 
-## Shell 測試腳本
+## 要重複跑的驗證寫成 pytest，不要另外養 shell 腳本
 
-- 不要貼一串 curl 指令讓使用者自己複製貼上；要重複跑的驗證一律寫成 `.sh` 腳本放 `tests/`
-- 新增腳本後，同步加入 `.claude/settings.json` 的 allow 清單：`"Bash(bash tests/腳本名.sh)"`
-- `tests/e2e/` 就是照這條規則長出來的，可當範本
-- 一次性的探索腳本不算「要重複跑的驗證」，寫在暫存目錄跑完就丟，不要留在 `tests/`
+- 不要貼一串 curl 指令讓使用者自己複製貼上——要重複跑的東西就寫成測試。
+- **預設寫成 `backend/tests/` 的 pytest**，跟著既有套件一起跑、CI 自動涵蓋，不必再維護
+  allow 清單與另一條 CI 指令。驗的不是後端邏輯也沒關係：`test_schema_migrations.py`
+  驗的是 migration 檔、`test_doc_translations.py` 驗的是文件翻譯有沒有漂，都放這裡。
+- 只有**真的無法用 pytest 表達**時才寫 `.sh`（例如要編排多個服務進程）。`tests/e2e/`
+  是這種例外——它要自己開後端、開瀏覽器。新增這類腳本要同步加入
+  `.claude/settings.json` 的 allow 清單：`"Bash(bash tests/腳本名.sh)"`。
+- 一次性的探索腳本兩者都不是，寫在暫存目錄跑完就丟，不要留在 `tests/`。
 
 ## E2E 瀏覽器測試（Playwright）
 
