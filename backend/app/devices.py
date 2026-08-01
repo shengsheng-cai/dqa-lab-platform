@@ -13,7 +13,6 @@ from .utils import (
 )
 from .auth import require_admin, current_user
 from .audit_log import log_audit
-from .constants import DEVICE_IDS
 from .schedule_service import list_running_schedules
 
 logger = logging.getLogger("app")
@@ -77,16 +76,13 @@ SimPhase = Literal[
 ]
 
 
-class DeviceBasicOut(BaseModel):
+class DeviceOut(BaseModel):
     status: DeviceStatus
     temperature: float
     humidity: float
     running_sop_name: str
     description: str
     timestamp: str
-
-
-class DeviceOut(DeviceBasicOut):
     device_id: str
     active_sop_json: Optional[str] = None
     completed_steps: int
@@ -285,30 +281,6 @@ def get_sensor_stats(device_id: str, request: Request, hours: int = 24):
         anomaly_count=anomaly_count,
         hours=hours,
     )
-
-
-@router.get("/api/latest", response_model=DeviceBasicOut)
-def get_latest(request: Request):
-    cache = request.app.state.AICM_CACHE
-    if not cache or DEVICE_IDS[0] not in cache:
-        return {
-            "status": "OFFLINE",
-            "temperature": 0.0,
-            "humidity": 0.0,
-            "running_sop_name": "未連線",
-            "description": "等待模擬器啟動...",
-            "timestamp": _now_utc().strftime("%Y-%m-%dT%H:%M:%S"),
-        }
-    data = cache[DEVICE_IDS[0]]
-    status = data.get("status", "OFFLINE")
-    return {
-        "status": status,
-        "temperature": data.get("temperature", 0.0),
-        "humidity": data.get("humidity", 0.0),
-        "running_sop_name": data.get("running_sop_name", "STANDBY"),
-        "description": _make_description(status, data.get("running_sop_name", "")),
-        "timestamp": _now_utc().strftime("%H:%M:%S"),
-    }
 
 
 def _record_emergency_stop(db, device_id: str, device: dict, user_id, role):

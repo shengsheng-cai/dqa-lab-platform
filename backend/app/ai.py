@@ -30,7 +30,7 @@ META_PREFIX = "\n[META:"
 META_SUFFIX = "]"
 # Gemini RPD hit 時常見 retry 接近一天；超過此值視為「今日額度已用完」提示
 DAILY_QUOTA_WAIT_THRESHOLD_SECONDS = 3600
-SLOW_AI_CALL_MS = 10000
+# 超過這個耗時就記 warning。目前只剩串流端點會呼叫，門檻依串流的節奏設定。
 SLOW_AI_STREAM_MS = 30000
 _AI_ERROR_OUTCOMES = {
     "timeout",
@@ -54,10 +54,9 @@ def _log_ai_call(endpoint: str, outcome: str, start: float, status_code: int | N
         msg += " status_code=%s"
         args += (status_code,)
 
-    threshold = SLOW_AI_STREAM_MS if "stream" in endpoint else SLOW_AI_CALL_MS
     if outcome in _AI_ERROR_OUTCOMES:
         logger.error(msg, *args)
-    elif duration_ms > threshold:
+    elif duration_ms > SLOW_AI_STREAM_MS:
         logger.warning(msg, *args)
     else:
         logger.info(msg, *args)
@@ -332,10 +331,6 @@ class QueryRequest(BaseModel):
         return (v or [])[-_MAX_HISTORY:]
 
 
-class QueryResponse(BaseModel):
-    reply: str
-
-
 def _extract_test_type_hints(msg: str) -> dict:
     merged = {}
     for keyword, hints in _TEST_TYPE_HINTS.items():
@@ -441,46 +436,6 @@ def _build_gemini_payload(messages: list, system_prompt: str) -> dict:
             "maxOutputTokens": 4096,
         },
     }
-
-
-@router.post("/standards-query", response_model=QueryResponse)
-async def standards_query(req: QueryRequest):
-    ref_block, _ = await _build_context(req.message, req.history)
-    if ref_block:
-        system_content = f"{_SYSTEM_PROMPT}\n\n【參考資料】\n{ref_block}"
-    else:
-        system_content = (
-            _SYSTEM_PROMPT + "\n\n【參考資料】查無相關資料，請直接回覆「查無此資料」。"
-        )
-
-    messages = [{"role": m["role"], "content": m["content"]} for m in req.history]
-    messages.append({"role": "user", "content": req.message})
-
-    payload = _build_gemini_payload(messages, system_content)
-    start = time.perf_counter()
-    try:
-        api_key = _get_api_key()
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{GEMINI_URL}:generateContent?key={api_key}",
-                json=payload,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        reply = data["candidates"][0]["content"]["parts"][0]["text"]
-        _log_ai_call("standards-query", "success", start, resp.status_code)
-    except httpx.TimeoutException:
-        _log_ai_call("standards-query", "timeout", start)
-        raise HTTPException(status_code=503, detail="AI 服務逾時，請稍後再試")
-    except httpx.HTTPStatusError as e:
-        _log_ai_call("standards-query", "http_error", start, e.response.status_code)
-        raise HTTPException(
-            status_code=503, detail=f"AI 服務錯誤：{e.response.status_code}"
-        )
-    except Exception:
-        _log_ai_call("standards-query", "unavailable", start)
-        raise HTTPException(status_code=503, detail="AI 服務不可用，請稍後再試")
-    return QueryResponse(reply=reply)
 
 
 @router.post("/standards-query-stream")

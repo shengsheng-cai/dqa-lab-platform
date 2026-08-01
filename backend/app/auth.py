@@ -26,7 +26,6 @@ SKIP_PATHS = {
     "/api/line/webhook",
     "/docs",
     "/openapi.json",
-    "/api/latest",
     "/health",
     "/api/auth/login",
     "/api/auth/demo-login",

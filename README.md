@@ -202,7 +202,6 @@ make lint       # Ruff
 | Gemini 諮詢與 embedding | `GEMINI_API_KEY` |
 | LINE 主動推播 | `LINE_CHANNEL_ACCESS_TOKEN`、`LINE_USER_ID` |
 | LINE 設備查詢（Webhook） | `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN` |
-| 本機 sentence-transformers embedding | `RAG_EMBED_PROVIDER=sentence_transformers` |
 
 外部 AI 服務的免費額度與速率限制以供應商當下政策為準；未設定可選整合時，核心 Demo 仍可執行。
 

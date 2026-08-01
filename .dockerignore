@@ -24,8 +24,6 @@ client/.vite
 
 # 日誌 / 環境
 *.log
-.socat_info.log
-.serial_ports.tmp
 .backend.log
 .ngrok.log
 .env

@@ -470,42 +470,6 @@ def list_active_loans():
         ]
 
 
-@router.get("/loans/overdue")
-def list_overdue_loans():
-    with SessionLocal() as db:
-        now_naive = _now_utc_naive()
-        loans = (
-            db.query(FixtureLoan)
-            .filter(
-                FixtureLoan.status == LOAN_LOANED,
-                FixtureLoan.due_date < now_naive,
-            )
-            .order_by(FixtureLoan.due_date.asc())
-            .all()
-        )
-        fixtures = _fetch_fixtures_map(db, {loan.fixture_id for loan in loans})
-        return [
-            {
-                "id": loan.id,
-                "fixture_id": loan.fixture_id,
-                "fixture_interface": fixtures[loan.fixture_id].interface_type
-                if loan.fixture_id in fixtures
-                else "",
-                "fixture_form_factor": fixtures[loan.fixture_id].form_factor
-                if loan.fixture_id in fixtures
-                else "",
-                "borrower_name": loan.borrower_name,
-                "device_id": loan.device_id,
-                "project_name": loan.project_name,
-                "due_date": loan.due_date.isoformat() if loan.due_date else None,
-                "overdue_days": (now_naive - loan.due_date).days
-                if loan.due_date
-                else 0,
-            }
-            for loan in loans
-        ]
-
-
 @router.get("/loans/damaged")
 def list_damaged_lost_loans():
     """損壞或遺失的治具紀錄"""
