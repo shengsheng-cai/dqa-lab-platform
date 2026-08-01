@@ -11,6 +11,7 @@ import logging
 import hashlib
 import json
 from pathlib import Path
+import httpx
 import numpy as np
 from typing import Optional
 from google import genai
@@ -20,6 +21,7 @@ from .standards import get_standard_tree
 logger = logging.getLogger("app")
 
 GEMINI_EMBED_MODEL = "gemini-embedding-001"
+GEMINI_EMBED_TIMEOUT_MS = 20_000
 RAG_CACHE_PATH = Path(__file__).parent.parent / "rag_cache.pkl"
 
 _CHUNKS: list[dict] = []
@@ -56,7 +58,19 @@ _genai_client: Optional[genai.Client] = None
 def _get_client() -> genai.Client:
     global _genai_client
     if _genai_client is None:
-        _genai_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
+        # Google 的 IPv6 路徑異常時，SDK 預設 timeout 可能讓 query embedding 卡數分鐘。
+        # 此服務只呼叫公開 Gemini API，固定以 IPv4 transport 連線並限制單次請求時間。
+        http_client = httpx.Client(
+            timeout=GEMINI_EMBED_TIMEOUT_MS / 1000,
+            transport=httpx.HTTPTransport(local_address="0.0.0.0"),
+        )
+        _genai_client = genai.Client(
+            api_key=os.getenv("GEMINI_API_KEY", ""),
+            http_options=genai_types.HttpOptions(
+                timeout=GEMINI_EMBED_TIMEOUT_MS,
+                httpx_client=http_client,
+            ),
+        )
     return _genai_client
 
 

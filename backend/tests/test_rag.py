@@ -4,6 +4,7 @@ T-16: RAG 快取驗證測試
 """
 import asyncio
 
+import httpx
 import numpy as np
 
 import app.rag as rag_module
@@ -78,3 +79,31 @@ def test_warmup_rag_rebuilds_cache_when_chunk_content_changes(tmp_path, monkeypa
     rag_module._EMBEDDINGS = None
     _run_async(rag_module.warmup_rag())
     assert embed_calls["count"] == 2
+
+
+def test_get_client_limits_embedding_timeout_and_uses_ipv4(monkeypatch):
+    captured = {}
+    real_http_transport = httpx.HTTPTransport
+
+    def _http_transport(**kwargs):
+        captured["transport_options"] = kwargs
+        return real_http_transport(**kwargs)
+
+    class FakeGenAIClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(rag_module.genai, "Client", FakeGenAIClient)
+    monkeypatch.setattr(rag_module.httpx, "HTTPTransport", _http_transport)
+    rag_module._genai_client = None
+
+    client = rag_module._get_client()
+
+    assert isinstance(client, FakeGenAIClient)
+    options = captured["http_options"]
+    assert options.timeout == rag_module.GEMINI_EMBED_TIMEOUT_MS
+    assert isinstance(options.httpx_client, httpx.Client)
+    assert options.httpx_client.timeout.read == rag_module.GEMINI_EMBED_TIMEOUT_MS / 1000
+    assert captured["transport_options"] == {"local_address": "0.0.0.0"}
+    options.httpx_client.close()
+    rag_module._genai_client = None

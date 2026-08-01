@@ -109,7 +109,18 @@ def test_stream_logs_success_and_meta(monkeypatch, caplog):
     stream_response = FakeStreamResponse(
         lines=[_sse_text("建議測試 [APPLY:SOP-A]"), "data: [DONE]"],
     )
-    monkeypatch.setattr(ai_module.httpx, "AsyncClient", lambda **kwargs: FakeStreamClient(stream_response, **kwargs))
+    client_options = {}
+
+    def _client_factory(**kwargs):
+        client_options.update(kwargs)
+        return FakeStreamClient(stream_response, **kwargs)
+
+    monkeypatch.setattr(
+        ai_module.httpx,
+        "AsyncHTTPTransport",
+        lambda **kwargs: {"transport_options": kwargs},
+    )
+    monkeypatch.setattr(ai_module.httpx, "AsyncClient", _client_factory)
 
     with caplog.at_level("INFO", logger="ai"):
         body = _run_async(_call_and_collect_stream(_query_request()))
@@ -117,6 +128,10 @@ def test_stream_logs_success_and_meta(monkeypatch, caplog):
     assert "建議測試" in body
     assert "[META:" in body
     assert "outcome=success" in _messages(caplog)
+    assert client_options["timeout"].read == 60.0
+    assert client_options["transport"] == {
+        "transport_options": {"local_address": "0.0.0.0"},
+    }
 
 
 def test_stream_logs_stream_error_without_exception_detail_or_meta(monkeypatch, caplog):
@@ -137,5 +152,36 @@ def test_stream_logs_stream_error_without_exception_detail_or_meta(monkeypatch, 
     assert "AI 服務不可用，請稍後再試" in body
     assert "[META:" not in body
     assert "outcome=stream_error" in text
+    assert "https://generativelanguage" not in text
+    assert "key=" not in text
+
+
+def test_context_timeout_returns_stream_message(monkeypatch, caplog):
+    async def _slow_context(_message, _history=None):
+        await asyncio.sleep(0.02)
+        return "", []
+
+    monkeypatch.setattr(ai_module, "_build_context", _slow_context)
+    monkeypatch.setattr(ai_module, "RAG_CONTEXT_TIMEOUT_SECONDS", 0.001)
+
+    with caplog.at_level("ERROR", logger="ai"):
+        body = _run_async(_call_and_collect_stream(_query_request()))
+
+    assert "AI 服務逾時，請稍後再試" in body
+    assert "outcome=timeout" in _messages(caplog)
+
+
+def test_context_failure_returns_stream_message_without_exception_detail(monkeypatch, caplog):
+    async def _failed_context(_message, _history=None):
+        raise RuntimeError("https://generativelanguage.googleapis.com/fake?key=SECRET_KEY")
+
+    monkeypatch.setattr(ai_module, "_build_context", _failed_context)
+
+    with caplog.at_level("ERROR", logger="ai"):
+        body = _run_async(_call_and_collect_stream(_query_request()))
+
+    text = _messages(caplog)
+    assert "AI 服務不可用，請稍後再試" in body
+    assert "outcome=unavailable" in text
     assert "https://generativelanguage" not in text
     assert "key=" not in text
