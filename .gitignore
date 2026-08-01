@@ -73,6 +73,7 @@ Thumbs.db
 .LSOverride
 
 ### 臨時檔案與日誌
+.logs/
 *.tmp
 *.bak
 *.pid

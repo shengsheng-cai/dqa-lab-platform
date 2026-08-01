@@ -43,7 +43,7 @@ clean:
 		fi; \
 	done
 	-@pkill -9 -f "ngrok http 8000" 2>/dev/null
-	@rm -f .backend.log .frontend.log .ngrok.log .hf-preview.log
+	@rm -rf .logs
 	@echo "✨ 清理完成。"
 
 # 單元測試（後端 pytest + 前端 vitest）

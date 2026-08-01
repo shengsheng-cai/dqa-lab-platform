@@ -10,6 +10,9 @@ cleanup() {
 trap cleanup SIGINT SIGTERM EXIT
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# 四個服務的 log 集中放這，不要散在根目錄。make clean 整個目錄刪掉。
+LOG_DIR="$ROOT_DIR/.logs"
+mkdir -p "$LOG_DIR"
 PYTHON_BIN="$ROOT_DIR/venv/bin/python"
 if [ ! -x "$PYTHON_BIN" ]; then
     PYTHON_BIN="python3"
@@ -41,19 +44,19 @@ fi
 # 1. 啟動後端 API (FastAPI)
 echo "🚀 啟動後端 API (FastAPI)..."
 lsof -ti:8000 | xargs kill -9 2>/dev/null || true
-(cd backend && ALLOWED_ORIGINS="$ALLOWED_ORIGINS_DEFAULT" ../venv/bin/uvicorn app.main:app --reload --port 8000 --no-access-log) > "$ROOT_DIR/.backend.log" 2>&1 &
+(cd backend && ALLOWED_ORIGINS="$ALLOWED_ORIGINS_DEFAULT" ../venv/bin/uvicorn app.main:app --reload --port 8000 --no-access-log) > "$LOG_DIR/backend.log" 2>&1 &
 BACK_PID=$!
 
 # 2. 啟動前端網頁 (Vite)
 echo "🚀 啟動前端網頁 (Vite)..."
 lsof -ti:5173 | xargs kill -9 2>/dev/null || true
-(cd client && npm run dev) > "$ROOT_DIR/.frontend.log" 2>&1 &
+(cd client && npm run dev) > "$LOG_DIR/frontend.log" 2>&1 &
 CLIENT_PID=$!
 
 # 3. 啟動 ngrok（背景執行）
 echo "🌐 啟動 ngrok..."
 lsof -ti:4040 | xargs kill -9 2>/dev/null || true
-ngrok http 8000 --log=stdout > .ngrok.log 2>&1 &
+ngrok http 8000 --log=stdout > "$LOG_DIR/ngrok.log" 2>&1 &
 NGROK_PID=$!
 
 # 3.5 啟動 HF 本地預覽（背景執行，可關閉：HF_PREVIEW_AUTO=0 make dev）
@@ -91,13 +94,13 @@ if [ "$HF_PREVIEW_AUTO" = "1" ]; then
         echo "[4/4] Start preview server ..."
         cd "$ROOT_DIR/backend"
         exec "$PYTHON_BIN" -m uvicorn app.main:app --host 127.0.0.1 --port "$HF_PREVIEW_PORT" --no-access-log
-    ) > "$ROOT_DIR/.hf-preview.log" 2>&1 &
+    ) > "$LOG_DIR/hf-preview.log" 2>&1 &
     HF_PREVIEW_PID=$!
     sleep 3
     if kill -0 "$HF_PREVIEW_PID" 2>/dev/null; then
         echo "✅ HF 本地預覽啟動中：http://localhost:${HF_PREVIEW_PORT}"
     else
-        echo "⚠️  HF 本地預覽啟動失敗，請查看 .hf-preview.log"
+        echo "⚠️  HF 本地預覽啟動失敗，請查看 .logs/hf-preview.log"
     fi
 else
     echo "ℹ️  已略過 HF 本地預覽（HF_PREVIEW_AUTO=0）"
