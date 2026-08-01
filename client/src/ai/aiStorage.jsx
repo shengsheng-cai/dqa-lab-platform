@@ -21,7 +21,7 @@ const titleFrom = (msgs) => {
 /**
  * 生成新的對話 ID
  */
-export const genId = () =>
+const genId = () =>
   `conv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 /**

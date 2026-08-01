@@ -76,11 +76,7 @@
     font-weight: 600;
     letter-spacing: 1px;
 }
-.value-pv  { font-size: 60px; font-weight: 800; text-align: right; line-height: 1.1; }
 .value-large { font-size: 26px; font-weight: 700; margin-top: 8px; color: #fff; }
-.temp-card .value-pv { color: #ff7b72; }
-.humi-card .value-pv { color: #a5d6ff; }
-.unit { font-size: 20px; color: #484f58; margin-left: 5px; }
 
 /* ── 右側卡片 ── */
 .operation-box {

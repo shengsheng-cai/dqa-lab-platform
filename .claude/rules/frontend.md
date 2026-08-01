@@ -67,7 +67,7 @@ App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, Maintenan
 ## 色彩 Token 與共用 Style
 
 - 色彩 token 集中在 `client/src/styles/theme.js`，export `C` 物件
-- 共用 style 物件在 `client/src/styles/common.js`：`thStyle`、`tdStyle`、`btnPrimary`、`btnOutline`、`btnDanger`、`inputBase`
+- 共用 style 物件在 `client/src/styles/common.js`：`thStyle`、`tdStyle`、`btnPrimary`、`btnDanger`
 - schedule/ 元件的 modal 共用 style（`inputStyle`、`labelStyle`、`primaryBtn`、`cancelBtn`、`STATUS_COLOR` 等）在 `scheduleUtils.js`，已引用 `C`
 - 新增元件：用 `C.token` 取代 hex literal；用 `common.js` export 取代重複的 button/input style 定義
 

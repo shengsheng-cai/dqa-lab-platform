@@ -20,7 +20,6 @@ WRITE_METHODS = {"POST", "PATCH", "PUT", "DELETE"}
 # 「不需 admin」的公開寫入 route——與 auth.py 的 SKIP_PATHS（「不需 token」）語意不同，
 # 刻意不共用：這裡含需登入的 ai / logout，且不含 SKIP_PATHS 的唯讀 GET 路徑。
 PUBLIC_WRITE_ROUTES = {
-    ("POST", "/api/ai/standards-query"),
     ("POST", "/api/ai/standards-query-stream"),
     ("POST", "/api/line/webhook"),
     ("POST", "/api/auth/login"),
@@ -28,7 +27,10 @@ PUBLIC_WRITE_ROUTES = {
     ("POST", "/api/auth/demo-login"),
 }
 # 走訪失效（框架升級改內部結構）時的最低寫入 route 數守衛，兩個列舉測試共用。
-MIN_WRITE_ROUTES = 49
+# 刻意設得寬鬆：走訪一旦失效，數字會直接掉到 0，所以地板放幾十都擋得住。
+# 不釘在當下的實際條數——那會讓每次正常增刪路由都被迫改這個數字，
+# 而且報的錯（「列舉可能失效」）會把人帶往錯的方向查。
+MIN_WRITE_ROUTES = 40
 
 
 def _walk_mounted_routes(routes, prefix=""):
@@ -90,6 +92,26 @@ def test_write_route_net_covers_mounted_app():
     assert any("/api/fixtures" in path for _, path, _ in routes)
     assert any("/api/schedules" in path for _, path, _ in routes)
     assert any(path.startswith(("/api/devices", "/api/stop")) for _, path, _ in routes)
+
+
+def test_skip_paths_match_real_routes_exactly():
+    """SKIP_PATHS 裡每個 /api/ 項目都必須「正好等於」一條掛載中的路由。
+
+    這個 allowlist 走的是前綴比對（auth.py 的 path.startswith），所以有兩種爛法：
+    路由刪了但項目忘了拿掉，留下一個還活著的免驗證前綴，日後任何以它開頭的新路由
+    都會靜默不需要 token；或是項目本身寫得太寬（極端如 `/api/`），一口氣把大批
+    路由放行。要求精確相等可以同時擋掉這兩種——「至少是某條路由的前綴」擋不住第二種。
+
+    只檢查 SKIP_PATHS 有沒有爛掉，不與 PUBLIC_WRITE_ROUTES 合併（兩份清單語意不同，
+    刻意分開：那份講「不需 admin」，這份講「不需 token」）。
+    """
+    import app.main as main_module
+    from app.auth import SKIP_PATHS
+
+    mounted = {path for path, _ in _walk_mounted_routes(main_module.app.routes)}
+    # /docs、/openapi.json、/health 等由框架或 app 層直接提供，不在 router 樹裡
+    bad = sorted(p for p in SKIP_PATHS if p.startswith("/api/") and p not in mounted)
+    assert not bad, f"SKIP_PATHS 項目對不上任何實際路由（免驗證前綴殘留或範圍過寬）：{bad}"
 
 
 # ── guest 對排程 PATCH 的邊界 ─────────────────────────────────────────────────

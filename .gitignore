@@ -39,19 +39,15 @@ pnpm-lock.yaml
 ### 本地開發文檔（不公開）
 docs/private/
 docs/business-strategy.md
-docs/dqa-lab-platform.md
 docs/architecture-review-*.html
-dqa-lab-platform.pptx
 .local/
 CLAUDE.local.md
 
 ### 真機驅動層（不公開，含廠商協定）
 backend/app/kson_driver.py
 
-### RAG 快取 / 模擬器工作目錄
+### RAG 快取
 backend/rag_cache.pkl
-simulator/__pycache__/
-simulator/venv/
 
 ### 測試與覆蓋率
 test_*.py
@@ -101,12 +97,10 @@ dmypy.json
 docs/templates/
 
 ### AI 工具設定
-.continue/
 .claude/settings.json
 .claude/settings.local.json
 .playwright-mcp/
 .codex/
-chat-history/
 
 ### E2E 測試產出（測試碼本身要進 git，這些跑出來的不進）
 tests/e2e/test-results/
@@ -114,6 +108,3 @@ tests/e2e/playwright-report/
 tests/e2e/.last-run.json
 tests/e2e/.backend.log
 client/dist-e2e/
-
-### 雜項
-git_log.txt
