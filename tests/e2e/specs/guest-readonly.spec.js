@@ -11,6 +11,14 @@ test.beforeAll(resetBackend);
 // 前端哪天改版漏藏一顆按鈕，後端那層還會擋——所以 UI 和 API 兩層分開驗。
 
 test.describe("訪客唯讀", () => {
+  test("UI：一鍵訪客登入後看得到資料", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "訪客模式" }).click();
+    await page.getByRole("button", { name: "🚀 一鍵訪客體驗" }).click();
+
+    await expect(page.getByText(/CH-0\d/).first()).toBeVisible();
+  });
+
   test("UI：看不到寫入按鈕與受限 tab", async ({ page }) => {
     await loginAsGuest(page);
 

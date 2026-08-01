@@ -3,12 +3,14 @@ import time
 import secrets
 import datetime
 import logging
+import threading
 from types import SimpleNamespace
 from typing import Optional
 import bcrypt as _bcrypt
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from .models import SessionLocal, User, DemoToken
 from .utils import _now_utc_naive
 from .audit_log import log_audit
@@ -19,6 +21,7 @@ DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "")
 
 _fail_tracker: dict = {}
 _FAIL_TRACKER_MAXSIZE = 1000
+_guest_hint_lock = threading.Lock()
 
 TOKEN_TTL = 8 * 60 * 60  # 8 小時
 
@@ -341,17 +344,46 @@ def guest_hint():
     """供登入頁顯示一鍵體驗按鈕，DEMO_PASSWORD 有設定時生成短效 DB token 回傳（不曝露原始密碼）。"""
     if not DEMO_PASSWORD:
         return {"token": None}
-    token_str = _gen_demo_token()
-    with SessionLocal() as db:
-        db.query(DemoToken).filter(DemoToken.label == "auto-hint").delete()
-        db.add(DemoToken(
-            token=token_str,
-            label="auto-hint",
-            max_uses=1,
-            expires_at=_now_utc_naive() + datetime.timedelta(hours=1),
-        ))
-        db.commit()
-    return {"token": token_str}
+
+    with _guest_hint_lock:
+        now = _now_utc_naive()
+        with SessionLocal() as db:
+            db.query(DemoToken).filter(
+                DemoToken.label == "auto-hint",
+                DemoToken.expires_at.is_not(None),
+                DemoToken.expires_at < now,
+            ).delete(synchronize_session=False)
+            active_token = (
+                db.query(DemoToken)
+                .filter(
+                    DemoToken.label == "auto-hint",
+                    DemoToken.is_active,
+                    DemoToken.expires_at.is_not(None),
+                    DemoToken.expires_at >= now,
+                    DemoToken.max_uses.is_(None),
+                )
+                .order_by(DemoToken.created_at.desc())
+                .first()
+            )
+            db.commit()
+            if active_token:
+                return {"token": active_token.token}
+
+        for _ in range(3):
+            token_str = _gen_demo_token()
+            try:
+                with SessionLocal() as db:
+                    db.add(DemoToken(
+                        token=token_str,
+                        label="auto-hint",
+                        expires_at=now + datetime.timedelta(hours=1),
+                    ))
+                    db.commit()
+                return {"token": token_str}
+            except IntegrityError:
+                continue
+
+    raise HTTPException(status_code=500, detail="Token 生成失敗，請重試")
 
 
 # ---------- Demo Token ----------
