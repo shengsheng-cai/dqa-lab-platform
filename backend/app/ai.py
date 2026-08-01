@@ -30,6 +30,7 @@ META_PREFIX = "\n[META:"
 META_SUFFIX = "]"
 # Gemini RPD hit 時常見 retry 接近一天；超過此值視為「今日額度已用完」提示
 DAILY_QUOTA_WAIT_THRESHOLD_SECONDS = 3600
+RAG_CONTEXT_TIMEOUT_SECONDS = 30
 # 超過這個耗時就記 warning。目前只剩串流端點會呼叫，門檻依串流的節奏設定。
 SLOW_AI_STREAM_MS = 30000
 _AI_ERROR_OUTCOMES = {
@@ -438,9 +439,28 @@ def _build_gemini_payload(messages: list, system_prompt: str) -> dict:
     }
 
 
+def _message_stream_response(message: str) -> StreamingResponse:
+    async def generate():
+        yield f"\n\n[{message}]"
+
+    return StreamingResponse(generate(), media_type="text/plain")
+
+
 @router.post("/standards-query-stream")
 async def standards_query_stream(req: QueryRequest):
-    ref_block, sop_ids = await _build_context(req.message, req.history)
+    request_start = time.perf_counter()
+    try:
+        ref_block, sop_ids = await asyncio.wait_for(
+            _build_context(req.message, req.history),
+            timeout=RAG_CONTEXT_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        _log_ai_call("standards-query-stream", "timeout", request_start)
+        return _message_stream_response("AI 服務逾時，請稍後再試")
+    except Exception:
+        _log_ai_call("standards-query-stream", "unavailable", request_start)
+        return _message_stream_response("AI 服務不可用，請稍後再試")
+
     if ref_block:
         system_content = f"{_SYSTEM_PROMPT}\n\n【參考資料】\n{ref_block}"
     else:
@@ -460,13 +480,13 @@ async def standards_query_stream(req: QueryRequest):
         raise
 
     async def generate():
-        start = time.perf_counter()
         outcome = "unavailable"
         status_code = None
         collected = []
         try:
             async with httpx.AsyncClient(
-                timeout=httpx.Timeout(connect=10.0, read=None, write=60.0, pool=10.0)
+                timeout=httpx.Timeout(connect=10.0, read=60.0, write=60.0, pool=10.0),
+                transport=httpx.AsyncHTTPTransport(local_address="0.0.0.0"),
             ) as client:
                 async with client.stream(
                     "POST",
@@ -526,7 +546,7 @@ async def standards_query_stream(req: QueryRequest):
             outcome = "stream_error"
             yield "\n\n[AI 服務不可用，請稍後再試]"
         finally:
-            _log_ai_call("standards-query-stream", outcome, start, status_code)
+            _log_ai_call("standards-query-stream", outcome, request_start, status_code)
         if outcome != "success":
             return
         # AI 從 [S:xxx] 清單選 ID 輸出 [APPLY:id1,id2]，後端白名單驗證防幻覺

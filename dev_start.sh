@@ -34,6 +34,7 @@ HF_PREVIEW_PID=""
 ALLOWED_ORIGINS_DEFAULT="${ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:7861,http://127.0.0.1:7861}"
 PREVIEW_ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(read_env_value ADMIN_PASSWORD)}"
 PREVIEW_DEMO_PASSWORD="${DEMO_PASSWORD:-$(read_env_value DEMO_PASSWORD)}"
+PREVIEW_GEMINI_API_KEY="${GEMINI_API_KEY:-$(read_env_value GEMINI_API_KEY)}"
 if [ -z "$PREVIEW_ADMIN_PASSWORD" ]; then
     PREVIEW_ADMIN_PASSWORD="hf_preview_admin"
 fi
@@ -84,7 +85,7 @@ if [ "$HF_PREVIEW_AUTO" = "1" ]; then
         export STATIC_DIR="$HF_STATIC_DIR"
         export ADMIN_PASSWORD="$PREVIEW_ADMIN_PASSWORD"
         export DEMO_PASSWORD="$PREVIEW_DEMO_PASSWORD"
-        export GEMINI_API_KEY="${GEMINI_API_KEY:-hf_preview_dummy_key}"
+        export GEMINI_API_KEY="$PREVIEW_GEMINI_API_KEY"
         export LINE_CHANNEL_ACCESS_TOKEN=""
         export LINE_USER_ID=""
         export LINE_CHANNEL_SECRET=""
