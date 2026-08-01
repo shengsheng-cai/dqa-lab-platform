@@ -43,6 +43,12 @@ DQA Lab 把溫濕度試驗室的設備監控、SOP、排程、治具與報告串
 - **資產連動**：治具隨排程自動預約、借出與歸還，保留完整異動紀錄。
 - **品質證據**：以風險導向測試、分層自動化與真實缺陷報告驗證核心流程。
 
+## 作者角色
+
+我以約 9 年硬體 DQA／可靠度驗證經驗定義這個系統的領域需求、風險與驗收標準：
+測什麼、如何斷言、缺陷如何判讀、修正是否符合實驗室流程，都由我決定。
+實作與程式碼審查借助 Claude Code、Codex 等 AI coding agent。
+
 ## QA 與自動化測試
 
 這不只是功能展示，而是一個刻意建立的受測系統。測試重點放在狀態一致性、跨模組交易、權限邊界、日期時區與失敗回滾，而不是單純追求測試數量。
@@ -56,21 +62,23 @@ DQA Lab 把溫濕度試驗室的設備監控、SOP、排程、治具與報告串
 
 ### 真實缺陷與回歸證據
 
-六份報告都走完「發現 → 記錄 → 修復 → 回歸驗證」：
+每份報告都走完「發現 → 記錄 → 修復 → 回歸驗證」：
 
 | 缺陷 | 使用者影響 | 回歸重點 |
 |---|---|---|
-| [BUG-001](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-001-schedule-status-not-refreshed-after-confirm.md) | 排程確認後畫面仍顯示舊狀態 | 寫入後的跨區塊刷新 |
-| [BUG-002](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-002-maintenance-device-auto-started.md) | 維護中的設備被排程自動啟動 | 啟動前的設備可用性判斷 |
-| [BUG-003](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-003-execution-insert-failure-left-zombie-running-state.md) | 啟動失敗後設備留下殭屍狀態 | 原子交易與失敗回滾 |
-| [BUG-004](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-004-fixture-dates-stored-one-day-early.md) | 台北凌晨送出的日期少一天 | 本地日期與 UTC 邊界 |
-| [BUG-005](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-005-fixture-day-deadlines-evaluated-in-utc.md) | 以天為期限的治具提早被判逾期 | 本地日界與截止時間 |
-| [BUG-006](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-006-cooling-device-treated-as-available.md) | 降溫中的設備被當成可立即排程 | 設備可用時間的單一估算來源 |
-| [BUG-007](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-007-fallback-execution-save-diverged-from-main-path.md) | 報告產出時量測數據整段空白 | 主路徑與備援路徑送出的欄位一致 |
+| [BUG-001](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-001-schedule-status-not-refreshed-after-confirm.zh-TW.md) | 排程確認後畫面仍顯示舊狀態 | 寫入後的跨區塊刷新 |
+| [BUG-002](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-002-maintenance-device-auto-started.zh-TW.md) | 維護中的設備被排程自動啟動 | 啟動前的設備可用性判斷 |
+| [BUG-003](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-003-execution-insert-failure-left-zombie-running-state.zh-TW.md) | 啟動失敗後設備留下殭屍狀態 | 原子交易與失敗回滾 |
+| [BUG-004](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-004-fixture-dates-stored-one-day-early.zh-TW.md) | 台北凌晨送出的日期少一天 | 本地日期與 UTC 邊界 |
+| [BUG-005](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-005-fixture-day-deadlines-evaluated-in-utc.zh-TW.md) | 以天為期限的治具提早被判逾期 | 本地日界與截止時間 |
+| [BUG-006](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-006-cooling-device-treated-as-available.zh-TW.md) | 降溫中的設備被當成可立即排程 | 設備可用時間的單一估算來源 |
+| [BUG-007](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-007-fallback-execution-save-diverged-from-main-path.zh-TW.md) | 報告產出時量測數據整段空白 | 主路徑與備援路徑送出的欄位一致 |
 
-[測試策略](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/test-strategy.md) ·
-[風險導向測試計畫](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/risk-based-test-plan.md) ·
-[需求與測試追溯表](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/traceability.md) ·
+QA 文件皆為中英雙語，每份開頭可切換語言：
+
+[測試策略](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/test-strategy.zh-TW.md) ·
+[風險導向測試計畫](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/risk-based-test-plan.zh-TW.md) ·
+[需求與測試追溯表](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/traceability.zh-TW.md) ·
 [全部 QA 文件](https://github.com/shengsheng-cai/dqa-lab-platform/tree/main/docs/qa)
 
 ## 核心流程
@@ -216,15 +224,6 @@ make lint       # Ruff
 
 取得實機與通訊協定後，將於獨立分支進行真實設備通訊與驅動整合（Phase 3）；
 目前的 `main` 維持可穩定展示的純模擬版本。
-
-## 作者角色與 AI 協作
-
-我以約 9 年硬體 DQA／可靠度驗證經驗定義領域需求、風險與驗收標準，
-並使用 Claude Code、Codex 等 AI coding agent 協助實作與審查。
-我負責決定測什麼、如何斷言、判讀缺陷，以及確認修正是否符合實驗室流程。
-
-不宣稱已獨立精通每個框架，也不掛 SDET 頭銜。定位是硬體 DQA／可靠度驗證背景
-延伸到實驗室流程軟體化與測試自動化，不是純軟體或純 AI。
 
 ## Contributing
 
