@@ -43,8 +43,13 @@ user_id, role = u.user_id, u.role
 
 - 主動 push 時機（三個）：條件完成（等待人員確認）、測試完成、緊急停止。
   - 條件完成推播：`simulator.py`（sim_phase → done 時）
-  - 測試完成推播：`schedules.py` `confirm_condition`
+  - 測試完成推播有**兩個**發送點，依測試是否掛排程分流，不會同時發：
+    - 有排程：`schedules.py` `confirm_condition`（人員確認條件完成後）
+    - 無排程的臨時測試：`sop.py` `create_execution`（存執行紀錄時）
   - 緊急停止推播：`devices.py`
+- `sop.py` 那個發送點被 `manual_mode` 擋掉：手動模式是除錯用，完全不推播，避免消耗
+  免費額度（200 則／月）。前端建立執行紀錄時**一定要送 `manual_mode`**，漏送會被
+  當成一般測試而推播出去（BUG-007 就是漏送造成的）。
 - `push_message` 推播給 `LINE_USER_ID`（管理者個人）。
 
 ## Async/Sync 慣例

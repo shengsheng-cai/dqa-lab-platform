@@ -3,14 +3,16 @@
 
 - 找不到執行紀錄 → 乾淨 404（PDF 與 CSV 共用 _fetch_execution_data），非 500 崩潰。
 - PDF 產生走真實 reportlab（行內函式庫，不 mock），輸出必須是合法 PDF。
+- 前端存執行紀錄時送的是帶時區的 ISO 時間，落地後仍要對得上 naive UTC 的感測資料。
 """
 import asyncio
+import datetime
 
 import pytest
 from fastapi import HTTPException
 
-from app.models import SopExecution
-from app.reports import download_csv_report, download_pdf_report
+from app.models import DeviceData, SopExecution
+from app.reports import _fetch_execution_data, download_csv_report, download_pdf_report
 
 
 @pytest.fixture()
@@ -61,3 +63,53 @@ def test_pdf_report_generates_valid_pdf(session_patched):
 
     assert body.startswith(b"%PDF"), "輸出不是合法 PDF"
     assert len(body) > 1000, "PDF 內容過小，可能產生失敗"
+
+
+def test_frontend_iso_timestamps_still_match_sensor_data(api_client, monkeypatch):
+    """前端送的帶時區 ISO 時間，經真實路由存進去後，報告仍要撈得到感測資料。
+
+    前端存執行紀錄時送的是字串：開始時間來自設備狀態（帶 +00:00）、結束時間是
+    new Date().toISOString()（帶 Z）。兩者經 pydantic 解析成 aware UTC 後直接寫進
+    naive UTC 欄位，而感測資料的時間戳是 naive UTC。這兩者要對得上，報告才有數據。
+    對不上時不會有錯誤訊息，只是量測數據整段消失（步驟表還在，最高／最低／平均溫全空）。
+
+    刻意走 HTTP 而非直接塞 ORM：要涵蓋的正是「ISO 字串 → pydantic → DB」這段，
+    直接塞 ORM 會跳過解析，只驗到 SQLAlchemy 丟棄 tzinfo 的框架行為。
+    """
+    import app.sop as sop_module
+
+    async def _no_push(*_a, **_kw):
+        return None
+    monkeypatch.setattr(sop_module, "push_message", _no_push)
+
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    started = now - datetime.timedelta(minutes=15)
+
+    with api_client(sop_module, sop_module.execution_router) as (client, Session):
+        with Session() as db:
+            # 感測資料：模擬器實際寫入的樣子（naive UTC）
+            for i in range(10):
+                db.add(DeviceData(
+                    device_id="CH-01", temperature=-40.0 + i, humidity=5.0,
+                    timestamp=now.replace(tzinfo=None) - datetime.timedelta(minutes=10 - i),
+                ))
+            db.commit()
+
+        resp = client.post("/api/sop-executions/", json={
+            "sop_id": "iec60068_ab_-40_16h",
+            "device_id": "CH-01",
+            "operator": "測試員",
+            # 前端兩個欄位的實際字串格式，不要改寫成 naive
+            "test_started_at": started.isoformat(),            # ...+00:00
+            "test_ended_at": now.isoformat().replace("+00:00", "Z"),
+            "steps": [],
+        })
+        assert resp.status_code == 200, resp.text
+        eid = resp.json()["id"]
+
+        with Session() as db:
+            _, _, device_records, _ = _fetch_execution_data(eid, db)
+
+    assert len(device_records) == 10, (
+        f"報告只撈到 {len(device_records)} 筆感測資料，帶時區的時間與 naive 時間戳對不上"
+    )

@@ -88,6 +88,11 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
   const prevSimCycleRef = useRef(0);
   const prevDwellHalfFiredRef = useRef(false);
   const savingExecutionRef = useRef(new Set());
+  // 每台設備最後一次看到的測試開始時間。設備回 IDLE 時 started_at 會被清掉，
+  // 但補存報告仍需要它去撈那段期間的感測資料，所以在測試進行中先留一份。
+  // 不共用 chartStartedAt：那是圖表自己的狀態，緊急停止時 started_at 被清掉、
+  // 狀態又不是 FINISHING，它會先被歸零；這份 ref 在那條路徑上仍然留著。
+  const lastStartedAtRef = useRef({});
   const pendingDwellTriggersRef = useRef([]);
 
   const data = allDevices[selectedDevice] || {
@@ -237,11 +242,16 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
         savingExecutionRef.current.add(selectedDevice);
         const steps = curDs.activeSop.steps || [];
         const allCompleted = Object.fromEntries(steps.map((s) => [s.step_id, true]));
+        // 這裡的欄位要跟 ExecutionPanel.saveExecution 對齊，兩邊漏一個就會有差異：
+        // 兩個時間都送到，報告端才撈得到感測資料，否則溫度統計整段空白；
+        // manual_mode 要送到，後端才知道除錯模式不該發 LINE 推播。
         api.post("/api/sop-executions/", {
           sop_id: curDs.activeSop.sop_id,
           device_id: selectedDevice,
           operator: operator?.trim() || null,
-          test_started_at: null,
+          test_started_at: lastStartedAtRef.current[selectedDevice] || null,
+          test_ended_at: new Date().toISOString(),
+          manual_mode: manualMode,
           steps: steps.map((s) => ({ step_id: s.step_id, completed: true })),
         }).then((res) => {
           setDeviceStates((p) => ({
@@ -293,6 +303,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
         updateDS(selectedDevice, { chartHistory: [], chartStartedAt: null });
       return;
     }
+    lastStartedAtRef.current[selectedDevice] = startedAt;
     fetchHistory(selectedDevice, startedAt);
   }, [startedAt, currentStatus]); // eslint-disable-line
 
