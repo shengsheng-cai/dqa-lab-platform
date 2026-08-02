@@ -35,6 +35,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `fixture_excel.py` | 治具 Excel 範本、匯入、匯出 adapter |
 | `purchase_orders.py` | 採購單 CRUD API |
 | `ai.py` + `rag.py` | Gemini 整合 + RAG 向量檢索 |
+| `standards/` | 5 套測試標準與 78 個條件的定義；由各標準子模組組成 `STANDARD_TREE`，並產生向後相容的 `STANDARDS_AND_SOPS` |
 | `reports.py` | PDF / CSV 報告生成 |
 | `sop.py` | SOP 執行流程、步驟確認、照片上傳 |
 | `auth.py` | 登入、token 驗證、middleware、rate limiting；`current_user(request)` 讀取身分，`require_admin` 驗證管理者並回傳 actor |
@@ -102,22 +103,24 @@ chain，再比對 model 的每張表與每個欄位；只改 model 忘了寫 mig
 
 - 一個一個來，沒有著急的，改好一起測試
 - 不說「哪個優先？」「著急/緊急」等詞；說「下一個要改 X」「X 改好了」「還剩 N 個」
-- 執行 bash 前先用中文解釋，等使用者確認再執行
+- 執行指令前先用中文說明；一般讀取、檢查與測試可直接執行，刪除資料、重置、commit、push 等操作必須先取得使用者明確同意
 - 不自動 push 到 GitHub，除非明確要求
 
 ### Demo 版 / 真機版分兩條線（不得混用）
 
-- `main` 分支 = Demo 版（純模擬，永遠不動）
+- `main` 分支維持穩定的純模擬 Demo；可以修 Bug、補測試與文件，但不加入真機驅動或客戶專用程式
 - 真機版另開分支 `feature/kson-real-device`
 - 不做 feature flag 切換：多一層抽象就多一份 bug 面
-- 遇到「加切換開關」「加 mock 模式」等需求，一律拒絕，改在真機版分支實作
+- 正式 Demo 不增加真機／模擬切換開關；自動化測試需要的 mock、fake 與假帳密可以使用，但只能存在測試環境
 
-### Push 前自動執行（依改動規模判斷，不詢問使用者）
+### Commit／Push 前檢查（依改動規模判斷）
 
 | 情境 | 要跑的 |
 |------|--------|
-| 任何 `.py` / `.jsx` 邏輯改動（含單檔、含只改一行邏輯） | **四關**（見下） → push |
-| 小改動（typo、config、純顯示、純文件、純測試斷言微調） | 直接 push |
+| 任何 `.py` / `.jsx` 邏輯改動（含單檔、含只改一行邏輯） | 自動跑**四關**（見下），再向使用者報告結果 |
+| 小改動（typo、config、純顯示、純文件、純測試斷言微調） | 可跳過四關，但仍要向使用者報告變更 |
+
+不論改動大小，執行 `git commit` 或 `git push` 前都必須再次取得使用者明確同意。
 
 **四關，缺一不可**（對外一律講「四關」，不要講成三關）：
 
@@ -214,5 +217,5 @@ API 文件：http://localhost:8000/docs
 
 ## Agent skills
 
-Issue 放在 GitHub Issues（`shengsheng-cai/dqa-lab-platform`），用 `gh` CLI 操作。
-見 `docs/agents/issue-tracker.md`（四關第 3 關的 code-review 會讀它）。
+審查發現的問題先向使用者報告；取得明確同意後，再記入 `CLAUDE.local.md` 的「待補」。只有使用者明確要求時才建立 GitHub Issue。
+需要操作 GitHub Issues 時使用 `gh` CLI，見 `docs/agents/issue-tracker.md`（四關第 3 關的 code-review 會讀它）。

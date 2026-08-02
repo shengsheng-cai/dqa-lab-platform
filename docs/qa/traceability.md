@@ -24,10 +24,15 @@ route or UI element.
 | **REQ-RPT-01** | A saved execution carries the timestamps its report needs, so the measurement summary reflects the test window whichever path saved the record | R-07 | `backend/tests/test_reports_degradation.py::test_frontend_iso_timestamps_still_match_sensor_data` | [BUG-007](BUG-007-fallback-execution-save-diverged-from-main-path.md) | Backend contract covered; the frontend fallback that raised it is not automatable here (see GAP-04) |
 | **REQ-AI-01** | AI-recommended conditions can enter scheduling, while guest remains unable to submit a write | R-08 | `backend/tests/test_rag.py`; `tests/e2e/specs/ai-apply-schedule.spec.js`; `guest-readonly.spec.js` | — | Covered with mocked AI boundary |
 
+## Portfolio scope exclusions
+
+| Excluded item | Reason |
+|---|---|
+| Real chamber integration | The public portfolio baseline is simulator-only. It demonstrates workflow and QA automation, but does not claim vendor-protocol or physical-control validation. Any authorized real-device work belongs on a separate branch and is not an open gap in this baseline. |
+| Load, multi-browser, and accessibility matrices | The public portfolio baseline targets Playwright-managed Chromium and selected high-risk flows. It does not claim production-scale capacity, cross-browser certification, or accessibility conformance; create separate plans only if deployment requirements change. |
+
 ## Open coverage gaps
 
 | Gap | Impact | Planned treatment |
 |---|---|---|
-| **GAP-02** — No real chamber integration | Simulator evidence cannot prove vendor protocol or physical control | Validate on a separate real-device branch when authorized hardware is available |
-| **GAP-03** — No load/browser/accessibility matrix | Non-functional regressions may be missed | Create separate plans only when these become release requirements |
 | **GAP-04** — Frontend fallback paths that fire only on a dropped device-feed update | Divergence between a main path and its fallback is caught by code review, not by a test, as BUG-007 was | Covered indirectly: the backend contract each fallback depends on is pinned by a test, and both call sites cross-reference each other. Direct coverage needs component tests, which this baseline excludes |

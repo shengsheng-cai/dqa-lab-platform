@@ -12,6 +12,7 @@ English · [繁體中文](BUG-006-cooling-device-treated-as-available.zh-TW.md)
 | **Environment** | FastAPI backend, simulator Demo baseline; any deployment where a test is stopped part-way or an emergency stop is cleared |
 | **Found by** | State-machine spine review, 2026-07-31 (code read of `device_state.py`, `schedule_service.py`, `simulator.py`) |
 | **Reporter** | Sheng-Sheng Tsai |
+| **Fix commit** | `86e7faac29ec7e0fc2ac95c21437b639b797caa2` |
 
 ## Summary
 

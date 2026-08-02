@@ -45,7 +45,7 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 ## Backend 單元測試（pytest）
 
 - 測試檔放在 `backend/tests/`
-- 執行：`cd backend && python -m pytest`
+- 執行：`cd backend && ../venv/bin/python -m pytest`
 - conftest.py 使用 in-memory SQLite（StaticPool，跨執行緒共用同一個 DB），測試間互相隔離
 - 共用 fixture：`db`（單一 session）、`api_client`（掛 router 的 TestClient + 角色注入）、`patched_session`（一次 patch 多個模組的 SessionLocal）
 - 跨模組寫 DB 的流程（如啟動排程會動到 schedule_service / sop / device_state / utils / schedules）一律用 `patched_session` 把相關模組一次 patch 完——漏一個那模組就會寫進真實的 aicm.db
@@ -62,8 +62,8 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 - 測試檔放在 `client/src/__tests__/`，命名 `*.test.js`
 - 執行：`cd client && npm test`；監看模式：`npm run test:watch`。**一律走 npm script**，不要直接跑 `npx vitest run`——時區是釘在 script 上的（見下）
 - 測試目標：**純邏輯**的 utility 函式 —— `errorMessages.js`、`timezone.js`、`validation.js`、`download.js` 的 `buildReportFilename`
-- 碰 DOM 或網路的不測（如 `download.js` 的 `downloadBlob`，它建 `<a>` 點下去）；React 元件渲染也不測（無 jsdom 設定），元件正確性透過瀏覽器手動驗證
+- 碰 DOM 或網路的不放進 Vitest（如 `download.js` 的 `downloadBlob`，它建 `<a>` 點下去）；不做 Vitest 元件渲染測試，重要流程由 Playwright E2E 驗證，其餘畫面再人工檢查
 - 時區固定在 `Asia/Taipei`，釘在 `package.json` 的 test script（`TZ=...` 前綴）。`formatLocal` / `parseDateOnlyLocal` 的正確性就是「UTC 轉本地」，不釘的話本機（+08）跟 CI（UTC）會得到不同字串。`vite.config.js` 的 `test.env.TZ` 是給繞過 npm script 的跑法補的，但它只在 vitest 預設的 forks 模式有效，別把它當唯一保險。`timezone.test.js` 第一條就在確認時區，它紅了代表釘子鬆了，去修釘子、不要改後面的期望值
 - `Intl` 輸出的日期時間分隔符不是一般空格（目前 ICU 是 U+2009），且會隨 Node 版本變。斷言前先用 `s.replace(/\s/g, " ")` 正規化，不然會出現「看起來一模一樣卻不相等」的紅字
-- **不要順手升 CI workflow 裡的 `node-version`**。時區測試斷言了 `Intl` 的輸出字串，而那字串綁在 Node 內建的 ICU 版本上（目前 CI 的 Node 24 是 ICU 78.3、開發機的 Node 25 是 78.2，兩邊輸出相同才對得上）。真要升，先在暫存目錄下載目標版本跑一次 `npm test`，綠了才改 workflow；紅了代表期望字串要重新確認，不是改斷言了事。這跟「升 GitHub Action 版本」是兩回事，別混在一起改
+- **不要順手升 CI workflow 裡的 `node-version`**。時區測試斷言了 `Intl` 的輸出字串，而那字串會隨 Node 內建的 ICU 版本改變。真要升，先用目標 Node 版本跑一次 `npm test`，綠了才改 workflow；紅了代表期望字串要重新確認，不是改斷言了事。這跟「升 GitHub Action 版本」是兩回事，別混在一起改
 - 判斷一支 utility 有沒有人用，不能只 grep 原名：`constants.js` 會把 `parseUTC` 改名成 `parseUtcDate` 再轉出去。要連別名一起找，確認真的零引用才動它
