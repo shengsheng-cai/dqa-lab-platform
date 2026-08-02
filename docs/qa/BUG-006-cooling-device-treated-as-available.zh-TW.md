@@ -12,6 +12,7 @@
 | **環境** | FastAPI 後端、模擬器 Demo 基準；任何會中途停止測試或解除緊急停止的部署 |
 | **發現方式** | 狀態機主幹審查，2026-07-31（讀 `device_state.py`、`schedule_service.py`、`simulator.py`） |
 | **回報者** | 蔡聖生 |
+| **修正 commit** | `86e7faac29ec7e0fc2ac95c21437b639b797caa2` |
 
 ## 摘要
 

@@ -12,6 +12,7 @@ English · [繁體中文](BUG-004-fixture-dates-stored-one-day-early.zh-TW.md)
 | **Environment** | React client, any timezone ahead of UTC; Demo and development baseline run in `Asia/Taipei` (UTC+8) |
 | **Found by** | Four-gate review backlog (`CLAUDE.local.md`), 2026-07-27 |
 | **Reporter** | Sheng-Sheng Tsai |
+| **Fix commit** | `e62c73ed7eebee950f09bc9ba91e0bd6439edf43` |
 
 ## Summary
 

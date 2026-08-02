@@ -9,9 +9,10 @@
 | **嚴重度** | Low |
 | **優先度** | Medium |
 | **元件** | 治具借出到期日與摘要計數 — 時區語意 |
-| **環境** | React 前端 + FastAPI 後端，任何時區早於 UTC 的地區；Demo 與開發基準跑在 `Asia/Taipei`（UTC+8） |
+| **環境** | React 前端 + FastAPI 後端，任何 UTC 正時差地區；Demo 與開發基準跑在 `Asia/Taipei`（UTC+8） |
 | **發現方式** | 四關審查，2026-07-27（讀 diff 與 altitude 那一輪） |
 | **回報者** | 蔡聖生 |
+| **修正 commits** | `5147eadbbeb851ebbdc2689a1f7ba0b7d378b40a`、`b8bd531e04cb7adfaaa34b925d5e340d6c1aa9e6` |
 
 ## 摘要
 
@@ -33,7 +34,7 @@
 
 ## 前置條件
 
-- 前端機器的時區早於 UTC（`Asia/Taipei`，UTC+8）。
+- 前端機器位於 UTC 正時差地區（`Asia/Taipei`，UTC+8）。
 - 至少有一筆有到期日的有效借出。
 - 第二條路徑還需要：觀察者在當地時間 00:00 到 08:00 之間查看左側面板的治具摘要。
 

@@ -12,6 +12,7 @@ English · [繁體中文](BUG-007-fallback-execution-save-diverged-from-main-pat
 | **Environment** | React frontend + FastAPI backend, simulator Demo baseline; any deployment where the browser misses the `ramp_to_ambient` phase transition |
 | **Found by** | Code read during the unreferenced-endpoint cleanup, 2026-08-01, while investigating why `GET /api/sop-executions/{id}` returned an empty `steps` array. Extended by the four-gate review of the fix |
 | **Reporter** | Sheng-Sheng Tsai |
+| **Fix commit** | `6e90524d476e92361ac439b59386844c79984ef1` |
 
 ## Summary
 

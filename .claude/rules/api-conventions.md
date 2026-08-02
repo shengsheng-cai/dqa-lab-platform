@@ -8,7 +8,7 @@
 | 治具總表/甘特圖 | ✅ | ✅ 唯讀 |
 | AI 諮詢/設備查看 | ✅ | ✅ |
 
-新增 API 端點時，寫入操作一律加 `role != "admin"` 檢查。  
+新增 API 端點時，寫入操作一律使用 `Depends(require_admin)`；不要在路由內手動比較角色。
 唯讀感測器端點（如 `GET /api/devices/{id}/sensor-stats`、`GET /api/devices/{id}/history`）不需 role 檢查，guest 可存取。
 
 ### 使用者身份取用
@@ -82,7 +82,7 @@ async def my_route(...):
 - DB 寫入一律用 `_now_utc_naive()`（`utils.py`），保持與 SQLite naive datetime 欄位一致
 - `_now_utc()` 只用於 HTTP response、推播文字等不寫入 DB 的場景
 - `datetime.datetime.now(datetime.timezone.utc)` 禁止出現在 DB 寫入路徑
-- 唯一例外是 device state cache 的 `started_at`：cache 保留 aware UTC 供 API/排程計算，`DeviceStateManager._save` 是唯一落盤入口，會先正規化成 naive UTC；同 transaction 的 `SopExecution.test_started_at` 仍直接使用 `_now_utc_naive()`
+- 唯一例外是 device state cache 的 `started_at`：cache 保留 aware UTC 供 API／排程計算，所有狀態動作都經 `DeviceStateManager._persist`，再由模組內的 `_save` 正規化成 naive UTC 後落盤；同 transaction 的 `SopExecution.test_started_at` 仍直接使用 `_now_utc_naive()`
 
 ## 自動排程邏輯
 
