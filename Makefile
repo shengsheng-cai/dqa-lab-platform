@@ -61,12 +61,13 @@ test:
 test-e2e:
 	@bash tests/e2e/run-e2e.sh $(ARGS)
 
-# 臨時探索腳本（舊用法，需先 make dev；跑的是開發環境的資料）
-# 用法：make test-e2e-script SCRIPT=tests/e2e/test_xxx.mjs
-# 副檔名要用 .mjs 或 .cjs：tests/e2e/package.json 設了 "type": "module"，
-# 放在那底下的 .js 會被當成 ESM，用 require() 寫的腳本會掛掉。
+# 臨時探索腳本（需先 make dev；跑的是開發環境的資料）
+# 用法：make test-e2e-script SCRIPT=/tmp/xxx.mjs
+# 腳本寫在暫存目錄、跑完就丟，不要留在 tests/ 底下——值得重複跑的畫面檢查要寫成
+# tests/e2e/specs/*.spec.js 讓 CI 跑（見 .claude/rules/testing.md）。
+# 副檔名別用 .js：用 import 寫就存 .mjs，用 require 寫就存 .cjs。
 test-e2e-script:
-	@if [ -z "$(SCRIPT)" ]; then echo "❌ 請指定腳本：make test-e2e-script SCRIPT=tests/e2e/xxx.mjs"; exit 1; fi
+	@if [ -z "$(SCRIPT)" ]; then echo "❌ 請指定腳本：make test-e2e-script SCRIPT=/tmp/xxx.mjs"; exit 1; fi
 	@[ -d tests/e2e/node_modules/playwright ] || { echo "❌ 請先執行：npm install --prefix tests/e2e"; exit 1; }
 	@echo "🎭 執行探索腳本：$(SCRIPT)"
 	@PLAYWRIGHT_PATH=$(CURDIR)/tests/e2e/node_modules/playwright \

@@ -18,7 +18,9 @@
 
 - 測試檔放 `tests/e2e/specs/*.spec.js`，共用程式放 `tests/e2e/helpers/`
 - Playwright 鎖在 `tests/e2e/package.json`（目前 1.61.1），用它自帶的 Chromium，不是系統上的瀏覽器
-- 臨時探索腳本走另一個指令 `make test-e2e-script SCRIPT=...`，那個跑的是**開發環境的真實資料**，別跟正式套件搞混
+- 臨時探索腳本**寫在暫存目錄、跑完就丟**，用 `make test-e2e-script SCRIPT=/tmp/xxx.mjs` 跑，
+  不要留在 `tests/` 底下（同上一節那條）。想留下來重複跑的畫面檢查不叫探索腳本，直接寫成
+  `specs/*.spec.js` 讓 CI 跑。那個指令跑的是**開發環境的真實資料**，別跟正式套件搞混
 
 ### 寫新測試檔一定要做的事
 
