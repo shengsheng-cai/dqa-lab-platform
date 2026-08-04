@@ -18,9 +18,22 @@ IDLE → RUNNING ↔ PAUSED → FINISHING → IDLE
 
 ## 模擬相位（sim_phase）
 
+主線（雙溫度、多循環的完整路徑）：
+
 ```
-idle → ramp_to_low → ramp_to_high → dwell_high → ramp_to_low2 → dwell_low → ramp_to_ambient → stabilize
+idle → ramp_to_low → ramp_to_high → dwell_high → ramp_to_low2 → dwell_low → ramp_to_ambient → stabilize → done
+                          ↑                                         │
+                          └────────── 還有 cycle 就繞回 ─────────────┘
 ```
+
+**這不是一條直線，有三個分岔和一個迴圈**（`simulator.py`）：
+
+- 起點看低溫設定：`low_temp` 有設且低於常溫才進 `ramp_to_low`，否則直接 `ramp_to_high`
+- `ramp_to_low` 有可能直接跳到 `dwell_high`，不一定經過 `ramp_to_high`
+- `dwell_high` 之後只有雙溫度才進 `ramp_to_low2`；單溫度直接進 `ramp_to_ambient` 收尾
+- **迴圈**：`dwell_low` 結束時若 `sim_cycle < cycles`，回到 `ramp_to_high` 重跑下一個循環，跑完才進 `ramp_to_ambient`
+
+其餘規則：
 
 - RUNNING 內自然完成：`ramp_to_ambient` 回到常溫後，再經 `stabilize`（常溫穩定 30 分鐘，`STABILIZATION_MINUTES`，期間設備仍占用）才回 IDLE，不在回常溫瞬間就 IDLE
 - 常溫穩定時間三處共用：設備卡 estimated_end、排程器占用表、模擬器 `stabilize` 相位一律以「曲線 + 30 分鐘」為真正可再用時間

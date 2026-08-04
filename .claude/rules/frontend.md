@@ -1,61 +1,30 @@
 # 前端慣例
 
-## 元件結構
+## 檔案放哪
 
-```
-App.jsx → ControlCenter.jsx → [SOPPage, FixturePage, SchedulePage, MaintenancePage, UsersPage, ErrorLog, ExecutionList]
-├─ ai/         [ChatArea, MarkdownRenderer, MessageBubble, useAIChat, aiStorage, markdownUtils, messageBubbleConstants]   ← src/ai/（非 components/）
-├─ constants.js   ← src/ 根目錄，全域共用常數（DEVICE_IDS、SESSION_DURATION）；另把 timezone 的 parseUTC 改名成 parseUtcDate 轉出去
-├─ utils/      [timezone（parseUTC/parseDateOnlyLocal/formatLocal/localDateStamp/endOfLocalDay/localDayWindow）, download（downloadBlob/buildReportFilename）, validation（isNonnegativeInteger）]   ← 純邏輯共用函式放這，新增前先看有沒有現成的
-│                 送「到期日」這種以天為單位的期限用 endOfLocalDay，它給的是本地當天 23:59；送午夜會讓台北早上 8 點就判逾期
-│                 要後端照「本地的今天」查（如今日到期）就用 localDayWindow 把日界算好傳過去，後端只認 UTC
-│                 取日期用 localDateStamp（第二個參數可指定日期，預設今天），不要寫 toISOString().slice(0,10)（那是 UTC，台北凌晨會少一天）
-├─ errorMessages.js   ← src/ 根目錄，錯誤訊息轉譯表，由 api.js 的攔截器統一套用
-├─ __tests__/  ← 單元測試（見 .claude/rules/testing.md）
-└─ components/
-   ├─ [ConfirmModal, Toast, ToastContext, useToast]   ← components/ 根目錄，全站共用
-   ├─ sop/     [ConditionCard, ControlPanel, ExecutionInfoPanel, ExecutionPanel, MonitorSide, SafetyChecklist, SelectGroup, StepList, TempChart, generateSP]
-   ├─ schedule/ [ConditionPicker, DateTimePicker, GanttChart, ManageBlockedPeriodsModal, NewScheduleModal, ScheduleDetailModal, ScheduleModalShell, scheduleUtils]
-   ├─ fixture/  [AddEditModal, CreatePurchaseModal, DatePicker, ImportModal, LoanModal, ModalShell, ReturnModal, SetKeeperModal, StocktakeModal, modalStyles]
-   └─ control/  [RightPanel, SensorQcModal, SensorQcChart, AuditLog,
-                 TopBar, DeviceCard, deviceCardUtils, TabBadge, LeftPanel,
-                 FixtureSummaryPanel, ScheduleSummaryPanel, UsersSummaryPanel, CalibrationSummaryPanel]
-```
+目錄結構自己 `ls`，這裡只列看不出來的規矩。
 
-`MaintenancePage` 和 `ExecutionList` 定義在 `src/` 根目錄，由 `ControlCenter.jsx` import。  
-`ControlCenter.jsx` 本身只負責全局 state 管理 + `CenterPanel` + `BannerConfirmBtn` + Modal 組裝，不再包含頁面/面板元件定義。
+- 頁面元件（`SOPPage`、`FixturePage`、`SchedulePage`、`MaintenancePage`、`UsersPage`、`ErrorLog`、`ExecutionList`）放 `src/` 根目錄，**不放 `components/`**；`api.js`、`useDeviceWebSocket.js`、`constants.js`、`errorMessages.js` 也在根目錄
+- `ControlCenter.jsx` 只負責全局 state + `CenterPanel` + `BannerConfirmBtn` + Modal 組裝，不放頁面／面板元件定義
+- AI 相關元件在 `src/ai/`，不在 `components/ai/`
+- 純邏輯共用函式放 `src/utils/`，新增前先看有沒有現成的
 
-## ControlCenter 佈局
+## 時區陷阱（踩過，不要再踩）
 
-- LeftPanel（155px）：依 activeTab 動態切換內容
-  - device → DeviceCards（設備狀態，可點擊選擇設備）
-  - schedule → ScheduleSummaryPanel（待審核/進行中/已確認/已完成計數，另有壞排程時顯示「異常」計數）+ DeviceCard × 5（顯示設備即時狀態，含不可用鎖定）
-  - fixture → FixtureSummaryPanel（借出中 / 今日到期 / 逾期未還 / 庫存不足）
-  - users → UsersSummaryPanel（角色人數 + 有效 Token 計數）
-  - maintenance → CalibrationSummaryPanel（正常 / 即將到期 / 逾期 / 未知 計數，60s 輪詢）
-  - 其他 → DeviceCards（預設）
-- CenterPanel（flex:1）：Tab bar（設備 / 治具 / 排程 / 維護 / 人員管理）+ 各頁面
-  - 維護 tab（adminOnly）→ MaintenancePage（設備校驗 & 維護紀錄 CRUD）；`calibrationStatusMap` state + `fetchCalStatus` useCallback 在 ControlCenter；透過 `onCalibrationChange` prop 傳至 MaintenancePage，儲存/刪除後即時更新 LeftPanel
-  - `fixtureSummary` 與 `scheduleCounts` 由 ControlCenter 持有；FixturePage、SchedulePage、SOPPage 的相關寫入成功後必須呼叫資源 callback 立即失效，30／60 秒 polling 只作背景或其他瀏覽器變更的 fallback
-  - 「紀錄」是 LeftPanel `📋 紀錄` 按鈕觸發的 Modal（非 tab），內嵌子 tab bar（異常紀錄 / 執行紀錄 / 稽核紀錄）；`recordsOpen` / `recordsSubTab` state 在 ControlCenter 主元件（非 CenterPanel）
-  - 「感測器 QC 控制圖」是 DeviceCard `📊` 按鈕觸發的 Modal；`sensorModalDevice` state（string | null）在 ControlCenter 主元件；`onShowQc` prop 沿 LeftPanel → ScheduleSummaryPanel / DeviceCard 傳遞
-- AI FAB：右下角浮動按鈕，點擊從右側 translateX 滑入 RightPanel（500px）
+- 送「到期日」這種以天為單位的期限用 `endOfLocalDay`，它給的是本地當天 23:59。送午夜會讓台北早上 8 點就判逾期
+- 要後端照「本地的今天」查（如今日到期）就用 `localDayWindow` 把日界算好再傳，後端只認 UTC
+- 取日期用 `localDateStamp`，**不要寫 `toISOString().slice(0,10)`**——那是 UTC，台北凌晨會少一天
+- 判斷一支 utility 有沒有人用，不能只 grep 原名：`constants.js` 會把 `parseUTC` 改名成 `parseUtcDate` 再轉出去，要連別名一起找
 
-## FixturePage 佈局
+## 佈局上不可改的決定
 
-- **2 個 tab**：治具總表 / 記錄（admin only）
-- **治具總表**：庫存列表；「借出」欄數字 > 0 時可點擊展開子列，顯示借用人 / 到期日 / 逾期標示（`expandedFixtureId` state）；子列的「歸還」鈕開 `ReturnModal`（選正常／損壞／遺失、填備註、改實際歸還日，損壞與遺失要二次確認），不在列上直接送出
-- **記錄 tab**：
-  - 上方 sub-tab 切換：損壞／遺失（`DamagedList`）/ 盤點紀錄（`InventoryLogTab`）
-  - 下方固定區塊：採購清單（`PurchaseTab`），帶分隔線與「採購清單」標題
-- **不**另設借出中、逾期、採購、損壞等獨立 tab；借出資訊整合在總表展開列，採購整合在記錄 tab
+畫面現在長什麼樣，打開 `ControlCenter.jsx` 就看得到；這裡只列改動前要先知道的決定。
 
-## SchedulePage 佈局
-
-- Header：無（badge 已移至 LeftPanel ScheduleSummaryPanel）
-- 過濾列：全部/待審核/已確認/進行中/已取消/已完成/異常 tab + 右側 ↺/+ 不可用時段/+ 申請排程 按鈕
-- 甘特圖：`flexShrink:0` 固定區塊（308px），永遠可見，不可改為可捲動
-- 捲動區：待審核警示條 + 待審核隊列 + 圖例 + 排程表格
+- 寫入成功後**必須呼叫對應的資源 callback 立即失效**（`fixtureSummary`、`scheduleCounts`、`calibrationStatusMap` 都由 ControlCenter 持有）。30／60 秒 polling 只是背景與跨瀏覽器變更的 fallback，不能拿它當主要更新手段
+- FixturePage 固定**只有 2 個 tab**（治具總表／記錄）。**不**另設借出中、逾期、採購、損壞等獨立 tab——借出資訊整合在總表展開列，採購整合在記錄 tab
+- 治具歸還一律開 `ReturnModal`（選正常／損壞／遺失、填備註、改實際歸還日，損壞與遺失要二次確認），不在列上直接送出
+- SchedulePage 的甘特圖是 `flexShrink:0` 固定區塊（308px），永遠可見，**不可改為可捲動**
+- 「紀錄」與「感測器 QC 控制圖」是 Modal，不是 tab；state 放在 ControlCenter 主元件
 
 ## DateTimePicker / DatePicker
 

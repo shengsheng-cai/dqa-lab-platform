@@ -5,17 +5,13 @@ colorFrom: blue
 colorTo: purple
 sdk: docker
 app_port: 7860
-pinned: false
 license: mit
-datasets: []
 short_description: Environmental lab workflow and QA automation portfolio
 ---
 
 # DQA Lab Platform
 
 **環境試驗室流程平台，也是風險導向測試與 QA Automation 作品。**
-
-Environmental test lab workflow and QA automation portfolio built with FastAPI and React.
 
 [![Tests](https://github.com/shengsheng-cai/dqa-lab-platform/actions/workflows/test.yml/badge.svg)](https://github.com/shengsheng-cai/dqa-lab-platform/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/License-MIT-green)](./LICENSE)
@@ -220,14 +216,10 @@ make lint       # Ruff
 - Hugging Face Spaces 使用 `/tmp` SQLite，容器重啟後會重新建立示範資料。
 - Live Demo 未設定 LINE secrets，因此不會真的發送 LINE 通知。
 
-## 後續規劃
+## 關於這個專案
 
-取得實機與通訊協定後，將於獨立分支進行真實設備通訊與驅動整合（Phase 3）；
-目前的 `main` 維持可穩定展示的純模擬版本。
-
-## Contributing
-
-問題與功能建議歡迎開 Issue；商業合作請透過 GitHub 聯絡。
+這是個人作品集專案，不以持續擴增功能為目標，也不接受外部貢獻。
+對其中的測試策略、架構取捨或缺陷分析有興趣，歡迎透過 GitHub 個人檔案聯絡討論。
 
 ## License
 

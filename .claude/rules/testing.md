@@ -57,7 +57,9 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 
 - 測試直接對 in-memory SQLite 操作，避免 mock/prod 行為不一致
 - 跨模組流程用共用 `patched_session` 注入 in-memory session（參考 `test_schedule_start_consistency.py`），DB 本身仍走真實 SQLAlchemy 行為
-- schema 的權威只有 Alembic（見 `CLAUDE.md`）：`test_schema_migrations.py` 在暫存 DB 實跑整條 migration chain，再比對 model 的每張表與每個欄位。加欄位只改 model、忘了寫 migration 會直接紅
+- **schema 的權威只有 Alembic**：`init_db()` 只服務全新資料庫（`create_all` + 建 admin），不補既有資料表的欄位，也不得再加「啟動時自己 ALTER TABLE」的補丁；既有資料庫一律 `alembic upgrade head`。改 `models.py` 一定要跟著寫 migration
+- 遷移指令在 `backend/` 底下跑：`../venv/bin/alembic revision --autogenerate -m "描述"`、`../venv/bin/alembic upgrade head`
+- `test_schema_migrations.py` 在暫存 DB 實跑整條 migration chain，再比對 model 的每張表與每個欄位。加欄位只改 model、忘了寫 migration 會直接紅（只比對表與欄位的有無，型別／nullable 漂移仍要自己顧）
 
 ## Frontend 單元測試（Vitest）
 
@@ -68,4 +70,3 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 - 時區固定在 `Asia/Taipei`，釘在 `package.json` 的 test script（`TZ=...` 前綴）。`formatLocal` / `parseDateOnlyLocal` 的正確性就是「UTC 轉本地」，不釘的話本機（+08）跟 CI（UTC）會得到不同字串。`vite.config.js` 的 `test.env.TZ` 是給繞過 npm script 的跑法補的，但它只在 vitest 預設的 forks 模式有效，別把它當唯一保險。`timezone.test.js` 第一條就在確認時區，它紅了代表釘子鬆了，去修釘子、不要改後面的期望值
 - `Intl` 輸出的日期時間分隔符不是一般空格（目前 ICU 是 U+2009），且會隨 Node 版本變。斷言前先用 `s.replace(/\s/g, " ")` 正規化，不然會出現「看起來一模一樣卻不相等」的紅字
 - **不要順手升 CI workflow 裡的 `node-version`**。時區測試斷言了 `Intl` 的輸出字串，而那字串會隨 Node 內建的 ICU 版本改變。真要升，先用目標 Node 版本跑一次 `npm test`，綠了才改 workflow；紅了代表期望字串要重新確認，不是改斷言了事。這跟「升 GitHub Action 版本」是兩回事，別混在一起改
-- 判斷一支 utility 有沒有人用，不能只 grep 原名：`constants.js` 會把 `parseUTC` 改名成 `parseUtcDate` 再轉出去。要連別名一起找，確認真的零引用才動它
