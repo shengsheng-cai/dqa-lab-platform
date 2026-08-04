@@ -4,7 +4,7 @@
 
 | 功能 | admin | guest |
 |------|-------|-------|
-| 所有寫入操作（治具/排程/SOP/採購） | ✅ | ❌ |
+| 所有寫入操作（治具/排程/SOP/採購/維護校驗） | ✅ | ❌ |
 | 治具總表/甘特圖 | ✅ | ✅ 唯讀 |
 | AI 諮詢/設備查看 | ✅ | ✅ |
 
@@ -39,7 +39,16 @@ user_id, role = u.user_id, u.role
 
 禁止在路由 handler 直接使用 `getattr(request.state, "user_id", None)` 等原始存取。
 
-## LINE（Push）
+### 稽核寫入
+
+稽核日誌一律走 `audit_log.py` 的共用 helper，不要各模組自己組 `AuditLog`；關鍵業務寫入都要埋點。
+
+## LINE
+
+LINE 有兩條方向相反的路，不要混用：主動推播用 `push_message`（PUSH_URL），
+回覆使用者訊息用 `_send_to_line`（REPLY_URL，需要 `reply_token`）。
+
+### Push（主動推播）
 
 - 主動 push 時機（三個）：條件完成（等待人員確認）、測試完成、緊急停止。
   - 條件完成推播：`simulator.py`（sim_phase → done 時）
@@ -51,6 +60,20 @@ user_id, role = u.user_id, u.role
   免費額度（200 則／月）。前端建立執行紀錄時**一定要送 `manual_mode`**，漏送會被
   當成一般測試而推播出去（BUG-007 就是漏送造成的）。
 - `push_message` 推播給 `LINE_USER_ID`（管理者個人）。
+
+### Webhook（使用者查詢設備）
+
+`POST /webhook`（`line.py`）是**全專案唯一不經 `require_admin`、由外部直接呼叫**的端點，
+不出現在 `/docs`（`include_in_schema=False`）。改這段要注意四件事：
+
+- **簽章驗證不能拿掉**：`_verify_signature` 用 `LINE_CHANNEL_SECRET` 做 HMAC-SHA256，
+  比對 `X-Line-Signature` header，不符就 400。
+- **沒設 `LINE_CHANNEL_SECRET` 時會直接放行**（`return True`）。本機與 Demo 環境多半沒設，
+  所以「本機測起來過」不代表驗證有效；要驗這段一定要先設 secret，否則測到的是放行分支。
+- **回覆一律丟 `background_tasks`**，webhook 本身立刻回 200——LINE 要求快速回應，
+  在 handler 裡等 API 回來會逾時。
+- **只讀 `app.state.AICM_CACHE`，不查 DB**。指令由 `_dispatch_command` 解析：
+  「狀態／status／s」回設備概覽，輸入設備 ID 回該機的 flex 詳情卡。
 
 ## Async/Sync 慣例
 
@@ -100,3 +123,10 @@ async def my_route(...):
 - 壞排程收斂：排程若缺設備、條件或法規資料，`start_schedule` 轉「異常」、釋放治具並寫 audit、停止重試；設備忙碌與維護屬暫時性，維持原狀
 - 手動 ad-hoc SOP 只可認領「已到開始時間且目前條件相同」的已確認排程；未來或條件不同的排程不得異動
 - 條件銜接由人員在排程頁面確認後，再由同一個 `start_schedule(..., continuation=True)` 啟動下一條件
+
+## 治具生命週期
+
+- 治具庫存唯一 owner 是 `fixture_lifecycle.py`：可借量公式與借還狀態轉換只有這一份
+- 排程與治具靠 `schedule_fixtures` 中間表 + `fixture_loans.schedule_id` 外鍵串起來
+- 狀態流：排程確認 → 預約（reserved）→ 測試開始 → 借出（loaned）→ 測試完成 → 歸還
+- 排程走到終止狀態（取消／異常／刪除）一律走 `_release_schedule_fixtures`：預約的丟掉、借出中的歸還並記時間；測試完成時同樣自動歸還

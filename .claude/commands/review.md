@@ -4,11 +4,11 @@
 
 1. 執行 `git status --short`，列出已追蹤與未追蹤的修改；未追蹤的新檔案也要實際讀取，不能只看 `git diff`。
 2. 執行 `git diff --stat`、`git diff` 與 `git diff --staged`，確認完整改動。依照本次需求判斷哪些屬於本次修改；無法確認的既有修改標示為「範圍不明」，不得擅自改動或還原。
-3. 依改動範圍讀取相關規則，不要固定只看單一檔案：
-   - API、權限、交易或 LINE：@.claude/rules/api-conventions.md
-   - 設備狀態或模擬流程：@.claude/rules/state-machine.md
-   - 前端元件或版面：@.claude/rules/frontend.md
-   - 測試或測試方式：@.claude/rules/testing.md
+3. 依改動範圍讀取相關規則，不要固定只看單一檔案（下面是路徑，用到才讀，不要整批載入）：
+   - API、權限、交易、排程、治具借還、稽核埋點或 LINE：`.claude/rules/api-conventions.md`
+   - 設備狀態、模擬流程或採購單狀態：`.claude/rules/state-machine.md`
+   - 前端元件或版面：`.claude/rules/frontend.md`
+   - 測試、測試方式，或動到 `models.py` 與資料庫 schema：`.claude/rules/testing.md`
 4. 逐一檢查：
    - 是否混入與本次需求無關或非預期的修改
    - 是否遺留 TODO、debug print、假資料、憑證或敏感資訊

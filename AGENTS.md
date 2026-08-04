@@ -1,9 +1,6 @@
 # AGENTS.md
 
-This repo uses `CLAUDE.md` as the source of truth for AI coding agents.
+本專案的 AI 協作規則統一放在 `CLAUDE.md`，裡面是一張「什麼時候該讀哪份規則檔」的對照表。
 
-Before making code changes, read:
-- `README.md`
-- `CLAUDE.md`
-- `CLAUDE.local.md` if present
-- `.claude/rules/*.md` when relevant
+改動任何程式碼前，先讀 `CLAUDE.md`，再依表讀 `.claude/rules/` 底下對應的檔案。
+個人覆蓋設定與待補清單在 `CLAUDE.local.md`（若存在）。
