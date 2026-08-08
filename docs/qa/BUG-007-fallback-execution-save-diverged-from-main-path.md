@@ -137,13 +137,22 @@ resistance.
   existing `chartStartedAt`: that value belongs to the chart's lifecycle and is
   cleared on the emergency-stop path, where `started_at` disappears while the
   status is not yet `FINISHING`.
-- Both call sites now carry a comment pointing at the other, so the next field
-  added to either is visible from both.
+- Both call sites carried a comment pointing at the other, so the next field
+  added to either was visible from both.
 
-The two payloads were not merged into a shared builder. They legitimately differ
-beyond these fields — the fallback marks every step complete, the main path
-sends the operator's actual per-step state — and consolidating them is a
-refactor outside this repair.
+The two payloads were not merged into a shared builder as part of this repair.
+They legitimately differ beyond these fields — the fallback marks every step
+complete, the main path sends the operator's actual per-step state — so
+consolidating them was left as a separate refactor.
+
+That refactor has since landed (2026-08-08). Both call sites now build the
+request body through `buildExecutionPayload` in
+`client/src/utils/executionPayload.js`, and
+`client/src/__tests__/executionPayload.test.js` pins the field set, so dropping
+a field fails a test instead of relying on readers noticing the cross-reference
+comments — which have been removed, since the shared function replaces what they
+were reminding people to do. The legitimate per-step difference survives: each
+caller still passes its own completion map into the builder.
 
 ## Verification
 

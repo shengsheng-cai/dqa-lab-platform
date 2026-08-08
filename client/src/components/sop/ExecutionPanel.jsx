@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { downloadBlob, buildReportFilename } from "../../utils/download";
+import { buildExecutionPayload } from "../../utils/executionPayload";
 import api from "../../api";
 import { useToast } from "../useToast";
 
@@ -51,22 +52,17 @@ const ExecutionPanel = ({
     if (saving || downloadingCsv || downloadingPdf) return;
     setSaving(true);
     try {
-      const stepPayload = activeSop.steps.map((s) => ({
-        step_id: s.step_id,
-        completed: !!completedSteps[s.step_id],
-        parameters: null,
-      }));
-      // 這份 payload 在 SOPPage 的補存分支有第二份；改欄位時兩邊要一起改，
-      // 漏掉會產生只在某條路徑上出現的差異（報告缺數據、或該不推播卻推播）。
-      const res = await api.post("/api/sop-executions/", {
-        sop_id: activeSop.sop_id,
-        device_id: selectedDevice,
-        operator: operator?.trim() || null,
-        test_started_at: startedAt || null,
-        test_ended_at: new Date().toISOString(),
-        manual_mode: manualMode,
-        steps: stepPayload,
-      });
+      const res = await api.post(
+        "/api/sop-executions/",
+        buildExecutionPayload({
+          sop: activeSop,
+          deviceId: selectedDevice,
+          operator,
+          startedAt,
+          manualMode,
+          completedSteps,
+        }),
+      );
 
       const execId = res.data.id;
       onSaved(execId);
