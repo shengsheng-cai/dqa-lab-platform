@@ -526,7 +526,7 @@ def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_ad
             device_id=body.device_id,
             project_name=body.project_name,
             quantity=body.quantity,
-            due_date=body.due_date,
+            due_date=_to_naive_utc(body.due_date),
             loan_date=_now_utc_naive(),
         )
         log_audit(db, str(user_id or "unknown"), u.role, "LOAN", "fixture", body.fixture_id,
@@ -580,11 +580,12 @@ def extend_loan(loan_id: int, body: ExtensionRequest, request: Request, _: None 
             raise HTTPException(status_code=404, detail="借出紀錄不存在")
 
         old_due = loan.due_date.isoformat() if loan.due_date else "未設定"
-        loan.due_date = body.new_due_date
-        note = f"[延期] {old_due} → {body.new_due_date.isoformat()} 原因：{body.reason}"
+        new_due = _to_naive_utc(body.new_due_date)
+        loan.due_date = new_due
+        note = f"[延期] {old_due} → {new_due.isoformat()} 原因：{body.reason}"
         loan.extension_note = (loan.extension_note or "") + "\n" + note
         log_audit(db, str(u.user_id or "unknown"), u.role, "LOAN_EXTEND", "fixture", loan.fixture_id,
-                  f"借出 #{loan_id} 延期至 {body.new_due_date.date()}")
+                  f"借出 #{loan_id} 延期至 {new_due.date()}")
         db.commit()
         return {"status": "success"}
 

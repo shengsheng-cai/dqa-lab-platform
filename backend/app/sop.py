@@ -21,7 +21,7 @@ from .schedule_service import (
     start_schedule as start_schedule_service,
 )
 from .schedule_api import schedule_start_http_error
-from .utils import _now_utc, _now_utc_naive, _parse_conditions
+from .utils import _now_utc, _now_utc_naive, _to_naive_utc, _parse_conditions
 from . import device_state
 from .auth import require_admin, current_user
 from .line import push_message
@@ -348,8 +348,8 @@ def create_execution(
             device_id=data.device_id,
             operator=data.operator,
             operator_user_id=operator_user_id,
-            test_started_at=data.test_started_at,
-            test_ended_at=data.test_ended_at,
+            test_started_at=_to_naive_utc(data.test_started_at),
+            test_ended_at=_to_naive_utc(data.test_ended_at),
         )
         db.add(execution)
         db.flush()
