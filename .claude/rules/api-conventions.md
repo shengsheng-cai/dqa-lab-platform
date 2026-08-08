@@ -108,6 +108,14 @@ async def my_route(...):
 - DB 寫入一律用 `_now_utc_naive()`（`utils.py`），保持與 SQLite naive datetime 欄位一致
 - `_now_utc()` 只用於 HTTP response、推播文字等不寫入 DB 的場景
 - `datetime.datetime.now(datetime.timezone.utc)` 禁止出現在 DB 寫入路徑
+- **外部送進來的時間**（request body、query 參數）寫進 DB 前一律過 `_to_naive_utc()`
+  （`utils.py`），不要直接寫。它把帶時區的換算成 UTC 再去掉時區，已經是 naive 的原樣
+  放行。直接寫的話 SQLAlchemy 會無聲丟掉時區：目前前端送的都是 UTC，丟掉剛好等於正確
+  答案，但哪天改送本地時間就會差幾小時，而且完全不會報錯。收外部時間的端點有 SOP
+  執行紀錄、封鎖時段、排程時段、治具借出與延期、設備校驗與維護，整類由
+  `backend/tests/test_datetime_normalization.py` 釘住
+- `_to_naive_utc()` 只救得了「有帶時區但不是 UTC」。**不帶時區的本地時間救不了**——
+  伺服器無從得知客戶端在哪一時區，所以前端送時間一定要帶 `Z` 或 offset
 - 唯一例外是 device state cache 的 `started_at`：cache 保留 aware UTC 供 API／排程計算，所有狀態動作都經 `DeviceStateManager._persist`，再由模組內的 `_save` 正規化成 naive UTC 後落盤；同 transaction 的 `SopExecution.test_started_at` 仍直接使用 `_now_utc_naive()`
 
 ## 自動排程邏輯

@@ -4,6 +4,7 @@
 - 找不到執行紀錄 → 乾淨 404（PDF 與 CSV 共用 _fetch_execution_data），非 500 崩潰。
 - PDF 產生走真實 reportlab（行內函式庫，不 mock），輸出必須是合法 PDF。
 - 前端存執行紀錄時送的是帶時區的 ISO 時間，落地後仍要對得上 naive UTC 的感測資料。
+- 送進來的時間若不是 UTC，要先換算再存，不是把時區直接丟掉。
 """
 import asyncio
 import datetime
@@ -112,4 +113,48 @@ def test_frontend_iso_timestamps_still_match_sensor_data(api_client, monkeypatch
 
     assert len(device_records) == 10, (
         f"報告只撈到 {len(device_records)} 筆感測資料，帶時區的時間與 naive 時間戳對不上"
+    )
+
+
+def test_non_utc_timestamps_are_converted_before_saving(api_client, monkeypatch):
+    """送進來的時間不是 UTC 時，要換算成 UTC 再存，不是把時區直接丟掉。
+
+    目前前端送的一定是 UTC，丟掉時區剛好等於正確答案，所以這條守的是往後：
+    哪天有人改成送本地時間（+08:00），台北 17:30 會被當成 UTC 17:30 存進去，
+    報告就去撈晚了 8 小時的區間。整段過程沒有任何錯誤訊息，只有數據不對。
+
+    走 HTTP 而非直接塞 ORM，理由同上一條：要涵蓋的是「ISO 字串 → pydantic → DB」。
+    """
+    import app.sop as sop_module
+
+    async def _no_push(*_a, **_kw):
+        return None
+    monkeypatch.setattr(sop_module, "push_message", _no_push)
+
+    taipei = datetime.timezone(datetime.timedelta(hours=8))
+    started_local = datetime.datetime(2026, 8, 8, 17, 30, tzinfo=taipei)
+    ended_local = datetime.datetime(2026, 8, 8, 18, 0, tzinfo=taipei)
+
+    with api_client(sop_module, sop_module.execution_router) as (client, Session):
+        resp = client.post("/api/sop-executions/", json={
+            "sop_id": "iec60068_ab_-40_16h",
+            "device_id": "CH-01",
+            "operator": "測試員",
+            "test_started_at": started_local.isoformat(),   # ...+08:00
+            "test_ended_at": ended_local.isoformat(),
+            "steps": [],
+        })
+        assert resp.status_code == 200, resp.text
+        eid = resp.json()["id"]
+
+        with Session() as db:
+            row = db.get(SopExecution, eid)
+            saved_start, saved_end = row.test_started_at, row.test_ended_at
+
+    assert saved_start.tzinfo is None and saved_end.tzinfo is None, "欄位應維持 naive"
+    assert saved_start == datetime.datetime(2026, 8, 8, 9, 30), (
+        f"開始時間存成 {saved_start}，台北 17:30 應換算成 UTC 09:30"
+    )
+    assert saved_end == datetime.datetime(2026, 8, 8, 10, 0), (
+        f"結束時間存成 {saved_end}，台北 18:00 應換算成 UTC 10:00"
     )

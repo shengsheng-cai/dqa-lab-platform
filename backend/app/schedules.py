@@ -21,7 +21,7 @@ from .standards import STANDARD_TREE, get_standard
 from .constants import DEVICE_IDS
 from .auth import require_admin, current_user
 from .line import push_message
-from .utils import _now_utc, _now_utc_naive, _parse_conditions
+from .utils import _now_utc, _now_utc_naive, _to_naive_utc, _parse_conditions
 from .audit_log import log_audit
 from .schedule_api import schedule_start_http_error
 from .schedule_service import (
@@ -386,8 +386,8 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, role, c
             running_until = _build_running_until(cache)
             if body.device_id and body.start_time and body.end_time:
                 device_id = body.device_id
-                start = body.start_time
-                end = body.end_time
+                start = _to_naive_utc(body.start_time)
+                end = _to_naive_utc(body.end_time)
                 _assert_no_overlap(db, schedule_id, device_id, start, end)
             elif body.device_id:
                 device_id = body.device_id
@@ -434,8 +434,8 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, role, c
             original_status = s.status
             original_device_id = s.device_id
             new_device_id = body.device_id or s.device_id
-            new_start = body.start_time or s.start_time
-            new_end = body.end_time or s.end_time
+            new_start = _to_naive_utc(body.start_time) or s.start_time
+            new_end = _to_naive_utc(body.end_time) or s.end_time
             s.device_id = new_device_id
             s.start_time = new_start
             s.end_time = new_end
@@ -453,8 +453,8 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, role, c
 
         else:
             new_device_id = body.device_id if body.device_id is not None else s.device_id
-            new_start = body.start_time if body.start_time is not None else s.start_time
-            new_end = body.end_time if body.end_time is not None else s.end_time
+            new_start = _to_naive_utc(body.start_time) if body.start_time is not None else s.start_time
+            new_end = _to_naive_utc(body.end_time) if body.end_time is not None else s.end_time
             if _slot_changed(body) and s.status == ScheduleStatus.RUNNING:
                 raise HTTPException(
                     status_code=409,
@@ -720,8 +720,8 @@ def create_blocked_period(body: BlockedPeriodCreate, actor=Depends(require_admin
     with SessionLocal() as db:
         b = DeviceBlockedPeriod(
             device_id=body.device_id,
-            start_time=body.start_time,
-            end_time=body.end_time,
+            start_time=_to_naive_utc(body.start_time),
+            end_time=_to_naive_utc(body.end_time),
             reason=body.reason,
             created_by=actor.user_id,
         )
@@ -753,9 +753,9 @@ def update_blocked_period(period_id: int, body: BlockedPeriodPatch, actor=Depend
                 raise HTTPException(status_code=400, detail=f"無效的設備 ID：{body.device_id}")
             b.device_id = body.device_id
         if body.start_time is not None:
-            b.start_time = body.start_time
+            b.start_time = _to_naive_utc(body.start_time)
         if body.end_time is not None:
-            b.end_time = body.end_time
+            b.end_time = _to_naive_utc(body.end_time)
         if body.reason is not None:
             b.reason = body.reason
         if b.end_time <= b.start_time:
