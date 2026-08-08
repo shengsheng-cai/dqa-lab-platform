@@ -20,7 +20,7 @@
 | **REQ-FIX-02** | 人員送出的日期以他所在的當地日計算，不是 UTC 的那天：歸還日是當地的日曆日、到期日在當地日結束時才過期、今日到期也以當地日計算 | R-06 | `client/src/__tests__/timezone.test.js`（整個套件釘在 `Asia/Taipei`）；`backend/tests/test_fixtures_api.py::test_summary_due_today_uses_caller_day_window`；`::test_summary_without_window_falls_back_to_utc_day` | [BUG-004](BUG-004-fixture-dates-stored-one-day-early.zh-TW.md)；[BUG-005](BUG-005-fixture-day-deadlines-evaluated-in-utc.zh-TW.md) | 已涵蓋 |
 | **REQ-FIX-03** | 歸還治具要走歸還對話框，讓人員記錄狀態、備註與實際歸還日；損壞或遺失需要二次確認 | R-06 | `tests/e2e/specs/fixture-loan.spec.js` | — | 已涵蓋 |
 | **REQ-EXT-01** | LINE、報告與 AI 供應商的失敗會被收斂，並回傳可據以行動的結果 | R-07 | `backend/tests/test_line_resilience.py`；`test_reports_degradation.py`；`test_ai_observability.py` | — | 以模擬故障涵蓋 |
-| **REQ-RPT-01** | 存下來的執行紀錄要帶著報告需要的時間，讓量測摘要反映測試區間，不論是哪條路徑存的 | R-07 | `backend/tests/test_reports_degradation.py::test_frontend_iso_timestamps_still_match_sensor_data` | [BUG-007](BUG-007-fallback-execution-save-diverged-from-main-path.zh-TW.md) | 後端契約已涵蓋；引發它的前端備援路徑在此基準下無法自動化（見 GAP-04） |
+| **REQ-RPT-01** | 存下來的執行紀錄要帶著報告需要的時間，讓量測摘要反映測試區間，不論是哪條路徑存的 | R-07 | `backend/tests/test_reports_degradation.py::test_frontend_iso_timestamps_still_match_sensor_data`；`client/src/__tests__/executionPayload.test.js` | [BUG-007](BUG-007-fallback-execution-save-diverged-from-main-path.zh-TW.md) | 後端契約已涵蓋；兩條前端存檔路徑現在都用同一支共用函式組出送出的內容，少送欄位會讓測試變紅（剩餘缺口見 GAP-04） |
 | **REQ-AI-01** | AI 建議的條件可以進入排程，同時訪客仍然無法送出寫入 | R-08 | `backend/tests/test_rag.py`；`tests/e2e/specs/ai-apply-schedule.spec.js`；`guest-readonly.spec.js` | — | 以模擬 AI 邊界涵蓋 |
 
 ## 作品範圍外
@@ -34,4 +34,4 @@
 
 | 缺口 | 影響 | 規劃處理方式 |
 |---|---|---|
-| **GAP-04** — 只在設備狀態更新掉包時才觸發的前端備援路徑 | 主路徑與備援路徑的分歧是靠程式碼審查抓到的，不是靠測試，BUG-007 就是如此 | 以間接方式涵蓋：每條備援所依賴的後端契約都有測試釘住，兩個呼叫點也互相交叉引用。要直接涵蓋需要元件測試，而本基準不做元件測試 |
+| **GAP-04** — 只在設備狀態更新掉包時才觸發的前端備援路徑 | 備援何時觸發、以及它怎麼把結果合併回狀態，仍然靠程式碼審查驗證，不是靠測試 | 已收窄：兩條存檔路徑送出的內容現在由同一支共用函式（`client/src/utils/executionPayload.js`）產生，並由 `client/src/__tests__/executionPayload.test.js` 逐欄位釘住，所以造成 BUG-007 的欄位漂移現在會讓測試變紅。觸發條件與狀態合併仍需要元件測試，而本基準不做元件測試 |

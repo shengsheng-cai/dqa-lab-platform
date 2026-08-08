@@ -58,7 +58,10 @@ LINE 有兩條方向相反的路，不要混用：主動推播用 `push_message`
   - 緊急停止推播：`devices.py`
 - `sop.py` 那個發送點被 `manual_mode` 擋掉：手動模式是除錯用，完全不推播，避免消耗
   免費額度（200 則／月）。前端建立執行紀錄時**一定要送 `manual_mode`**，漏送會被
-  當成一般測試而推播出去（BUG-007 就是漏送造成的）。
+  當成一般測試而推播出去（BUG-007 就是漏送造成的）。前端存執行紀錄的兩條路徑
+  （SOP 面板按儲存、設備回到待機時補存）一律用 `client/src/utils/executionPayload.js`
+  的 `buildExecutionPayload` 組出要送的內容，不要在呼叫點自己組——這個欄位的保證只有
+  那一份，`client/src/__tests__/executionPayload.test.js` 逐欄位釘著它。
 - `push_message` 推播給 `LINE_USER_ID`（管理者個人）。
 
 ### Webhook（使用者查詢設備）

@@ -11,6 +11,7 @@ import SafetyChecklist from "./components/sop/SafetyChecklist";
 import "./SOPPage.css";
 import { DEVICE_IDS, ACTIVE_STATUSES, IDLE_STATUS, FINISHING_STATUS, EMERGENCY_STATUS } from "./constants";
 import ConfirmModal from "./components/ConfirmModal";
+import { buildExecutionPayload } from "./utils/executionPayload";
 
 const initDeviceState = () => ({
   activeSop: null,
@@ -242,18 +243,15 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
         savingExecutionRef.current.add(selectedDevice);
         const steps = curDs.activeSop.steps || [];
         const allCompleted = Object.fromEntries(steps.map((s) => [s.step_id, true]));
-        // 這裡的欄位要跟 ExecutionPanel.saveExecution 對齊，兩邊漏一個就會有差異：
-        // 兩個時間都送到，報告端才撈得到感測資料，否則溫度統計整段空白；
-        // manual_mode 要送到，後端才知道除錯模式不該發 LINE 推播。
-        api.post("/api/sop-executions/", {
-          sop_id: curDs.activeSop.sop_id,
-          device_id: selectedDevice,
-          operator: operator?.trim() || null,
-          test_started_at: lastStartedAtRef.current[selectedDevice] || null,
-          test_ended_at: new Date().toISOString(),
-          manual_mode: manualMode,
-          steps: steps.map((s) => ({ step_id: s.step_id, completed: true })),
-        }).then((res) => {
+        // 走到這裡代表設備已經回到待機，測試確實跑完了，所以所有步驟都算完成。
+        api.post("/api/sop-executions/", buildExecutionPayload({
+          sop: curDs.activeSop,
+          deviceId: selectedDevice,
+          operator,
+          startedAt: lastStartedAtRef.current[selectedDevice],
+          manualMode,
+          completedSteps: allCompleted,
+        })).then((res) => {
           setDeviceStates((p) => ({
             ...p,
             [selectedDevice]: { ...p[selectedDevice], savedExecutionId: res.data.id, completedSteps: allCompleted },
