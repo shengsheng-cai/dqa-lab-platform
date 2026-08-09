@@ -12,7 +12,8 @@ def test_uB_formula():
 
 
 def test_stable_segment_filter():
-    """穩定段過濾：遠離目標的升溫數據不應影響計算"""
+    """穩定段過濾：遠離目標的升溫數據不應影響計算，result.data 要精確等於過濾後的那段
+    （不能只是「筆數對得上」——它是報告其他統計，如平均溫，沿用的同一段資料）"""
     # 升溫 25~79°C（全部超出 85±2 容差）+ dwell 段
     ramp = [float(t) for t in range(25, 80)]
     dwell = [85.0 + (i % 3) * 0.03 for i in range(30)]
@@ -21,6 +22,8 @@ def test_stable_segment_filter():
     assert result.using_stable_only is True
     assert result.n == len(dwell)
     assert result.n_total == len(all_temps)
+    assert result.data == dwell
+    assert result.mean == round(sum(dwell) / len(dwell), 3)
 
 
 def test_fallback_when_stable_too_few():
