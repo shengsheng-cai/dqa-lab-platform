@@ -22,6 +22,7 @@
 | **REQ-FIX-03** | 歸還治具要走歸還對話框，讓人員記錄狀態、備註與實際歸還日；損壞或遺失需要二次確認 | R-06 | `tests/e2e/specs/fixture-loan.spec.js` | — | 已涵蓋 |
 | **REQ-EXT-01** | LINE、報告與 AI 供應商的失敗會被收斂，並回傳可據以行動的結果 | R-07 | `backend/tests/test_line_resilience.py`；`test_reports_degradation.py`；`test_ai_observability.py` | — | 以模擬故障涵蓋 |
 | **REQ-RPT-01** | 存下來的執行紀錄要帶著報告需要的時間，讓量測摘要反映測試區間，不論是哪條路徑存的 | R-07 | `backend/tests/test_reports_degradation.py::test_frontend_iso_timestamps_still_match_sensor_data`；`client/src/__tests__/executionPayload.test.js` | [BUG-007](BUG-007-fallback-execution-save-diverged-from-main-path.zh-TW.md) | 後端契約已涵蓋；兩條前端存檔路徑現在都用同一支共用函式組出送出的內容，少送欄位會讓測試變紅（剩餘缺口見 GAP-04） |
+| **REQ-RPT-02** | 報告的數據統計（最高/最低/平均）跟自己的不確定度分析一致，同一筆執行紀錄的 PDF 與 CSV 報告也彼此一致 | R-07 | `backend/tests/test_reports_degradation.py::test_summary_stats_matches_uncertainty_mean_not_full_window_average`；`::test_csv_report_avg_temp_matches_uncertainty_stable_segment`；`backend/tests/test_uncertainty.py::test_stable_segment_filter` | [BUG-008](BUG-008-report-summary-disagreed-with-uncertainty-analysis.zh-TW.md) | 已涵蓋 |
 | **REQ-AI-01** | AI 建議的條件可以進入排程，同時訪客仍然無法送出寫入 | R-08 | `backend/tests/test_rag.py`；`tests/e2e/specs/ai-apply-schedule.spec.js`；`guest-readonly.spec.js` | — | 以模擬 AI 邊界涵蓋 |
 
 ## 作品範圍外

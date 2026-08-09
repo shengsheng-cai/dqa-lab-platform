@@ -6,7 +6,7 @@
 |---|---|
 | **計畫類型** | 發布基準的回歸測試計畫 |
 | **對象** | `main` 上的模擬設備 Demo |
-| **最後更新** | 2026-08-02 |
+| **最後更新** | 2026-08-09 |
 | **對應策略** | [測試策略](test-strategy.zh-TW.md) |
 
 ## 1. 目標
@@ -32,7 +32,7 @@
 | **R-04** | UI 顯示過期狀態，並提供了無效的操作 | Medium | High | P1 | `schedule-flow.spec.js`、`fixture-loan.spec.js` | 短暫的重新整理或網路失敗仍可能需要人工重試 |
 | **R-05** | 重疊、延遲啟動、修改已確認時段、重啟或錯誤輸入，導致排程卡住或啟動了錯的工作 | High | Medium | P1 | `test_schedule_conflict.py`、`test_schedules_slot.py`、`test_simulator_schedule.py`、`test_schedule_start_consistency.py`（含精確日期 job 的取代）、`test_schedules_complete.py`（回常溫期間的設備可用性） | 長時間的時鐘漂移與生產環境的排程器負載未涵蓋 |
 | **R-06** | 治具庫存變成負數、被排程預約超額、重複歸還、到貨重複入庫、永久卡在預約，或連到錯誤的排程 | High | Medium | P1 | `test_fixture_lifecycle.py`、`test_fixtures_api.py`、`test_fixture_excel.py`、`test_purchase_orders.py`、`test_linkage.py`、`fixture-loan.spec.js` | 多人同時借用未做負載測試 |
-| **R-07** | 外部服務或報告讓核心操作失敗，或報告產出了但內容悄悄不完整 | Medium | Medium | P2 | `test_line_resilience.py`、`test_reports_degradation.py`（降級，以及量測摘要所依賴的時間契約）、`test_ai_observability.py`、`client/src/__tests__/executionPayload.test.js` | 供應商的實際行為與額度變動不涵蓋；前端存檔路徑漏送欄位現在會讓測試變紅，但備援路徑何時觸發仍然只能靠審查抓（GAP-04） |
+| **R-07** | 外部服務或報告讓核心操作失敗，或報告產出了但內容悄悄不完整或前後矛盾 | Medium | Medium | P2 | `test_line_resilience.py`、`test_reports_degradation.py`（降級、量測摘要所依賴的時間契約，以及數據統計與不確定度分析的一致性契約）、`test_uncertainty.py`、`test_ai_observability.py`、`client/src/__tests__/executionPayload.test.js` | 供應商的實際行為與額度變動不涵蓋；前端存檔路徑漏送欄位現在會讓測試變紅，但備援路徑何時觸發仍然只能靠審查抓（GAP-04） |
 | **R-08** | AI 的建議無法安全套用，或訪客走進無法完成的寫入流程 | Medium | Medium | P2 | `test_rag.py`、`ai-apply-schedule.spec.js`、`guest-readonly.spec.js` | 回答的語意品質未做完整評分 |
 
 ## 4. 執行順序
