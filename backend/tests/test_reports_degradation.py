@@ -12,8 +12,15 @@ import datetime
 import pytest
 from fastapi import HTTPException
 
+from app import uncertainty as unc
 from app.models import DeviceData, SopExecution
-from app.reports import _fetch_execution_data, download_csv_report, download_pdf_report
+from app.reports import (
+    _fetch_execution_data,
+    _summary_avg,
+    _summary_stats,
+    download_csv_report,
+    download_pdf_report,
+)
 
 
 @pytest.fixture()
@@ -28,6 +35,21 @@ def _seed_execution(Session) -> int:
         db.add(e)
         db.commit()
         return e.id
+
+
+def _drain_streaming_response(resp) -> bytes:
+    """收集 StreamingResponse 的完整內容，供直接呼叫 route 函式（非走 TestClient）的測試用。"""
+    async def _collect():
+        chunks = []
+        async for c in resp.body_iterator:
+            chunks.append(c)
+        return b"".join(chunks)
+
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(_collect())
+    finally:
+        loop.close()
 
 
 def test_pdf_report_missing_execution_returns_404(session_patched):
@@ -50,17 +72,7 @@ def test_pdf_report_generates_valid_pdf(session_patched):
 
     assert resp.media_type == "application/pdf"
 
-    async def _collect():
-        chunks = []
-        async for c in resp.body_iterator:
-            chunks.append(c)
-        return b"".join(chunks)
-
-    loop = asyncio.new_event_loop()
-    try:
-        body = loop.run_until_complete(_collect())
-    finally:
-        loop.close()
+    body = _drain_streaming_response(resp)
 
     assert body.startswith(b"%PDF"), "輸出不是合法 PDF"
     assert len(body) > 1000, "PDF 內容過小，可能產生失敗"
@@ -158,3 +170,78 @@ def test_non_utc_timestamps_are_converted_before_saving(api_client, monkeypatch)
     assert saved_end == datetime.datetime(2026, 8, 8, 10, 0), (
         f"結束時間存成 {saved_end}，台北 18:00 應換算成 UTC 10:00"
     )
+
+
+def test_summary_stats_matches_uncertainty_mean_not_full_window_average():
+    """報告的平均溫要跟不確定度分析取同一段資料，不能各算各的。
+
+    升溫段（遠離目標、佔多數）+ dwell 段（落在容差內）混合時，全資料窗的平均會被
+    升溫段拉低；不確定度分析只取 dwell 段（穩定段）計算 mean。曾經 PDF 第 6 節與
+    CSV 都直接對全部溫度取平均，導致同一筆執行紀錄的 PDF §5、PDF §6、CSV 三處平均溫互不相同。
+    """
+    ramp = [float(t) for t in range(25, 80)]              # 遠離目標，佔多數
+    dwell = [85.0 + (i % 3) * 0.03 for i in range(30)]     # 落在 85±2 容差內
+    all_temps = ramp + dwell
+
+    u_temp = unc.calc_temp(all_temps, target=85.0, tolerance=2.0)
+    assert u_temp.using_stable_only is True, "測試前提：這組資料應該能篩出穩定段"
+
+    full_window_avg = round(sum(all_temps) / len(all_temps), 2)
+    _, _, temp_avg = _summary_stats(u_temp, all_temps, 2)
+
+    assert temp_avg == round(u_temp.mean, 2), "平均溫應該直接沿用不確定度分析的結果"
+    assert temp_avg != full_window_avg, "這組資料下穩定段平均與全窗平均本該不同，測試前提才成立"
+    # 只需要平均值的呼叫點（如濕度、CSV）跟需要 max/min 的呼叫點（如溫度）必須拿到同一個平均值
+    assert _summary_avg(u_temp, all_temps, 2) == temp_avg
+
+
+def test_summary_stats_falls_back_to_raw_values_without_uncertainty_result():
+    """沒有 target（沒算不確定度）時，退回全段自算，行為與改動前一致。"""
+    temps = [20.0, 22.0, 24.0]
+    assert _summary_stats(None, temps, 2) == (24.0, 20.0, 22.0)
+    assert _summary_avg(None, temps, 2) == 22.0
+
+
+def test_summary_stats_empty_data_returns_na():
+    assert _summary_stats(None, [], 2) == ("N/A", "N/A", "N/A")
+    assert _summary_avg(None, [], 2) == "N/A"
+
+
+def test_csv_report_avg_temp_matches_uncertainty_stable_segment(session_patched):
+    """實際跑 CSV 報告路由（不只測 helper）：印出的平均溫要是穩定段平均，
+    不能是全資料窗平均——CSV 之前完全沒算不確定度，這是新接上的路徑，要驗證真的接對。
+    """
+    now = datetime.datetime(2026, 1, 1, 0, 0, 0)
+    ramp = [float(t) for t in range(25, -35, -1)]          # 遠離 -40 目標，佔多數
+    dwell = [-40.0 + (i % 3) * 0.03 for i in range(30)]     # 落在 -40±2 容差內
+    all_temps = ramp + dwell
+
+    with session_patched() as db:
+        e = SopExecution(
+            sop_id="iec60068_ab_-40_16h", device_id="CH-01", operator="測試員",
+            test_started_at=now, test_ended_at=now + datetime.timedelta(minutes=len(all_temps)),
+        )
+        db.add(e)
+        db.commit()
+        eid = e.id
+
+        for i, t in enumerate(all_temps):
+            db.add(DeviceData(
+                device_id="CH-01", temperature=t,
+                timestamp=now + datetime.timedelta(minutes=i),
+            ))
+        db.commit()
+
+    expected = unc.calc_temp(all_temps, target=-40.0, tolerance=2.0)
+    assert expected.using_stable_only is True, "測試前提：這組資料應該能篩出穩定段"
+    full_window_avg = round(sum(all_temps) / len(all_temps), 2)
+    assert round(expected.mean, 2) != full_window_avg, "測試前提：穩定段平均要跟全窗平均不同"
+
+    resp = download_csv_report(eid)
+    body = _drain_streaming_response(resp)
+    text = body.decode("big5")
+    avg_line = next(line for line in text.splitlines() if "平均溫度 Avg Temp" in line)
+    assert str(round(expected.mean, 2)) in avg_line, (
+        f"CSV 平均溫應該是穩定段平均 {round(expected.mean, 2)}，實際那行：{avg_line!r}"
+    )
+    assert str(full_window_avg) not in avg_line, "CSV 平均溫不該退回全窗平均"

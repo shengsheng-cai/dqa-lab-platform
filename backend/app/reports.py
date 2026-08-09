@@ -2,6 +2,7 @@ import io
 import os
 import datetime
 import urllib.parse
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from reportlab.lib import colors
@@ -53,6 +54,42 @@ def _fmt_dt(dt) -> str:
     return str(dt)
 
 
+def _compute_uncertainties(temps, humis, target_high, humi_target, temp_tolerance, humi_tolerance):
+    """CSV 與 PDF 共用：算出溫度／濕度的不確定度分析（沒有 target 或沒有數據時為 None）。
+    兩種格式都呼叫這個函式取得 u_temp/u_humi，結構上保證同一筆執行紀錄下載兩種格式時，
+    摘要統計（見 `_summary_avg`/`_summary_stats`）用的是同一段資料，不會各算各的。
+    """
+    u_temp = None
+    u_humi = None
+    if temps and target_high is not None:
+        u_temp = unc.calc_temp(temps, float(target_high), float(temp_tolerance))
+    if humis and humi_target is not None:
+        u_humi = unc.calc_humi(humis, float(humi_target), float(humi_tolerance))
+    return u_temp, u_humi
+
+
+def _summary_avg(u: Optional[unc.UncertaintyResult], raw_values: list, ndigits: int):
+    """報告「數據統計」的平均值。有不確定度分析時直接沿用 u.mean（跟不確定度分析
+    取同一段資料：u.data，即穩定段或其退回段），沒有時（如無 target）才退回全段
+    raw_values 自算。避免報告因兩處取不同資料窗，印出兩個矛盾的平均值。
+    資料為空時回傳 "N/A"。
+    """
+    data = u.data if u else raw_values
+    if not data:
+        return "N/A"
+    return round(u.mean, ndigits) if u else round(sum(data) / len(data), ndigits)
+
+
+def _summary_stats(u: Optional[unc.UncertaintyResult], raw_values: list, ndigits: int):
+    """同 `_summary_avg`，另外回傳 max/min，供需要溫度範圍的呼叫點使用。
+    回傳 (max, min, avg)，資料為空時三者皆為 "N/A"。
+    """
+    data = u.data if u else raw_values
+    if not data:
+        return "N/A", "N/A", "N/A"
+    return round(max(data), ndigits), round(min(data), ndigits), _summary_avg(u, raw_values, ndigits)
+
+
 @router.get("/csv/{execution_id}")
 def download_csv_report(execution_id: int):
     """
@@ -72,13 +109,15 @@ def download_csv_report(execution_id: int):
         temps = [r.temperature for r in device_records if r.temperature is not None]
         humis = [r.humidity for r in device_records if r.humidity is not None]
 
-        temp_max = round(max(temps), 2) if temps else "N/A"
-        temp_min = round(min(temps), 2) if temps else "N/A"
-        temp_avg = round(sum(temps) / len(temps), 2) if temps else "N/A"
-        humi_avg = round(sum(humis) / len(humis), 1) if humis else "N/A"
-
         target_high = _resolve_target_high(sop_data)
         target_low = sop_data.get("low_temperature")
+        humi_target = sop_data.get("humidity_rh_percent")
+
+        u_temp, u_humi = _compute_uncertainties(
+            temps, humis, target_high, humi_target, temp_tolerance, humi_tolerance
+        )
+        temp_max, temp_min, temp_avg = _summary_stats(u_temp, temps, 2)
+        humi_avg = _summary_avg(u_humi, humis, 1)
 
         output = io.BytesIO()
         report_no = f"RPT-{execution.created_at.strftime('%Y%m%d')}-{execution_id:03d}"
@@ -491,13 +530,9 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     # ── 5. 量測不確定度（核心新功能）────────────────────────────────────────
     story.append(Paragraph("5. 量測不確定度分析  Measurement Uncertainty (GUM)", h2))
 
-    u_temp = None
-    u_humi = None
-
-    if temps and target_high is not None:
-        u_temp = unc.calc_temp(temps, float(target_high), float(temp_tolerance))
-    if humis and humi_target is not None:
-        u_humi = unc.calc_humi(humis, float(humi_target), float(humi_tolerance))
+    u_temp, u_humi = _compute_uncertainties(
+        temps, humis, target_high, humi_target, temp_tolerance, humi_tolerance
+    )
 
     def _unc_table(u: unc.UncertaintyResult, qty_label: str):
         header = [
@@ -576,10 +611,8 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
 
     # ── 6. 數據統計 ───────────────────────────────────────────────────────────
     story.append(Paragraph("6. 數據統計  Measurement Summary", h2))
-    temp_max = round(max(temps), 2) if temps else "N/A"
-    temp_min = round(min(temps), 2) if temps else "N/A"
-    temp_avg = round(sum(temps)/len(temps), 2) if temps else "N/A"
-    humi_avg = round(sum(humis)/len(humis), 1) if humis else "N/A"
+    temp_max, temp_min, temp_avg = _summary_stats(u_temp, temps, 2)
+    humi_avg = _summary_avg(u_humi, humis, 1)
     data_note = (f"{len(device_records)} 筆"
                  + (f" (已截斷，上限 {MAX_DATA_POINTS} 筆)" if truncated else ""))
     story.append(kv_table([

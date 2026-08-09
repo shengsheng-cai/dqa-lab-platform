@@ -23,6 +23,7 @@ class UncertaintyResult:
     n: int                    # 計算所用樣本數
     n_total: int              # 全段樣本數
     using_stable_only: bool   # 是否成功限縮穩定段
+    data: list[float]         # 實際用於計算的樣本（穩定段或全段，供報告其他統計沿用同一段資料）
     mean: float               # 樣本均值
     std_dev: float            # 樣本標準差
     uA: float                 # Type A 標準不確定度
@@ -77,6 +78,7 @@ def calc(
         n=n,
         n_total=n_total,
         using_stable_only=using_stable,
+        data=data,
         mean=round(mean, 3),
         std_dev=round(std_dev, 4),
         uA=round(uA, 4),
