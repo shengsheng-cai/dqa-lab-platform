@@ -198,10 +198,12 @@ def download_csv_report(execution_id: int):
             output, "停留時間 Dwell Time (h):", sop_data.get("dwell_time_hours", "N/A")
         )
         _row(output, "循環次數 Cycles:", sop_data.get("cycles", "N/A"))
+        # 不控濕的 SOP（如純低溫測試）這個欄位存在但值是 None，預設值救不到，
+        # 直接印會在報告上留下英文的 None。改成跟上面幾列同樣的判法。
         _row(
             output,
             "濕度設定 Humidity (%RH):",
-            sop_data.get("humidity_rh_percent", "N/A"),
+            humi_target if humi_target is not None else "N/A",
         )
         _row(output, "溫度容差 Temp Tolerance (C):", f"± {temp_tolerance}")
         _row(output, "濕度容差 Humi Tolerance (%RH):", f"± {humi_tolerance}")
@@ -542,7 +544,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated,
         ["升降溫速率 Ramp Rate", f"{sop_data.get('ramp_rate', 'N/A')} °C/min"],
         ["停留時間 Dwell Time", f"{sop_data.get('dwell_time_hours', 'N/A')} h"],
         ["循環次數 Cycles", str(sop_data.get("cycles", "N/A"))],
-        ["濕度設定 Humidity", f"{humi_target} %RH" if humi_target else "N/A"],
+        ["濕度設定 Humidity", f"{humi_target} %RH" if humi_target is not None else "N/A"],
         ["溫度容差 Temp Tolerance", f"± {temp_tolerance} °C"],
         ["測試開始 Start Time", _fmt_dt(execution.test_started_at)],
         ["測試結束 End Time", _fmt_dt(execution.test_ended_at)],

@@ -344,6 +344,21 @@ def test_report_carries_laboratory_identity_and_scope_statement(session_patched)
     assert "結果僅適用於本次所測之樣品" in text
 
 
+def test_report_prints_na_for_uncontrolled_humidity(session_patched):
+    """不控濕的 SOP，濕度設定要印 N/A，不能把 Python 的 None 印到報告上。
+
+    這個欄位在 SOP 資料裡存在、值是 None，所以 `.get(key, "N/A")` 的預設值救不到，
+    修正前報告上會出現英文的 None，看起來像程式漏東西。
+    """
+    eid = _seed_case(session_patched, link=True)  # iec60068_ab_-40_16h 不控濕
+
+    conditions = _section_between(_csv_text(eid), "3. 測試條件", "4. 步驟執行記錄")
+
+    humidity_line = next(line for line in conditions.splitlines() if "濕度設定" in line)
+    assert "N/A" in humidity_line, f"不控濕時應印 N/A，實際：{humidity_line!r}"
+    assert "None" not in humidity_line
+
+
 def test_pdf_report_with_case_still_generates_valid_pdf(session_patched):
     """PDF 走的是另一條組版路徑，樣品欄位接上後仍要產得出合法 PDF。"""
     eid = _seed_case(session_patched, link=True)
