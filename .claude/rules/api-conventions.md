@@ -116,7 +116,7 @@ async def my_route(...):
   `backend/tests/test_datetime_normalization.py` 釘住
 - `_to_naive_utc()` 只救得了「有帶時區但不是 UTC」。**不帶時區的本地時間救不了**——
   伺服器無從得知客戶端在哪一時區，所以前端送時間一定要帶 `Z` 或 offset
-- 唯一例外是 device state cache 的 `started_at`：cache 保留 aware UTC 供 API／排程計算，所有狀態動作都經 `DeviceStateManager._persist`，再由模組內的 `_save` 正規化成 naive UTC 後落盤；同 transaction 的 `SopExecution.test_started_at` 仍直接使用 `_now_utc_naive()`
+- 唯一例外是 device state cache 的 `started_at`：cache 保留 aware UTC 供 API／排程計算，所有狀態動作都經 `DeviceStateManager._persist`，再由模組內的 `_save` 正規化成 naive UTC 後落盤。同 transaction 的 `SopExecution.test_started_at` 由**同一個瞬間**去掉時區得到（`started_at.replace(tzinfo=None)`），不另外呼叫 `_now_utc_naive()`——測試結束後 SOP 頁面存的那列要靠這個時間戳認回開始那列來繼承案件（`sop.py` 的 `_find_origin_schedule_id_db`），各自取 now() 會差幾微秒而認不回來
 
 ## 自動排程邏輯
 

@@ -12,7 +12,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 )
-from .models import SessionLocal, SopExecution, StepRecord, DeviceData
+from .models import SessionLocal, Schedule, SopExecution, StepRecord, DeviceData
 from .standards import STANDARDS_AND_SOPS
 from .constants import DEVICE_IDS
 from . import uncertainty as unc
@@ -22,6 +22,13 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 REPORT_VERSION = "1.0"
 LAB_NAME = "DQA Lab Platform"
+# §7.8.2.1(b) 要求實驗室名稱與地址。本專案是作品展示、沒有實體實驗室，
+# 因此誠實標示為模擬環境，不掛一個編出來的地址冒充受認證實驗室。
+LAB_ADDRESS = "作品展示用模擬實驗室，無實體地址  Portfolio demonstration laboratory (simulated); no physical address"
+# §7.8.2.1(l)
+RESULTS_SCOPE_STATEMENT = "本報告結果僅適用於本次所測之樣品。  The results relate only to the items tested."
+# 執行紀錄沒接到排程時，樣品欄位印這個——不退回去印設備編號（BUG-009）
+NO_CASE_TEXT = "(臨時測試，無對應案件)  Ad-hoc test; no associated case"
 # fix: 限制單次查詢最大筆數，避免長時間測試資料塞爆記憶體
 MAX_DATA_POINTS = 10000
 
@@ -54,6 +61,11 @@ def _fmt_dt(dt) -> str:
     return str(dt)
 
 
+def _report_no(execution) -> str:
+    """報告編號。CSV 與 PDF 共用同一份算式，兩種格式的同一筆紀錄編號才會一致。"""
+    return f"RPT-{execution.created_at.strftime('%Y%m%d')}-{execution.id:03d}"
+
+
 def _compute_uncertainties(temps, humis, target_high, humi_target, temp_tolerance, humi_tolerance):
     """CSV 與 PDF 共用：算出溫度／濕度的不確定度分析（沒有 target 或沒有數據時為 None）。
     兩種格式都呼叫這個函式取得 u_temp/u_humi，結構上保證同一筆執行紀錄下載兩種格式時，
@@ -66,6 +78,26 @@ def _compute_uncertainties(temps, humis, target_high, humi_target, temp_toleranc
     if humis and humi_target is not None:
         u_humi = unc.calc_humi(humis, float(humi_target), float(humi_tolerance))
     return u_temp, u_humi
+
+
+def _case_info(db, execution) -> dict:
+    """報告的受測樣品識別（§7.8.2.1 e、g）。樣品名稱／案號／客戶都在 Schedule 上，
+    執行紀錄靠 schedule_id 連過去。沒接到排程時誠實回報沒有案件，不退回去印設備編號——
+    印設備編號正是 BUG-009：那識別的是試驗箱，不是受測樣品。CSV 與 PDF 共用這一份，
+    兩種格式的樣品識別不會各講一套。
+    """
+    schedule = (
+        db.get(Schedule, execution.schedule_id)
+        if execution.schedule_id is not None
+        else None
+    )
+    if schedule is None:
+        return {"sample_name": NO_CASE_TEXT, "project_number": "N/A", "customer": "N/A"}
+    return {
+        "sample_name": schedule.sample_name or "N/A",
+        "project_number": schedule.project_number or "N/A",
+        "customer": schedule.applicant_name or "N/A",
+    }
 
 
 def _summary_avg(u: Optional[unc.UncertaintyResult], raw_values: list, ndigits: int):
@@ -106,6 +138,8 @@ def download_csv_report(execution_id: int):
         temp_tolerance = sop_data.get("temp_tolerance", 2.0)
         humi_tolerance = sop_data.get("humi_tolerance", 3.0)
 
+        case = _case_info(db, execution)
+
         temps = [r.temperature for r in device_records if r.temperature is not None]
         humis = [r.humidity for r in device_records if r.humidity is not None]
 
@@ -120,7 +154,7 @@ def download_csv_report(execution_id: int):
         humi_avg = _summary_avg(u_humi, humis, 1)
 
         output = io.BytesIO()
-        report_no = f"RPT-{execution.created_at.strftime('%Y%m%d')}-{execution_id:03d}"
+        report_no = _report_no(execution)
 
         _write(output, "")
         _write(output, "  " + "=" * 56)
@@ -130,6 +164,8 @@ def download_csv_report(execution_id: int):
 
         # 1. 報告識別（ISO/IEC 17025:2017 §7.8.2）
         _section(output, "1. 報告識別  Report Identification")
+        _row(output, "實驗室 Laboratory:", LAB_NAME)
+        _row(output, "實驗室地址 Address:", LAB_ADDRESS)
         _row(output, "報告編號 Report No.:", report_no)
         _row(output, "報告版本 Version:", REPORT_VERSION)
         _row(
@@ -139,9 +175,12 @@ def download_csv_report(execution_id: int):
         )
         _row(output, "執行記錄 ID:", execution_id)
 
-        # 2. 受測樣品（§7.8.2.1 g, h）
-        _section(output, "2. 受測樣品資訊  Test Item Information")
-        _row(output, "設備編號 Device ID:", device_id_filter)
+        # 2. 受測樣品與測試方法（§7.8.2.1 e 客戶、g 樣品識別、f 方法）
+        # 樣品欄位排在方法之前：這節先回答「測了什麼」，才回答「怎麼測」。
+        _section(output, "2. 受測樣品與測試方法  Test Item and Method")
+        _row(output, "樣品名稱 Sample Name:", case["sample_name"])
+        _row(output, "案號 Project No.:", case["project_number"])
+        _row(output, "客戶／申請人 Customer:", case["customer"])
         _row(output, "SOP ID:", execution.sop_id)
         _row(output, "測試名稱 Test Name:", sop_data.get("name", "N/A"))
         _row(output, "測試類型 Test Type:", sop_data.get("test_type", "N/A"))
@@ -149,8 +188,9 @@ def download_csv_report(execution_id: int):
         _row(output, "參考法規 Reference:", sop_data.get("reference", "N/A"))
 
         # 3. 測試條件（§7.8.3.1 a）
+        # 試驗設備屬於「怎麼測」，放這裡；放在受測樣品那節會被誤讀成樣品識別。
         _section(output, "3. 測試條件  Test Conditions")
-        _row(output, "測試標準 Standard:", execution.sop_id)
+        _row(output, "試驗設備 Chamber:", device_id_filter)
         _row(output, "目標高溫 Target High (C):", target_high if target_high is not None else "N/A")
         _row(output, "目標低溫 Target Low (C):", target_low if target_low is not None else "N/A")
         _row(output, "升降溫速率 Ramp Rate (C/min):", sop_data.get("ramp_rate", "N/A"))
@@ -212,6 +252,8 @@ def download_csv_report(execution_id: int):
         _row(output, "判定依據 Based on:", sop_data.get("reference", "IEC 60068"))
         _row(output, "判定人員 Judged by:", "(工程師簽名)")
         _row(output, "判定日期 Judge Date:", "(填寫日期)")
+        _write(output, "")
+        _write(output, f"  ※ {RESULTS_SCOPE_STATEMENT}")
 
         # 7. 原始數據（§7.5.1 原始觀察結果）
         _section(output, "7. 原始溫濕度數據  Raw Temperature & Humidity Data")
@@ -406,7 +448,7 @@ def _get_cjk_font():
     return None
 
 
-def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated) -> bytes:
+def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated, case) -> bytes:
     font_name = _get_cjk_font()
     if not font_name:
         # 極端情況才 fallback 英文字型
@@ -458,7 +500,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     humi_target = sop_data.get("humidity_rh_percent")
 
     # ── 封面 ──────────────────────────────────────────────────────────────────
-    story.append(Paragraph("DQA Lab Platform", h1))
+    story.append(Paragraph(LAB_NAME, h1))
     story.append(Paragraph(
         "環境測試報告 Environmental Test Report" if has_cjk_font
         else "Environmental Test Report",
@@ -470,15 +512,20 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     # ── 1. 報告識別 ───────────────────────────────────────────────────────────
     story.append(Paragraph("1. 報告識別  Report Identification", h2))
     story.append(kv_table([
+        ["實驗室 Laboratory", LAB_NAME],
+        ["實驗室地址 Address", LAB_ADDRESS],
         ["報告編號 Report No.", report_no],
         ["產生日期 Issue Date", _now_utc().strftime("%Y-%m-%d %H:%M UTC")],
         ["執行記錄 Execution ID", str(execution.id)],
     ]))
 
-    # ── 2. 受測樣品 ───────────────────────────────────────────────────────────
-    story.append(Paragraph("2. 受測樣品  Test Item", h2))
+    # ── 2. 受測樣品與測試方法 ─────────────────────────────────────────────────
+    # 樣品欄位排在方法之前：這節先回答「測了什麼」，才回答「怎麼測」。
+    story.append(Paragraph("2. 受測樣品與測試方法  Test Item and Method", h2))
     story.append(kv_table([
-        ["設備編號 Device ID", device_id],
+        ["樣品名稱 Sample Name", case["sample_name"]],
+        ["案號 Project No.", case["project_number"]],
+        ["客戶／申請人 Customer", case["customer"]],
         ["SOP ID", execution.sop_id],
         ["測試名稱 Test Name", sop_data.get("name", "N/A")],
         ["參考法規 Reference", sop_data.get("reference", "N/A")],
@@ -486,8 +533,10 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
     ]))
 
     # ── 3. 測試條件 ───────────────────────────────────────────────────────────
+    # 試驗設備屬於「怎麼測」，放這裡；放在受測樣品那節會被誤讀成樣品識別。
     story.append(Paragraph("3. 測試條件  Test Conditions", h2))
     story.append(kv_table([
+        ["試驗設備 Chamber", device_id],
         ["目標高溫 Target High", f"{target_high} °C" if target_high is not None else "N/A"],
         ["目標低溫 Target Low", f"{target_low} °C" if target_low is not None else "N/A"],
         ["升降溫速率 Ramp Rate", f"{sop_data.get('ramp_rate', 'N/A')} °C/min"],
@@ -635,6 +684,8 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated)
         ["判定人員 Judged by", "(工程師簽名)"],
         ["判定日期 Judge Date", "(填寫日期)"],
     ]))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(f"※ {RESULTS_SCOPE_STATEMENT}", small))
 
     # ── 頁尾 ──────────────────────────────────────────────────────────────────
     story.append(Spacer(1, 12))
@@ -658,10 +709,11 @@ def download_pdf_report(execution_id: int):
     with SessionLocal() as db:
         execution, steps, device_records, truncated = _fetch_execution_data(execution_id, db)
         sop_data = STANDARDS_AND_SOPS.get(execution.sop_id, {})
-        report_no = f"RPT-{execution.created_at.strftime('%Y%m%d')}-{execution_id:03d}"
+        report_no = _report_no(execution)
         sop_id = execution.sop_id
         pdf_bytes = _build_pdf(
-            execution, steps, device_records, sop_data, report_no, truncated
+            execution, steps, device_records, sop_data, report_no, truncated,
+            _case_info(db, execution),
         )
 
     filename = f"{report_no}_{sop_id}.pdf"

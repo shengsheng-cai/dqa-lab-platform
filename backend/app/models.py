@@ -265,6 +265,11 @@ class SopExecution(Base):
     device_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     operator: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     operator_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # 報告要印的受測樣品／案號／客戶都在 Schedule 上，執行紀錄本身沒有這些欄位。
+    # 可為空：真正的臨時測試沒有對應案件，報告會據此明講「無對應案件」。
+    schedule_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("schedules.id"), nullable=True, index=True
+    )
     test_started_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
     )
