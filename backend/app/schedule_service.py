@@ -793,6 +793,7 @@ async def start_schedule(
             actor.operator,
             actor.operator_user_id,
             before_commit=lambda db, _state: _apply_schedule_start(db, plan, actor),
+            schedule_id=plan.schedule_id,
         )
     except _ScheduleStartRejected as error:
         return ScheduleStartResult(

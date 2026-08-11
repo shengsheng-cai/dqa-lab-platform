@@ -623,7 +623,9 @@ def test_patch_running_uses_start_lifecycle(session_factory):
     assert states["CH-01"]["status"] == "RUNNING"
     assert _loan_status(Session, loan_id) == "loaned"
     with Session() as db:
-        assert db.query(SopExecution).count() == 1
+        execution = db.query(SopExecution).one()
+        # 報告要靠這個外鍵才印得出受測樣品與案號（BUG-009）
+        assert execution.schedule_id == sid
         audit = db.query(AuditLog).filter(
             AuditLog.entity_id == str(sid),
             AuditLog.action == "START",

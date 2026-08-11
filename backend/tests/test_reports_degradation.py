@@ -5,6 +5,8 @@
 - PDF 產生走真實 reportlab（行內函式庫，不 mock），輸出必須是合法 PDF。
 - 前端存執行紀錄時送的是帶時區的 ISO 時間，落地後仍要對得上 naive UTC 的感測資料。
 - 送進來的時間若不是 UTC，要先換算再存，不是把時區直接丟掉。
+- 報告的數據統計要跟自己的不確定度分析取同一段資料（BUG-008）。
+- 報告的受測樣品欄位要識別樣品，不是識別試驗箱；連不到案件時要明講（BUG-009）。
 """
 import asyncio
 import datetime
@@ -13,8 +15,9 @@ import pytest
 from fastapi import HTTPException
 
 from app import uncertainty as unc
-from app.models import DeviceData, SopExecution
+from app.models import DeviceData, Schedule, ScheduleStatus, SopExecution
 from app.reports import (
+    NO_CASE_TEXT,
     _fetch_execution_data,
     _summary_avg,
     _summary_stats,
@@ -27,6 +30,18 @@ from app.reports import (
 def session_patched(patched_session):
     with patched_session("app.reports") as TestSession:
         yield TestSession
+
+
+@pytest.fixture()
+def no_line_push(monkeypatch):
+    """走真實 sop 路由的測試都要擋掉 LINE 推播，否則測試會真的去打外部 API。"""
+    import app.sop as sop_module
+
+    async def _no_push(*_a, **_kw):
+        return None
+
+    monkeypatch.setattr(sop_module, "push_message", _no_push)
+    return sop_module
 
 
 def _seed_execution(Session) -> int:
@@ -78,7 +93,7 @@ def test_pdf_report_generates_valid_pdf(session_patched):
     assert len(body) > 1000, "PDF 內容過小，可能產生失敗"
 
 
-def test_frontend_iso_timestamps_still_match_sensor_data(api_client, monkeypatch):
+def test_frontend_iso_timestamps_still_match_sensor_data(api_client, no_line_push):
     """前端送的帶時區 ISO 時間，經真實路由存進去後，報告仍要撈得到感測資料。
 
     前端存執行紀錄時送的是字串：開始時間來自設備狀態（帶 +00:00）、結束時間是
@@ -89,11 +104,7 @@ def test_frontend_iso_timestamps_still_match_sensor_data(api_client, monkeypatch
     刻意走 HTTP 而非直接塞 ORM：要涵蓋的正是「ISO 字串 → pydantic → DB」這段，
     直接塞 ORM 會跳過解析，只驗到 SQLAlchemy 丟棄 tzinfo 的框架行為。
     """
-    import app.sop as sop_module
-
-    async def _no_push(*_a, **_kw):
-        return None
-    monkeypatch.setattr(sop_module, "push_message", _no_push)
+    sop_module = no_line_push
 
     now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
     started = now - datetime.timedelta(minutes=15)
@@ -128,7 +139,7 @@ def test_frontend_iso_timestamps_still_match_sensor_data(api_client, monkeypatch
     )
 
 
-def test_non_utc_timestamps_are_converted_before_saving(api_client, monkeypatch):
+def test_non_utc_timestamps_are_converted_before_saving(api_client, no_line_push):
     """送進來的時間不是 UTC 時，要換算成 UTC 再存，不是把時區直接丟掉。
 
     目前前端送的一定是 UTC，丟掉時區剛好等於正確答案，所以這條守的是往後：
@@ -137,11 +148,7 @@ def test_non_utc_timestamps_are_converted_before_saving(api_client, monkeypatch)
 
     走 HTTP 而非直接塞 ORM，理由同上一條：要涵蓋的是「ISO 字串 → pydantic → DB」。
     """
-    import app.sop as sop_module
-
-    async def _no_push(*_a, **_kw):
-        return None
-    monkeypatch.setattr(sop_module, "push_message", _no_push)
+    sop_module = no_line_push
 
     taipei = datetime.timezone(datetime.timedelta(hours=8))
     started_local = datetime.datetime(2026, 8, 8, 17, 30, tzinfo=taipei)
@@ -245,3 +252,242 @@ def test_csv_report_avg_temp_matches_uncertainty_stable_segment(session_patched)
         f"CSV 平均溫應該是穩定段平均 {round(expected.mean, 2)}，實際那行：{avg_line!r}"
     )
     assert str(full_window_avg) not in avg_line, "CSV 平均溫不該退回全窗平均"
+
+
+# ── 受測樣品識別（BUG-009）────────────────────────────────────────────────────
+
+SAMPLE_NAME = "MX-1000 工業乙太網路交換器"
+PROJECT_NUMBER = "PRJ-2026-0042"
+APPLICANT = "王小明"
+
+
+def _make_schedule(status=ScheduleStatus.RUNNING, **overrides) -> Schedule:
+    """帶完整案件資料的排程；報告要印的就是這三個欄位。"""
+    return Schedule(**{
+        "project_number": PROJECT_NUMBER, "sample_name": SAMPLE_NAME,
+        "applicant_name": APPLICANT, "device_id": "CH-01", "standard": "IEC 60068",
+        "conditions": '["iec60068_ab_-40_16h"]', "status": status,
+        **overrides,
+    })
+
+
+def _seed_case(Session, *, link: bool) -> int:
+    """建一張帶案件資料的排程 + 一筆執行紀錄，回傳 execution id。
+
+    link=False 時執行紀錄不接排程，用來驗「臨時測試」那條路徑。
+    """
+    with Session() as db:
+        sched = _make_schedule()
+        db.add(sched)
+        db.flush()
+        e = SopExecution(
+            sop_id="iec60068_ab_-40_16h", device_id="CH-01", operator="測試員",
+            schedule_id=sched.id if link else None,
+        )
+        db.add(e)
+        db.commit()
+        return e.id
+
+
+def _csv_text(execution_id: int) -> str:
+    return _drain_streaming_response(download_csv_report(execution_id)).decode("big5")
+
+
+def _section_between(text: str, start_marker: str, end_marker: str) -> str:
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if start_marker in line)
+    end = next(i for i, line in enumerate(lines) if end_marker in line)
+    return "\n".join(lines[start:end])
+
+
+def test_report_identifies_the_sample_not_the_chamber(session_patched):
+    """受測樣品那節要印真正的樣品，而且不能再把試驗箱編號放在那裡。
+
+    修正前那節印的是設備編號 CH-01——識別的是試驗箱，不是受測樣品，
+    等於報告聲稱識別了樣品但實際沒有（BUG-009）。
+    """
+    eid = _seed_case(session_patched, link=True)
+
+    text = _csv_text(eid)
+    item_section = _section_between(text, "2. 受測樣品與測試方法", "3. 測試條件")
+
+    assert SAMPLE_NAME in item_section, "受測樣品那節要印樣品名稱"
+    assert PROJECT_NUMBER in item_section, "受測樣品那節要印案號"
+    assert APPLICANT in item_section, "受測樣品那節要印客戶／申請人"
+    assert "CH-01" not in item_section, (
+        "試驗箱編號不該出現在受測樣品那節——那正是 BUG-009 的症狀"
+    )
+    # 設備資訊本身沒有消失，只是搬到「怎麼測」那節
+    assert "CH-01" in _section_between(text, "3. 測試條件", "4. 步驟執行記錄")
+
+
+def test_report_states_no_case_when_execution_has_no_schedule(session_patched):
+    """臨時測試沒有對應案件時要明講，不能退回去印設備編號充數。"""
+    eid = _seed_case(session_patched, link=False)
+
+    text = _csv_text(eid)
+    item_section = _section_between(text, "2. 受測樣品與測試方法", "3. 測試條件")
+
+    assert NO_CASE_TEXT in item_section, "沒接到排程時要明講無對應案件"
+    assert SAMPLE_NAME not in item_section, "沒接到排程不該印出別張排程的樣品"
+    assert "CH-01" not in item_section, "沒有案件時更不該用試驗箱編號充當樣品識別"
+
+
+def test_report_carries_laboratory_identity_and_scope_statement(session_patched):
+    """§7.8.2.1 (b) 實驗室識別與 (l) 結果適用範圍聲明要在報告裡。"""
+    eid = _seed_case(session_patched, link=True)
+
+    text = _csv_text(eid)
+
+    assert "實驗室 Laboratory" in text
+    assert "模擬實驗室" in text, "沒有實體實驗室就要誠實標示，不掛編出來的地址"
+    assert "結果僅適用於本次所測之樣品" in text
+
+
+def test_pdf_report_with_case_still_generates_valid_pdf(session_patched):
+    """PDF 走的是另一條組版路徑，樣品欄位接上後仍要產得出合法 PDF。"""
+    eid = _seed_case(session_patched, link=True)
+
+    body = _drain_streaming_response(download_pdf_report(eid))
+
+    assert body.startswith(b"%PDF")
+    assert len(body) > 1000
+
+
+def _post_execution(client, started_at: datetime.datetime | None) -> int:
+    """模擬 SOP 頁面存執行紀錄（前端送的是帶時區的 ISO 字串）。"""
+    body = {
+        "sop_id": "iec60068_ab_-40_16h", "device_id": "CH-01",
+        "operator": "測試員", "manual_mode": True, "steps": [],
+    }
+    if started_at is not None:
+        body["test_started_at"] = started_at.replace(
+            tzinfo=datetime.timezone.utc
+        ).isoformat()
+    resp = client.post("/api/sop-executions/", json=body)
+    assert resp.status_code == 200, resp.text
+    return resp.json()["id"]
+
+
+def test_saved_execution_inherits_the_case_from_the_row_created_at_test_start(
+    api_client, no_line_push,
+):
+    """SOP 頁面存的那列（使用者實際下載報告的那列）要繼承開始那列的案件。
+
+    瀏覽器不知道排程編號，所以後端用「同一台設備 + 同一個開始時刻」認回測試開始
+    時建的那列，直接沿用它的 schedule_id。沒接上的話，報告的樣品欄位對主要流程
+    仍然是空的。
+    """
+    sop_module = no_line_push
+    started = datetime.datetime(2026, 8, 10, 3, 0, 0, 123456)
+
+    with api_client(sop_module, sop_module.execution_router) as (client, Session):
+        with Session() as db:
+            sched = _make_schedule()
+            db.add(sched)
+            db.flush()
+            # 測試開始時建的那列：帶著正確的案件
+            db.add(SopExecution(
+                sop_id="iec60068_ab_-40_16h", device_id="CH-01",
+                test_started_at=started, schedule_id=sched.id,
+            ))
+            db.commit()
+            sid = sched.id
+
+        eid = _post_execution(client, started)
+
+        with Session() as db:
+            assert db.get(SopExecution, eid).schedule_id == sid
+
+
+def test_saved_execution_does_not_borrow_the_case_of_a_later_schedule(
+    api_client, no_line_push,
+):
+    """舊測試存檔前，同台機器已經開始跑下一張排程時，不能接到那張的樣品。
+
+    這是「問設備現在正在跑哪張排程」那種做法會踩到的坑：報告會印出別人的樣品，
+    比留白更糟。繼承開始那列就沒有這個問題——認不回來就留白。
+    """
+    sop_module = no_line_push
+    started = datetime.datetime(2026, 8, 10, 3, 0, 0, 123456)
+
+    with api_client(sop_module, sop_module.execution_router) as (client, Session):
+        with Session() as db:
+            # 這次測試沒有案件（臨時測試），但同台機器現在正在跑另一張排程
+            db.add(SopExecution(
+                sop_id="iec60068_ab_-40_16h", device_id="CH-01",
+                test_started_at=started, schedule_id=None,
+            ))
+            db.add(_make_schedule(sample_name="別人的樣品"))
+            db.commit()
+
+        eid = _post_execution(client, started)
+
+        with Session() as db:
+            assert db.get(SopExecution, eid).schedule_id is None
+
+
+def test_start_row_timestamp_matches_the_one_the_browser_gets_back(patched_session):
+    """測試開始那列的 test_started_at 要跟設備狀態的 started_at 是同一個瞬間。
+
+    這是案件繼承的要害：瀏覽器拿到的是設備狀態的 started_at，存檔時原樣送回來，
+    後端拿它去認開始那列。兩邊若各自呼叫 now()，會差幾微秒而永遠認不回來——
+    報告的樣品欄位會安靜地全部變成「無對應案件」，不會有任何錯誤訊息。
+    """
+    import app.device_state as device_state_module
+    import app.sop as sop_module
+
+    with patched_session("app.sop", "app.device_state") as Session:
+        states = device_state_module.DeviceStateManager(
+            {"CH-01": {"status": "IDLE", "temperature": 25.0, "humidity": 55.0}}
+        )
+
+        asyncio.run(sop_module._start_device_sop(
+            states, "CH-01", "iec60068_ab_-40_16h", "低溫測試",
+            {"steps": []}, "測試員", 7,
+        ))
+
+        cache_started_at = states["CH-01"]["started_at"]
+        with Session() as db:
+            row_started_at = db.query(SopExecution).one().test_started_at
+
+    assert row_started_at == cache_started_at.replace(tzinfo=None), (
+        "開始那列的時間戳跟設備狀態對不上，存檔時就認不回這列、案件會繼承不到"
+    )
+
+
+def test_device_api_does_not_truncate_the_timestamp_the_browser_sends_back(patched_session):
+    """設備 API 送出的 started_at 不能損失精度，否則案件繼承會整個失效。
+
+    鏈路是：設備狀態 started_at →（這裡序列化成字串）→ 瀏覽器原樣存著 → 存執行紀錄時
+    原樣送回 → 後端拿去認開始那列。這一步若被改成 `.replace(microsecond=0)` 之類的
+    「整理」，認回來的條件就永遠不成立，每份報告的樣品欄位都會安靜地變成「無對應案件」，
+    不會有任何錯誤訊息，也不會有別的測試變紅。
+    """
+    import app.devices as devices_module
+
+    started = datetime.datetime(2026, 8, 10, 3, 0, 0, 123456, tzinfo=datetime.timezone.utc)
+
+    with patched_session("app.devices", "app.schedule_service"):
+        serialized = devices_module.build_device_list(
+            {"CH-01": {"status": "RUNNING", "started_at": started}}
+        )[0]["started_at"]
+
+    assert datetime.datetime.fromisoformat(serialized) == started, (
+        f"序列化後的 started_at 對不回原值（{serialized!r}），案件繼承會失效"
+    )
+
+
+def test_saved_execution_has_no_case_when_no_matching_start_row(api_client, no_line_push):
+    """認不回開始那列（例如沒送開始時間）就留白，不亂認一張排程。"""
+    sop_module = no_line_push
+
+    with api_client(sop_module, sop_module.execution_router) as (client, Session):
+        with Session() as db:
+            db.add(_make_schedule())
+            db.commit()
+
+        eid = _post_execution(client, None)
+
+        with Session() as db:
+            assert db.get(SopExecution, eid).schedule_id is None

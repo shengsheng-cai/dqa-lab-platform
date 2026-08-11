@@ -99,11 +99,14 @@ def get_standards_tree():
 def _create_execution_id_db(
     db, sop_id: str, device_id: str, operator: str, now: datetime.datetime,
     operator_user_id: Optional[int] = None,
+    schedule_id: Optional[int] = None,
 ) -> Optional[int]:
     """在 DeviceStateManager.start 的同一 transaction 建 SopExecution。
 
     ad-hoc start_sop 與排程 start_schedule 共用——兩條路徑的建立語意必須一致。
     sync DB I/O 與 commit 都由 DeviceStateManager.start 在 worker thread 內處理。
+
+    schedule_id 讓報告印得出受測樣品與案號；臨時測試沒有排程，維持 None。
     """
     execution = SopExecution(
         sop_id=sop_id,
@@ -111,10 +114,36 @@ def _create_execution_id_db(
         operator=operator,
         operator_user_id=operator_user_id,
         test_started_at=now,
+        schedule_id=schedule_id,
     )
     db.add(execution)
     db.flush()
     return execution.id
+
+
+def _find_origin_schedule_id_db(
+    db, device_id: Optional[str], test_started_at: Optional[datetime.datetime],
+) -> Optional[int]:
+    """一次測試會留下兩列：測試開始時建一列，SOP 頁面存紀錄時再建一列。
+    報告兩列都印得到，所以第二列也要知道自己屬於哪個案件。
+
+    做法是用「同一台設備 + 同一個開始時刻」認回開始那列，直接繼承它的 schedule_id。
+    不用「這台設備現在正在跑哪張排程」反推：那是代理指標，舊測試存檔前若同台機器
+    已經開始下一張排程，會接到別人的樣品——印錯樣品比留白更糟。認不回來就回 None，
+    報告據此印「無對應案件」，失敗方向永遠是留白。
+    """
+    if not device_id or test_started_at is None:
+        return None
+    origin = (
+        db.query(SopExecution)
+        .filter(
+            SopExecution.device_id == device_id,
+            SopExecution.test_started_at == test_started_at,
+        )
+        .order_by(SopExecution.id.asc())
+        .first()
+    )
+    return origin.schedule_id if origin else None
 
 
 async def _start_device_sop(
@@ -126,9 +155,13 @@ async def _start_device_sop(
     operator: str,
     operator_user_id: int | None,
     before_commit: Callable[[Any, Any], None] | None = None,
+    schedule_id: int | None = None,
 ) -> device_state.TransitionResult:
     started_at = _now_utc()
-    execution_started_at = _now_utc_naive()
+    # 同一個開始時刻，兩種表示：cache 留 aware（API／排程用），DB 欄位存 naive。
+    # 刻意共用同一個瞬間而不各自呼叫 now()——測試結束後存的那列要靠這個時間戳認回
+    # 這一列來繼承案件（見 _find_origin_schedule_id_db），差幾微秒就認不回來了。
+    execution_started_at = started_at.replace(tzinfo=None)
     active_sop_json = json.dumps(
         {**std_data, "sop_id": sop_id, "name": sop_name},
         ensure_ascii=False,
@@ -149,6 +182,7 @@ async def _start_device_sop(
             operator,
             execution_started_at,
             operator_user_id,
+            schedule_id,
         ),
         before_commit=before_commit,
     )
@@ -343,13 +377,15 @@ def create_execution(
 ):
     operator_user_id = current_user(request).user_id
     with SessionLocal() as db:
+        test_started_at = _to_naive_utc(data.test_started_at)
         execution = SopExecution(
             sop_id=data.sop_id,
             device_id=data.device_id,
             operator=data.operator,
             operator_user_id=operator_user_id,
-            test_started_at=_to_naive_utc(data.test_started_at),
+            test_started_at=test_started_at,
             test_ended_at=_to_naive_utc(data.test_ended_at),
+            schedule_id=_find_origin_schedule_id_db(db, data.device_id, test_started_at),
         )
         db.add(execution)
         db.flush()
