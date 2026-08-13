@@ -171,6 +171,18 @@ browser actually sends: the start time carries `+00:00` and the end time is
 `new Date().toISOString()` with `Z`. Sensor timestamps are naive UTC. The test
 pins the requirement that the two still match.
 
-The frontend change itself has no automated coverage. React components are out
-of scope for unit testing in this baseline (no jsdom configuration), and the
-fallback only fires on a feed gap that a browser test cannot reliably provoke.
+The frontend side is covered too, for the request body:
+
+```bash
+cd client && npm test -- executionPayload
+```
+
+`executionPayload.test.js` asserts the whole object `buildExecutionPayload`
+returns, so the three fields this bug was about — both timestamps and
+`manual_mode` — cannot be dropped from either save path without turning it red.
+
+What is still not covered is the trigger: when the fallback fires, and how it
+merges the result back into state. React components are out of scope for unit
+testing in this baseline (no jsdom configuration), and the fallback only fires on
+a feed gap that a browser test cannot reliably provoke. The traceability matrix
+carries that remainder as GAP-04.
