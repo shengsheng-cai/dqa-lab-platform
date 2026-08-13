@@ -148,5 +148,16 @@ cd backend && ../venv/bin/python -m pytest tests/test_reports_degradation.py -v
 `+00:00`，結束時間是帶 `Z` 的 `new Date().toISOString()`。而感測資料的時間戳是
 naive UTC。這條測試釘住的就是「兩者仍然要對得上」這個要求。
 
-前端的改動本身沒有自動化涵蓋。React 元件在本基準下不做單元測試（沒有 jsdom 設定），
-而備援只在推送中斷時才觸發，那是瀏覽器測試無法穩定製造出來的情況。
+前端這一側，送出去的內容也有涵蓋：
+
+```bash
+cd client && npm test -- executionPayload
+```
+
+`executionPayload.test.js` 斷言的是 `buildExecutionPayload` 回傳的整個物件，所以
+這個缺陷牽涉的三個欄位——兩個時間與 `manual_mode`——不論從哪條存檔路徑漏送，都會
+讓它變紅。
+
+仍然沒有涵蓋的是觸發條件：備援在什麼情況下會被觸發、以及它怎麼把結果合併回狀態。
+React 元件在本基準下不做單元測試（沒有 jsdom 設定），而備援只在推送中斷時才觸發，
+那是瀏覽器測試無法穩定製造出來的情況。追溯表把這個剩餘部分記為 GAP-04。
