@@ -7,7 +7,7 @@ PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else ech
 help:
 	@echo "🛠️  DQA Lab 控制指令："
 	@echo "  make install   - 安裝後端與前端依賴"
-	@echo "  make dev       - 啟動所有服務（含 HF 預覽 + ngrok）"
+	@echo "  make dev       - 啟動核心服務、HF 預覽與 ngrok（有 LINE Token 時更新 Webhook）"
 	@echo "  make test      - 後端 + 前端單元測試"
 	@echo "  make test-e2e  - E2E 瀏覽器測試（會自己開測試後端）"
 	@echo "  make lint      - PEP 8 檢查（ruff）"
@@ -24,25 +24,40 @@ install:
 
 # 啟動流程
 dev:
-	@echo "🚀 系統全面啟動中..."
+	@echo "🚀 正在啟動核心服務與可選整合..."
 	@bash dev_start.sh
 
 # 清理流程
 # 只關 make dev 開的那幾個 port，不用 pkill 掃全部程序——
 # 以前是 pkill uvicorn，會連 E2E 測試或其他專案的後端一起殺掉。
-# 5174/5175 也要列：5173 被占用時 vite 會自動往上找下一個 port。
-DEV_PORTS := 8000 5173 5174 5175 7861
+# 5174/5175 留著清理由舊版 Vite fallback 殘留的程序；4040 是 ngrok 本機 API。
+DEV_PORTS := 8000 5173 5174 5175 7861 4040
 
 clean:
 	@echo "🧹 正在關閉 make dev 開的服務..."
 	@for p in $(DEV_PORTS); do \
-		pids=$$(lsof -ti:$$p 2>/dev/null); \
+		pids=$$(lsof -nP -tiTCP:$$p -sTCP:LISTEN 2>/dev/null || true); \
 		if [ -n "$$pids" ]; then \
 			echo "  port $$p → 關閉"; \
 			echo "$$pids" | xargs kill -9 2>/dev/null || true; \
 		fi; \
 	done
-	-@pkill -9 -f "ngrok http 8000" 2>/dev/null
+	@for _ in 1 2 3 4 5 6 7 8 9 10; do \
+		busy=0; \
+		for p in $(DEV_PORTS); do \
+			lsof -nP -tiTCP:$$p -sTCP:LISTEN >/dev/null 2>&1 && busy=1; \
+		done; \
+		[ "$$busy" -eq 0 ] && break; \
+		sleep 0.1; \
+	done; \
+	failed=0; \
+	for p in $(DEV_PORTS); do \
+		if lsof -nP -tiTCP:$$p -sTCP:LISTEN >/dev/null 2>&1; then \
+			echo "❌ port $$p 仍有服務監聽，清理未完成"; \
+			failed=1; \
+		fi; \
+	done; \
+	[ "$$failed" -eq 0 ]
 	@rm -rf .logs
 	@echo "✨ 清理完成。"
 
