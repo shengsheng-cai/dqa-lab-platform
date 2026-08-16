@@ -187,6 +187,9 @@ venv/bin/python backend/init_db.py  # 會重建本機 demo 資料
 make dev
 ```
 
+若 `backend/.env` 設有 `LINE_CHANNEL_ACCESS_TOKEN`，`make dev` 取得 ngrok HTTPS URL 後會
+自動把 LINE Webhook 更新為本機的 `/api/line/webhook`。
+
 啟動後可使用：
 
 | 服務 | 網址 |
