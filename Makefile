@@ -10,7 +10,7 @@ help:
 	@echo "  make dev       - 啟動核心服務、HF 預覽與 ngrok（有 LINE Token 時更新 Webhook）"
 	@echo "  make test      - 後端 + 前端單元測試"
 	@echo "  make test-e2e  - E2E 瀏覽器測試（會自己開測試後端）"
-	@echo "  make lint      - PEP 8 檢查（ruff）"
+	@echo "  make lint      - 靜態檢查（後端 ruff + 前端 eslint）"
 	@echo "  make clean     - 關閉服務並清理殘留程序"
 	@echo "  make ngrok     - 單獨啟動 ngrok"
 
@@ -90,10 +90,12 @@ test-e2e-script:
 	node $(SCRIPT)
 	@echo "✅ 完成。"
 
-# PEP 8 檢查
+# 靜態檢查（後端 ruff + 前端 eslint）
 lint:
-	@echo "🔍 執行 PEP 8 檢查（ruff）..."
+	@echo "🔍 執行後端檢查（ruff）..."
 	$(PYTHON) -m ruff check backend/
+	@echo "🔍 執行前端檢查（eslint）..."
+	cd client && npm run lint
 	@echo "✅ 檢查完成。"
 
 # ngrok 單獨啟動（通常不需要，make dev 已包含）

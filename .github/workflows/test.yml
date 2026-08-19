@@ -23,6 +23,7 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: pip install -r backend/requirements.txt
       - run: cd client && npm ci
+      - run: cd client && npm run lint
       - run: ruff check backend/
       - run: cd backend && python -m pytest
       - run: cd client && npm test
