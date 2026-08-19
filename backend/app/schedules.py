@@ -13,6 +13,7 @@ from .models import (
     User, ScheduleFixture, FixtureLoan,
 )
 from .fixture_lifecycle import (
+    acquire_fixture_allocation_lock,
     assert_stock_available,
     create_schedule_reservation,
     sync_schedule_reservations,
@@ -370,6 +371,8 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, role, c
     now = _now_utc_naive()
 
     with SessionLocal() as db:
+        if body.status == ScheduleStatus.CONFIRMED:
+            acquire_fixture_allocation_lock(db)
         s = db.query(Schedule).filter(Schedule.id == schedule_id).first()
         if not s:
             raise HTTPException(status_code=404, detail="找不到排程")

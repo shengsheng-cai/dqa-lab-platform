@@ -13,10 +13,12 @@
 """
 
 import datetime
+import time
 from dataclasses import dataclass
 
 from fastapi import HTTPException
 from sqlalchemy import func
+from sqlalchemy.exc import OperationalError
 
 from .audit_log import log_audit
 from .models import Fixture, FixtureInventoryLog, FixtureLoan, ReturnCondition
@@ -29,6 +31,9 @@ LOAN_LOST = "lost"
 
 ACTIVE_LOAN_STATUSES = (LOAN_LOANED, LOAN_RESERVED)
 
+_SQLITE_LOCK_RETRY_SECONDS = 5.0
+_SQLITE_LOCK_POLL_SECONDS = 0.01
+
 
 @dataclass(frozen=True)
 class StockCounts:
@@ -38,6 +43,33 @@ class StockCounts:
     reserved: int
     damaged: int
     available: int
+
+
+def acquire_fixture_allocation_lock(db) -> None:
+    """在第一次讀庫存前序列化 SQLite 的借用／預約交易。
+
+    SQLite 沒有 row-level ``FOR UPDATE``；``BEGIN IMMEDIATE`` 會先取得寫入保留鎖，
+    直到呼叫端 commit／rollback 才釋放。如此第二個請求只能在前一筆提交後重新計算
+    可借量。這必須是 session 的第一個 DB 操作，否則先前讀到的資料可能已經過期。
+
+    測試使用 shared-cache in-memory SQLite，鎖衝突會立即回 ``SQLITE_LOCKED``，不會
+    像檔案型 SQLite 等待 busy timeout，因此在同一個短期限內重試。
+    """
+    if db.get_bind().dialect.name != "sqlite":
+        return
+    if db.in_transaction():
+        raise RuntimeError("治具配置鎖必須在 session 的第一次資料庫操作前取得")
+
+    deadline = time.monotonic() + _SQLITE_LOCK_RETRY_SECONDS
+    while True:
+        try:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            return
+        except OperationalError as exc:
+            db.rollback()
+            if "locked" not in str(exc).lower() or time.monotonic() >= deadline:
+                raise
+            time.sleep(_SQLITE_LOCK_POLL_SECONDS)
 
 
 def build_loan_qty_map(db, fixture_ids: list[int]) -> dict:

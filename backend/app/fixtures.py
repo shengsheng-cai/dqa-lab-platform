@@ -20,6 +20,7 @@ from .fixture_lifecycle import (
     LOAN_DAMAGED,
     LOAN_LOANED,
     LOAN_LOST,
+    acquire_fixture_allocation_lock,
     create_manual_loan,
     fetch_fixtures_map as _fetch_fixtures_map,
     finish_manual_loan,
@@ -514,6 +515,7 @@ def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_ad
     if body.quantity <= 0:
         raise HTTPException(status_code=400, detail="借出數量必須大於 0")
     with SessionLocal() as db:
+        acquire_fixture_allocation_lock(db)
         f = db.query(Fixture).filter(Fixture.id == body.fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")

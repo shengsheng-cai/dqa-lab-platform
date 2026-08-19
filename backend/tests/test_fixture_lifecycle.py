@@ -5,14 +5,18 @@
 任何借出/歸還操作都不得讓 available 被灌大或讓庫存被超借。
 """
 import datetime
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 import app.fixtures as fixtures_module
 import app.schedules as schedules_module
-from app.fixtures import router as fixtures_router
-from app.schedules import router as schedules_router
-from app.models import Fixture, FixtureLoan, Schedule, ScheduleStatus
+from app.fixtures import LoanCreate, router as fixtures_router
+from app.schedules import SchedulePatch, router as schedules_router
+from app.models import Fixture, FixtureLoan, Schedule, ScheduleFixture, ScheduleStatus
 
 
 @pytest.fixture()
@@ -115,6 +119,83 @@ def test_loan_within_stock_succeeds_and_reduces_available(admin_client):
 
     assert resp.status_code == 200
     assert _available(client, fid) == 2
+
+
+def test_manual_loan_and_schedule_cannot_both_claim_last_fixture(patched_session):
+    """手動借出與排程預約同時搶最後一件時，只能有一筆成功。
+
+    兩條路都是「先讀庫存、再寫借出」。沒有原子配置鎖時，兩個執行緒會各自讀到
+    available=1 就放行，接著各自提交，最後留下兩筆有效借出、庫存被超借。
+    """
+    with patched_session("app.fixtures", "app.schedules") as Session:
+        with Session() as db:
+            fixture = Fixture(
+                interface_type="USB",
+                form_factor="Desktop",
+                total_quantity=1,
+                shortage=0,
+                is_active=True,
+            )
+            schedule = Schedule(
+                project_number="P-CONCURRENT",
+                sample_name="sample",
+                standard="IEC 60068",
+                conditions='["iec60068_ab_-40_16h"]',
+                status=ScheduleStatus.PENDING,
+            )
+            db.add_all((fixture, schedule))
+            db.flush()
+            fixture_id = fixture.id
+            schedule_id = schedule.id
+            db.add(ScheduleFixture(schedule_id=schedule_id, fixture_id=fixture_id, quantity=1))
+            db.commit()
+
+        start = threading.Barrier(2)
+
+        def run(operation):
+            request = SimpleNamespace(
+                state=SimpleNamespace(user_id=1, username="admin", user_role="admin")
+            )
+            start.wait()
+            try:
+                if operation == "manual":
+                    fixtures_module.create_loan(
+                        LoanCreate(
+                            fixture_id=fixture_id,
+                            borrower_name="手動借用",
+                            quantity=1,
+                        ),
+                        request,
+                        None,
+                    )
+                else:
+                    start_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1)
+                    schedules_module._patch_schedule_db(
+                        schedule_id,
+                        SchedulePatch(
+                            status=ScheduleStatus.CONFIRMED,
+                            device_id="CH-01",
+                            start_time=start_time,
+                            end_time=start_time + datetime.timedelta(hours=20),
+                        ),
+                        1,
+                        "admin",
+                        {},
+                    )
+                return 200
+            except HTTPException as exc:
+                return exc.status_code
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            statuses = sorted(executor.map(run, ("manual", "schedule")))
+
+        assert statuses == [200, 400]
+        with Session() as db:
+            active = db.query(FixtureLoan).filter(
+                FixtureLoan.fixture_id == fixture_id,
+                FixtureLoan.status.in_(("loaned", "reserved")),
+            ).all()
+            assert sum(loan.quantity for loan in active) == 1
 
 
 def test_loan_over_stock_is_rejected(admin_client):
