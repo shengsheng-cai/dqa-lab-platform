@@ -77,6 +77,7 @@ GitHub Actions currently gates pushes to `main` and pull requests targeting
 - Ruff
 - Backend pytest
 - Frontend Vitest
+- Playwright E2E
 
 ### E2E
 
