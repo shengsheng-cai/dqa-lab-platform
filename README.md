@@ -173,7 +173,7 @@ FastAPI
 | Frontend | React 19、Vite、Recharts、Axios |
 | AI | Gemini Flash-Lite、自建 RAG retrieval |
 | Reports | ReportLab、pandas、openpyxl |
-| Quality | pytest、Vitest、Playwright、Ruff、GitHub Actions |
+| Quality | pytest、Vitest、Playwright、Ruff、ESLint、GitHub Actions |
 
 ## 本機執行
 
@@ -202,7 +202,7 @@ make dev
 ```bash
 make test       # pytest + Vitest
 make test-e2e   # Playwright，會自行啟動隔離的測試後端
-make lint       # Ruff
+make lint       # Ruff + ESLint
 ```
 
 ### 可選整合
