@@ -68,6 +68,7 @@ GitHub Actions 目前會對推向 `main` 的 push 與以 `main` 為目標的 PR 
 - Ruff
 - 後端 pytest
 - 前端 Vitest
+- Playwright E2E
 
 ### E2E
 
