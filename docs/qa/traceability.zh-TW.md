@@ -8,6 +8,7 @@
 | 需求 | 預期行為 | 風險 | 自動化證據 | 缺陷證據 | 狀態 |
 |---|---|---|---|---|---|
 | **REQ-AUTH-01** | 訪客不能變更受保護的業務狀態；每一條僅限管理者的路由都強制授權檢查 | R-01 | `backend/tests/test_guest_authorization.py`；`backend/tests/test_blocked_period_audit.py::test_blocked_period_write_rejects_non_admin_without_audit`；`tests/e2e/specs/guest-readonly.spec.js` | — | 已涵蓋 |
+| **REQ-AUTH-02** | 憑證不會出現在網址上：設備即時資料的握手改用 30 秒過期、只能用一次的入場券，所以 access log 記得到的東西都沒有重放價值 | R-09 | `backend/tests/test_ws_auth.py`；`tests/e2e/specs/ws-auth.spec.js` | [BUG-011](BUG-011-websocket-handshake-carried-a-long-lived-admin-token.zh-TW.md) | 涵蓋到反向代理之前；部署環境會不會轉送握手用的 subprotocol，要靠打開部署好的 Space 確認 |
 | **REQ-AUD-01** | 設備不可用時段的變更會記錄下經過驗證的操作者；稽核寫入失敗時，業務變更要一併回滾 | R-03 | `backend/tests/test_blocked_period_audit.py` | — | 已涵蓋 |
 | **REQ-MNT-01** | 維護中的設備不能被選取或啟動；排程維持「已確認」，維護結束後可以重試 | R-02 | `backend/tests/test_schedule_start_consistency.py::test_start_skipped_when_device_in_maintenance`；`::test_maintenance_keeps_confirmed_then_resumes`；`tests/e2e/specs/maintenance-block.spec.js` | [BUG-002](BUG-002-maintenance-device-auto-started.zh-TW.md) | 已涵蓋 |
 | **REQ-STATE-01** | 啟動成功時，設備、執行、排程、治具、稽核與 cache 的狀態要保持一致，即使呼叫端被取消 | R-03 | `backend/tests/test_schedule_start_consistency.py`；`backend/tests/test_device_state.py::test_start_repeated_cancellation_waits_for_commit_and_publishes_cache`；`backend/tests/test_linkage.py`；`tests/e2e/specs/schedule-flow.spec.js` | — | 已涵蓋 |
