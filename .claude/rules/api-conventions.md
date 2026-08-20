@@ -11,6 +11,17 @@
 新增 API 端點時，寫入操作一律使用 `Depends(require_admin)`；不要在路由內手動比較角色。
 唯讀感測器端點（如 `GET /api/devices/{id}/sensor-stats`、`GET /api/devices/{id}/history`）不需 role 檢查，guest 可存取。
 
+### WebSocket 憑證不放網址
+
+網址會被 Uvicorn 的 access log 原樣記下來，長效 token 進了日誌就能被撿去重放（BUG-011）。
+瀏覽器又沒辦法在 WebSocket 握手時自訂 header，所以走這條路：
+
+- 前端先打 `POST /api/auth/ws-ticket`（要通過一般認證），換一張 30 秒、用過即廢的 ticket
+- 再把 ticket 放進握手的 `Sec-WebSocket-Protocol`，後端收下後原樣回送
+- `consume_ws_ticket` 是先拿掉再檢查有效期，所以過期、重放、同時搶同一張都只會有一個贏家
+
+新增 WebSocket 端點沿用這套，不要為了方便把憑證接回 query string。
+
 ### 使用者身份取用
 
 **新增**的管理者寫入端點從 `require_admin` dependency 取得已驗證的 actor；同一個
