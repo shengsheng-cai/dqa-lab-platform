@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { DEVICE_IDS } from "./constants";
-import { WS_BASE } from "./api";
+import api, { WS_BASE } from "./api";
 
-function getToken() {
-  return localStorage.getItem("user_token") || localStorage.getItem("demo_password") || "";
-}
+const WS_TICKET_PROTOCOL_PREFIX = "dqa-ws-ticket.";
 
 const OFFLINE_DEVICES = DEVICE_IDS.map((id) => ({
   device_id: id,
@@ -17,16 +15,40 @@ export function useDeviceWebSocket() {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
   const retryDelay = useRef(1000);
-  const unmounted = useRef(false);
+  // 每次掛載給一個編號，卸載時 +1。還在等 ticket 的請求和排隊中的重連拿舊編號一比就知道
+  // 自己已經過期，該收手。少了這個，「卸載後馬上又掛回來」（開發模式每次載入都會做一次）
+  // 會讓上一輪的連線照樣建起來，而 wsRef 只留得住最後一條，前一條就沒人關了。
+  const generation = useRef(0);
   const lastJsonRef = useRef(null);
   const connectRef = useRef(null);
 
-  const connect = useCallback(() => {
-    if (unmounted.current) return;
+  // 拿不到 ticket 和連線斷掉都走這條：等一下再試，每次等久一倍，最多 30 秒。
+  const scheduleReconnect = useCallback((myGeneration) => {
+    if (myGeneration !== generation.current) return;
+    const delay = retryDelay.current;
+    retryDelay.current = Math.min(delay * 2, 30000);
+    setTimeout(() => {
+      if (myGeneration === generation.current) connectRef.current?.();
+    }, delay);
+  }, []);
 
-    const token = getToken();
-    const url = `${WS_BASE}/ws/devices${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-    const ws = new WebSocket(url);
+  const connect = useCallback(async () => {
+    const myGeneration = generation.current;
+
+    let ticket;
+    try {
+      const response = await api.post("/api/auth/ws-ticket");
+      ticket = response.data.ticket;
+    } catch {
+      scheduleReconnect(myGeneration);
+      return;
+    }
+
+    if (myGeneration !== generation.current) return;
+    const ws = new WebSocket(
+      `${WS_BASE}/ws/devices`,
+      `${WS_TICKET_PROTOCOL_PREFIX}${ticket}`,
+    );
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -46,24 +68,19 @@ export function useDeviceWebSocket() {
 
     ws.onclose = () => {
       setConnected(false);
-      if (!unmounted.current) {
-        const delay = retryDelay.current;
-        retryDelay.current = Math.min(delay * 2, 30000);
-        setTimeout(() => connectRef.current?.(), delay);
-      }
+      scheduleReconnect(myGeneration);
     };
 
     ws.onerror = () => {
       ws.close();
     };
-  }, []);
+  }, [scheduleReconnect]);
 
   useEffect(() => {
     connectRef.current = connect;
-    unmounted.current = false;
     connect();
     return () => {
-      unmounted.current = true;
+      generation.current += 1;
       retryDelay.current = 1000;
       wsRef.current?.close();
     };

@@ -24,6 +24,8 @@ PUBLIC_WRITE_ROUTES = {
     ("POST", "/api/line/webhook"),
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/logout"),
+    # 訪客也看得到設備即時狀態，所以換 WebSocket 握手券的端點不能綁 admin
+    ("POST", "/api/auth/ws-ticket"),
     ("POST", "/api/auth/demo-login"),
 }
 # 走訪失效（框架升級改內部結構）時的最低寫入 route 數守衛，兩個列舉測試共用。

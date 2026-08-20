@@ -3,7 +3,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from .auth import get_token_info, _validate_demo_token, DEMO_PASSWORD
+from .auth import consume_ws_ticket
 from .devices import build_device_list
 
 logger = logging.getLogger("app")
@@ -14,8 +14,8 @@ class ConnectionManager:
     def __init__(self):
         self._connections: set[WebSocket] = set()
 
-    async def connect(self, ws: WebSocket):
-        await ws.accept()
+    async def connect(self, ws: WebSocket, subprotocol: str):
+        await ws.accept(subprotocol=subprotocol)
         self._connections.add(ws)
         logger.info(f"[WS] connected, total={len(self._connections)}")
 
@@ -55,27 +55,28 @@ async def broadcast_loop(cache: dict):
             logger.error(f"[WS] broadcast_loop error: {e}")
 
 
-def _authenticate(token: str) -> bool:
-    if not token:
-        return not DEMO_PASSWORD
+_TICKET_PROTOCOL_PREFIX = "dqa-ws-ticket."
 
-    if get_token_info(token):
-        return True
-    if _validate_demo_token(token):
-        return True
-    if DEMO_PASSWORD and token == DEMO_PASSWORD:
-        return True
-    return False
+
+def _consume_ticket_protocol(ws: WebSocket) -> str | None:
+    # ASGI 伺服器（uvicorn 與測試用的 TestClient）已經把瀏覽器送來的
+    # Sec-WebSocket-Protocol 拆好放進 scope，這裡不用自己再切一次字串。
+    for protocol in ws.scope.get("subprotocols", []):
+        if protocol.startswith(_TICKET_PROTOCOL_PREFIX) and consume_ws_ticket(
+            protocol.removeprefix(_TICKET_PROTOCOL_PREFIX)
+        ):
+            return protocol
+    return None
 
 
 @router.websocket("/ws/devices")
 async def ws_devices(ws: WebSocket):
-    token = ws.query_params.get("token", "")
-    if not _authenticate(token):
+    protocol = _consume_ticket_protocol(ws)
+    if not protocol:
         await ws.close(code=4001)
         return
 
-    await manager.connect(ws)
+    await manager.connect(ws, subprotocol=protocol)
     try:
         # 連線後立即推一幀，讓前端不用等 1 秒
         data = build_device_list(dict(ws.app.state.AICM_CACHE))
