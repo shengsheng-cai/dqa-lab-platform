@@ -9,7 +9,7 @@ import time
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from .sop import router as sop_router, execution_router
 from .constants import DEVICE_IDS
 from . import device_state
@@ -34,10 +34,57 @@ from .devices_maintenance import router as devices_maintenance_router
 from .ws import router as ws_router, broadcast_loop
 import httpx as _httpx
 import logging
+from collections.abc import Awaitable
+
+from apscheduler.schedulers.base import STATE_RUNNING
 
 logger = logging.getLogger("app")
-background_tasks = set()
 SLOW_REQUEST_MS = 2000
+
+
+def _start_background_task(app: FastAPI, name: str, awaitable: Awaitable) -> asyncio.Task:
+    """啟動並保留背景工作，確保例外會被讀取、記錄，也能由 health 觀察。"""
+    task = asyncio.create_task(awaitable, name=f"dqa-{name}")
+    # 先抓住這份名冊再交給 callback：callback 觸發時才去讀 app.state 的話，
+    # 同一個 app 重跑一次 lifespan 就可能把新名冊裡活著的工作誤刪。
+    tasks = app.state.background_tasks
+    tasks[name] = task
+
+    def _task_done(done: asyncio.Task) -> None:
+        # 名冊只留還活著的工作：結束就移除，health 查不到就是停了，
+        # 也不會讓已結束的 task 一直抓著它的 traceback 與 frame 變數。
+        tasks.pop(name, None)
+        if done.cancelled():
+            return
+
+        error = done.exception()  # 讀取 exception，避免 Task exception was never retrieved
+        if error is not None:
+            logger.error("Background task %s failed: %s", name, error, exc_info=error)
+
+    task.add_done_callback(_task_done)
+    return task
+
+
+async def _cancel_background_tasks(app: FastAPI) -> None:
+    """取消並等待所有由 lifespan 啟動的背景工作。"""
+    tasks = list(app.state.background_tasks.values())
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
+def _health_checks(app: FastAPI) -> dict[str, str]:
+    tasks = getattr(app.state, "background_tasks", {})
+    simulator = tasks.get("simulator")
+    scheduler = getattr(app.state, "scheduler", None)
+    return {
+        "simulator": "running" if simulator is not None and not simulator.done() else "stopped",
+        "scheduler": (
+            "running"
+            if scheduler is not None and scheduler.state == STATE_RUNNING
+            else "stopped"
+        ),
+    }
 
 
 async def observability_middleware(request: Request, call_next):
@@ -133,54 +180,54 @@ async def lifespan(app: FastAPI):
             f"溫度：{item.get('temperature')}°C"
         )
 
-    sim_task = asyncio.create_task(data_simulator(states))
-    background_tasks.add(sim_task)
-    sim_task.add_done_callback(background_tasks.discard)
-
-    ws_task = asyncio.create_task(broadcast_loop(states))
-    background_tasks.add(ws_task)
-    ws_task.add_done_callback(background_tasks.discard)
-    logger.info(f"System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
-
-    task = asyncio.create_task(warmup_rag())
-    background_tasks.add(task)
-    task.add_done_callback(background_tasks.discard)
+    app.state.background_tasks = {}
+    app.state.scheduler = None
     app.state.http_client = _httpx.AsyncClient(timeout=10.0)
 
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    scheduler = AsyncIOScheduler(timezone="Asia/Taipei")
-    scheduler.add_job(
-        auto_advance_schedules, "interval", minutes=5,
-        kwargs={"states": states},
-    )
-    scheduler.start()
-    app.state.scheduler = scheduler
+    try:
+        _start_background_task(app, "simulator", data_simulator(states))
+        _start_background_task(app, "websocket", broadcast_loop(states))
+        logger.info(f"System initialized with {len(DEVICE_IDS)} devices: {DEVICE_IDS}")
 
-    # 重啟後重新註冊未來的 CONFIRMED 排程 date job
-    from .schedule_service import _register_schedule_start_job
-    from .models import Schedule, ScheduleStatus
-    from .utils import _now_utc_naive
-    _now_naive = _now_utc_naive()
-    with SessionLocal() as db:
-        future_confirmed = db.query(Schedule).filter(
-            Schedule.status == ScheduleStatus.CONFIRMED,
-            Schedule.start_time > _now_naive,
-        ).all()
-        for s in future_confirmed:
-            _register_schedule_start_job(
-                scheduler,
-                s.id,
-                states,
-                s.start_time,
-            )
-        if future_confirmed:
-            logger.info(f"重新註冊 {len(future_confirmed)} 筆未來排程 date job")
+        _start_background_task(app, "rag-warmup", warmup_rag())
 
-    logger.info("APScheduler 已啟動（精確 date job + 每 5 分鐘 fallback）")
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        scheduler = AsyncIOScheduler(timezone="Asia/Taipei")
+        scheduler.add_job(
+            auto_advance_schedules, "interval", minutes=5,
+            kwargs={"states": states},
+        )
+        scheduler.start()
+        app.state.scheduler = scheduler
 
-    yield
-    scheduler.shutdown()
-    await app.state.http_client.aclose()
+        # 重啟後重新註冊未來的 CONFIRMED 排程 date job
+        from .schedule_service import _register_schedule_start_job
+        from .models import Schedule, ScheduleStatus
+        from .utils import _now_utc_naive
+        _now_naive = _now_utc_naive()
+        with SessionLocal() as db:
+            future_confirmed = db.query(Schedule).filter(
+                Schedule.status == ScheduleStatus.CONFIRMED,
+                Schedule.start_time > _now_naive,
+            ).all()
+            for s in future_confirmed:
+                _register_schedule_start_job(
+                    scheduler,
+                    s.id,
+                    states,
+                    s.start_time,
+                )
+            if future_confirmed:
+                logger.info(f"重新註冊 {len(future_confirmed)} 筆未來排程 date job")
+
+        logger.info("APScheduler 已啟動（精確 date job + 每 5 分鐘 fallback）")
+
+        yield
+    finally:
+        if app.state.scheduler is not None and app.state.scheduler.running:
+            app.state.scheduler.shutdown(wait=False)
+        await _cancel_background_tasks(app)
+        await app.state.http_client.aclose()
 
 
 _is_prod = os.getenv("ENVIRONMENT") == "production"
@@ -280,7 +327,13 @@ app.add_middleware(
 
 
 @app.get("/health", include_in_schema=False)
-async def health():
+async def health(request: Request):
+    checks = _health_checks(request.app)
+    if any(status != "running" for status in checks.values()):
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "checks": checks},
+        )
     return {"status": "ok"}
 
 
