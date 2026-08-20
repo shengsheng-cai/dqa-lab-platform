@@ -6,7 +6,6 @@ English · [繁體中文](risk-based-test-plan.zh-TW.md)
 |---|---|
 | **Plan type** | Release-baseline regression plan |
 | **Target** | Simulated-device Demo on `main` |
-| **Last updated** | 2026-08-11 |
 | **Related strategy** | [Test Strategy](test-strategy.md) |
 
 ## 1. Objective

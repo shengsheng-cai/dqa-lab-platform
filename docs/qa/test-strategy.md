@@ -6,7 +6,6 @@ English · [繁體中文](test-strategy.zh-TW.md)
 |---|---|
 | **Document status** | Active |
 | **Baseline** | Demo / simulated-device `main` branch |
-| **Last updated** | 2026-08-02 |
 | **Approach** | Risk-based, automation-first, evidence-driven |
 
 ## 1. Purpose
