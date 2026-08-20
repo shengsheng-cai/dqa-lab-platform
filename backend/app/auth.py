@@ -22,8 +22,12 @@ DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "")
 _fail_tracker: dict = {}
 _FAIL_TRACKER_MAXSIZE = 1000
 _guest_hint_lock = threading.Lock()
+_ws_ticket_lock = threading.Lock()
+_ws_tickets: dict[str, float] = {}
 
 TOKEN_TTL = 8 * 60 * 60  # 8 小時
+WS_TICKET_TTL_SECONDS = 30
+_WS_TICKET_MAXSIZE = 1000
 
 SKIP_PATHS = {
     "/api/line/webhook",
@@ -154,6 +158,11 @@ class LoginResponse(BaseModel):
     user_id: int
 
 
+class WebSocketTicketResponse(BaseModel):
+    ticket: str
+    expires_in: int
+
+
 @router.post("/api/auth/login", response_model=LoginResponse)
 def login(body: LoginRequest, request: Request):
     ip = request.client.host
@@ -196,6 +205,42 @@ def logout(request: Request):
     if token:
         revoke_token(token)
     return {"ok": True}
+
+
+def _issue_ws_ticket() -> str:
+    """簽發短效、一次性的 WebSocket 握手憑證。"""
+    now = time.monotonic()
+    with _ws_ticket_lock:
+        expired = [ticket for ticket, expires_at in _ws_tickets.items() if expires_at < now]
+        for ticket in expired:
+            _ws_tickets.pop(ticket, None)
+
+        if len(_ws_tickets) >= _WS_TICKET_MAXSIZE:
+            # dict 保留插入順序；空間滿時淘汰最舊、尚未使用的 ticket。
+            _ws_tickets.pop(next(iter(_ws_tickets)))
+
+        ticket = secrets.token_hex(32)
+        _ws_tickets[ticket] = now + WS_TICKET_TTL_SECONDS
+        return ticket
+
+
+def consume_ws_ticket(ticket: str) -> bool:
+    """原子地消耗 ticket；不論成功、過期或重放都不可再用。"""
+    if not ticket:
+        return False
+    now = time.monotonic()
+    with _ws_ticket_lock:
+        expires_at = _ws_tickets.pop(ticket, None)
+    return expires_at is not None and expires_at >= now
+
+
+@router.post("/api/auth/ws-ticket", response_model=WebSocketTicketResponse)
+def create_ws_ticket():
+    """用現有 HTTP 認證換取 WebSocket 握手用的一次性 ticket。"""
+    return WebSocketTicketResponse(
+        ticket=_issue_ws_ticket(),
+        expires_in=WS_TICKET_TTL_SECONDS,
+    )
 
 
 @router.get("/api/auth/me", response_model=UserMeResponse)
