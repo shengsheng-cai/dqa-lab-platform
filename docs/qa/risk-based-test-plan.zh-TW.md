@@ -34,6 +34,7 @@
 | **R-06** | 治具庫存變成負數、被排程預約超額、重複歸還、到貨重複入庫、永久卡在預約，或連到錯誤的排程 | High | Medium | P1 | `test_fixture_lifecycle.py`、`test_fixtures_api.py`、`test_fixture_excel.py`、`test_purchase_orders.py`、`test_linkage.py`、`fixture-loan.spec.js` | 多人同時借用未做負載測試 |
 | **R-07** | 外部服務或報告讓核心操作失敗，或報告產出了但內容悄悄不完整、前後矛盾，或識別錯對象 | Medium | Medium | P2 | `test_line_resilience.py`、`test_reports_degradation.py`（降級、量測摘要所依賴的時間契約、數據統計與不確定度分析的一致性契約，以及受測樣品識別契約）、`test_uncertainty.py`、`test_ai_observability.py`、`client/src/__tests__/executionPayload.test.js` | 供應商的實際行為與額度變動不涵蓋；前端存檔路徑漏送欄位現在會讓測試變紅，但備援路徑何時觸發仍然只能靠審查抓（GAP-04） |
 | **R-08** | AI 的建議無法安全套用，或訪客走進無法完成的寫入流程 | Medium | Medium | P2 | `test_rag.py`、`ai-apply-schedule.spec.js`、`guest-readonly.spec.js` | 回答的語意品質未做完整評分 |
+| **R-09** | 登入憑證跑到可以被撿去重放的地方——網址、access log，或任何在請求結束後還留著的紀錄 | High | Medium | P1 | `test_ws_auth.py`、`ws-auth.spec.js` | 涵蓋的是這個應用自己控制得到的憑證；部署平台的代理或日誌管線自己會記下什麼，不是測試套件觀察得到的範圍 |
 
 ## 4. 執行順序
 
