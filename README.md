@@ -56,20 +56,14 @@ DQA Lab 把溫濕度試驗室的設備監控、SOP、排程、治具與報告串
 | 瀏覽器流程 | Playwright | 排程、權限、治具、維護與 AI 帶入排程 |
 | 持續整合 | GitHub Actions | lint、後端、前端與 E2E 全數通過後才部署 Demo |
 
-### 真實缺陷與回歸證據
+### 精選缺陷案例與回歸證據
 
-每份報告都走完「發現 → 記錄 → 修復 → 回歸驗證」：
+以下案例都有可核對的影響、修正與回歸證據；部分在修正當下記錄，部分由後續審查
+依 Git 與測試證據整理，個別報告會明示時序。這是作品集精選，不是完整缺陷資料庫：
 
 | 缺陷 | 使用者影響 | 回歸重點 |
 |---|---|---|
-| [BUG-001](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-001-schedule-status-not-refreshed-after-confirm.zh-TW.md) | 排程確認後畫面仍顯示舊狀態 | 寫入後的跨區塊刷新 |
-| [BUG-002](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-002-maintenance-device-auto-started.zh-TW.md) | 維護中的設備被排程自動啟動 | 啟動前的設備可用性判斷 |
 | [BUG-003](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-003-execution-insert-failure-left-zombie-running-state.zh-TW.md) | 啟動失敗後設備留下殭屍狀態 | 原子交易與失敗回滾 |
-| [BUG-004](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-004-fixture-dates-stored-one-day-early.zh-TW.md) | 台北凌晨送出的日期少一天 | 本地日期與 UTC 邊界 |
-| [BUG-005](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-005-fixture-day-deadlines-evaluated-in-utc.zh-TW.md) | 以天為期限的治具提早被判逾期 | 本地日界與截止時間 |
-| [BUG-006](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-006-cooling-device-treated-as-available.zh-TW.md) | 降溫中的設備被當成可立即排程 | 設備可用時間的單一估算來源 |
-| [BUG-007](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-007-fallback-execution-save-diverged-from-main-path.zh-TW.md) | 報告產出時量測數據整段空白 | 主路徑與備援路徑送出的欄位一致 |
-| [BUG-008](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-008-report-summary-disagreed-with-uncertainty-analysis.zh-TW.md) | 報告的平均溫在章節之間、PDF 與 CSV 之間互相矛盾 | 數據統計與不確定度分析取同一段資料 |
 | [BUG-009](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-009-report-test-item-section-identified-the-chamber-not-the-sample.zh-TW.md) | 報告的「受測樣品」欄位印的是試驗箱編號 | 執行紀錄連回案件，連不到時明講 |
 | [BUG-010](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-010-concurrent-loan-and-schedule-both-claimed-the-last-fixture.zh-TW.md) | 庫存只剩一件，手動借出與排程確認卻同時借走 | 配置前先取得寫入鎖，可借量從讀到寫都算數 |
 | [BUG-011](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-011-websocket-handshake-carried-a-long-lived-admin-token.zh-TW.md) | 畫面沒有異常，但管理員憑證被寫進伺服器日誌 | 憑證不進網址，握手改用 30 秒一次性入場券 |
