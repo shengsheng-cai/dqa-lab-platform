@@ -39,6 +39,7 @@ execution, and fixture states.
 | **R-08** | AI recommendation cannot be safely applied, or guest reaches a dead-end write flow | Medium | Medium | P2 | `test_rag.py`, `ai-apply-schedule.spec.js`, `guest-readonly.spec.js` | Semantic answer quality is not exhaustively scored |
 | **R-09** | A session credential ends up somewhere it can be replayed from — a URL, an access log, or any record kept after the request | High | Medium | P1 | `test_ws_auth.py`, `ws-auth.spec.js` | Covers the credentials this application controls; what a deployment platform's proxy or log pipeline records on its own is outside what the suite can observe |
 | **R-10** | Core background work stops while the service still claims to be healthy | Medium | Low | P2 | `test_health.py` | Covers whether the probe tells the truth; the simulator's main loop still has no outer guard, and whether the deployment wires up monitoring is out of scope |
+| **R-11** | Deleting a row leaves other rows pointing at data that no longer exists, because the declared relationships are not enforced | Medium | Medium | P2 | `test_foreign_key_enforcement.py`, `test_schema_migrations.py` | Covers what the schema declares and what the database does with it; a database that already contains orphans is refused by the migration rather than repaired, which stays a human decision |
 
 ## 4. Execution order
 
