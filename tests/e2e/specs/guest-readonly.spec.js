@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { resetBackend } from "../helpers/backend.js";
-import { loginAsGuest } from "../helpers/login.js";
+import { loginAsAdmin, loginAsGuest } from "../helpers/login.js";
 
 // 每個測試檔跑之前把後端重來一次，跟其他檔案的狀態完全切開
 test.beforeAll(resetBackend);
@@ -48,6 +48,38 @@ test.describe("訪客唯讀", () => {
         await expect(page.getByRole("button", { name })).toHaveCount(0);
       }
     });
+  });
+
+  test("UI：管理員從人員管理登出後，訪客登入會回到設備首頁", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.getByRole("button", { name: "人員管理" }).click();
+    await expect(page).toHaveURL(/\/users$/);
+
+    await page.getByRole("button", { name: "登出" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await loginAsGuest(page);
+
+    await page.goto("/users");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByText(/CH-0\d/).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "+ 新增" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "+ 生成" })).toHaveCount(0);
+  });
+
+  test("UI：人員資料被拒絕時顯示權限說明", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.route("**/api/auth/users", route => route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "需要管理者權限" }),
+    }));
+
+    await page.getByRole("button", { name: "人員管理" }).click();
+
+    await expect(page.getByText("此頁僅限管理者")).toBeVisible();
+    await expect(page.getByText("尚無人員資料")).toHaveCount(0);
+    await expect(page.getByText(/尚無訪客 Token/)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "+ 生成" })).toHaveCount(0);
   });
 
   test("API：直接打寫入端點會被擋 403", async ({ page }) => {

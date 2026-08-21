@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "./api";
 import { useToast } from "./components/useToast";
+import { C } from "./styles/theme";
 
 const ROLE_LABELS = { admin: "管理者" };
 const ROLE_COLORS = { admin: "#f85149" };
+const ADMIN_ONLY_ERROR = "此頁僅限管理者";
 
 function RoleBadge({ role }) {
   return (
@@ -492,25 +494,28 @@ const iconActionBtn = {
   lineHeight: 1,
 };
 
-export default function UsersPage({ active }) {
+export default function UsersPage({ active, role }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [modalUser, setModalUser] = useState(undefined); // undefined=隱藏, null=新增, obj=編輯
   const [deleteTarget, setDeleteTarget] = useState(null);
   const { showToast } = useToast();
 
   const fetchUsers = useCallback(async () => {
-    if (!active) return;
+    if (!active || role !== "admin") return;
     setLoading(true);
+    setLoadError("");
     try {
       const res = await api.get("/api/auth/users");
       setUsers(res.data);
     } catch (e) {
       console.error(e);
+      setLoadError(e.response?.status === 403 ? ADMIN_ONLY_ERROR : "人員資料載入失敗");
     } finally {
       setLoading(false);
     }
-  }, [active]);
+  }, [active, role]);
 
   useEffect(() => {
     fetchUsers();
@@ -557,6 +562,11 @@ export default function UsersPage({ active }) {
     borderBottom: "1px solid #21262d",
   };
 
+  if (role !== "admin") return null;
+  if (loadError === ADMIN_ONLY_ERROR) {
+    return <div style={{ padding: 24, color: C.error }}>{ADMIN_ONLY_ERROR}</div>;
+  }
+
   return (
     <div
       style={{
@@ -590,7 +600,9 @@ export default function UsersPage({ active }) {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {loadError ? (
+                  <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: C.error }}>{loadError}</td></tr>
+                ) : loading ? (
                   <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: "#8b949e" }}>載入中...</td></tr>
                 ) : users.length === 0 ? (
                   <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: "#8b949e" }}>尚無人員資料</td></tr>

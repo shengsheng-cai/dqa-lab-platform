@@ -134,12 +134,16 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
             liveDeviceStatuses={Object.fromEntries(devices.map(d => [d.device_id, (d.is_blocked && d.status === IDLE_STATUS) ? "BLOCKED" : d.status]))}
           />
         </div>
-        <div style={{ display: activeTab === "maintenance" ? "block" : "none", height: "100%" }}>
-          <MaintenancePage active={activeTab === "maintenance"} role={role} onCalibrationChange={onCalibrationChange} />
-        </div>
-        <div style={{ display: activeTab === "users" ? "block" : "none", height: "100%" }}>
-          <UsersPage active={activeTab === "users"} role={role} />
-        </div>
+        {role === "admin" && (
+          <>
+            <div style={{ display: activeTab === "maintenance" ? "block" : "none", height: "100%" }}>
+              <MaintenancePage active={activeTab === "maintenance"} role={role} onCalibrationChange={onCalibrationChange} />
+            </div>
+            <div style={{ display: activeTab === "users" ? "block" : "none", height: "100%" }}>
+              <UsersPage active={activeTab === "users"} role={role} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -150,8 +154,16 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
 export default function ControlCenter({ role, displayName, onLogout }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const activeTab = PATH_TO_TAB[pathname] ?? "device";
+  const requestedTab = PATH_TO_TAB[pathname] ?? "device";
+  const requestedTabConfig = TABS.find((tab) => tab.key === requestedTab);
+  const activeTab = role !== "admin" && requestedTabConfig?.adminOnly
+    ? "device"
+    : requestedTab;
   const setActiveTab = useCallback((key) => navigate(TAB_TO_PATH[key] ?? "/"), [navigate]);
+
+  useEffect(() => {
+    if (activeTab !== requestedTab) navigate("/", { replace: true });
+  }, [activeTab, navigate, requestedTab]);
 
   const { devices } = useDeviceWebSocket();
   const [pendingByDevice, setPendingByDevice] = useState({});
