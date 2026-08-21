@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import ControlCenter from "./ControlCenter";
 import { ToastProvider } from "./components/Toast";
 import { API_BASE } from "./api";
@@ -369,6 +370,7 @@ function LoginPage({ onLogin }) {
 }
 
 function App() {
+  const navigate = useNavigate();
   const [authed, setAuthed] = useState(() => isSessionValid());
   const [role, setRole] = useState(getCurrentRole);
   const [displayName, setDisplayName] = useState(
@@ -395,6 +397,7 @@ function App() {
       try { await api.post("/api/auth/logout"); } catch { /* ignore */ }
     }
     clearSession();
+    navigate("/", { replace: true });
     setAuthed(false);
   };
 
