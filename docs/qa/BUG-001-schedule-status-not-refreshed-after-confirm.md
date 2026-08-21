@@ -116,5 +116,6 @@ already **進行中**.
 ## Notes
 
 - Discovered while building the Playwright E2E suite.
-- Written against the live bug (evidence above) **before** fixing, then fixed and
-  verified — documenting the full find → report → fix → verify cycle.
+- The screenshots capture the affected version. The public Git history records
+  the fix before the report commit, so this case does not claim that the report
+  itself was completed before the fix.

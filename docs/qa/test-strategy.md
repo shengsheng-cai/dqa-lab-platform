@@ -60,7 +60,7 @@ maintenance constraints, reporting, and cross-module consistency.
 | Backend unit/integration | Exercise API, database, service, failure, and state-machine behavior | `backend/tests/` | Uses real in-memory SQLite; cross-module flows patch all participating `SessionLocal` references |
 | Frontend unit | Verify deterministic client utilities | `client/src/__tests__/` | Vitest; no jsdom component suite, while selected critical flows are exercised through browser tests |
 | Browser E2E | Prove critical workflows from the user's point of view | `tests/e2e/specs/` | Playwright, isolated backend/database, sequential execution, no retries |
-| Exploratory/manual | Investigate new risks and collect evidence before automation | Local Demo | A confirmed defect receives a report and, where practical, an automated regression |
+| Exploratory/manual | Investigate new risks and collect evidence before automation | Local Demo | A confirmed finding leaves traceable evidence; selected core defects receive a standalone report, and regressions are automated where practical |
 
 Tests use the real database model and service code where practical. Mocks are
 reserved for external services, controlled failure injection, time-dependent
@@ -116,8 +116,8 @@ A low-priority test must not delay investigation of a failing P0 invariant.
 - Targeted tests for the changed risk pass.
 - The relevant broader suite passes with no unexplained failure.
 - No open Critical or High defect affects the intended Demo flow.
-- A fixed defect has reproducible evidence and regression protection where
-  practical.
+- A fixed defect has traceable evidence and regression protection where
+  practical; a standalone report is not required for every fix.
 - Documentation and [traceability](traceability.md) match the implemented
   behavior.
 
@@ -125,11 +125,16 @@ A low-priority test must not delay investigation of a failing P0 invariant.
 
 The minimum lifecycle is:
 
-`discover → reproduce → document → fix → regression test → verify`
+`discover → reproduce → record → fix → regression test → verify`
 
-Bug reports live in this directory. Severity describes impact; priority
-describes repair order. Reports must distinguish observed facts from inference
-and must not claim physical-device validation when only the simulator was used.
+The record may be a backlog item, issue, commit or pull request, and a regression
+test. Standalone bug reports in this directory are selected portfolio case
+studies, not a complete defect database and not a requirement for every fix.
+They are reserved for reproducible core risks or distinct QA lessons with
+credible evidence and regression value. Severity describes impact; priority
+describes repair order. Reports must distinguish observed facts from inference,
+state whether they were written before, with, or after the fix, and must not
+claim physical-device validation when only the simulator was used.
 
 ## 9. Current limitations
 

@@ -2,19 +2,19 @@
 
 [English](traceability.md) · 繁體中文
 
-這張矩陣把關鍵行為連到風險、自動化證據與已知缺陷。它刻意只涵蓋高風險的 Demo
-基準，而不是每一條路由或每一個 UI 元素。
+這張矩陣把關鍵行為連到風險與自動化證據；缺陷證據是選填，只連到精選案例。它刻意
+只涵蓋高風險的 Demo 基準，而不是每一條路由、每一次修正或每一個 UI 元素。
 
 | 需求 | 預期行為 | 風險 | 自動化證據 | 缺陷證據 | 狀態 |
 |---|---|---|---|---|---|
-| **REQ-AUTH-01** | 訪客不能變更受保護的業務狀態；每一條僅限管理者的路由都強制授權檢查 | R-01 | `backend/tests/test_guest_authorization.py`；`backend/tests/test_blocked_period_audit.py::test_blocked_period_write_rejects_non_admin_without_audit`；`tests/e2e/specs/guest-readonly.spec.js` | — | 已涵蓋 |
+| **REQ-AUTH-01** | 訪客不能停留在僅限管理者的頁面，也不能變更受保護的業務狀態；前端路由與頁面掛載會遵守角色，每一條管理 API 也強制授權檢查 | R-01 | `backend/tests/test_guest_authorization.py`；`backend/tests/test_blocked_period_audit.py::test_blocked_period_write_rejects_non_admin_without_audit`；`tests/e2e/specs/guest-readonly.spec.js` | — | 已涵蓋 |
 | **REQ-AUTH-02** | 憑證不會出現在網址上：設備即時資料的握手改用 30 秒過期、只能用一次的入場券，所以 access log 記得到的東西都沒有重放價值 | R-09 | `backend/tests/test_ws_auth.py`；`tests/e2e/specs/ws-auth.spec.js` | [BUG-011](BUG-011-websocket-handshake-carried-a-long-lived-admin-token.zh-TW.md) | 涵蓋到反向代理之前；部署環境會不會轉送握手用的 subprotocol，要靠打開部署好的 Space 確認 |
 | **REQ-AUD-01** | 設備不可用時段的變更會記錄下經過驗證的操作者；稽核寫入失敗時，業務變更要一併回滾 | R-03 | `backend/tests/test_blocked_period_audit.py` | — | 已涵蓋 |
 | **REQ-MNT-01** | 維護中的設備不能被選取或啟動；排程維持「已確認」，維護結束後可以重試 | R-02 | `backend/tests/test_schedule_start_consistency.py::test_start_skipped_when_device_in_maintenance`；`::test_maintenance_keeps_confirmed_then_resumes`；`tests/e2e/specs/maintenance-block.spec.js` | [BUG-002](BUG-002-maintenance-device-auto-started.zh-TW.md) | 已涵蓋 |
 | **REQ-STATE-01** | 啟動成功時，設備、執行、排程、治具、稽核與 cache 的狀態要保持一致，即使呼叫端被取消 | R-03 | `backend/tests/test_schedule_start_consistency.py`；`backend/tests/test_device_state.py::test_start_repeated_cancellation_waits_for_commit_and_publishes_cache`；`backend/tests/test_linkage.py`；`tests/e2e/specs/schedule-flow.spec.js` | — | 已涵蓋 |
 | **REQ-STATE-02** | 執行紀錄建立失敗時，設備回到 IDLE、排程維持「已確認」、治具維持預約狀態 | R-03 | `backend/tests/test_device_state.py::test_start_execution_failure_leaves_db_and_cache_unchanged`；`backend/tests/test_schedule_start_consistency.py::test_start_schedule_keeps_confirmed_when_execution_insert_fails`；`::test_manual_start_sop_reverts_when_execution_insert_fails` | [BUG-003](BUG-003-execution-insert-failure-left-zombie-running-state.zh-TW.md) | 已涵蓋 |
 | **REQ-UI-01** | 確認之後，排程列不需人工重新整理就會與後端狀態一致 | R-04 | `tests/e2e/specs/schedule-flow.spec.js` | [BUG-001](BUG-001-schedule-status-not-refreshed-after-confirm.zh-TW.md) | 已涵蓋 |
-| **REQ-UI-02** | 治具或排程寫入之後，頁面資料與全域摘要立即一致，不必等 30／60 秒的輪詢兜底 | R-04 | `tests/e2e/specs/fixture-loan.spec.js`；`tests/e2e/specs/schedule-flow.spec.js` | — | 已涵蓋 |
+| **REQ-UI-02** | 治具、排程或維護寫入後，持久資料與畫面都要符合操作人員送出的內容，不必等待 30／60 秒輪詢兜底 | R-04 | `tests/e2e/specs/fixture-loan.spec.js`；`tests/e2e/specs/schedule-flow.spec.js`；`backend/tests/test_maintenance.py::test_update_maintenance_can_clear_next_date` | — | 已涵蓋 |
 | **REQ-SCH-01** | 同一台設備上的有效排程不重疊；修改已確認的時段會取代精確啟動的 job；暫時性阻擋會重試；壞掉的排程收斂到終止錯誤 | R-05 | `backend/tests/test_schedule_conflict.py`；`test_schedules_slot.py`；`test_schedule_start_consistency.py::test_confirmed_slot_edit_replaces_scheduled_start_job`；`test_simulator_schedule.py` | [BUG-002](BUG-002-maintenance-device-auto-started.zh-TW.md) | 已涵蓋 |
 | **REQ-SCH-02** | 正在回常溫的設備，在抵達常溫之前都算被占用；設備卡與排程器由同一份共用估算得出那個時間點 | R-05 | `backend/tests/test_utils.py`；`backend/tests/test_schedules_complete.py::test_est_end_finishing_counts_remaining_ramp_not_whole_curve`；`::test_est_end_finishing_after_emergency_is_not_treated_as_free`；`::test_build_running_until_includes_finishing_device` | [BUG-006](BUG-006-cooling-device-treated-as-available.zh-TW.md) | 已涵蓋 |
 | **REQ-TIME-01** | 客戶端送出的每個時間，不論從哪個端點進來，寫進資料庫前都要換算成 UTC，避免送非 UTC 時區時無聲地把排程時段、到期日或報告區間位移 | R-05 | `backend/tests/test_datetime_normalization.py`；`backend/tests/test_reports_degradation.py::test_non_utc_timestamps_are_converted_before_saving` | — | 排程時段、封鎖時段、治具借出與延期、校驗與維護、執行紀錄皆已涵蓋 |
