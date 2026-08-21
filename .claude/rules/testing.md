@@ -60,7 +60,7 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 - 跨模組流程用共用 `patched_session` 注入 in-memory session（參考 `test_schedule_start_consistency.py`），DB 本身仍走真實 SQLAlchemy 行為
 - **schema 的權威只有 Alembic**：`init_db()` 只服務全新資料庫（`create_all` + 建 admin），不補既有資料表的欄位，也不得再加「啟動時自己 ALTER TABLE」的補丁；既有資料庫一律 `alembic upgrade head`。改 `models.py` 一定要跟著寫 migration
 - 遷移指令在 `backend/` 底下跑：`../venv/bin/alembic revision --autogenerate -m "描述"`、`../venv/bin/alembic upgrade head`
-- `test_schema_migrations.py` 在暫存 DB 實跑整條 migration chain，再比對 model 的每張表與每個欄位。加欄位只改 model、忘了寫 migration 會直接紅（只比對表與欄位的有無，型別／nullable 漂移仍要自己顧）
+- `test_schema_migrations.py` 在暫存 DB 實跑整條 migration chain，再比對 model 的每張表、每個欄位，以及每條外鍵指向哪張表、父列被刪時怎麼辦。加欄位或改外鍵行為時只改 model、忘了寫 migration 會直接紅（型別／nullable 漂移仍要自己顧）
 
 ## Frontend 單元測試（Vitest）
 

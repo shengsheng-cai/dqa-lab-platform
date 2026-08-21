@@ -12,7 +12,7 @@ from sqlalchemy.pool import QueuePool
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.device_state import DeviceStateManager
-from app.models import Base
+from app.models import Base, User, enable_sqlite_foreign_keys
 
 
 def _make_memory_db():
@@ -25,14 +25,36 @@ def _make_memory_db():
     資料庫的壽命綁在連線上：撐住它的是 create_all 用完還留在池子裡的那條，換成
     NullPool 之類不留連線的池子，表會憑空消失。
     用完由呼叫端負責 engine.dispose()：連線全關，這個具名 DB 就跟著消失，不必 drop_all。
+    外鍵檢查跟正式環境一樣打開，否則測試會放行正式環境擋得下來的孤兒資料。
     """
     engine = create_engine(
         f"sqlite:///file:dqa_test_{uuid.uuid4().hex}?mode=memory&cache=shared&uri=true",
         connect_args={"check_same_thread": False},
         poolclass=QueuePool,
     )
+    enable_sqlite_foreign_keys(engine)
     Base.metadata.create_all(engine)
     return engine, sessionmaker(bind=engine)
+
+
+def _seed_user(Session, user_id: int, username: str | None = None, role: str = "admin") -> None:
+    """把「目前登入者」補進資料庫。
+
+    測試常直接指定一個 user_id 當登入者，但沒建對應的人；外鍵檢查打開後，handler 一把
+    這個 id 寫進 created_by／applicant_user_id 就會被擋下來。
+    """
+    with Session() as session:
+        name = username or f"user_{user_id}"
+        session.add(
+            User(
+                id=user_id,
+                username=name,
+                display_name=name,
+                hashed_password="x",
+                role=role,
+            )
+        )
+        session.commit()
 
 
 @pytest.fixture()
@@ -58,6 +80,8 @@ def api_client():
 
     - module.SessionLocal 導向測試 session，離開 context 還原並清庫
     - role / user_id / username 為 None 時該欄位不注入（沿用 handler 的 getattr 預設）
+    - 有給 user_id 就在庫裡建出這個人：外鍵檢查是開的，handler 把它寫進 created_by
+      之類的欄位時，資料庫裡沒有這個人就會被擋下來
     - app_state：需掛在 app.state 的額外物件（如排程用的 AICM_CACHE）
     - yield (client, Session)：只需要 client 的呼叫端解包後忽略 Session 即可
     """
@@ -65,6 +89,8 @@ def api_client():
     def _make(module, router, *, role="admin", user_id=None, username=None, app_state=None):
         # 只 patch 傳入的單一 module；跨多模組寫 DB 的流程請改用 patched_session。
         engine, TestSession = _make_memory_db()
+        if user_id is not None:
+            _seed_user(TestSession, user_id, username, role or "admin")
         original_session = module.SessionLocal
         module.SessionLocal = lambda: TestSession()  # type: ignore[assignment]
 
