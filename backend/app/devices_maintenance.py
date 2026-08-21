@@ -217,8 +217,10 @@ def update_maintenance(
         )
         if not maint:
             raise HTTPException(status_code=404, detail="維護紀錄不存在")
-        for field, value in body.model_dump(exclude_none=True).items():
-            if field in ("maintenance_date", "next_maintenance_date"):
+        for field, value in body.model_dump(exclude_unset=True).items():
+            if value is None and field != "next_maintenance_date":
+                continue
+            if value is not None and field in ("maintenance_date", "next_maintenance_date"):
                 value = _to_naive_utc(value)
             setattr(maint, field, value)
         log_audit(db, str(u.user_id or "unknown"), u.role, "MAINTENANCE_UPDATE", "device", device_id,
