@@ -107,6 +107,10 @@ def test_migrations_cover_every_model_table_and_column(migrated_schema):
     assert missing_columns == {}, f"model 有欄位但 migration 沒補：{missing_columns}"
 
 
+def test_calibration_certificate_number_is_removed(migrated_schema):
+    assert "certificate_number" not in migrated_schema.columns["device_calibrations"]
+
+
 def test_migrations_match_model_foreign_key_delete_behaviour(migrated_schema):
     """外鍵指到哪張表、父列被刪時怎麼辦，migration 要和 model 說的一樣。"""
     assert migrated_schema.foreign_keys == _model_foreign_keys()

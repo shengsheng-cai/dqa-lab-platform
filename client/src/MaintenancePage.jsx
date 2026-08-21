@@ -61,7 +61,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
     setModalType(type);
     setEditItem(null);
     setForm(type === "calibrations"
-      ? { calibration_date: "", next_calibration_date: "", interval_days: 365, certificate_number: "", result: "pass", notes: "", created_by: "admin" }
+      ? { calibration_date: "", next_calibration_date: "", interval_days: 365, result: "pass", notes: "", created_by: "admin" }
       : { maintenance_date: "", maintenance_type: "preventive", description: "", performed_by: "", next_maintenance_date: "" }
     );
     setShowModal(true);
@@ -72,7 +72,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
     setEditItem(item);
     const fmt = (v) => v ? v.replace("T", " ").slice(0, 16) : "";
     if (type === "calibrations") {
-      setForm({ calibration_date: fmt(item.calibration_date), next_calibration_date: fmt(item.next_calibration_date), interval_days: item.interval_days, certificate_number: item.certificate_number || "", result: item.result, notes: item.notes || "", created_by: item.created_by });
+      setForm({ calibration_date: fmt(item.calibration_date), next_calibration_date: fmt(item.next_calibration_date), interval_days: item.interval_days, result: item.result, notes: item.notes || "", created_by: item.created_by });
     } else {
       setForm({ maintenance_date: fmt(item.maintenance_date), maintenance_type: item.maintenance_type, description: item.description, performed_by: item.performed_by, next_maintenance_date: fmt(item.next_maintenance_date) });
     }
@@ -178,17 +178,16 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
           </div>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr>{["校驗日期", "下次校驗日期", "間隔", "證書號", "結果", ...(role === "admin" ? ["操作"] : [])].map(h => <th key={h} style={thS}>{h}</th>)}</tr>
+              <tr>{["校驗日期", "下次校驗日期", "間隔", "結果", ...(role === "admin" ? ["操作"] : [])].map(h => <th key={h} style={thS}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {calibrations.length === 0 ? (
-                <tr><td colSpan={6} style={{ ...tdS, color: C.textDim, textAlign: "center", padding: "16px 0" }}>尚無校驗紀錄</td></tr>
+                <tr><td colSpan={role === "admin" ? 5 : 4} style={{ ...tdS, color: C.textDim, textAlign: "center", padding: "16px 0" }}>尚無校驗紀錄</td></tr>
               ) : calibrations.map(c => (
                 <tr key={c.id}>
                   <td style={tdS}>{fmtDt(c.calibration_date)}</td>
                   <td style={tdS}>{fmtDt(c.next_calibration_date)}</td>
                   <td style={tdS}>{c.interval_days}天</td>
-                  <td style={{ ...tdS, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.certificate_number || "—"}</td>
                   <td style={tdS}>
                     <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 8, fontWeight: 700, background: c.result === "pass" ? C.successBg : C.errorBg, color: c.result === "pass" ? C.success : C.error, border: `1px solid ${c.result === "pass" ? "#2d5a3a" : "#5a2d2d"}` }}>{c.result === "pass" ? "通過" : "不通過"}</span>
                   </td>
@@ -249,7 +248,6 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                 <FieldRow label="校驗日期 *" value={form.calibration_date} onChange={v => setForm(f => ({ ...f, calibration_date: v }))} placeholder="YYYY-MM-DD HH:MM" />
                 <FieldRow label="下次校驗日期 *" value={form.next_calibration_date} onChange={v => setForm(f => ({ ...f, next_calibration_date: v }))} placeholder="YYYY-MM-DD HH:MM" />
                 <FieldRow label="間隔(天)" value={form.interval_days} onChange={v => setForm(f => ({ ...f, interval_days: v }))} placeholder="365" />
-                <FieldRow label="證書號" value={form.certificate_number} onChange={v => setForm(f => ({ ...f, certificate_number: v }))} placeholder="CAL-2026-001" />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <label style={{ fontSize: 11, color: C.textMuted }}>結果</label>
                   <select value={form.result} onChange={e => setForm(f => ({ ...f, result: e.target.value }))} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textPrimary, padding: "5px 8px", fontSize: 12 }}>

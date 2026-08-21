@@ -126,10 +126,9 @@ document that presents itself as one coherent set of results.
   own numbers come from, falling back to the full window only when no
   uncertainty analysis was possible (no target set).
 - The CSV report now computes `u_temp`/`u_humi` for the first time, so its
-  average temperature agrees with the PDF's for the same execution. Its
-  uncertainty row still prints the calibration-certificate placeholder text —
-  extending it to show the numeric expanded uncertainty was out of scope for
-  this fix.
+  average temperature agrees with the PDF's for the same execution. A later
+  product-boundary decision excluded external calibration documents, so the
+  uncertainty row now states that this demo estimates sensor resolution only.
 - Humidity's average was fixed the same way in the same edit, since it shared
   the exact code path with temperature.
 

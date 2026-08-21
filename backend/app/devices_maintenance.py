@@ -23,7 +23,6 @@ class CalibrationCreate(BaseModel):
     calibration_date: datetime.datetime
     next_calibration_date: datetime.datetime
     interval_days: int = 365
-    certificate_number: Optional[str] = None
     result: str
     notes: Optional[str] = None
     created_by: str
@@ -33,7 +32,6 @@ class CalibrationUpdate(BaseModel):
     calibration_date: Optional[datetime.datetime] = None
     next_calibration_date: Optional[datetime.datetime] = None
     interval_days: Optional[int] = None
-    certificate_number: Optional[str] = None
     result: Optional[str] = None
     notes: Optional[str] = None
     created_by: Optional[str] = None
@@ -47,7 +45,6 @@ class CalibrationOut(BaseModel):
     calibration_date: datetime.datetime
     next_calibration_date: datetime.datetime
     interval_days: int
-    certificate_number: Optional[str]
     result: str
     notes: Optional[str]
     created_by: str
@@ -106,7 +103,6 @@ def create_calibration(device_id: str, body: CalibrationCreate, request: Request
             calibration_date=_to_naive_utc(body.calibration_date),
             next_calibration_date=_to_naive_utc(body.next_calibration_date),
             interval_days=body.interval_days,
-            certificate_number=body.certificate_number,
             result=body.result,
             notes=body.notes,
             created_by=body.created_by,

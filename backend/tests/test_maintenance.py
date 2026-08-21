@@ -50,7 +50,6 @@ def test_create_calibration(admin_client):
         "calibration_date": "2026-01-15T00:00:00",
         "next_calibration_date": "2027-01-15T00:00:00",
         "interval_days": 365,
-        "certificate_number": "CAL-TEST-001",
         "result": "pass",
         "notes": "測試校驗",
         "created_by": "admin",
@@ -60,14 +59,14 @@ def test_create_calibration(admin_client):
     data = resp.json()
     assert data["device_id"] == "CH-01"
     assert data["result"] == "pass"
-    assert data["certificate_number"] == "CAL-TEST-001"
+    assert "certificate_number" not in data
 
     # GET 確認
     list_resp = admin_client.get("/api/devices/CH-01/calibrations")
     assert list_resp.status_code == 200
     records = list_resp.json()
     assert len(records) == 1
-    assert records[0]["certificate_number"] == "CAL-TEST-001"
+    assert "certificate_number" not in records[0]
 
 
 def test_create_calibration_guest_forbidden(guest_client):

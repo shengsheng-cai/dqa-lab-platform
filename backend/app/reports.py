@@ -243,7 +243,7 @@ def download_csv_report(execution_id: int):
             if target_high is not None
             else "N/A",
         )
-        _row(output, "量測不確定度 Uncertainty:", "待儀器校正證書確認")
+        _row(output, "量測不確定度 Uncertainty:", "本 Demo 僅估算感測器解析度")
 
         # 6. 測試結論（§7.8.6 & §7.8.7）
         _section(output, "6. 測試結論  Test Conclusion")
@@ -657,7 +657,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated,
         story.extend(_unc_table(u_humi, "RH"))
 
     story.append(Paragraph(
-        "※ Type B 僅含感測器解析度；校正證書誤差須取得後另行補充。",
+        "※ 本 Demo 的 Type B 僅估算感測器解析度，不含外部校正資料。",
         warn))
 
     # ── 6. 數據統計 ───────────────────────────────────────────────────────────
