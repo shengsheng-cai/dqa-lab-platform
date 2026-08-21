@@ -74,6 +74,7 @@ DQA Lab 把溫濕度試驗室的設備監控、SOP、排程、治具與報告串
 | [BUG-010](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-010-concurrent-loan-and-schedule-both-claimed-the-last-fixture.zh-TW.md) | 庫存只剩一件，手動借出與排程確認卻同時借走 | 配置前先取得寫入鎖，可借量從讀到寫都算數 |
 | [BUG-011](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-011-websocket-handshake-carried-a-long-lived-admin-token.zh-TW.md) | 畫面沒有異常，但管理員憑證被寫進伺服器日誌 | 憑證不進網址，握手改用 30 秒一次性入場券 |
 | [BUG-012](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-012-dead-simulator-task-still-reported-a-healthy-service.zh-TW.md) | 模擬器停掉後溫度與排程全部停住，服務卻仍回報自己正常 | 探測跟著核心背景工作的存活走，工作的例外一定被讀取 |
+| [BUG-013](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-013-declared-foreign-keys-were-never-enforced.zh-TW.md) | 刪掉使用者或排程後，指向它的資料仍留著已不存在的 ID | 外鍵真的生效，並由 schema 說明父列被刪時子列怎麼辦 |
 
 QA 文件皆為中英雙語，每份開頭可切換語言：
 
