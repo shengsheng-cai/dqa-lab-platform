@@ -158,6 +158,40 @@ def test_create_maintenance(admin_client):
     assert len(list_resp.json()) == 1
 
 
+def test_update_maintenance_can_clear_next_date(admin_client):
+    """未傳下次維護日期時保留原值；明確傳 null 時清空。"""
+    create_resp = admin_client.post(
+        "/api/devices/CH-02/maintenances",
+        json={
+            "maintenance_date": "2026-02-10T00:00:00",
+            "maintenance_type": "preventive",
+            "description": "更換密封條",
+            "performed_by": "王工程師",
+            "next_maintenance_date": "2026-08-10T00:00:00",
+        },
+    )
+    assert create_resp.status_code == 201
+    maint_id = create_resp.json()["id"]
+
+    update_resp = admin_client.put(
+        f"/api/devices/CH-02/maintenances/{maint_id}",
+        json={"description": "更換密封條與濾網"},
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["next_maintenance_date"] == "2026-08-10T00:00:00"
+
+    clear_resp = admin_client.put(
+        f"/api/devices/CH-02/maintenances/{maint_id}",
+        json={"next_maintenance_date": None},
+    )
+    assert clear_resp.status_code == 200
+    assert clear_resp.json()["next_maintenance_date"] is None
+
+    list_resp = admin_client.get("/api/devices/CH-02/maintenances")
+    assert list_resp.status_code == 200
+    assert list_resp.json()[0]["next_maintenance_date"] is None
+
+
 # ── Audit Trail Tests ─────────────────────────────────────────────────────────
 
 
