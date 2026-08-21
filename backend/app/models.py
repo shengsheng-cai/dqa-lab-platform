@@ -540,7 +540,6 @@ class DeviceCalibration(Base):
         default=365,
         nullable=False,
     )
-    certificate_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     result: Mapped[str] = mapped_column(String(10), nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
