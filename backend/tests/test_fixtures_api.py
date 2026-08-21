@@ -2,6 +2,7 @@
 T-15: fixtures API 補充測試
 - delete_fixture：有 reserved/loaned 借用時不可刪除
 - update_inventory：負數盤點擋下、歸零合法
+- create_loan：借用人指到不存在的帳號要被擋
 """
 import datetime
 
@@ -101,6 +102,22 @@ def test_delete_fixture_blocks_reserved_loan(admin_client):
 
     assert resp.status_code == 400
     assert "借出/預約未結束" in resp.json()["detail"]
+
+
+def test_create_loan_rejects_unknown_borrower(admin_client):
+    """借用人指到不存在的帳號時回 404，不要讓外鍵把它變成 500。"""
+    client, Session = admin_client
+    fixture_id = _seed_fixture_with_loan(Session, "returned")
+
+    resp = client.post("/api/fixtures/loans", json={
+        "fixture_id": fixture_id,
+        "borrower_name": "查無此人",
+        "borrower_user_id": 999,
+        "quantity": 1,
+    })
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "使用者不存在"
 
 
 def _seed_plain_fixture(Session, total_quantity: int = 5) -> int:

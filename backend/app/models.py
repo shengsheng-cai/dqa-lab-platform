@@ -1,5 +1,6 @@
 from sqlalchemy import (
     create_engine,
+    event,
     String,
     Integer,
     Float,
@@ -8,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     Index,
+    MetaData,
     false,
 )
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Mapped, mapped_column
@@ -56,12 +58,43 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=_connect_args, **_p
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def enable_sqlite_foreign_keys(target_engine) -> None:
+    """打開 SQLite 的外鍵檢查。
+
+    SQLite 預設不理會外鍵宣告，而且這個開關是每條連線各自設定，所以要掛在 connect 事件上。
+    沒開的話，刪掉被引用的資料只會留下指向不存在資料的孤兒 ID，schema 上寫的關聯等於裝飾。
+
+    做成公開函式是因為測試自己建 engine，要能掛上同一份設定。Alembic 自己建的 engine
+    刻意不掛：SQLite 改表是「建新表→複製資料→丟掉舊表→改名」，開著外鍵檢查跑會被自己擋下來。
+    """
+    if target_engine.dialect.name != "sqlite":
+        return
+
+    @event.listens_for(target_engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
+enable_sqlite_foreign_keys(engine)
+
+
 def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
-    pass
+    # 外鍵約束的名字由這條規則產生。SQLite 不能單獨 ALTER 掉一個約束，改外鍵一律要整表重建，
+    # 而重建前得先叫得出名字；規則寫在這裡，migration 就不必替每條外鍵各取一個。
+    metadata = MetaData(
+        naming_convention={
+            # "ix" 是 SQLAlchemy 的預設值，這裡要原樣抄回來——naming_convention 是整份取代，
+            # 只寫 fk 會把索引的命名規則一起蓋掉，index=True 的索引就變成沒有名字。
+            "ix": "ix_%(column_0_label)s",
+            "fk": "fk_%(table_name)s_%(column_0_name)s",
+        }
+    )
 
 
 # ---------- 使用者（多用戶權限）----------
@@ -107,7 +140,8 @@ class Fixture(Base):
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     keeper_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     keeper_user_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     deputy_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     vendor: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -129,7 +163,10 @@ class FixtureInventoryLog(Base):
     __tablename__ = "fixture_inventory_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.id"), index=True)
+    fixture_id: Mapped[int] = mapped_column(
+        ForeignKey("fixtures.id", ondelete="RESTRICT"),
+        index=True,
+    )
     previous_quantity: Mapped[int] = mapped_column(Integer)
     counted_quantity: Mapped[int] = mapped_column(Integer)
     difference: Mapped[int] = mapped_column(Integer)  # counted - previous
@@ -144,10 +181,14 @@ class FixtureLoan(Base):
     __tablename__ = "fixture_loans"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.id"), index=True)
+    fixture_id: Mapped[int] = mapped_column(
+        ForeignKey("fixtures.id", ondelete="RESTRICT"),
+        index=True,
+    )
     borrower_name: Mapped[str] = mapped_column(String)
     borrower_user_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     device_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     project_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -170,7 +211,9 @@ class FixtureLoan(Base):
     )
 
     schedule_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("schedules.id"), nullable=True, index=True
+        ForeignKey("schedules.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     __table_args__ = (
@@ -185,10 +228,12 @@ class ScheduleFixture(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     schedule_id: Mapped[int] = mapped_column(
-        ForeignKey("schedules.id"), index=True
+        ForeignKey("schedules.id", ondelete="CASCADE"),
+        index=True,
     )
     fixture_id: Mapped[int] = mapped_column(
-        ForeignKey("fixtures.id"), index=True
+        ForeignKey("fixtures.id", ondelete="RESTRICT"),
+        index=True,
     )
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -201,7 +246,10 @@ class PurchaseOrder(Base):
     __tablename__ = "purchase_orders"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.id"), index=True)
+    fixture_id: Mapped[int] = mapped_column(
+        ForeignKey("fixtures.id", ondelete="RESTRICT"),
+        index=True,
+    )
     quantity: Mapped[int] = mapped_column(Integer)
     unit_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     total_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -227,7 +275,8 @@ class DemoToken(Base):
     token: Mapped[str] = mapped_column(String, unique=True, index=True)
     label: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     expires_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
@@ -268,7 +317,9 @@ class SopExecution(Base):
     # 報告要印的受測樣品／案號／客戶都在 Schedule 上，執行紀錄本身沒有這些欄位。
     # 可為空：真正的臨時測試沒有對應案件，報告會據此明講「無對應案件」。
     schedule_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("schedules.id"), nullable=True, index=True
+        ForeignKey("schedules.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     test_started_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
@@ -289,7 +340,8 @@ class StepRecord(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     execution_id: Mapped[int] = mapped_column(
-        ForeignKey("sop_executions.id"), index=True
+        ForeignKey("sop_executions.id", ondelete="CASCADE"),
+        index=True,
     )
     step_id: Mapped[int] = mapped_column(Integer)
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -403,7 +455,8 @@ class Schedule(Base):
     sample_name: Mapped[str] = mapped_column(String)
     applicant_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     applicant_user_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     device_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     standard: Mapped[str] = mapped_column(String)  # e.g. "IEC 60068"
@@ -420,10 +473,12 @@ class Schedule(Base):
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     rejection_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     confirmed_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=_utcnow
@@ -450,7 +505,8 @@ class DeviceBlockedPeriod(Base):
     end_time: Mapped[datetime.datetime] = mapped_column(DateTime)
     reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=_utcnow

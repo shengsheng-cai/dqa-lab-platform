@@ -16,7 +16,7 @@ import app.fixtures as fixtures_module
 import app.schedules as schedules_module
 from app.fixtures import LoanCreate, router as fixtures_router
 from app.schedules import SchedulePatch, router as schedules_router
-from app.models import Fixture, FixtureLoan, Schedule, ScheduleFixture, ScheduleStatus
+from app.models import Fixture, FixtureLoan, Schedule, ScheduleFixture, ScheduleStatus, User
 
 
 @pytest.fixture()
@@ -129,6 +129,8 @@ def test_manual_loan_and_schedule_cannot_both_claim_last_fixture(patched_session
     """
     with patched_session("app.fixtures", "app.schedules") as Session:
         with Session() as db:
+            # 兩條路都以 #1 當操作者，外鍵檢查要求這個人真的存在
+            db.add(User(id=1, username="admin", display_name="admin", hashed_password="x", role="admin"))
             fixture = Fixture(
                 interface_type="USB",
                 form_factor="Desktop",

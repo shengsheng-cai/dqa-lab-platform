@@ -519,6 +519,11 @@ def create_loan(body: LoanCreate, request: Request, _: None = Depends(require_ad
         f = db.query(Fixture).filter(Fixture.id == body.fixture_id).first()
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
+        # 借用人指到不存在的帳號會被外鍵擋成 500，先在這裡講清楚是哪裡不對（同 set_keeper）
+        if body.borrower_user_id is not None:
+            borrower = db.query(User).filter(User.id == body.borrower_user_id).first()
+            if not borrower:
+                raise HTTPException(status_code=404, detail="使用者不存在")
 
         loan = create_manual_loan(
             db,

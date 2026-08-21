@@ -566,6 +566,7 @@ def _delete_schedule_db(schedule_id: int, user_id, role):
         # 借出歷史要留著才查得到那批治具曾被誰借走、何時還。
         _release_schedule_fixtures(db, schedule_id, _now_utc_naive(), return_loaned=True)
         # 排程本身要刪掉，留下來的借用紀錄不能再指向一筆不存在的排程
+        # （外鍵的 SET NULL 也會做同一件事，這裡明寫是為了讓刪除的意圖留在程式碼裡）
         db.query(FixtureLoan).filter(
             FixtureLoan.schedule_id == schedule_id,
         ).update({"schedule_id": None}, synchronize_session=False)
