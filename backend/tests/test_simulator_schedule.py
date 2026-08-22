@@ -4,15 +4,17 @@ T-05: 模擬器與排程連動邏輯測試
 排程推進的兩個入口住在 schedule_service（設備一報「條件結束了」就呼叫），
 本檔對「真的那兩支函式」作證，不再自己重抄一份 DB 操作來測自己：
 - advance_running_condition：RUNNING 設備自然完成一個條件 → 只推進索引，等人員確認
-- complete_running_schedule：RUNNING 設備手動收尾 → 排程標已完成 + 借出治具歸還
+- running_schedule_info：RUNNING 設備手動中止收尾 → 排程與治具都不動，只回報還掛著哪一筆
 - 兩者都不得用 device_id 誤動同機台「未來的已確認排程」
 
 另含 DeviceBlockedPeriod 查詢時段過濾（與排程啟動時的可用性判斷相關）。
 """
 import datetime
 
+import pytest
+
 from app.models import DeviceBlockedPeriod, Schedule, ScheduleStatus, Fixture, FixtureLoan
-from app.schedule_service import advance_running_condition, complete_running_schedule
+from app.schedule_service import advance_running_condition, running_schedule_info
 from app.utils import device_blocked_reason_now
 
 
@@ -112,9 +114,7 @@ def _seed_future_confirmed_schedule(Session, device_id="CH-01") -> int:
         return schedule.id
 
 
-def _seed_running_schedule_with_loan(
-    Session, device_id="CH-01", conditions='["sop_a", "sop_b"]', loan_status="loaned"
-) -> tuple[int, int]:
+def _seed_running_schedule_with_loan(Session, loan_status="loaned") -> tuple[int, int]:
     """建立進行中排程 + 一筆治具借用列，回傳 (schedule_id, loan_id)。
     loan_status="loaned" 為已借出（帶借出時間）；"reserved" 為尚未借出的預約。"""
     with Session() as db:
@@ -123,8 +123,8 @@ def _seed_running_schedule_with_loan(
         db.flush()
         s = Schedule(
             project_number="P001", sample_name="Sample",
-            standard="IEC", conditions=conditions,
-            status=ScheduleStatus.RUNNING, device_id=device_id,
+            standard="IEC", conditions='["sop_a", "sop_b"]',
+            status=ScheduleStatus.RUNNING, device_id="CH-01",
             start_time=_now_naive() - datetime.timedelta(hours=2),
             end_time=_now_naive() + datetime.timedelta(hours=1),
             current_condition_index=0,
@@ -156,12 +156,12 @@ def test_ad_hoc_natural_completion_does_not_advance_future_schedule(patched_sess
             assert schedule.current_condition_index == 0
 
 
-def test_ad_hoc_manual_stop_does_not_complete_future_schedule(patched_session):
-    """臨時 SOP 手動收尾時，不得把同機台的未來排程直接標成 DONE。"""
+def test_ad_hoc_manual_stop_ignores_future_schedule(patched_session):
+    """臨時 SOP 中止收尾時，同機台的未來排程不得被當成「正在跑的那一筆」回報出去。"""
     with patched_session("app.schedule_service") as Session:
         schedule_id = _seed_future_confirmed_schedule(Session)
 
-        result = complete_running_schedule("CH-01", _now_naive())
+        result = running_schedule_info("CH-01")
 
         assert result is None
         with Session() as db:
@@ -192,38 +192,25 @@ def test_advance_running_condition_bumps_index_without_completing(patched_sessio
             assert db.get(FixtureLoan, loan_id).status == "loaned"  # 治具還沒歸還
 
 
-# ── 手動收尾：排程標已完成 + 借出治具歸還 ─────────────────────────────────────
+# ── 手動中止收尾：排程續為進行中、治具不動 ────────────────────────────────────
 
 
-def test_complete_running_schedule_marks_done_and_returns_fixture(patched_session):
-    """手動收尾 → 排程標為已完成、借出治具改 returned，回傳結構化結果。"""
+@pytest.mark.parametrize("loan_status", ["loaned", "reserved"])
+def test_manual_stop_keeps_schedule_running_and_fixture_untouched(patched_session, loan_status):
+    """中止不是完成：排程續為進行中，已借出與預約中的治具都不動，只回報身分供通知使用。"""
     with patched_session("app.schedule_service") as Session:
-        schedule_id, loan_id = _seed_running_schedule_with_loan(Session)
+        schedule_id, loan_id = _seed_running_schedule_with_loan(
+            Session, loan_status=loan_status
+        )
 
-        result = complete_running_schedule("CH-01", _now_naive())
+        result = running_schedule_info("CH-01")
 
         assert result is not None
         assert result.schedule_id == schedule_id
-        assert result.device_id == "CH-01"
         assert result.project_number == "P001"
         assert result.sample_name == "Sample"
         with Session() as db:
-            assert db.get(Schedule, schedule_id).status == ScheduleStatus.DONE
+            assert db.get(Schedule, schedule_id).status == ScheduleStatus.RUNNING
             loan = db.get(FixtureLoan, loan_id)
-            assert loan.status == "returned"
-            assert loan.return_date is not None
-
-
-def test_complete_running_schedule_leaves_reserved_fixture_released(patched_session):
-    """收尾時尚未借出（reserved）的治具要被釋放（刪除預約），不留卡住的占用。"""
-    with patched_session("app.schedule_service") as Session:
-        schedule_id, reserved_id = _seed_running_schedule_with_loan(
-            Session, device_id="CH-02", conditions='["sop_b"]', loan_status="reserved"
-        )
-
-        result = complete_running_schedule("CH-02", _now_naive())
-
-        assert result is not None
-        with Session() as db:
-            assert db.get(Schedule, schedule_id).status == ScheduleStatus.DONE
-            assert db.get(FixtureLoan, reserved_id) is None   # 預約被刪除釋放
+            assert loan.status == loan_status
+            assert loan.return_date is None

@@ -10,7 +10,7 @@ from .models import SessionLocal, DeviceData, SopExecution
 from .standards import get_ramp_rate, get_standard
 from .utils import _now_utc_naive, ramp_rate_from_sop
 from . import device_state
-from .schedule_service import advance_running_condition, complete_running_schedule
+from .schedule_service import advance_running_condition, running_schedule_info
 from .constants import AMBIENT_TEMP, AMBIENT_HUMIDITY, STABILIZATION_MINUTES
 from .line import push_message
 
@@ -428,20 +428,20 @@ async def data_simulator(states: device_state.DeviceStateManager) -> None:
                         dwell_elapsed_times.pop(_k, None)
                     logger.info(f"[{device_id}] 手動停止降溫完成，回待機。")
                     if not completion.before.get("skip_push", False):
-                        push_text = None
+                        # 中止不是完成：排程與治具都不動，只查名字給通知用
+                        push_text = f"⏹ 測試已中止\n設備：{device_id}\n已降回常溫、回到待機"
                         try:
-                            done = await asyncio.to_thread(complete_running_schedule, device_id, now)
-                            if done is not None:
-                                push_text = (
-                                    f"✅ 測試完成\n"
-                                    f"專案：{done.project_number} / {done.sample_name}\n"
-                                    f"設備：{done.device_id}"
+                            pending = await asyncio.to_thread(running_schedule_info, device_id)
+                            if pending is not None:
+                                logger.info(
+                                    f"[{device_id}] 排程 {pending.schedule_id} 維持進行中，待人員結案"
+                                )
+                                push_text += (
+                                    f"\n專案：{pending.project_number} / {pending.sample_name}"
+                                    "\n排程仍為進行中，請至排程頁面接續條件或取消排程"
                                 )
                         except Exception as e:
-                            logger.error(f"[{device_id}] 完成排程失敗：{e}", exc_info=True)
-                        if push_text is None:
-                            sop_name = completion.before.get("running_sop_name") or "未知測試"
-                            push_text = f"✅ 測試完成\n設備：{device_id}\n測試：{sop_name}"
+                            logger.error(f"[{device_id}] 查進行中排程失敗：{e}", exc_info=True)
                         asyncio.create_task(push_message(push_text))
                     continue
             elif status == "EMERGENCY":

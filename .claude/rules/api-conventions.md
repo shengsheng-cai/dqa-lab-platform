@@ -61,11 +61,15 @@ LINE 有兩條方向相反的路，不要混用：主動推播用 `push_message`
 
 ### Push（主動推播）
 
-- 主動 push 時機（三個）：條件完成（等待人員確認）、測試完成、緊急停止。
+- 主動 push 時機（四個）：條件完成（等待人員確認）、測試完成、測試中止、緊急停止。
   - 條件完成推播：`simulator.py`（sim_phase → done 時）
   - 測試完成推播有**兩個**發送點，依測試是否掛排程分流，不會同時發：
     - 有排程：`schedules.py` `confirm_condition`（人員確認條件完成後）
     - 無排程的臨時測試：`sop.py` `create_execution`（存執行紀錄時）
+  - 測試中止推播：`simulator.py`（FINISHING 降完溫回 IDLE 時）。中止不是完成，這則
+    不得寫成「測試完成」，也不得順手把排程標成已完成（理由見 `state-machine.md`）。
+    排程層已經自己處理完的路徑（人員確認完成、取消排程）一律用 `finish(notify=False)`
+    讓這則不發，避免同一件事發兩次。
   - 緊急停止推播：`devices.py`
 - `sop.py` 那個發送點被 `manual_mode` 擋掉：手動模式是除錯用，完全不推播，避免消耗
   免費額度（200 則／月）。前端建立執行紀錄時**一定要送 `manual_mode`**，漏送會被
@@ -152,3 +156,4 @@ async def my_route(...):
 - 排程與治具靠 `schedule_fixtures` 中間表 + `fixture_loans.schedule_id` 外鍵串起來
 - 狀態流：排程確認 → 預約（reserved）→ 測試開始 → 借出（loaned）→ 測試完成 → 歸還
 - 排程走到終止狀態（取消／異常／刪除）一律走 `_release_schedule_fixtures`：預約的丟掉、借出中的歸還並記時間；測試完成時同樣自動歸還
+- **手動中止不歸還治具**：測試被停掉時排程還沒結案、東西也還在人手上，預約與借出都原樣保留，等人員接續條件或取消排程時才由上面那條釋放
