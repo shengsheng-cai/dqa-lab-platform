@@ -136,6 +136,12 @@ describes repair order. Reports must distinguish observed facts from inference,
 state whether they were written before, with, or after the fix, and must not
 claim physical-device validation when only the simulator was used.
 
+Evidence is chosen to fit the defect rather than to look uniform. A defect that
+is visible on screen carries screenshots; one that lives in scheduling
+arithmetic, a database pragma, or a report calculation carries the code,
+command output, or test that demonstrates it. Screenshots must be captured
+before the fix, because the screen returns to normal once it lands.
+
 ## 9. Current limitations
 
 - Test coverage is not yet published automatically.
