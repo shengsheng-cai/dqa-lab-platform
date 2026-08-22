@@ -22,6 +22,7 @@
 
 - 寫入成功後**必須呼叫對應的資源 callback 立即失效**（`fixtureSummary`、`scheduleCounts`、`calibrationStatusMap` 都由 ControlCenter 持有）。30／60 秒 polling 只是背景與跨瀏覽器變更的 fallback，不能拿它當主要更新手段
 - FixturePage 固定**只有 2 個 tab**（治具總表／記錄）。**不**另設借出中、逾期、採購、損壞等獨立 tab——借出資訊整合在總表展開列，採購整合在記錄 tab
+- 「⏹ 正常停止」一律先開確認視窗（`SOPPage.jsx` 的 `handleAction`）：它會跳過剩餘步驟、立刻降溫，沒有復原鍵。**緊急停止、以及緊急後的「確認安全，開始降溫」維持單擊立即生效**——後者送出的動作也叫 `normal`，所以判斷要看 `isEmergency`，不能看動作名稱
 - 治具歸還一律開 `ReturnModal`（選正常／損壞／遺失、填備註、改實際歸還日，損壞與遺失要二次確認），不在列上直接送出
 - SchedulePage 的甘特圖是 `flexShrink:0` 固定區塊（308px），永遠可見，**不可改為可捲動**
 - 「紀錄」與「感測器 QC 控制圖」是 Modal，不是 tab；state 放在 ControlCenter 主元件
