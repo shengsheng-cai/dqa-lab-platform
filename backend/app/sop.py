@@ -411,7 +411,7 @@ def create_execution(
 
         sop_template = db.query(SopTemplate).filter(SopTemplate.sop_id == data.sop_id).first()
         sop_display_name = sop_template.name if sop_template else data.sop_id
-        # 有進行中排程時，simulator 完成後會 push；手動啟動無排程才從這裡 push
+        # 有排程時，完成通知由人員在排程頁面確認後從 schedules.py 發；這裡只管無排程的臨時測試
         # 手動模式（除錯）完全不推播，避免消耗 LINE 200/月額度
         has_schedule = db.query(Schedule).filter(
             Schedule.device_id == data.device_id,

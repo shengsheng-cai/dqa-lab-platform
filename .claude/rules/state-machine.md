@@ -40,6 +40,7 @@ idle → ramp_to_low → ramp_to_high → dwell_high → ramp_to_low2 → dwell_
 - 「設備何時空出來」只有 `device_free_at`（`utils.py`）這一份對應表：RUNNING/PAUSED 走 `occupied_end`（曲線 + 常溫穩定 + 暫停），FINISHING 走 `finishing_end`（從當前溫度降回常溫，不是整條曲線重跑）。設備卡與排程器共用它，不得各自再依 status 分支
 - 降溫速率只有 `ramp_rate_from_sop`（`utils.py`）一份：模擬器實際降溫與「還要降多久」的估算讀同一個來源
 - FINISHING 內手動停止（取消／緊急收尾）的 `ramp_to_ambient` 結束後直接回 IDLE，不走 `stabilize`（中止非完成，不需穩定）
+- 同理，**中止不動排程**：手動停止或緊急收尾降完溫後，排程維持「進行中」、治具不歸還，由人員在排程頁面接續條件或取消排程來結案（中止後 `current_condition_index` 沒動，畫面給的是「開始第 N 條件」，不會出現「確認完成」）。模擬器只發一則「測試已中止」通知，不得自己標完成——那會留下跑到一半卻記成完成的排程，還會把還在人手上的治具提前記成已還
 - 重啟後自動從 device_states 恢復 sim_phase（含 `stab_start`），不從頭開始
 
 ## 採購單狀態

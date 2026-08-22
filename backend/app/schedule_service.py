@@ -112,7 +112,7 @@ def _release_schedule_fixtures(
     )
 
 
-# ── 排程推進（設備完成一個條件時，唯一的推進入口）─────────────────────────────
+# ── 進行中排程的查詢與推進（設備回報條件結束時的唯一入口）────────────────────
 
 
 @dataclass(frozen=True)
@@ -126,10 +126,9 @@ class ConditionAdvance:
 
 
 @dataclass(frozen=True)
-class ScheduleCompletion:
-    """設備手動收尾後、排程被標為已完成的結果（治具已在同一 transaction 歸還）。"""
+class RunningScheduleInfo:
+    """設備上還掛著的那筆進行中排程的身分；只供通知與 log 使用，不代表排程有任何變化。"""
     schedule_id: int
-    device_id: str
     project_number: str
     sample_name: str
 
@@ -177,27 +176,22 @@ def advance_running_condition(device_id: str) -> Optional[ConditionAdvance]:
         return result
 
 
-def complete_running_schedule(
-    device_id: str, now: datetime.datetime
-) -> Optional[ScheduleCompletion]:
-    """設備手動收尾：把進行中排程標為已完成並歸還治具（同一 transaction）。
+def running_schedule_info(device_id: str) -> Optional[RunningScheduleInfo]:
+    """設備手動中止收尾後：只查這台設備還掛著哪一筆進行中排程，不改任何資料。
 
-    無進行中排程時回 None（臨時 SOP 收尾，不得把同機台未來排程直接標成已完成）。
+    中止不是完成——排程要走到「已完成」一律由人員在排程頁面按確認。這裡若順手標完成，
+    會留下「只跑到一半卻記成完成」的排程，也會把還在人手上的治具提前記成已歸還。
+    無進行中排程時回 None（臨時 SOP）。
     """
     with SessionLocal() as db:
         schedule = running_schedule_for_device(db, device_id)
         if schedule is None:
             return None
-        result = ScheduleCompletion(
+        return RunningScheduleInfo(
             schedule_id=schedule.id,
-            device_id=schedule.device_id,
             project_number=schedule.project_number,
             sample_name=schedule.sample_name,
         )
-        _complete_schedule(db, schedule, now)
-        db.commit()
-        logger.info(f"[{device_id}] 排程 {result.schedule_id} 標為已完成")
-        return result
 
 
 # ── 時長計算 ──────────────────────────────────────────────────────────────────
