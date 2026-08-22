@@ -517,7 +517,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
     }
   };
 
-  const handleAction = async (type) => {
+  const runAction = async (type) => {
     if (type === "pause")
       setPauseOptimistic(effectiveStatus === "RUNNING" ? "PAUSED" : "RUNNING");
     try {
@@ -544,6 +544,21 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
     }
   };
 
+  // 正常停止會跳過剩餘步驟、立刻開始降溫，先讓人核對停的是哪一台、哪一支測試。
+  // 緊急停止後那顆按鈕變成「確認安全，開始降溫」，走的也是 normal，但那是事故處理，
+  // 維持單擊生效——所以這裡看的是設備狀態，不是動作名稱。
+  const handleAction = (type) => {
+    if (type !== "normal" || isEmergency) return runAction(type);
+    setConfirmModal({
+      title: "停止測試",
+      type: "warning",
+      message:
+        `要停止 ${selectedDevice} 上的「${ds.activeSop?.name || "目前測試"}」嗎？\n\n` +
+        "剩餘步驟會被跳過，設備立刻開始降溫回到待機。",
+      onConfirm: () => runAction(type),
+    });
+  };
+
   const uploadPhoto = async (exId, photoType, file) => {
     setPhotoUploading(photoType);
     try {
@@ -567,7 +582,6 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
       setConfirmModal({
         message: `取消「Step ${stepId}」將清除後續所有步驟，確定？`,
         onConfirm: async () => {
-          setConfirmModal(null);
           steps.slice(stepIndex).forEach((s) => delete newCompleted[s.step_id]);
           updateDS(selectedDevice, { completedSteps: newCompleted });
           try {
@@ -600,8 +614,11 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
     <div className="sop-page-layout">
       {confirmModal && (
         <ConfirmModal
-          message={confirmModal.message}
-          onConfirm={confirmModal.onConfirm}
+          {...confirmModal}
+          onConfirm={() => {
+            setConfirmModal(null);
+            confirmModal.onConfirm();
+          }}
           onCancel={() => setConfirmModal(null)}
         />
       )}
@@ -676,7 +693,6 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
                         setConfirmModal({
                           message: "確定提前結束測試？設備將跳過剩餘步驟，立即開始降溫回待機狀態。",
                           onConfirm: async () => {
-                            setConfirmModal(null);
                             try {
                               await api.post(`/api/devices/${selectedDevice}/set-phase`, { phase: "ramp_to_ambient" });
                               showToast("已提前結束，設備開始降溫", "success");
