@@ -79,3 +79,52 @@ test("設備標成維護後，確認排程時就選不到它", async ({ page }) 
     await expect(healthyOption).toBeEnabled();
   });
 });
+
+// 刪除不可用時段以前沒有任何確認，按下去就直接生效。那一筆同時在擋「排程排得進來」和
+// 「現場啟動測試」，刪錯列不會有任何提示，只會看到一句綠色的「已刪除」。
+// 這支盯的是那道確認關卡還在，而且視窗上真的寫著刪的是哪一台、哪一段、什麼原因——
+// 只有「確定嗎」的話，使用者沒有東西可以核對，關卡等於白加。
+const DELETE_DEVICE = "CH-03";
+const DELETE_REASON = "E2E 刪除確認";
+
+test("刪除不可用時段要先跳確認，取消就什麼都沒發生", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: /^排程/ }).click();
+  await page.getByRole("button", { name: "+ 不可用時段" }).click();
+
+  await test.step("自己建一筆，不吃上一個測試留下的狀態", async () => {
+    await page.getByRole("button", { name: "+ 新增" }).click();
+    await page.locator("select")
+      .filter({ has: page.locator("option", { hasText: DELETE_DEVICE }) })
+      .selectOption(DELETE_DEVICE);
+    await page.getByPlaceholder("e.g. 年度校正").fill(DELETE_REASON);
+    await page.getByRole("button", { name: "新增", exact: true }).click();
+    await expect(page.getByText("已新增")).toBeVisible();
+  });
+
+  const row = page.getByRole("row").filter({ hasText: DELETE_REASON });
+  await expect(row).toBeVisible();
+
+  await test.step("確認視窗要列出刪的是哪一筆", async () => {
+    await row.getByRole("button", { name: "刪除" }).click();
+    await expect(page.getByText("刪除不可用時段", { exact: true })).toBeVisible();
+    await expect(page.getByText(`設備：${DELETE_DEVICE}`)).toBeVisible();
+    await expect(page.getByText(`原因：${DELETE_REASON}`)).toBeVisible();
+  });
+
+  await test.step("取消 = 那一列還在，沒有偷偷送出刪除", async () => {
+    // 不加 exact 會連排程篩選鈕「已取消」一起選到（子字串比對）
+    await page.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(row).toBeVisible();
+  });
+
+  await test.step("確定才真的刪掉", async () => {
+    await row.getByRole("button", { name: "刪除" }).click();
+    // 列上和對話框裡各有一顆「刪除」，範圍要限在對話框內，
+    // 錨點用它自己那句話（往上一層就是放標題、內文、按鈕的那個容器）
+    const dialog = page.getByText("刪除後這台設備在這段時間會重新開放").locator("xpath=..");
+    await dialog.getByRole("button", { name: "刪除", exact: true }).click();
+    await expect(page.getByText("已刪除")).toBeVisible();
+    await expect(row).toHaveCount(0);
+  });
+});

@@ -4,6 +4,7 @@ import { useToast } from "../useToast";
 import { DEVICE_IDS } from "../../constants";
 import DateTimePicker from "./DateTimePicker";
 import ScheduleModalShell from "./ScheduleModalShell";
+import ConfirmModal from "../ConfirmModal";
 import {
   fmtDt, toLocalInput,
   inputStyle, labelStyle, primaryBtn, cancelBtn,
@@ -22,6 +23,7 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmTarget, setConfirmTarget] = useState(null);
 
   async function fetchList() {
     setLoading(true);
@@ -100,6 +102,7 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
   }
 
   async function handleDelete(id) {
+    setConfirmTarget(null);
     setDeletingId(id);
     try {
       await api.delete(`/api/device-blocked-periods/${id}`);
@@ -113,6 +116,7 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
   }
 
   return (
+    <>
     <ScheduleModalShell title="管理設備不可用時段" width={560} maxHeight="80vh" onClose={onClose}>
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px" }}>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
@@ -144,7 +148,7 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
                     <td style={{ padding: "6px 8px", display: "flex", gap: 6 }}>
                       <button onClick={() => openEdit(item)}
                         style={{ ...cancelBtn, padding: "2px 8px", fontSize: 12 }}>編輯</button>
-                      <button onClick={() => handleDelete(item.id)}
+                      <button onClick={() => setConfirmTarget(item)}
                         disabled={deletingId === item.id}
                         style={{ ...cancelBtn, padding: "2px 8px", fontSize: 12, color: C.error, borderColor: C.errorDark }}>
                         {deletingId === item.id ? "..." : "刪除"}
@@ -204,5 +208,23 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
           </div>
         )}
     </ScheduleModalShell>
+    {confirmTarget && (
+      <ConfirmModal
+        title="刪除不可用時段"
+        message={[
+          "確定刪除這筆不可用時段？刪除後這台設備在這段時間會重新開放排程與啟動測試。",
+          "",
+          `設備：${confirmTarget.device_id}`,
+          `開始：${fmtDt(confirmTarget.start_time)}`,
+          `結束：${fmtDt(confirmTarget.end_time)}`,
+          `原因：${confirmTarget.reason || "未填"}`,
+        ].join("\n")}
+        type="danger"
+        confirmText="刪除"
+        onConfirm={() => handleDelete(confirmTarget.id)}
+        onCancel={() => setConfirmTarget(null)}
+      />
+    )}
+    </>
   );
 }

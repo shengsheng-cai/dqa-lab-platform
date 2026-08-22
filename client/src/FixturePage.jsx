@@ -682,6 +682,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
             <div style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 12, letterSpacing: "0.03em" }}>採購清單</div>
             <PurchaseTab
               orders={purchaseOrders}
+              fixtures={fixtures}
               canOperate={canOperate}
               role={role}
               onRefresh={refreshAfterMutation}
@@ -1148,12 +1149,14 @@ const PO_STATUS = {
   cancelled: { label: "已取消", color: C.textMuted, bg: C.surfaceHover },
 };
 
-function PurchaseTab({ orders, canOperate, role, onRefresh, onNew }) {
+function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [deletePOTarget, setDeletePOTarget] = useState(null);
+  const [arriveTarget, setArriveTarget] = useState(null);
 
   const handleArrive = async (order) => {
+    setArriveTarget(null);
     setLoading(true);
     try {
       await api.patch(`/api/purchase-orders/${order.id}`, { status: "arrived" });
@@ -1187,8 +1190,29 @@ function PurchaseTab({ orders, canOperate, role, onRefresh, onNew }) {
     }
   };
 
+  const arriveStock = fixtures.find((f) => f.id === arriveTarget?.fixture_id)?.total_quantity;
+
   return (
     <>
+      {arriveTarget && (
+        <ConfirmModal
+          title="確認到貨"
+          message={[
+            "確認後這張採購單固定為「已到貨」，畫面上無法改回待到貨。",
+            "",
+            `治具：${arriveTarget.fixture_label}`,
+            `到貨數量：${arriveTarget.quantity}`,
+            // 治具被刪掉時查不到庫存，就不要硬湊一行看不懂的數字
+            ...(arriveStock === undefined
+              ? []
+              : [`庫存：${arriveStock} → ${arriveStock + arriveTarget.quantity}`]),
+          ].join("\n")}
+          type="warning"
+          confirmText="確認到貨"
+          onConfirm={() => handleArrive(arriveTarget)}
+          onCancel={() => setArriveTarget(null)}
+        />
+      )}
       {deletePOTarget && (
         <ConfirmModal
           title="刪除採購單"
@@ -1289,7 +1313,7 @@ function PurchaseTab({ orders, canOperate, role, onRefresh, onNew }) {
                         <div style={{ display: "flex", gap: 4 }}>
                           {o.status === "pending" && (
                             <button
-                              onClick={() => handleArrive(o)}
+                              onClick={() => setArriveTarget(o)}
                               disabled={loading}
                               style={{
                                 padding: "3px 8px",

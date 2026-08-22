@@ -144,7 +144,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
         )}
       </div>
 
-      {/* 捲動區：警示條 + 隊列 + 圖例 + 表格 */}
+      {/* 捲動區：警示條 + 圖例 + 表格 */}
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
 
         {/* 待審核警示條 */}
@@ -161,96 +161,31 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
           </div>
         )}
 
-        {/* 待審核隊列 */}
-        {(() => {
-          const pending = schedules.filter((s) => s.status === "待審核");
-          if (pending.length === 0) return null;
-          return (
-            <div style={{ border: `1px solid ${C.textDim}`, borderRadius: 8, overflow: "hidden", background: C.bg }}>
-              <div style={{
-                padding: "6px 12px",
-                background: C.surface,
-                borderBottom: `1px solid ${C.border}`,
-                display: "flex", alignItems: "center", gap: 8,
-              }}>
-                <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, letterSpacing: 1 }}>待審核排程隊列</span>
-                <span style={{
-                  background: C.border, color: C.textMuted,
-                  borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700,
-                }}>{pending.length}</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                {pending.map((s, idx) => (
-                  <div
-                    key={s.id}
-                    onClick={() => setSelectedSchedule(s)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 12,
-                      padding: "7px 12px",
-                      borderBottom: idx < pending.length - 1 ? `1px solid ${C.surfaceHover}` : "none",
-                      cursor: "pointer",
-                      transition: "background 0.15s",
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = C.surface}
-                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                  >
-                    <span style={{ fontSize: 11, color: C.textDim, fontFamily: "monospace", width: 24, flexShrink: 0 }}>
-                      #{idx + 1}
-                    </span>
-                    <span style={{ fontSize: 12, color: C.textPrimary, fontFamily: "monospace", minWidth: 90 }}>
-                      {s.project_number}
-                    </span>
-                    <span style={{ fontSize: 12, color: C.textPrimary, flex: 1 }}>{s.sample_name}</span>
-                    <span style={{ fontSize: 11, color: C.textMuted, minWidth: 60 }}>{s.applicant_name || "—"}</span>
-                    <span style={{ fontSize: 11, color: C.warningAlt, minWidth: 60, textAlign: "right" }}>
-                      {fmtHours(s.total_hours)}
-                    </span>
-                    <span style={{ fontSize: 10, color: C.textDim, minWidth: 100, textAlign: "right" }}>
-                      {fmtDt(s.created_at)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* 圖例 */}
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {Object.entries(STATUS_COLOR).map(([s, c]) => (
-            <div key={s} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <div style={{ width: 14, height: 10, borderRadius: 2, background: c.bg, border: `1px solid ${c.border}` }} />
-              <span style={{ fontSize: 11, color: C.textMuted }}>{s}</span>
-            </div>
-          ))}
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <div style={{
-              width: 14, height: 10, borderRadius: 2,
-              background: `repeating-linear-gradient(135deg, ${C.errorSurface} 0px, ${C.errorSurface} 3px, ${C.errorSurfaceDark} 3px, ${C.errorSurfaceDark} 6px)`,
-              border: "1px solid #6e1b1b",
-            }} />
-            <span style={{ fontSize: 11, color: C.textMuted }}>不可用時段</span>
-          </div>
-        </div>
-
         {/* 排程清單 */}
         <div>
           <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
-            {["all", ...STATUS_LIST].map((s) => (
-              <button
-                key={s}
-                onClick={() => setFilterStatus(s)}
-                style={{
-                  padding: "4px 12px", fontSize: 12, borderRadius: 20,
-                  cursor: "pointer",
-                  background: filterStatus === s ? C.accentSurface : "transparent",
-                  color: filterStatus === s ? C.accentLight : C.textMuted,
-                  border: filterStatus === s ? `1px solid ${C.accentLink}` : `1px solid ${C.border}`,
-                }}
-              >
-                {s === "all" ? "全部" : s}
-              </button>
-            ))}
+            {["all", ...STATUS_LIST].map((s) => {
+              const active = filterStatus === s;
+              // 選中時套該狀態在甘特圖上的同一組顏色，取代舊的獨立圖例列；
+              // 「全部」不是狀態、沒有色票，退回藍色
+              const c = STATUS_COLOR[s] ?? { bg: C.accentSurface, text: C.accentLight, border: C.accentLink };
+              return (
+                <button
+                  key={s}
+                  onClick={() => setFilterStatus(s)}
+                  style={{
+                    padding: "4px 12px", fontSize: 12, borderRadius: 20,
+                    cursor: "pointer",
+                    background: active ? c.bg : "transparent",
+                    color: active ? c.text : C.textMuted,
+                    border: `1px solid ${active ? c.border : C.border}`,
+                    fontWeight: active ? 700 : 400,
+                  }}
+                >
+                  {s === "all" ? "全部" : s}
+                </button>
+              );
+            })}
             <div style={{ flex: 1 }} />
             <button
               onClick={handleRefresh}
