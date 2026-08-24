@@ -2,8 +2,28 @@ import { useState, useEffect, useCallback } from "react";
 import api from "./api";
 import { DEVICE_IDS } from "./constants";
 import { useToast } from "./components/useToast";
-import { isKnownMaintenanceType, maintenanceTypeLabel } from "./utils/maintenance";
+import DatePicker from "./components/fixture/DatePicker";
+import DateTimePicker from "./components/schedule/DateTimePicker";
+import { localDateStamp } from "./utils/timezone";
+import {
+  dateOnlyToApi,
+  formatDateOnly,
+  formatLocalDateTime,
+  isKnownMaintenanceType,
+  localDateTimeToApi,
+  maintenanceTypeLabel,
+  toDateOnlyInput,
+  toLocalDateTimeInput,
+} from "./utils/maintenance";
 import { C } from "./styles/theme";
+
+const pickerStyle = {
+  background: C.bg,
+  border: `1px solid ${C.border}`,
+  borderRadius: 5,
+  color: C.textPrimary,
+  fontSize: 12,
+};
 
 function FieldRow({ label, value, onChange, placeholder }) {
   return (
@@ -16,6 +36,45 @@ function FieldRow({ label, value, onChange, placeholder }) {
         placeholder={placeholder}
         style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textPrimary, padding: "5px 8px", fontSize: 12 }}
       />
+    </div>
+  );
+}
+
+function DateFieldRow({ label, value, onChange, optional = false }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ fontSize: 11, color: C.textMuted }}>{label}{optional ? "（選填）" : " *"}</div>
+      {optional && !value ? (
+        <button
+          type="button"
+          onClick={() => onChange(localDateStamp("-"))}
+          style={{ ...pickerStyle, alignSelf: "flex-start", padding: "5px 10px", cursor: "pointer" }}
+        >
+          ＋ 設定日期
+        </button>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <DatePicker label={label} value={value} onChange={onChange} style={pickerStyle} />
+          {optional && (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              style={{ background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 11 }}
+            >
+              清除
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DateTimeFieldRow({ label, value, onChange }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ fontSize: 11, color: C.textMuted }}>{label} *</div>
+      <DateTimePicker label={label} value={value} onChange={onChange} style={pickerStyle} />
     </div>
   );
 }
@@ -53,11 +112,16 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
   }, [active, selectedDevice, fetchCalibrations, fetchMaintenances]);
 
   const openCreate = (type) => {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    now.setMinutes(Math.floor(now.getMinutes() / 5) * 5);
+    const nextYear = new Date(now);
+    nextYear.setFullYear(nextYear.getFullYear() + 1);
     setModalType(type);
     setEditItem(null);
     setForm(type === "calibrations"
-      ? { calibration_date: "", next_calibration_date: "", interval_days: 365, result: "pass", notes: "", created_by: "admin" }
-      : { maintenance_date: "", maintenance_type: "preventive", description: "", performed_by: "", next_maintenance_date: "" }
+      ? { calibration_date: localDateStamp("-", now), next_calibration_date: localDateStamp("-", nextYear), interval_days: 365, result: "pass", notes: "", created_by: "admin" }
+      : { maintenance_date: toLocalDateTimeInput(now), maintenance_type: "preventive", description: "", performed_by: "", next_maintenance_date: "" }
     );
     setShowModal(true);
   };
@@ -65,28 +129,12 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
   const openEdit = (item, type) => {
     setModalType(type);
     setEditItem(item);
-    const fmt = (v) => v ? v.replace("T", " ").slice(0, 16) : "";
     if (type === "calibrations") {
-      setForm({ calibration_date: fmt(item.calibration_date), next_calibration_date: fmt(item.next_calibration_date), interval_days: item.interval_days, result: item.result, notes: item.notes || "", created_by: item.created_by });
+      setForm({ calibration_date: toDateOnlyInput(item.calibration_date), next_calibration_date: toDateOnlyInput(item.next_calibration_date), interval_days: item.interval_days, result: item.result, notes: item.notes || "", created_by: item.created_by });
     } else {
-      setForm({ maintenance_date: fmt(item.maintenance_date), maintenance_type: item.maintenance_type, description: item.description, performed_by: item.performed_by, next_maintenance_date: fmt(item.next_maintenance_date) });
+      setForm({ maintenance_date: toLocalDateTimeInput(item.maintenance_date), maintenance_type: item.maintenance_type, description: item.description, performed_by: item.performed_by, next_maintenance_date: toDateOnlyInput(item.next_maintenance_date) });
     }
     setShowModal(true);
-  };
-
-  const validateDateField = (val, fieldName) => {
-    if (!val) return null;
-    if (!/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?$/.test(val.trim())) {
-      return `${fieldName} 格式錯誤，請輸入 YYYY-MM-DD 或 YYYY-MM-DD HH:MM`;
-    }
-    return null;
-  };
-
-  const toIso = (val) => {
-    if (!val) return null;
-    const v = val.trim();
-    if (v.length === 10) return `${v}T00:00:00`;
-    return v.replace(" ", "T") + ":00";
   };
 
   const handleSave = async () => {
@@ -94,8 +142,6 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
       ? [["calibration_date", "校驗日期"], ["next_calibration_date", "下次校驗日期"]]
       : [["maintenance_date", "維護日期"]];
     for (const [field, label] of dateFields) {
-      const err = validateDateField(form[field], label);
-      if (err) { showToast(err, "error"); return; }
       if (!form[field]) { showToast(`${label} 為必填`, "error"); return; }
     }
     // 舊資料可能帶著系統不認得的類型。後端會擋，但那是一個難看的 422，
@@ -108,12 +154,12 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
     setSaving(true);
     try {
       const payload = { ...form };
-      const isoFields = modalType === "calibrations"
-        ? ["calibration_date", "next_calibration_date"]
-        : ["maintenance_date", "next_maintenance_date"];
-      for (const f of isoFields) {
-        if (payload[f]) payload[f] = toIso(payload[f]);
-        else payload[f] = null;
+      if (modalType === "calibrations") {
+        payload.calibration_date = dateOnlyToApi(payload.calibration_date);
+        payload.next_calibration_date = dateOnlyToApi(payload.next_calibration_date);
+      } else {
+        payload.maintenance_date = localDateTimeToApi(payload.maintenance_date);
+        payload.next_maintenance_date = dateOnlyToApi(payload.next_maintenance_date);
       }
       if (modalType === "calibrations") payload.interval_days = parseInt(payload.interval_days) || 365;
 
@@ -152,7 +198,6 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
     }
   };
 
-  const fmtDt = (v) => v ? v.replace("T", " ").slice(0, 16) : "—";
   const thS = { padding: "6px 10px", textAlign: "left", color: C.textMuted, fontWeight: 600, fontSize: 11, borderBottom: `1px solid ${C.border}` };
   const tdS = { padding: "6px 10px", fontSize: 11, color: C.textPrimary, borderBottom: `1px solid ${C.surfaceHover}` };
   const sectionHeader = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0 6px" };
@@ -186,8 +231,8 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                 <tr><td colSpan={role === "admin" ? 5 : 4} style={{ ...tdS, color: C.textDim, textAlign: "center", padding: "16px 0" }}>尚無校驗紀錄</td></tr>
               ) : calibrations.map(c => (
                 <tr key={c.id}>
-                  <td style={tdS}>{fmtDt(c.calibration_date)}</td>
-                  <td style={tdS}>{fmtDt(c.next_calibration_date)}</td>
+                  <td style={tdS}>{formatDateOnly(c.calibration_date)}</td>
+                  <td style={tdS}>{formatDateOnly(c.next_calibration_date)}</td>
                   <td style={tdS}>{c.interval_days}天</td>
                   <td style={tdS}>
                     <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 8, fontWeight: 700, background: c.result === "pass" ? C.successBg : C.errorBg, color: c.result === "pass" ? C.success : C.error, border: `1px solid ${c.result === "pass" ? "#2d5a3a" : "#5a2d2d"}` }}>{c.result === "pass" ? "通過" : "不通過"}</span>
@@ -219,13 +264,13 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                 <tr><td colSpan={6} style={{ ...tdS, color: C.textDim, textAlign: "center", padding: "16px 0" }}>尚無維護紀錄</td></tr>
               ) : maintenances.map(m => (
                 <tr key={m.id}>
-                  <td style={tdS}>{fmtDt(m.maintenance_date)}</td>
+                  <td style={tdS}>{formatLocalDateTime(m.maintenance_date)}</td>
                   <td style={{ ...tdS, color: isKnownMaintenanceType(m.maintenance_type) ? C.textPrimary : C.warning }}>
                     {maintenanceTypeLabel(m.maintenance_type)}
                   </td>
                   <td style={{ ...tdS, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.description}</td>
                   <td style={tdS}>{m.performed_by}</td>
-                  <td style={tdS}>{m.next_maintenance_date ? fmtDt(m.next_maintenance_date) : "—"}</td>
+                  <td style={tdS}>{formatDateOnly(m.next_maintenance_date)}</td>
                   {role === "admin" && (
                     <td style={tdS}>
                       <button onClick={() => openEdit(m, "maintenances")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.surfaceHover, border: `1px solid ${C.border}`, color: C.textMuted, cursor: "pointer" }}>編輯</button>
@@ -248,8 +293,8 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
             </div>
             {modalType === "calibrations" ? (
               <>
-                <FieldRow label="校驗日期 *" value={form.calibration_date} onChange={v => setForm(f => ({ ...f, calibration_date: v }))} placeholder="YYYY-MM-DD HH:MM" />
-                <FieldRow label="下次校驗日期 *" value={form.next_calibration_date} onChange={v => setForm(f => ({ ...f, next_calibration_date: v }))} placeholder="YYYY-MM-DD HH:MM" />
+                <DateFieldRow label="校驗日期" value={form.calibration_date} onChange={v => setForm(f => ({ ...f, calibration_date: v }))} />
+                <DateFieldRow label="下次校驗日期" value={form.next_calibration_date} onChange={v => setForm(f => ({ ...f, next_calibration_date: v }))} />
                 <FieldRow label="間隔(天)" value={form.interval_days} onChange={v => setForm(f => ({ ...f, interval_days: v }))} placeholder="365" />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <label style={{ fontSize: 11, color: C.textMuted }}>結果</label>
@@ -263,7 +308,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
               </>
             ) : (
               <>
-                <FieldRow label="維護日期 *" value={form.maintenance_date} onChange={v => setForm(f => ({ ...f, maintenance_date: v }))} placeholder="YYYY-MM-DD HH:MM" />
+                <DateTimeFieldRow label="維護日期" value={form.maintenance_date} onChange={v => setForm(f => ({ ...f, maintenance_date: v }))} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <label style={{ fontSize: 11, color: C.textMuted }}>類型</label>
                   <select value={form.maintenance_type} onChange={e => setForm(f => ({ ...f, maintenance_type: e.target.value }))} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textPrimary, padding: "5px 8px", fontSize: 12 }}>
@@ -282,7 +327,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                 </div>
                 <FieldRow label="說明 *" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="維護內容說明" />
                 <FieldRow label="執行人員 *" value={form.performed_by} onChange={v => setForm(f => ({ ...f, performed_by: v }))} placeholder="王工程師" />
-                <FieldRow label="下次維護日期" value={form.next_maintenance_date} onChange={v => setForm(f => ({ ...f, next_maintenance_date: v }))} placeholder="YYYY-MM-DD HH:MM（選填）" />
+                <DateFieldRow label="下次維護日期" value={form.next_maintenance_date} onChange={v => setForm(f => ({ ...f, next_maintenance_date: v }))} optional />
               </>
             )}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>

@@ -203,6 +203,14 @@ make test-e2e   # Playwright，會自行啟動隔離的測試後端
 make lint       # Ruff + ESLint
 ```
 
+首次執行 E2E 前，另安裝測試套件與 Chromium（`make install` 只安裝應用程式本身的
+後端與前端依賴）：
+
+```bash
+npm ci --prefix tests/e2e
+npx --prefix tests/e2e playwright install chromium
+```
+
 ### 可選整合
 
 | 功能 | 環境變數 |
@@ -217,7 +225,7 @@ make lint       # Ruff + ESLint
 
 - `main` 是純模擬 Demo，不控制真實環境試驗設備。
 - Hugging Face Spaces 使用 `/tmp` SQLite，容器重啟後會重新建立示範資料。
-- Live Demo 未設定 LINE secrets，因此不會真的發送 LINE 通知。
+- 未設定 LINE secrets 時不會真的發送 LINE 通知；是否啟用由部署環境變數決定。
 
 ## 關於這個專案
 
