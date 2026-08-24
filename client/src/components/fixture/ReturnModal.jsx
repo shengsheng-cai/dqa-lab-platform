@@ -4,7 +4,7 @@ import api from "../../api";
 import { useToast } from "../useToast";
 import DatePicker from "./DatePicker";
 import ModalShell from "./ModalShell";
-import { inputStyle } from "./modalStyles";
+import { inputStyle, labelStyle } from "./modalStyles";
 import { localDateStamp } from "../../utils/timezone";
 
 const CONDITIONS = [
@@ -86,9 +86,7 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
           ))}
         </div>
         <div>
-          <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>
-            實際歸還日期
-          </div>
+          <div style={labelStyle}>實際歸還日期</div>
           <DatePicker
             value={returnDate}
             onChange={setReturnDate}

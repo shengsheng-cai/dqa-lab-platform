@@ -68,7 +68,7 @@ const TABS = [
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange, onFixtureChanged, onScheduleChanged }) {
+function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, devicesReady, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange, onFixtureChanged, onScheduleChanged }) {
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
@@ -80,6 +80,32 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
       ? devices.filter(d => d.status === IDLE_STATUS && pendingByDevice[d.device_id])
       : [],
     [role, devices, pendingByDevice]
+  );
+
+  // 排程頁要判斷「這台現在能不能開始」：狀態決定能不能，估算的占用結束時間決定什麼時候可以。
+  const liveDeviceStatuses = useMemo(
+    () => devicesReady ? Object.fromEntries(devices.map(d => [
+      d.device_id,
+      (d.is_blocked && d.status === IDLE_STATUS) ? "BLOCKED" : d.status,
+    ])) : {},
+    [devices, devicesReady],
+  );
+  const liveDeviceFreeAt = useMemo(
+    () => devicesReady
+      ? Object.fromEntries(devices.map(d => [d.device_id, d.estimated_end_at]))
+      : {},
+    [devices, devicesReady],
+  );
+  const liveDeviceMaintenance = useMemo(
+    () => devicesReady ? Object.fromEntries(
+      devices
+        .filter(d => d.maintenance_blocked)
+        .map(d => [d.device_id, {
+          reason: d.maintenance_reason,
+          end_time: d.maintenance_end_at,
+        }]),
+    ) : {},
+    [devices, devicesReady],
   );
 
   return (
@@ -131,7 +157,10 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
             initConditions={scheduleInitConds}
             onInitCondsConsumed={handleInitCondsConsumed}
             onScheduleChanged={onScheduleChanged}
-            liveDeviceStatuses={Object.fromEntries(devices.map(d => [d.device_id, (d.is_blocked && d.status === IDLE_STATUS) ? "BLOCKED" : d.status]))}
+            liveDeviceStatuses={liveDeviceStatuses}
+            liveDeviceFreeAt={liveDeviceFreeAt}
+            liveDeviceMaintenance={liveDeviceMaintenance}
+            liveDeviceSnapshotReady={devicesReady}
           />
         </div>
         {role === "admin" && (
@@ -165,7 +194,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
     if (activeTab !== requestedTab) navigate("/", { replace: true });
   }, [activeTab, navigate, requestedTab]);
 
-  const { devices } = useDeviceWebSocket();
+  const { devices, devicesReady } = useDeviceWebSocket();
   const [pendingByDevice, setPendingByDevice] = useState({});
   const pendingJsonRef = useRef(null);
   const [fixtureSummary, setFixtureSummary] = useState({});
@@ -341,6 +370,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
           scheduleInitConds={scheduleInitConds}
           handleInitCondsConsumed={handleInitCondsConsumed}
           devices={devices}
+          devicesReady={devicesReady}
           pendingByDevice={pendingByDevice}
           onConfirmCondition={handleConfirmCondition}
           scheduleCounts={scheduleCounts}

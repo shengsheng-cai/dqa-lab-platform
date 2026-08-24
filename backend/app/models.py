@@ -446,6 +446,17 @@ class ReturnCondition(StrEnum):
     LOST = "lost"
 
 
+class MaintenanceType(StrEnum):
+    """設備維護的類型。
+
+    欄位在 DB 是純字串，值的權威是這一份。以前沒有這份清單，前端各自維護一張中文
+    對照表，種子資料寫了一個表上沒有的 `routine`，畫面就直接漏出英文代碼給使用者看。
+    """
+    PREVENTIVE = "preventive"
+    CORRECTIVE = "corrective"
+    INSPECTION = "inspection"
+
+
 # ---------- 排程申請單 ----------
 class Schedule(Base):
     __tablename__ = "schedules"

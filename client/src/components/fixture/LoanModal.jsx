@@ -3,9 +3,10 @@ import api from "../../api";
 import { useToast } from "../useToast";
 import DatePicker from "./DatePicker";
 import ModalShell from "./ModalShell";
-import { inputStyle } from "./modalStyles";
+import { inputStyle, labelStyle } from "./modalStyles";
 import { localDateStamp, endOfLocalDay } from "../../utils/timezone";
 import { DEVICE_IDS } from "../../constants";
+import { C } from "../../styles/theme";
 
 export default function LoanModal({ onClose, onSubmit, fixtures }) {
   const { showToast } = useToast();
@@ -126,21 +127,33 @@ export default function LoanModal({ onClose, onSubmit, fixtures }) {
           onChange={(e) => setProject(e.target.value)}
           style={inputStyle}
         />
+        {/* 上面幾個下拉沒選之前字都還在、選了之後值本身也看得懂，這一行不一樣：
+            一個數字和一組年月日，沒有標籤就認不出是什麼，打完字連提示都不見了。 */}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-          <input
-            type="number"
-            min={1}
-            placeholder="數量"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            style={{ ...inputStyle, width: 80 }}
-          />
+          <div>
+            <label htmlFor="loan-quantity" style={labelStyle}>借出數量</label>
+            <input
+              id="loan-quantity"
+              type="number"
+              min={1}
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              style={{ ...inputStyle, width: 80 }}
+            />
+          </div>
           <div style={{ flex: 1 }}>
+            <div style={labelStyle}>預計歸還日</div>
             <DatePicker
               value={dueDate}
               onChange={setDueDate}
               style={inputStyle}
             />
+            {/* 送出時會換成當天 23:59，畫面上只看到日期會以為當天就要還。
+                講「這一筆會被記成幾點」而不是「到期日都算到 23:59」——排程預約產生的
+                借出是用排程結束時間當到期，那些不走這條規則。 */}
+            <div style={{ fontSize: 11, color: C.textFaint, marginTop: 3 }}>
+              送出後記為當日 23:59 到期
+            </div>
           </div>
         </div>
         {error && <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>}

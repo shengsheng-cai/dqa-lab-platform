@@ -80,6 +80,10 @@ class SetKeeperBody(BaseModel):
 
 
 class FixtureUpsert(BaseModel):
+    # 多送的欄位直接擋掉，不要收下再忽略。忽略也是一種「回你成功、其實什麼都沒做」，
+    # 而那正是保管人那個欄位造成的問題——把它從這裡拿掉之後，不能又留一條靜默的路。
+    model_config = ConfigDict(extra="forbid")
+
     interface_type: str
     form_factor: str
     priority: Optional[int] = None
@@ -90,7 +94,9 @@ class FixtureUpsert(BaseModel):
     usage_frequency: Optional[int] = None
     replacement_years: Optional[str] = None
     note: Optional[str] = None
-    keeper_name: Optional[str] = None
+    # 保管人不在這裡改：它的唯一來源是 PATCH /{id}/keeper 指定的人員。以前這支也收
+    # keeper_name 純文字，於是同一個概念有兩個寫入口，畫面顯示又優先用人員那邊的名字，
+    # 結果是「在編輯治具改了保管人、按了儲存、畫面完全沒變」，而文字其實已經寫進資料庫。
     deputy_name: Optional[str] = None
     vendor: Optional[str] = None
     model_number: Optional[str] = None
@@ -145,7 +151,7 @@ def _calc_replacement_date(f: Fixture) -> Optional[str]:
         return None
 
 
-def _keeper_name_map(db, fixtures: list[Fixture]) -> dict[int, str]:
+def keeper_name_map(db, fixtures: list[Fixture]) -> dict[int, str]:
     """批次取得保管人的即時顯示名稱；Fixture.keeper_name 僅作快照備援。"""
     user_ids = {fixture.keeper_user_id for fixture in fixtures if fixture.keeper_user_id}
     if not user_ids:
@@ -213,7 +219,7 @@ def list_fixtures(
 
         fixture_ids = [f.id for f in fixtures]
         loan_map = _build_loan_qty_map(db, fixture_ids)
-        keeper_names = _keeper_name_map(db, fixtures)
+        keeper_names = keeper_name_map(db, fixtures)
 
         result = []
         for f in fixtures:
@@ -433,7 +439,7 @@ def get_fixture(fixture_id: int):
         if not f:
             raise HTTPException(status_code=404, detail="治具不存在")
         loan_map = _build_loan_qty_map(db, [f.id])
-        return _fixture_to_out(f, loan_map, _keeper_name_map(db, [f]))
+        return _fixture_to_out(f, loan_map, keeper_name_map(db, [f]))
 
 
 # ---------- 借出 ----------
@@ -673,7 +679,6 @@ def create_fixture(body: FixtureUpsert, request: Request, _: None = Depends(requ
             usage_frequency=body.usage_frequency,
             replacement_years=body.replacement_years,
             note=body.note,
-            keeper_name=body.keeper_name,
             deputy_name=body.deputy_name,
             vendor=body.vendor,
             model_number=body.model_number,
@@ -687,7 +692,7 @@ def create_fixture(body: FixtureUpsert, request: Request, _: None = Depends(requ
         db.commit()
         db.refresh(f)
         loan_map = _build_loan_qty_map(db, [f.id])
-        return _fixture_to_out(f, loan_map, _keeper_name_map(db, [f]))
+        return _fixture_to_out(f, loan_map, keeper_name_map(db, [f]))
 
 
 # ---------- 編輯治具 ----------
@@ -714,7 +719,6 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request, _: No
         f.usage_frequency = body.usage_frequency
         f.replacement_years = body.replacement_years
         f.note = body.note
-        f.keeper_name = body.keeper_name
         f.deputy_name = body.deputy_name
         f.vendor = body.vendor
         f.model_number = body.model_number
@@ -723,7 +727,7 @@ def update_fixture(fixture_id: int, body: FixtureUpsert, request: Request, _: No
                   f"編輯治具 #{fixture_id}")
         db.commit()
         loan_map = _build_loan_qty_map(db, [f.id])
-        return _fixture_to_out(f, loan_map, _keeper_name_map(db, [f]))
+        return _fixture_to_out(f, loan_map, keeper_name_map(db, [f]))
 
 
 # ---------- 刪除治具（軟刪除）----------

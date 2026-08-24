@@ -14,7 +14,7 @@ test.beforeAll(resetBackend);
 // 借用人下拉只有 Admin 一個，所以借出列表裡出現 Admin 一定是這個測試剛借的。
 
 // 抓某介面治具主列的「可借」數字。
-// 總表欄序：0介面 / 1尺寸 / 2規格 / 3總數 / 4借出 / 5預約 / 6可借 / 7缺口 ...
+// 總表欄序：0介面 / 1型態 / 2尺寸 / 3現有 / 4借出 / 5預約 / 6可借 / 7缺貨 ...
 async function availableQty(page, iface) {
   const row = page.getByRole("row").filter({ hasText: iface }).first();
   return Number((await row.locator("td").nth(6).innerText()).trim());
@@ -32,7 +32,7 @@ async function borrowOneToAdmin(page, iface) {
   await fixtureSelect.selectOption(ifaceValue);
   await page.locator("select").filter({ has: page.locator("option", { hasText: "選擇借用人" }) })
     .selectOption({ label: "Admin（admin）" });
-  await page.getByPlaceholder("數量").fill("1");
+  await page.getByLabel("借出數量").fill("1");
   // 改年份就會讓 DatePicker 送出日期，due_date 才有值（未來日）
   await page.locator("select").filter({ has: page.locator("option", { hasText: "2027" }) })
     .selectOption("2027");
@@ -41,11 +41,11 @@ async function borrowOneToAdmin(page, iface) {
   await expect(page.getByText("治具借出成功")).toBeVisible();
 }
 
-// 展開借出子列。展開只綁在「借出」那格（td 第 4 欄，就是有 ▼ 的數字），點整列不會展開
-async function expandLoans(page, iface) {
-  await page.getByRole("row").filter({ hasText: iface }).first()
-    .locator("td").nth(4).click();
-}
+// 展開借出子列。展開綁在「借出」那格裡的按鈕上，點整列不會展開。
+// 用按鈕的名稱定位，不要數第幾格——欄序一改那種寫法就會安靜地點到別的東西。
+const loansToggle = (page, iface) =>
+  page.getByRole("row").filter({ hasText: iface }).first()
+    .getByRole("button", { name: /借用明細/ });
 
 // 展開後的借出子列。用 accessible name「以 Admin 開頭」定位，避開兩個坑：
 // 巢狀表格會讓 hasText:"Admin" 同時命中外層 row；借出日/到期日又會隨當天變動。
@@ -77,7 +77,7 @@ test("治具借出後庫存扣減，歸還後恢復", async ({ page }) => {
   });
 
   await test.step("展開該治具，借出列表看得到 Admin", async () => {
-    await expandLoans(page, IFACE);
+    await loansToggle(page, IFACE).click();
     await expect(adminLoanRow(page)).toBeVisible();
   });
 
@@ -106,7 +106,7 @@ test("歸還標記損壞需二次確認，備註會留進損壞／遺失紀錄",
   await test.step("借出一件給 Admin", () => borrowOneToAdmin(page, IFACE));
 
   await test.step("開歸還 Modal，選損壞並填備註", async () => {
-    await expandLoans(page, IFACE);
+    await loansToggle(page, IFACE).click();
     await adminLoanRow(page).getByRole("button", { name: "歸還" }).click();
     await page.getByRole("button", { name: "損壞" }).click();
     await page.getByPlaceholder("備註（選填）").fill(NOTE);
@@ -124,5 +124,35 @@ test("歸還標記損壞需二次確認，備註會留進損壞／遺失紀錄",
   await test.step("記錄頁的損壞／遺失清單看得到備註", async () => {
     await page.getByRole("button", { name: "記錄", exact: true }).click();
     await expect(page.getByText(NOTE)).toBeVisible();
+  });
+});
+
+// 借出明細與「歸還」只有這一個入口。以前它是一個可點的數字加 9px 三角形，得先猜到數字
+// 能點才找得到歸還；找不到的人會以為系統沒有歸還流程。這支盯它是不是一顆找得到、
+// 也按得到的按鈕——只驗「點了會展開」不夠，滑鼠點得到不代表鍵盤走得到。
+test("借出明細的入口是找得到、鍵盤也按得動的按鈕", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "治具", exact: true }).click();
+
+  // demo 重灌後 M.2 有借出，所以那一列一定有這顆按鈕
+  const toggle = loansToggle(page, "M.2");
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toContainText("明細");     // 看得懂的字，不是只有三角形
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+  await test.step("用鍵盤聚焦後按 Enter 就能展開", async () => {
+    await toggle.focus();
+    await expect(toggle).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(toggle).toContainText("收合");
+    await expect(page.getByRole("columnheader", { name: "借用人" })).toBeVisible();
+  });
+
+  await test.step("再按一次收合", async () => {
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("columnheader", { name: "借用人" })).toBeHidden();
   });
 });

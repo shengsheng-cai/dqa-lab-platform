@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import api from "../../api";
 import { useToast } from "../useToast";
 import ConfirmModal from "../ConfirmModal";
-import { DEVICE_IDS } from "../../constants";
+import { DEVICE_IDS, deviceStatusZh, parseUtcDate } from "../../constants";
 import ScheduleModalShell from "./ScheduleModalShell";
 import {
   fmtDt, fmtHours, STATUS_COLOR,
@@ -17,6 +17,49 @@ function InfoRow({ label, value, muted }) {
       <span style={{ color: muted ? C.textFaint : C.textPrimary, wordBreak: "break-word", fontStyle: muted ? "italic" : "normal" }}>{value}</span>
     </div>
   );
+}
+
+/** 從甘特圖那份不可用時段裡，找出這台設備此刻最後才解除的那一段（沒有就回 null）。 */
+function findActiveMaintenance(blockedPeriods, deviceId) {
+  if (!deviceId) return null;
+  const now = Date.now();
+  return blockedPeriods.reduce((latest, block) => {
+    if (block.device_id !== deviceId) return latest;
+    const start = parseUtcDate(block.start_time)?.getTime();
+    const end = parseUtcDate(block.end_time)?.getTime();
+    if (start == null || end == null || start > now || end <= now) return latest;
+    const latestEnd = latest ? parseUtcDate(latest.end_time)?.getTime() : null;
+    return latestEnd == null || end > latestEnd ? block : latest;
+  }, null);
+}
+
+/**
+ * 這台現在可以接新測試嗎。BLOCKED 是前端自己合出來的：底下其實是待機，只是有維護時段
+ * 或別的排程掛著。維護另外判，而「有排程掛著」後端不擋，所以這裡也算它可以開始。
+ */
+const canDeviceStart = (status) => status === "IDLE" || status === "BLOCKED";
+
+const NO_READINESS = { label: null, blocker: null };
+
+/**
+ * 指定設備現在的樣子：label 給「指定設備」那列，blocker 有值就代表現在按「立即開始」
+ * 一定會被後端擋回來。兩個都從這裡出來，畫面才不會出現「寫著維護中卻按得下去」。
+ */
+function describeDeviceReadiness({ deviceId, status, freeAt, maintenance }) {
+  if (!deviceId) return NO_READINESS;
+  if (maintenance) {
+    const reason = maintenance.reason ? `（${maintenance.reason}）` : "";
+    const until = maintenance.end_time ? `${fmtDt(maintenance.end_time)} 結束前` : "維護期間";
+    return { label: "維護時段", blocker: `${deviceId} 在維護時段${reason}，${until}不能開始` };
+  }
+  // 設備清單還沒載完時狀態是空的。空的意思是「還不知道」，不是「不能用」——這時維持
+  // 可按、讓後端決定，否則按鈕會在剛打開頁面那幾秒假性壞掉，那比白按一次更難處理。
+  if (!status) return NO_READINESS;
+  // BLOCKED 底下其實是待機，所以這兩種都寫「待機」，不寫成「不可用」。
+  if (canDeviceStart(status)) return { label: deviceStatusZh("IDLE"), blocker: null };
+  const zh = deviceStatusZh(status);
+  const until = freeAt ? `預計 ${fmtDt(freeAt)} 回到待機後` : "回到待機後";
+  return { label: zh, blocker: `${deviceId} ${zh}，${until}才能開始` };
 }
 
 const SUCCESS_BANNER = { background: C.successBgDeep, border: `1px solid ${C.success}`, borderRadius: 8, padding: "12px 16px", fontSize: 13, color: C.successText, fontWeight: 600 };
@@ -35,7 +78,7 @@ function ResultScreen({ title, message, fields, onClose }) {
   );
 }
 
-export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {}, onClose, onUpdated, onDeleted, onMutation }) {
+export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {}, deviceFreeAt = {}, blockedPeriods = [], liveMaintenance = {}, liveMaintenanceReady = false, onClose, onUpdated, onDeleted, onMutation }) {
   const { showToast } = useToast();
   const [deviceId, setDeviceId] = useState(schedule.device_id || "");
   const [note, setNote] = useState(schedule.note || "");
@@ -48,6 +91,29 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const canEdit = role === "admin";
   const isPending = schedule.status === "待審核";
+  // 只有還沒跑完的排程才需要看設備現況；已完成／已取消那台現在在做什麼與這筆無關，
+  // 顯示出來只會讓人以為那是這筆排程的狀態，所以那些狀態直接不給設備編號。
+  const liveDeviceId = (schedule.status === "已確認" || schedule.status === "進行中")
+    ? schedule.device_id
+    : null;
+  const liveDevice = describeDeviceReadiness({
+    deviceId: liveDeviceId,
+    status: deviceStatuses[schedule.device_id],
+    freeAt: deviceFreeAt[schedule.device_id],
+    maintenance: liveMaintenanceReady
+      ? liveMaintenance[liveDeviceId]
+      : findActiveMaintenance(blockedPeriods, liveDeviceId),
+  });
+  // 條件正在執行時不需要顯示銜接鈕；一旦不是 RUNNING，就讓操作留在原位並說明為何
+  // 現在不能按。直接藏掉會讓暫停、收尾、緊急停止看起來像功能憑空消失。
+  const showContinuation = schedule.status === "進行中"
+    && deviceStatuses[schedule.device_id] !== "RUNNING";
+  // 兩顆按鈕在「現在不能開始」時的處理完全一樣，寫一份就好。
+  const blockedAttrs = {
+    disabled: saving || !!liveDevice.blocker,
+    title: liveDevice.blocker || undefined,
+  };
+  const blockedStyle = liveDevice.blocker ? { opacity: 0.5, cursor: "not-allowed" } : null;
   const previewConditions = schedule.conditions?.join(",") || "";
 
   const fetchPreview = useCallback(() => {
@@ -250,7 +316,9 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
             value={
               isPending
                 ? previewState.loading ? "計算中..." : (previewState.data?.device_id || "—")
-                : schedule.device_id || "（自動排程）"
+                : schedule.device_id
+                  ? `${schedule.device_id}${liveDevice.label ? `（${liveDevice.label}）` : ""}`
+                  : "（自動排程）"
             }
           />
           <InfoRow
@@ -354,6 +422,15 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
 
               {error && <div style={{ color: C.error, fontSize: 13 }}>{error}</div>}
 
+              {(schedule.status === "已確認" || showContinuation) && liveDevice.blocker && (
+                <div style={{
+                  fontSize: 12, color: C.warningAlt, background: C.warningBg,
+                  border: `1px solid ${C.warning}`, borderRadius: 6, padding: "8px 10px",
+                }}>
+                  ⏳ {liveDevice.blocker}
+                </div>
+              )}
+
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
                 {role === "admin" && (schedule.status === "已取消" || schedule.status === "已完成") && (
                   <button onClick={del} style={{ ...cancelBtn, color: C.error, borderColor: C.errorDark }}>
@@ -376,17 +453,25 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                   </button>
                 )}
                 {schedule.status === "已確認" && (
-                  <button onClick={startNow} disabled={saving} style={{ ...primaryBtn, background: C.accentDark }}>
+                  <button
+                    onClick={startNow}
+                    {...blockedAttrs}
+                    style={{ ...primaryBtn, background: C.accentDark, ...blockedStyle }}
+                  >
                     {saving ? "啟動中..." : "▶ 立即開始"}
                   </button>
                 )}
-                {schedule.status === "進行中" && ["IDLE", "BLOCKED"].includes(deviceStatuses[schedule.device_id]) && (() => {
+                {showContinuation && (() => {
                   const conds = schedule.conditions || [];
                   const idx = schedule.current_condition_index ?? 0;
                   const isLast = idx >= conds.length;
                   const label = isLast ? "✅ 確認完成" : `▶ 開始第 ${idx + 1} 條件（共 ${conds.length}）`;
                   return (
-                    <button onClick={confirmCondition} disabled={saving} style={{ ...primaryBtn, background: isLast ? C.successDark : C.accentDark }}>
+                    <button
+                      onClick={confirmCondition}
+                      {...blockedAttrs}
+                      style={{ ...primaryBtn, background: isLast ? C.successDark : C.accentDark, ...blockedStyle }}
+                    >
                       {saving ? "處理中..." : label}
                     </button>
                   );

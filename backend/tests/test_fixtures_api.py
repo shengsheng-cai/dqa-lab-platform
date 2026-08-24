@@ -3,13 +3,14 @@ T-15: fixtures API 補充測試
 - delete_fixture：有 reserved/loaned 借用時不可刪除
 - update_inventory：負數盤點擋下、歸零合法
 - create_loan：借用人指到不存在的帳號要被擋
+- 保管人只能從 PATCH /{id}/keeper 設定，編輯治具碰不到它
 """
 import datetime
 
 import pytest
 
 from app.fixtures import router as fixtures_router
-from app.models import Fixture, FixtureInventoryLog, FixtureLoan
+from app.models import Fixture, FixtureInventoryLog, FixtureLoan, User
 from app.utils import _now_utc_naive
 
 
@@ -223,3 +224,93 @@ def test_create_fixture_rejects_negative_stock(admin_client):
     )
 
     assert resp.status_code == 422
+
+
+# ── 保管人只有一個來源 ───────────────────────────────────────────────
+# 保管人以前有兩個寫入口：這支 API 的 keeper_name 純文字，以及 PATCH /{id}/keeper 指定
+# 的人員。畫面顯示優先用人員那邊的名字，於是「在編輯治具改了保管人、按儲存、畫面沒變，
+# 但文字已經寫進資料庫」。下面兩條釘住「編輯治具碰不到保管人」。
+
+
+def test_create_fixture_rejects_keeper_name(admin_client):
+    """新增治具送 keeper_name 要被擋。
+
+    收下再忽略也是一種「回你成功、其實什麼都沒做」，而那正是保管人原本的病。
+    """
+    client, Session = admin_client
+
+    resp = client.post(
+        "/api/fixtures/",
+        json={
+            "interface_type": "USB-C",
+            "form_factor": "Gen2",
+            "total_quantity": 1,
+            "shortage": 0,
+            "keeper_name": "王小明",
+        },
+    )
+
+    assert resp.status_code == 422
+    with Session() as db:
+        assert db.query(Fixture).count() == 0
+
+
+def test_update_fixture_rejects_keeper_name(admin_client):
+    """編輯治具送 keeper_name 要被擋，已設定的保管人不能被它動到。"""
+    client, Session = admin_client
+    fixture_id = _seed_keeper_fixture(client, Session)
+
+    resp = client.patch(
+        f"/api/fixtures/{fixture_id}",
+        json={
+            "interface_type": "USB",
+            "form_factor": "Desktop",
+            "total_quantity": 1,
+            "shortage": 0,
+            "keeper_name": "李四",
+        },
+    )
+
+    assert resp.status_code == 422
+    _assert_keeper_is_chen(Session, fixture_id)
+
+
+def test_update_fixture_leaves_keeper_untouched(admin_client):
+    """正常編輯治具（不帶保管人）不得動到保管人——它的來源只有設定保管人那支。"""
+    client, Session = admin_client
+    fixture_id = _seed_keeper_fixture(client, Session)
+
+    resp = client.patch(
+        f"/api/fixtures/{fixture_id}",
+        json={
+            "interface_type": "USB",
+            "form_factor": "Desktop",
+            "total_quantity": 1,
+            "shortage": 0,
+            "note": "換個備註而已",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["keeper_name"] == "陳工"
+    _assert_keeper_is_chen(Session, fixture_id)
+
+
+def _seed_keeper_fixture(client, Session) -> int:
+    """建一個治具，並用唯一的合法入口把保管人設成陳工。"""
+    with Session() as db:
+        db.add(User(id=2, username="chen", display_name="陳工", hashed_password="x", role="admin"))
+        db.commit()
+
+    fixture_id = _seed_plain_fixture(Session, total_quantity=1)
+    assert client.patch(
+        f"/api/fixtures/{fixture_id}/keeper", json={"keeper_user_id": 2}
+    ).status_code == 200
+    return fixture_id
+
+
+def _assert_keeper_is_chen(Session, fixture_id: int) -> None:
+    with Session() as db:
+        fixture = db.query(Fixture).filter(Fixture.id == fixture_id).first()
+        assert fixture.keeper_name == "陳工"
+        assert fixture.keeper_user_id == 2

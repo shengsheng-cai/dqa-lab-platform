@@ -2,13 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import api from "./api";
 import { DEVICE_IDS } from "./constants";
 import { useToast } from "./components/useToast";
+import { isKnownMaintenanceType, maintenanceTypeLabel } from "./utils/maintenance";
 import { C } from "./styles/theme";
-
-const MAINTENANCE_TYPE_LABEL = {
-  preventive: "預防性",
-  corrective: "矯正性",
-  inspection: "例行點檢",
-};
 
 function FieldRow({ label, value, onChange, placeholder }) {
   return (
@@ -102,6 +97,12 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
       const err = validateDateField(form[field], label);
       if (err) { showToast(err, "error"); return; }
       if (!form[field]) { showToast(`${label} 為必填`, "error"); return; }
+    }
+    // 舊資料可能帶著系統不認得的類型。後端會擋，但那是一個難看的 422，
+    // 在這裡先說清楚要做什麼。
+    if (modalType !== "calibrations" && !isKnownMaintenanceType(form.maintenance_type)) {
+      showToast(`這筆的維護類型「${form.maintenance_type}」系統不認得，請重新選擇`, "error");
+      return;
     }
 
     setSaving(true);
@@ -219,7 +220,9 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
               ) : maintenances.map(m => (
                 <tr key={m.id}>
                   <td style={tdS}>{fmtDt(m.maintenance_date)}</td>
-                  <td style={tdS}>{MAINTENANCE_TYPE_LABEL[m.maintenance_type] || m.maintenance_type}</td>
+                  <td style={{ ...tdS, color: isKnownMaintenanceType(m.maintenance_type) ? C.textPrimary : C.warning }}>
+                    {maintenanceTypeLabel(m.maintenance_type)}
+                  </td>
                   <td style={{ ...tdS, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.description}</td>
                   <td style={tdS}>{m.performed_by}</td>
                   <td style={tdS}>{m.next_maintenance_date ? fmtDt(m.next_maintenance_date) : "—"}</td>
@@ -264,6 +267,14 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <label style={{ fontSize: 11, color: C.textMuted }}>類型</label>
                   <select value={form.maintenance_type} onChange={e => setForm(f => ({ ...f, maintenance_type: e.target.value }))} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textPrimary, padding: "5px 8px", fontSize: 12 }}>
+                    {/* 舊資料的值不在清單裡時，要讓它自己站一個選項並且不能送出。
+                        沒有這一項的話下拉會自動停在第一個「預防性」，使用者只是想改說明，
+                        一存檔類型就被悄悄換掉了。 */}
+                    {!isKnownMaintenanceType(form.maintenance_type) && (
+                      <option value={form.maintenance_type} disabled>
+                        {maintenanceTypeLabel(form.maintenance_type)} — 請重新選擇
+                      </option>
+                    )}
                     <option value="preventive">預防性</option>
                     <option value="corrective">矯正性</option>
                     <option value="inspection">例行點檢</option>

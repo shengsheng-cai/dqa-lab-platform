@@ -159,7 +159,7 @@ def test_maintenance_create_converts_non_utc(api_client):
     with api_client(maintenance_module, maintenance_router, role="admin", user_id=7) as (client, Session):
         resp = client.post("/api/devices/CH-01/maintenances", json={
             "maintenance_date": LOCAL_START.isoformat(),
-            "maintenance_type": "定期保養",
+            "maintenance_type": "preventive",
             "description": "更換濾網",
             "performed_by": "測試員",
             "next_maintenance_date": LOCAL_END.isoformat(),
