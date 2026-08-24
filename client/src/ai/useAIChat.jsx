@@ -67,7 +67,7 @@ export default function useAIChat() {
     activeIdRef.current = activeId;
   }, [activeId]);
 
-  // A8 fix: saveChats 加 debounce 500ms，避免每次 store 更新都寫 localStorage
+  // 對話串流會頻繁更新 store；延遲寫入可避免每個 token 都同步寫 localStorage。
   useEffect(() => {
     if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
     saveDebounceRef.current = setTimeout(() => {
@@ -226,7 +226,7 @@ export default function useAIChat() {
       Math.min(Math.max(el.scrollHeight, lh * 3), lh * 8) + "px";
   }, []);
 
-  // A5 fix: stopStream 移除 focus()，統一由 finally 處理
+  // 輸入框焦點統一由請求的 finally 恢復，停止串流時不要和它重複搶焦點。
   const stopStream = useCallback(() => {
     if (streamRafRef.current) {
       cancelAnimationFrame(streamRafRef.current);
@@ -283,12 +283,14 @@ export default function useAIChat() {
       streamTextRef.current = "";
       startTimeRef.current = Date.now();
 
+      // 串流期間使用者可能切換對話；回覆必須寫回送出當下的對話，而非目前畫面。
       const sendingConvId = activeIdRef.current;
       const history = newMessages
         .slice(0, -1)
         .slice(-MAX_HISTORY)
         .map((m) => ({
           role: m.role,
+          // 顯示文字不包含 metadata，送回模型時補上推薦 ID 才能延續套用條件的語境。
           content: m.role === "assistant" && m.sop_ids?.length
             ? m.content + `\n[已推薦條件ID:${m.sop_ids.join(",")}]`
             : m.content,
@@ -313,6 +315,7 @@ export default function useAIChat() {
           if (done) break;
           fullText += decoder.decode(value, { stream: true });
           streamTextRef.current = fullText;
+          // 網路 chunk 可能比畫面重繪更密集，只保留下一幀的最新文字。
           if (streamRafRef.current) cancelAnimationFrame(streamRafRef.current);
           streamRafRef.current = requestAnimationFrame(() => {
             const t = streamTextRef.current;
@@ -327,6 +330,7 @@ export default function useAIChat() {
 
         if (!controller.signal.aborted && fullText.trim()) {
           const elapsed = ((Date.now() - startTimeRef.current) / 1000).toFixed(1);
+          // metadata 只供套用 SOP 使用，不可混進使用者看到或匯出的回答文字。
           const { displayText, metadata } = parseStreamingResponse(fullText);
           const sop_ids = metadata?.sop_ids || [];
           updateMessages(

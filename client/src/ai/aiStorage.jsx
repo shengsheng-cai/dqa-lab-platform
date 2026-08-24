@@ -191,6 +191,6 @@ export const exportChat = (messages, title = "對話紀錄") => {
   a.href = url;
   a.download = `dqa_chat_${localDateStamp()}.txt`;
   a.click();
-  // A6 fix: 延遲 1 秒再 revoke，避免部分瀏覽器下載來不及觸發
+  // 延遲釋放 object URL，避免部分瀏覽器尚未開始下載就失去資料來源。
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };

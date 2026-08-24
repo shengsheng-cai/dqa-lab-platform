@@ -59,6 +59,8 @@ function fmtRemaining(secs) {
 }
 
 export default function DeviceCard({ device, isSelected, onClick, pendingSchedule, onConfirmCondition, onShowQc, calibrationStatus }) {
+  // is_blocked 可能與執行狀態同時存在；設備仍在運轉時要顯示真實狀態，
+  // 只有底層狀態為 IDLE 才改用不可用樣式。
   const isBlocked = device.is_blocked && device.status === IDLE_STATUS;
   const cfg = isBlocked ? STATUS_CONFIG.BLOCKED : (STATUS_CONFIG[device.status] || STATUS_CONFIG.OFFLINE);
   const remaining = useCountdown(device.estimated_end_at);

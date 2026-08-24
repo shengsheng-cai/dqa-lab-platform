@@ -27,9 +27,9 @@ LAB_NAME = "DQA Lab Platform"
 LAB_ADDRESS = "作品展示用模擬實驗室，無實體地址  Portfolio demonstration laboratory (simulated); no physical address"
 # §7.8.2.1(l)
 RESULTS_SCOPE_STATEMENT = "本報告結果僅適用於本次所測之樣品。  The results relate only to the items tested."
-# 執行紀錄沒接到排程時，樣品欄位印這個——不退回去印設備編號（BUG-009）
+# 執行紀錄沒接到排程時，樣品欄位要明示沒有案件，不能拿設備編號冒充樣品資訊。
 NO_CASE_TEXT = "(臨時測試，無對應案件)  Ad-hoc test; no associated case"
-# fix: 限制單次查詢最大筆數，避免長時間測試資料塞爆記憶體
+# 報告只讀取固定上限，避免長時間測試累積的資料一次塞滿記憶體。
 MAX_DATA_POINTS = 10000
 
 

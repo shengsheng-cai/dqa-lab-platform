@@ -14,6 +14,7 @@ const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin
   const allStepsDone = totalSteps > 0 && doneCnt === totalSteps;
 
   const unlockedMap = useMemo(() => {
+    // 選填步驟不阻擋後續流程；只有前面尚未完成的必填步驟會鎖住目前步驟。
     const map = {};
     for (let idx = 0; idx < steps.length; idx++) {
       let unlocked = true;

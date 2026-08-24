@@ -348,6 +348,11 @@ def _extract_std_from_history(history: list) -> list[str]:
 
 
 async def _build_context(msg: str, history: list = None) -> tuple[str, list[str]]:
+    """依問題意圖組合標準、治具、設備與排程內容，並回傳可推薦的 SOP ID。
+
+    標準檢索依序優先處理跨標準比較、明確標準、測試類型、溫度與一般查詢；
+    這個順序避免寬鬆的語意檢索蓋掉使用者已明確指定的標準。
+    """
     if history is None:
         history = []
     matched_stds = match_std_keys(msg)
@@ -380,6 +385,7 @@ async def _build_context(msg: str, history: list = None) -> tuple[str, list[str]
         raw_hits = retrieve_by_std(matched_stds)
         if type_hints:
             filtered = filter_chunks_by_hints(raw_hits, type_hints)
+            # 命中太少時保留同標準的原始結果，避免類型詞過窄而讓回答失去依據。
             _add_hits(filtered if len(filtered) >= 2 else raw_hits)
         else:
             _add_hits(raw_hits)
@@ -387,6 +393,7 @@ async def _build_context(msg: str, history: list = None) -> tuple[str, list[str]
     elif type_hints:
         raw_hits = await retrieve(msg, top_k=30)
         filtered = filter_chunks_by_hints(raw_hits, type_hints)
+        # 至少要有兩筆才採用類型篩選，否則退回較寬的前 20 筆供模型判讀。
         _add_hits(filtered if len(filtered) >= 2 else raw_hits[:20])
 
     elif temps:
@@ -448,6 +455,11 @@ def _message_stream_response(message: str) -> StreamingResponse:
 
 @router.post("/standards-query-stream")
 async def standards_query_stream(req: QueryRequest):
+    """串流法規回答，並把可套用的 SOP ID 以隱藏 metadata 附在文末。
+
+    檢索逾時與串流中的供應商錯誤會轉成對話內文字，讓前端沿用同一套串流 UI；
+    每次呼叫仍以 outcome 記錄成功、限流、逾時、取消或供應商錯誤。
+    """
     request_start = time.perf_counter()
     try:
         ref_block, sop_ids = await asyncio.wait_for(
@@ -480,6 +492,7 @@ async def standards_query_stream(req: QueryRequest):
         raise
 
     async def generate():
+        # 回應開始串流後已無法改 HTTP status，因此供應商錯誤以可閱讀文字送回。
         outcome = "unavailable"
         status_code = None
         collected = []

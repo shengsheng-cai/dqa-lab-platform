@@ -76,7 +76,7 @@ const ExecutionPanel = ({
     }
   };
 
-  // Phase 9-3: 測試自然完成時自動存報告
+  // 自然完成只自動儲存一次；手動儲存中或已有 execution ID 時不得重複送出。
   useEffect(() => {
     if (autoSave && !saving && !savedExecutionId) {
       saveExecution();

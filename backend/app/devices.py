@@ -238,6 +238,11 @@ def get_device_history(device_id: str, request: Request):
 
 @router.get("/api/devices/{device_id}/sensor-stats", response_model=SensorStatsOut)
 def get_sensor_stats(device_id: str, request: Request, hours: int = 24):
+    """以每分鐘平均值建立控制界線，並計算異常分鐘數。
+
+    圖表點、平均值、上下控制界線與 anomaly_count 都使用相同的分鐘粒度；
+    anomaly_count 不是超界原始樣本數，避免取樣頻率改變時扭曲異常程度。
+    """
     _get_device(request.app.state.AICM_CACHE, device_id)
     cutoff = _now_utc_naive() - datetime.timedelta(hours=hours)
 

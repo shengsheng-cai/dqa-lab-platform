@@ -133,7 +133,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
     return () => clearInterval(t);
   }, [isEmergency]);
 
-  // S3 fix: 只有當 status 已符合 optimistic 值才清除，避免過早 reset
+  // WebSocket 確認後才清掉 optimistic 狀態，避免 API 回應早於設備廣播時畫面跳回舊值。
   useEffect(() => {
     if (pauseOptimistic && data.status === effectiveStatus) {
       setPauseOptimistic(null);
@@ -305,7 +305,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
     fetchHistory(selectedDevice, startedAt);
   }, [startedAt, currentStatus]); // eslint-disable-line
 
-  // Phase 9-2: 根據 sim_phase 自動確認步驟
+  // 自動步驟跟著設備 sim_phase 完成，人工勾選只負責沒有 auto_trigger 的步驟。
   const simPhase = allDevices[selectedDevice]?.sim_phase || "";
   const simCycle = allDevices[selectedDevice]?.sim_cycle || 0;
   const dwellHalfFired = allDevices[selectedDevice]?.dwell_half_fired || false;
