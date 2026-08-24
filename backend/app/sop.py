@@ -93,9 +93,6 @@ def get_standards_tree():
     return result
 
 
-# B5 fix: 移除 list_sops 廢棄端點，前端完全不呼叫
-
-
 def _create_execution_id_db(
     db, sop_id: str, device_id: str, operator: str, now: datetime.datetime,
     operator_user_id: Optional[int] = None,

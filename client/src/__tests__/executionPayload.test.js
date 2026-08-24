@@ -23,8 +23,7 @@ const base = {
 
 describe("buildExecutionPayload", () => {
   it("組出後端要的每一個欄位", () => {
-    // 這條把整份資料釘住，少一個欄位就會紅。BUG-007 正是漏送 manual_mode 造成的：
-    // 除錯用的手動測試被當成正式測試，發了 LINE 推播。
+    // 這條把整份資料釘住，少一個欄位就會紅；manual_mode 漏送會讓手動測試誤發 LINE 推播。
     expect(buildExecutionPayload(base)).toEqual({
       sop_id: "IEC-60068-2-1",
       device_id: "CH-01",

@@ -366,6 +366,11 @@ def _schedule_start_actor(user, action: str) -> ScheduleStartActor:
 
 
 def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, role, cache: dict):
+    """準備排程更新，並回傳 transaction 外仍需執行的設備與 scheduler 動作。
+
+    status=RUNNING 在這裡只驗證請求，不寫入排程；實際啟動統一交給
+    start_schedule，讓設備、執行紀錄、排程與治具能在同一個 transaction 轉換。
+    """
     cancelled_device_id = None
     completed_device_id = None
     explicit_start = body.status == ScheduleStatus.RUNNING
@@ -482,6 +487,8 @@ def _patch_schedule_db(schedule_id: int, body: "SchedulePatch", user_id, role, c
                 )
                 scheduled_start = new_start
 
+        # 明確啟動刻意不在這裡 commit；caller 接著呼叫 start_schedule，避免排程先變成
+        # RUNNING、設備與治具卻尚未成功轉換的半完成狀態。
         if not explicit_start:
             s.updated_at = now
             if body.status:

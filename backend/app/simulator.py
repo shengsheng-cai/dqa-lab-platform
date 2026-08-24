@@ -337,6 +337,12 @@ async def _apply_simulated_item_with_retry(
 
 
 async def data_simulator(states: device_state.DeviceStateManager) -> None:
+    """每秒推進所有設備，並以目前狀態與相位作為 optimistic-write 前提。
+
+    記憶體狀態每個 tick 都會更新；感測資料與 device_state 每 10 個 tick 才落盤。
+    完成排程、結束執行紀錄與發送通知等副作用，只能在狀態轉換成功後執行，
+    避免使用者操作與模擬器同時改狀態時重複結案。
+    """
     write_counters: dict = {}
     dwell_start_times: dict = {}
     dwell_elapsed_times: dict = {}

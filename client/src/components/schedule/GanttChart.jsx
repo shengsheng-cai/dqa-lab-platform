@@ -4,12 +4,15 @@ import { DEVICE_IDS, parseUtcDate } from "../../constants";
 import { HOUR_PX, DAY_PX, ROW_H, HEADER_H, LABEL_W, STATUS_COLOR, fmtDt } from "./scheduleUtils";
 
 export default function GanttChart({ schedules, blockedPeriods, rangeStart, rangeEnd, onClickSchedule }) {
+  // range 使用 epoch 毫秒，API 時間先經 parseUtcDate；所有區塊共用同一條時間軸，
+  // 日期刻度則以瀏覽器本地午夜切日，避免日期欄和使用者看到的本地日期錯位。
   const scrollRef = useRef(null);
   const totalMs = rangeEnd - rangeStart;
   const totalPx = (totalMs / 3600000) * HOUR_PX;
 
   useEffect(() => {
     if (scrollRef.current) {
+      // 現在時間左側保留 200px，讓使用者能同時看到剛發生的排程。
       const nowOffset = ((Date.now() - rangeStart) / 3600000) * HOUR_PX - 200;
       scrollRef.current.scrollLeft = Math.max(0, nowOffset);
     }
@@ -150,6 +153,7 @@ export default function GanttChart({ schedules, blockedPeriods, rangeStart, rang
                     const left = toPx(s.start_time);
                     const right = toPx(s.end_time);
                     if (right <= 0 || left >= totalPx) return null;
+                    // 跨出查詢範圍的排程仍顯示可見部分，不讓區塊溢出時間軸。
                     const clampLeft = Math.max(0, left);
                     const clampRight = Math.min(totalPx, right);
                     const color = STATUS_COLOR[s.status] || STATUS_COLOR["待審核"];
