@@ -7,6 +7,7 @@ import datetime
 import json
 import os
 import random
+import secrets
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -16,8 +17,10 @@ from app.models import (
     engine,
     ensure_admin_user,
     SessionLocal,
+    User,
     DeviceCalibration,
     DeviceMaintenance,
+    MaintenanceType,
     DeviceBlockedPeriod,
     DeviceData,
     DeviceState,
@@ -30,6 +33,7 @@ from app.models import (
     ScheduleFixture,
     SopExecution,
 )
+from app.auth import hash_password
 from app.sop import STANDARDS_AND_SOPS
 from app.utils import _now_utc_naive
 
@@ -52,6 +56,32 @@ print("✅ Admin 帳號就緒！")
 print("正在寫入 Demo 資料...")
 
 with SessionLocal() as db:
+    # ── 0. Users ───────────────────────────────────────────────────
+    # Demo 資料裡到處都出現陳工、林工、王工，以前只是散在各處的文字，系統裡沒有這些人。
+    # 治具保管人要指到「人」，所以他們得先是真的帳號。
+    #
+    # 密碼是隨機字串的雜湊：這幾個只是 demo 資料裡的人名，沒有人該登得進去。不要為了
+    # 「反正登不進去」就塞一個不是雜湊的字串進去——bcrypt 比對到格式不對的值會丟例外，
+    # 登入端點沒接，結果是有人拿這個帳號試登入就回 500，順便證實了這個帳號存在。
+    # 雜湊一次三個人共用：bcrypt 故意跑得慢（每次約 0.24 秒），而這支種子腳本每個
+    # E2E 測試檔都會重跑一次。三個帳號的原文都被丟掉了，共用同一個雜湊一樣沒人登得進去。
+    unusable_password = hash_password(secrets.token_hex(32))
+    staff = {}
+    for username, display_name in [("chen", "陳工"), ("lin", "林工"), ("wang", "王工")]:
+        user = User(
+            username=username,
+            display_name=display_name,
+            hashed_password=unusable_password,
+            role="admin",
+        )
+        db.add(user)
+        staff[display_name] = user
+    db.flush()
+
+    def keeper(name: str) -> dict:
+        """治具的保管人欄位。名字只寫一次，快照跟關聯就不會各寫各的、還互相矛盾。"""
+        return {"keeper_name": name, "keeper_user_id": staff[name].id}
+
     # ── 1. Fixtures ────────────────────────────────────────────────
     f1 = Fixture(
         interface_type="M.2",
@@ -59,7 +89,7 @@ with SessionLocal() as db:
         size="22×80mm",
         total_quantity=4,
         shortage=0,
-        keeper_name="陳工",
+        **keeper("陳工"),
         vendor="固緯電子",
         unit_price=1200.0,
         loan_count=8,
@@ -70,7 +100,7 @@ with SessionLocal() as db:
         size="167×76mm",
         total_quantity=2,
         shortage=0,
-        keeper_name="陳工",
+        **keeper("陳工"),
         vendor="Molex",
         unit_price=3500.0,
         loan_count=3,
@@ -80,7 +110,7 @@ with SessionLocal() as db:
         form_factor="Type-A 2.0",
         total_quantity=6,
         shortage=0,
-        keeper_name="林工",
+        **keeper("林工"),
         unit_price=450.0,
         loan_count=15,
     )
@@ -89,7 +119,7 @@ with SessionLocal() as db:
         form_factor="Gen2",
         total_quantity=3,
         shortage=1,
-        keeper_name="林工",
+        **keeper("林工"),
         vendor="Samtec",
         unit_price=2200.0,
         loan_count=6,
@@ -99,7 +129,7 @@ with SessionLocal() as db:
         form_factor="1GbE",
         total_quantity=5,
         shortage=0,
-        keeper_name="陳工",
+        **keeper("陳工"),
         unit_price=800.0,
         loan_count=20,
     )
@@ -108,7 +138,10 @@ with SessionLocal() as db:
         form_factor="MXM-B",
         total_quantity=1,
         shortage=0,
-        keeper_name="王工",
+        # 刻意留一筆「有名字、沒連到人員」的舊資料：張工在 demo 裡是借用人，沒有帳號。
+        # Excel 匯入寫進來的名字對不到人時也是長這樣，畫面要標成「未連結人員」而不是
+        # 當成正常設定過的保管人。沒有這筆的話，那段畫面在 demo 裡永遠不會出現。
+        keeper_name="張工",
         vendor="NVIDIA",
         unit_price=15000.0,
         loan_count=2,
@@ -357,7 +390,7 @@ with SessionLocal() as db:
             DeviceMaintenance(
                 device_id="CH-03",
                 maintenance_date=_dt(days=2),
-                maintenance_type="preventive",
+                maintenance_type=MaintenanceType.PREVENTIVE,
                 description="冷凍壓縮機冷媒補充、過濾器更換、電氣連接件點檢",
                 performed_by="廠商技師（鑫泰制冷）",
                 next_maintenance_date=_dt(days=-363),
@@ -365,7 +398,7 @@ with SessionLocal() as db:
             DeviceMaintenance(
                 device_id="CH-01",
                 maintenance_date=_dt(days=60),
-                maintenance_type="routine",
+                maintenance_type=MaintenanceType.INSPECTION,
                 description="例行清潔，加熱管目視檢查，溫度均勻性確認",
                 performed_by="陳工",
                 next_maintenance_date=_dt(days=-305),
@@ -373,7 +406,7 @@ with SessionLocal() as db:
             DeviceMaintenance(
                 device_id="CH-02",
                 maintenance_date=_dt(days=25),
-                maintenance_type="corrective",
+                maintenance_type=MaintenanceType.CORRECTIVE,
                 description="溫控板更換（原廠備料），更換後重新校驗確認",
                 performed_by="廠商技師（安捷環境）",
             ),

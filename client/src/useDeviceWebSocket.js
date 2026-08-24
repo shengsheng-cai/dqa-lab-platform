@@ -13,6 +13,7 @@ const OFFLINE_DEVICES = DEVICE_IDS.map((id) => ({
 export function useDeviceWebSocket() {
   const [devices, setDevices] = useState(OFFLINE_DEVICES);
   const [connected, setConnected] = useState(false);
+  const [snapshotReady, setSnapshotReady] = useState(false);
   const wsRef = useRef(null);
   const retryDelay = useRef(1000);
   // 每次掛載給一個編號，卸載時 +1。還在等 ticket 的請求和排隊中的重連拿舊編號一比就知道
@@ -58,9 +59,11 @@ export function useDeviceWebSocket() {
 
     ws.onmessage = (e) => {
       try {
+        const nextDevices = JSON.parse(e.data);
+        setSnapshotReady(true);
         if (e.data === lastJsonRef.current) return;
         lastJsonRef.current = e.data;
-        setDevices(JSON.parse(e.data));
+        setDevices(nextDevices);
       } catch {
         // ignore malformed frames
       }
@@ -68,6 +71,7 @@ export function useDeviceWebSocket() {
 
     ws.onclose = () => {
       setConnected(false);
+      setSnapshotReady(false);
       scheduleReconnect(myGeneration);
     };
 
@@ -86,5 +90,5 @@ export function useDeviceWebSocket() {
     };
   }, [connect]);
 
-  return { devices, connected };
+  return { devices, connected, devicesReady: connected && snapshotReady };
 }

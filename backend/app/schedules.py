@@ -205,7 +205,11 @@ def get_gantt(request: Request):
             .order_by(Schedule.start_time)
             .all()
         )
-        blocked = db.query(DeviceBlockedPeriod).limit(500).all()
+        blocked = (
+            db.query(DeviceBlockedPeriod)
+            .order_by(DeviceBlockedPeriod.start_time.asc(), DeviceBlockedPeriod.id.asc())
+            .all()
+        )
         fixtures_map = _build_schedule_fixtures_map(db, [s.id for s in schedules])
 
         return {

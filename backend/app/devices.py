@@ -94,6 +94,9 @@ class DeviceOut(BaseModel):
     dwell_half_fired: bool
     is_blocked: bool
     blocked_reason: Optional[str] = None
+    maintenance_blocked: bool
+    maintenance_reason: Optional[str] = None
+    maintenance_end_at: Optional[str] = None
 
 
 class DeviceHistoryPoint(BaseModel):
@@ -138,15 +141,28 @@ def build_device_list(cache: dict) -> list:
             DeviceBlockedPeriod.end_time > now_dt,
         ).all()
         running_schedules = list_running_schedules(db)
-    blocked_devices: dict[str, str] = {b.device_id: b.reason for b in active_blocks}
+    # 同一台設備可能有重疊的不可用時段。即時狀態要顯示「最後才解除」的那一段，
+    # 不能依資料庫剛好回傳的順序挑第一筆，否則畫面會提早宣稱設備已可用。
+    maintenance_by_device = {}
+    for block in active_blocks:
+        current = maintenance_by_device.get(block.device_id)
+        if current is None or block.end_time > current.end_time:
+            maintenance_by_device[block.device_id] = block
+
+    blocked_devices: dict[str, Optional[str]] = {
+        device_id: block.reason
+        for device_id, block in maintenance_by_device.items()
+    }
     for s in running_schedules:
         if s.device_id and s.device_id not in blocked_devices:
             total = len(_parse_conditions(s.conditions))
             idx = (s.current_condition_index or 0) + 1
             blocked_devices[s.device_id] = f"排程進行中（第 {idx}/{total} 條件）"
 
-    return [
-        {
+    result = []
+    for device_id, item in cache.items():
+        maintenance = maintenance_by_device.get(device_id)
+        result.append({
             "device_id": device_id,
             "status": item.get("status", "OFFLINE"),
             "temperature": item.get("temperature", 0.0),
@@ -168,9 +184,11 @@ def build_device_list(cache: dict) -> list:
             "dwell_half_fired": item.get("dwell_half_fired", False),
             "is_blocked": device_id in blocked_devices,
             "blocked_reason": blocked_devices.get(device_id),
-        }
-        for device_id, item in cache.items()
-    ]
+            "maintenance_blocked": maintenance is not None,
+            "maintenance_reason": maintenance.reason if maintenance else None,
+            "maintenance_end_at": maintenance.end_time.isoformat() if maintenance else None,
+        })
+    return result
 
 
 @router.get("/api/devices", response_model=list[DeviceOut])

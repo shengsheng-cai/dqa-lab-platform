@@ -6,7 +6,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
-from .models import SessionLocal, DeviceCalibration, DeviceMaintenance
+from .models import SessionLocal, DeviceCalibration, DeviceMaintenance, MaintenanceType
 from .auth import require_admin, current_user
 from .utils import _now_utc_naive, _to_naive_utc
 from .constants import DEVICE_IDS
@@ -53,7 +53,7 @@ class CalibrationOut(BaseModel):
 
 class MaintenanceCreate(BaseModel):
     maintenance_date: datetime.datetime
-    maintenance_type: str
+    maintenance_type: MaintenanceType
     description: str
     performed_by: str
     next_maintenance_date: Optional[datetime.datetime] = None
@@ -61,7 +61,7 @@ class MaintenanceCreate(BaseModel):
 
 class MaintenanceUpdate(BaseModel):
     maintenance_date: Optional[datetime.datetime] = None
-    maintenance_type: Optional[str] = None
+    maintenance_type: Optional[MaintenanceType] = None
     description: Optional[str] = None
     performed_by: Optional[str] = None
     next_maintenance_date: Optional[datetime.datetime] = None

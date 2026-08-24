@@ -4,6 +4,8 @@ T-11: 設備校驗 & 維護排程 API 測試
 - MaintenanceCRUD（list / create）
 - calibration-status 摘要端點
 """
+import datetime
+
 import pytest
 
 from app.devices_maintenance import router as maintenance_router
@@ -248,3 +250,78 @@ def test_calibration_status_api(admin_client):
     # 空 DB 時所有設備皆為 unknown
     for device_id in ["CH-01", "CH-02", "CH-03", "CH-04", "CH-05"]:
         assert data[device_id]["status"] == "unknown"
+
+
+# ── 維護類型的允許值 ──────────────────────────────────────────────────────────
+
+
+def test_create_maintenance_rejects_unknown_type(admin_client):
+    """類型只收 preventive／corrective／inspection，其他一律擋。
+
+    這個欄位以前是不設限的字串，前端各自維護一張中文對照表，於是種子資料寫進一個
+    表上沒有的值（routine），畫面就把內部代碼原樣印給使用者看。值的權威要在後端。
+    """
+    resp = admin_client.post("/api/devices/CH-01/maintenances", json={
+        "maintenance_date": "2026-02-10T00:00:00",
+        "maintenance_type": "routine",
+        "description": "例行清潔",
+        "performed_by": "王工程師",
+    })
+
+    assert resp.status_code == 422
+    assert admin_client.get("/api/devices/CH-01/maintenances").json() == []
+
+
+def test_update_maintenance_rejects_unknown_type(admin_client):
+    """編輯也要擋——不然舊資料改一改就能把不認得的值寫回去。"""
+    created = admin_client.post("/api/devices/CH-01/maintenances", json={
+        "maintenance_date": "2026-02-10T00:00:00",
+        "maintenance_type": "preventive",
+        "description": "更換密封條",
+        "performed_by": "王工程師",
+    })
+    assert created.status_code == 201
+
+    resp = admin_client.put(
+        f"/api/devices/CH-01/maintenances/{created.json()['id']}",
+        json={"maintenance_type": "routine"},
+    )
+
+    assert resp.status_code == 422
+    after = admin_client.get("/api/devices/CH-01/maintenances").json()
+    assert after[0]["maintenance_type"] == "preventive"
+
+    # 換成合法值要存成乾淨的字串。欄位在 DB 是純字串，列舉如果落盤成
+    # "MaintenanceType.INSPECTION" 之類的東西，畫面會安靜地變成未知類型。
+    ok = admin_client.put(
+        f"/api/devices/CH-01/maintenances/{created.json()['id']}",
+        json={"maintenance_type": "inspection"},
+    )
+    assert ok.status_code == 200
+    assert admin_client.get("/api/devices/CH-01/maintenances").json()[0]["maintenance_type"] == "inspection"
+
+
+def test_legacy_unknown_type_still_reads(api_client):
+    """資料庫裡躺著不認得的舊值時，讀取端不得整頁壞掉。
+
+    寫入端收斂成三個值之後，很容易順手把輸出定義也改成同一個列舉——那樣舊資料
+    一讀就 500，而前端「未知類型」那段畫面也永遠走不到。這條把那個不對稱釘住。
+    """
+    import app.devices_maintenance as dm_module
+    from app.models import DeviceMaintenance
+
+    with api_client(dm_module, maintenance_router, role="admin") as (client, Session):
+        with Session() as db:
+            db.add(DeviceMaintenance(
+                device_id="CH-01",
+                maintenance_date=datetime.datetime(2026, 2, 10),
+                maintenance_type="routine",     # 這個值現在已經寫不進來了，只會存在於舊資料庫
+                description="例行清潔",
+                performed_by="王工程師",
+            ))
+            db.commit()
+
+        resp = client.get("/api/devices/CH-01/maintenances")
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()[0]["maintenance_type"] == "routine"

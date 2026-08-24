@@ -9,7 +9,8 @@ from fastapi.responses import StreamingResponse
 from .audit_log import log_audit
 from .auth import current_user, require_admin
 from .fixture_lifecycle import require_nonnegative_quantity, set_fixture_quantity
-from .models import Fixture, SessionLocal
+from .fixtures import keeper_name_map
+from .models import Fixture, SessionLocal, User
 
 try:
     import pandas as pd
@@ -73,7 +74,10 @@ def _require_excel_dependencies() -> None:
         raise HTTPException(status_code=500, detail="需要安裝 pandas 和 openpyxl")
 
 
-def _fixture_excel_row(fixture: Fixture) -> dict:
+def _fixture_excel_row(fixture: Fixture, keeper_names: dict[int, str] | None = None) -> dict:
+    # 保管人要匯出「那個人現在叫什麼」，不是連結當下存下來的快照。匯出的檔案會被改一改
+    # 再匯入回來，那時是拿名字去對人；匯出舊名字的話，改過名的人會對不回自己。
+    keeper_name = (keeper_names or {}).get(fixture.keeper_user_id, fixture.keeper_name)
     return {
         "介面": fixture.interface_type,
         "型態": fixture.form_factor,
@@ -86,7 +90,7 @@ def _fixture_excel_row(fixture: Fixture) -> dict:
         "使用頻率": fixture.usage_frequency or "",
         "汰換年限": fixture.replacement_years or "",
         "備註": fixture.note or "",
-        "保管人": fixture.keeper_name or "",
+        "保管人": keeper_name or "",
         "代理人": fixture.deputy_name or "",
         "廠商": fixture.vendor or "",
         "型號": fixture.model_number or "",
@@ -143,8 +147,9 @@ def export_fixtures(_: None = Depends(require_admin)):
             .order_by(Fixture.interface_type)
             .all()
         )
+        keeper_names = keeper_name_map(db, fixtures)
         return _excel_response(
-            pd.DataFrame([_fixture_excel_row(fixture) for fixture in fixtures]),
+            pd.DataFrame([_fixture_excel_row(f, keeper_names) for f in fixtures]),
             "fixtures_export.xlsx",
         )
 
@@ -196,6 +201,26 @@ def _run_import_db(df, col_map, actor, role):
 
     with SessionLocal() as db:
         try:
+            # Excel 的保管人只有名字。剛好對到一個人才連上去，對不到就照原文留著，畫面會
+            # 標成「未連結人員」——不要偷偷丟掉，那是對方表格裡真的有寫的資訊。
+            #
+            # 顯示名稱沒有唯一限制，同名的人可以有兩個。這種時候不猜：連了就等於替使用者
+            # 決定是哪一個王小明，而這整件事要修的就是「保管人到底指誰說不清楚」。
+            users_by_name: dict[str, int] = {}
+            if "keeper_name" in col_map:
+                name_counts: dict[str, int] = {}
+                name_to_id: dict[str, int] = {}
+                for u in db.query(User).filter(User.is_active).all():
+                    if not u.display_name:
+                        continue
+                    name_counts[u.display_name] = name_counts.get(u.display_name, 0) + 1
+                    name_to_id[u.display_name] = u.id
+                users_by_name = {
+                    name: user_id
+                    for name, user_id in name_to_id.items()
+                    if name_counts[name] == 1
+                }
+
             for row_number, (_, row) in enumerate(df.iterrows(), start=2):
                 interface_type = _safe_str(row, col_map, "interface_type") or ""
                 form_factor = _safe_str(row, col_map, "form_factor") or ""
@@ -211,21 +236,31 @@ def _run_import_db(df, col_map, actor, role):
                     _safe_int(row, col_map, "shortage", 0),
                     f"第 {row_number} 列缺貨數",
                 )
+                # 只放進表格裡真的有的欄位。以前是整份覆蓋，所以拿一份只有數量的表格來更新
+                # 庫存，會順手把備註、廠商、保管人全部清空——沒有人會預期匯入是這個意思。
+                # 保管人另外處理：它由「保管人」那一欄推導出兩個欄位。
                 fields = {
-                    "priority": _safe_int(row, col_map, "priority"),
-                    "size": _safe_str(row, col_map, "size"),
-                    "purpose": _safe_str(row, col_map, "purpose"),
-                    "estimated_usage": _safe_float(row, col_map, "estimated_usage"),
-                    "shortage": shortage,
-                    "usage_frequency": _safe_int(row, col_map, "usage_frequency"),
-                    "replacement_years": _safe_str(row, col_map, "replacement_years"),
-                    "note": _safe_str(row, col_map, "note"),
-                    "keeper_name": _safe_str(row, col_map, "keeper_name"),
-                    "deputy_name": _safe_str(row, col_map, "deputy_name"),
-                    "vendor": _safe_str(row, col_map, "vendor"),
-                    "model_number": _safe_str(row, col_map, "model_number"),
-                    "unit_price": _safe_float(row, col_map, "unit_price"),
+                    key: value
+                    for key, value in {
+                        "priority": _safe_int(row, col_map, "priority"),
+                        "size": _safe_str(row, col_map, "size"),
+                        "purpose": _safe_str(row, col_map, "purpose"),
+                        "estimated_usage": _safe_float(row, col_map, "estimated_usage"),
+                        "shortage": shortage,
+                        "usage_frequency": _safe_int(row, col_map, "usage_frequency"),
+                        "replacement_years": _safe_str(row, col_map, "replacement_years"),
+                        "note": _safe_str(row, col_map, "note"),
+                        "deputy_name": _safe_str(row, col_map, "deputy_name"),
+                        "vendor": _safe_str(row, col_map, "vendor"),
+                        "model_number": _safe_str(row, col_map, "model_number"),
+                        "unit_price": _safe_float(row, col_map, "unit_price"),
+                    }.items()
+                    if key in col_map
                 }
+                if "keeper_name" in col_map:
+                    keeper_name = _safe_str(row, col_map, "keeper_name")
+                    fields["keeper_name"] = keeper_name
+                    fields["keeper_user_id"] = users_by_name.get(keeper_name)
                 existing = (
                     db.query(Fixture)
                     .filter(
@@ -238,7 +273,9 @@ def _run_import_db(df, col_map, actor, role):
                 if existing is not None:
                     for key, value in fields.items():
                         setattr(existing, key, value)
-                    set_fixture_quantity(existing, total_quantity)
+                    # 同理：表格沒有「現有數量」這欄時不要把庫存改成 0
+                    if "total_quantity" in col_map:
+                        set_fixture_quantity(existing, total_quantity)
                     updated += 1
                 else:
                     db.add(

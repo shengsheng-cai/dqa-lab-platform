@@ -14,6 +14,7 @@ import datetime
 import pytest
 
 from app.models import DeviceBlockedPeriod, Schedule, ScheduleStatus, Fixture, FixtureLoan
+from app.devices import build_device_list
 from app.schedule_service import advance_running_condition, running_schedule_info
 from app.utils import device_blocked_reason_now
 
@@ -91,6 +92,28 @@ def test_blocked_period_different_device_not_returned(patched_session):
             end_time=now + datetime.timedelta(hours=1),
         )
         assert device_blocked_reason_now("CH-01") is None
+
+
+def test_device_list_uses_latest_end_for_overlapping_maintenance(patched_session):
+    """重疊的維護時段要報最晚解除時間，不能依查詢順序提早放行。"""
+    with patched_session("app.devices", "app.schedule_service") as Session:
+        now = _now_naive()
+        shorter_end = now + datetime.timedelta(hours=1)
+        later_end = now + datetime.timedelta(hours=3)
+        _seed_block(
+            Session, device_id="CH-01", reason="先結束",
+            start_time=now - datetime.timedelta(hours=1), end_time=shorter_end,
+        )
+        _seed_block(
+            Session, device_id="CH-01", reason="最後解除",
+            start_time=now - datetime.timedelta(minutes=30), end_time=later_end,
+        )
+
+        device = build_device_list({"CH-01": {"status": "IDLE"}})[0]
+
+    assert device["maintenance_blocked"] is True
+    assert device["maintenance_reason"] == "最後解除"
+    assert datetime.datetime.fromisoformat(device["maintenance_end_at"]) == later_end
 
 
 # ── 排程推進：只挑 RUNNING，不誤動未來的已確認排程 ────────────────────────────

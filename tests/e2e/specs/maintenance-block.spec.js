@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { resetBackend } from "../helpers/backend.js";
 import { loginAsAdmin } from "../helpers/login.js";
+import { closeModal } from "../helpers/modal.js";
+import { addBlockedPeriod, BLOCKED_PERIODS_MODAL } from "../helpers/blocked-periods.js";
 
 // 每個測試檔跑之前把後端重來一次，跟其他檔案的狀態完全切開
 test.beforeAll(resetBackend);
@@ -31,23 +33,8 @@ test("設備標成維護後，確認排程時就選不到它", async ({ page }) 
 
   await test.step("把 CH-05 設成維護（不可用時段，涵蓋現在）", async () => {
     await page.getByRole("button", { name: "+ 不可用時段" }).click();
-    await page.getByRole("button", { name: "+ 新增" }).click();
-
-    // 表單開始/結束時間預設就是「現在 → 8 小時後」，不用動；只要把設備改成 CH-05。
-    // 選設備的那顆 select 是唯一帶 CH-0x 選項的（日期挑選器那幾顆 select 沒有）。
-    await page.locator("select")
-      .filter({ has: page.locator("option", { hasText: MAINT_DEVICE }) })
-      .selectOption(MAINT_DEVICE);
-    await page.getByPlaceholder("e.g. 年度校正").fill("E2E 維護封鎖");
-
-    // 表單送出的「新增」和上面開表單的「+ 新增」不同字，exact 才不會誤點到上面那顆
-    await page.getByRole("button", { name: "新增", exact: true }).click();
-    await expect(page.getByText("已新增")).toBeVisible();
-
-    // 頁面上會有兩個 ✕：modal 的關閉鈕，和「已新增」toast 自己的關閉鈕。
-    // 把範圍限在這個 modal（toast 不在 modal 的 DOM 子樹裡），才不會 strict mode 撞名。
-    await page.locator("div").filter({ has: page.getByText("管理設備不可用時段") })
-      .getByRole("button", { name: "✕" }).first().click();
+    await addBlockedPeriod(page, { device: MAINT_DEVICE, reason: "E2E 維護封鎖" });
+    await closeModal(page, BLOCKED_PERIODS_MODAL);
   });
 
   await test.step("送出一筆新排程", async () => {
@@ -93,13 +80,7 @@ test("刪除不可用時段要先跳確認，取消就什麼都沒發生", async
   await page.getByRole("button", { name: "+ 不可用時段" }).click();
 
   await test.step("自己建一筆，不吃上一個測試留下的狀態", async () => {
-    await page.getByRole("button", { name: "+ 新增" }).click();
-    await page.locator("select")
-      .filter({ has: page.locator("option", { hasText: DELETE_DEVICE }) })
-      .selectOption(DELETE_DEVICE);
-    await page.getByPlaceholder("e.g. 年度校正").fill(DELETE_REASON);
-    await page.getByRole("button", { name: "新增", exact: true }).click();
-    await expect(page.getByText("已新增")).toBeVisible();
+    await addBlockedPeriod(page, { device: DELETE_DEVICE, reason: DELETE_REASON });
   });
 
   const row = page.getByRole("row").filter({ hasText: DELETE_REASON });

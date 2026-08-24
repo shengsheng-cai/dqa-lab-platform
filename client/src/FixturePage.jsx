@@ -16,6 +16,7 @@ import CreatePurchaseModal from "./components/fixture/CreatePurchaseModal";
 import ConfirmModal from "./components/ConfirmModal";
 import { C } from "./styles/theme";
 import { thStyle, tdStyle, btnPrimary, btnDanger } from "./styles/common";
+import { isUnlinkedKeeper } from "./utils/keeper";
 
 function ResizableTh({ children, defaultWidth, style, onClick }) {
   const [width, setWidth] = useState(defaultWidth || null);
@@ -390,7 +391,8 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                     { label: "型態", key: "form_factor" },
                     { label: "尺寸", key: "size" },
                     { label: "現有", key: "total_quantity" },
-                    { label: "借出", key: "loaned_quantity" },
+                    // 借出那格是展開明細的入口，裡面要放得下「明細」兩個字，比別欄寬一點
+                    { label: "借出", key: "loaned_quantity", width: 92 },
                     { label: "預約", key: "reserved_quantity" },
                     { label: "可借", key: "available_quantity" },
                     { label: "缺貨", key: "shortage" },
@@ -399,9 +401,10 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                     { label: "汰換", key: "estimated_replacement_date" },
                     { label: "保管人", key: "keeper_name" },
                     { label: "實際數量", key: null },
-                  ].map(({ label, key }) => (
+                  ].map(({ label, key, width }) => (
                     <ResizableTh
                       key={label}
+                      defaultWidth={width}
                       style={{
                         ...thStyle,
                         cursor: key ? "pointer" : "default",
@@ -447,6 +450,12 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                       !isNaN(parsedVal) && parsedVal !== f.total_quantity;
                     const isExpanded = expandedFixtureId === f.id;
                     const fixtureLoans = isExpanded ? activeLoans.filter((l) => l.fixture_id === f.id) : [];
+                    const keeperUnlinked = isUnlinkedKeeper(f);
+                    // 一個字串同時給 aria-label 和 title：滑鼠提示和螢幕閱讀器唸出來的
+                    // 應該是同一句，兩份會各自漂走。測試也是靠這個名稱定位那顆按鈕。
+                    const loansLabel = isExpanded
+                      ? "收合借用明細"
+                      : `借出 ${f.loaned_quantity} 個，查看借用明細與歸還`;
                     return (
                     <Fragment key={f.id}>
                     <tr
@@ -466,19 +475,30 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                         {f.size || "—"}
                       </td>
                       <td style={tdStyle}>{f.total_quantity}</td>
-                      <td
-                        style={{
-                          ...tdStyle,
-                          color: f.loaned_quantity > 0 ? C.warning : C.textMuted,
-                          cursor: f.loaned_quantity > 0 ? "pointer" : "default",
-                        }}
-                        onClick={() => f.loaned_quantity > 0 && setExpandedFixtureId(isExpanded ? null : f.id)}
-                      >
+                      {/* 借出明細與「歸還」的唯一入口。以前是可點的數字加一個 9px 三角形，
+                          得先猜到數字能點才找得到歸還。改成真的按鈕：有文字、能聚焦、
+                          Enter／Space 直接生效（原生按鈕自帶），展開狀態走 aria-expanded。 */}
+                      <td style={{ ...tdStyle, color: f.loaned_quantity > 0 ? C.warning : C.textMuted }}>
                         {f.loaned_quantity > 0 ? (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-                            {f.loaned_quantity}
-                            <span style={{ fontSize: 9, color: C.textDim }}>{isExpanded ? "▲" : "▼"}</span>
-                          </span>
+                          <button
+                            onClick={() => setExpandedFixtureId(isExpanded ? null : f.id)}
+                            aria-expanded={isExpanded}
+                            aria-controls={`fixture-loans-${f.id}`}
+                            aria-label={loansLabel}
+                            title={loansLabel}
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: 4,
+                              minHeight: 28, padding: "2px 6px", borderRadius: 4,
+                              background: "transparent", border: `1px solid ${C.border}`,
+                              color: "inherit", font: "inherit", cursor: "pointer",
+                            }}
+                          >
+                            <span>{f.loaned_quantity}</span>
+                            <span style={{ fontSize: 11 }}>{isExpanded ? "收合" : "明細"}</span>
+                            <span aria-hidden="true" style={{ fontSize: 9, color: C.textDim }}>
+                              {isExpanded ? "▲" : "▼"}
+                            </span>
+                          </button>
                         ) : f.loaned_quantity}
                       </td>
                       <td
@@ -528,8 +548,13 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                           return <span style={{ color, fontWeight: daysLeft <= 30 ? 600 : 400 }}>{f.estimated_replacement_date}</span>;
                         })()}
                       </td>
-                      <td style={{ ...tdStyle, color: f.keeper_name ? C.accent : C.textDim }}>
+                      <td style={{ ...tdStyle, color: keeperUnlinked ? C.warning : f.keeper_name ? C.accent : C.textDim }}>
                         {f.keeper_name || "未設定"}
+                        {keeperUnlinked && (
+                          <span style={{ fontSize: 11, marginLeft: 4 }} title="這個名字沒有連到系統裡的人員，開啟「保管人」可以連起來">
+                            （未連結人員）
+                          </span>
+                        )}
                       </td>
                       <td style={tdStyle}>
                         {canOperate ? (
@@ -608,7 +633,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                       )}
                     </tr>
                     {isExpanded && fixtureLoans.length > 0 && (
-                      <tr key={`${f.id}-loans`}>
+                      <tr key={`${f.id}-loans`} id={`fixture-loans-${f.id}`}>
                         <td colSpan={canOperate ? 14 : 13} style={{ padding: 0, background: C.surfaceAlt, borderBottom: `1px solid ${C.border}` }}>
                           <div style={{ padding: "8px 16px 12px 32px" }}>
                             <table style={{ width: "100%", borderCollapse: "collapse" }}>

@@ -20,7 +20,6 @@ export default function AddEditModal({ fixture, onClose, onSuccess }) {
     usage_frequency: fixture?.usage_frequency ?? "",
     replacement_years: fixture?.replacement_years || "",
     note: fixture?.note || "",
-    keeper_name: fixture?.keeper_name || "",
     deputy_name: fixture?.deputy_name || "",
     vendor: fixture?.vendor || "",
     model_number: fixture?.model_number || "",
@@ -57,7 +56,6 @@ export default function AddEditModal({ fixture, onClose, onSuccess }) {
         purpose: form.purpose || null,
         replacement_years: form.replacement_years || null,
         note: form.note || null,
-        keeper_name: form.keeper_name || null,
         deputy_name: form.deputy_name || null,
         vendor: form.vendor || null,
         model_number: form.model_number || null,
@@ -142,10 +140,21 @@ export default function AddEditModal({ fixture, onClose, onSuccess }) {
                 {label("單價")}
                 <input type="number" min={0} value={form.unit_price} onChange={(e) => set("unit_price", e.target.value)} style={inputStyle} />
               </div>
-              <div>
-                {label("保管人")}
-                <input value={form.keeper_name} onChange={(e) => set("keeper_name", e.target.value)} style={inputStyle} />
-              </div>
+              {/* 這裡不給改，新增時也不出現：保管人的唯一來源是列上的「保管人」按鈕，
+                  那裡選的是真的人員。以前這格是自由文字，兩個入口寫到不同地方，
+                  改了按儲存畫面卻不會變。新增中的治具還沒有那一列可以按，所以不顯示。 */}
+              {isEdit && (
+                <div>
+                  {label("保管人")}
+                  <input
+                    value={fixture?.keeper_name || "未設定"}
+                    readOnly
+                    disabled
+                    title="在治具列上的「保管人」修改"
+                    style={inputStyle}
+                  />
+                </div>
+              )}
               <div>
                 {label("代理人")}
                 <input value={form.deputy_name} onChange={(e) => set("deputy_name", e.target.value)} style={inputStyle} />

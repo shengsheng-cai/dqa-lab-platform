@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api from "./api";
-import { DEVICE_IDS } from "./constants";
+import { DEVICE_IDS, POLL_GENERAL_MS } from "./constants";
 import GanttChart from "./components/schedule/GanttChart";
 import NewScheduleModal from "./components/schedule/NewScheduleModal";
 import ScheduleDetailModal from "./components/schedule/ScheduleDetailModal";
@@ -12,7 +12,7 @@ import {
 } from "./components/schedule/scheduleUtils";
 import { C } from "./styles/theme";
 
-export default function SchedulePage({ active, role, initConditions, onInitCondsConsumed, onScheduleChanged, liveDeviceStatuses = {} }) {
+export default function SchedulePage({ active, role, initConditions, onInitCondsConsumed, onScheduleChanged, liveDeviceStatuses = {}, liveDeviceFreeAt = {}, liveDeviceMaintenance = {}, liveDeviceSnapshotReady = false }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
@@ -95,10 +95,16 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
     [fetchAll, onScheduleChanged],
   );
 
+  const fetchAllRef = useRef(fetchAll);
   useEffect(() => {
-    if (active) fetchAll();
-    // fetchAll 刻意不入 deps：只在 active 切換時重抓，避免 identity 變動造成重複請求
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchAllRef.current = fetchAll;
+  }, [fetchAll]);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    fetchAllRef.current();
+    const timer = setInterval(() => fetchAllRef.current(), POLL_GENERAL_MS);
+    return () => clearInterval(timer);
   }, [active]);
 
   const isAdmin = role === "admin";
@@ -288,6 +294,10 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
           schedule={selectedSchedule}
           role={role}
           deviceStatuses={{ ...deviceStatuses, ...liveDeviceStatuses }}
+          deviceFreeAt={liveDeviceFreeAt}
+          blockedPeriods={blockedPeriods}
+          liveMaintenance={liveDeviceMaintenance}
+          liveMaintenanceReady={liveDeviceSnapshotReady}
           onClose={() => setSelectedSchedule(null)}
           onMutation={refreshAfterMutation}
           onUpdated={(updated) => {
