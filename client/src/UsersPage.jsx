@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import api from "./api";
 import { useToast } from "./components/useToast";
 import { C } from "./styles/theme";
@@ -176,7 +176,7 @@ function UserModal({ user, onClose, onSaved }) {
   );
 }
 
-function ConfirmModal({ message, onConfirm, onClose }) {
+function ConfirmModal({ message, onConfirm, onClose, confirmText = "確認刪除", confirmDisabled = false }) {
   return (
     <div
       style={{
@@ -201,7 +201,7 @@ function ConfirmModal({ message, onConfirm, onClose }) {
           gap: 16,
         }}
       >
-        <div style={{ fontSize: 14, color: "#cdd9e5" }}>{message}</div>
+        <div style={{ fontSize: 14, color: "#cdd9e5", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{message}</div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={onClose}
@@ -220,6 +220,7 @@ function ConfirmModal({ message, onConfirm, onClose }) {
           </button>
           <button
             onClick={onConfirm}
+            disabled={confirmDisabled}
             style={{
               flex: 1,
               padding: "8px",
@@ -227,12 +228,13 @@ function ConfirmModal({ message, onConfirm, onClose }) {
               background: "#da3633",
               color: "#fff",
               border: "none",
-              cursor: "pointer",
+              cursor: confirmDisabled ? "not-allowed" : "pointer",
               fontSize: 13,
               fontWeight: 600,
+              opacity: confirmDisabled ? 0.6 : 1,
             }}
           >
-            確認刪除
+            {confirmText}
           </button>
         </div>
       </div>
@@ -252,7 +254,10 @@ function DemoTokenSection({ active }) {
   const [maxUses, setMaxUses] = useState("");
   const [creating, setCreating] = useState(false);
   const [newToken, setNewToken] = useState(null); // 剛建立的 token（高亮顯示）
-  const [deleteTokenId, setDeleteTokenId] = useState(null);
+  const [deleteToken, setDeleteToken] = useState(null);
+  const [deletingToken, setDeletingToken] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const tokenRef = useRef(null);
 
   const fetchTokens = useCallback(async () => {
     if (!active) return;
@@ -263,6 +268,39 @@ function DemoTokenSection({ active }) {
   }, [active]);
 
   useEffect(() => { fetchTokens(); }, [fetchTokens]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
+
+  // 複製失敗時把 Token 選起來讓人自己按 Ctrl/Cmd + C：
+  // 這個提示一關就再也看不到完整 Token，不能只丟一句失敗就算了。
+  // 沒有 clipboard API 的環境下，下面那行會直接丟例外，走的是同一條 fallback。
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(newToken);
+      setCopied(true);
+      showToast("Token 已複製", "success");
+    } catch {
+      const el = tokenRef.current;
+      const sel = window.getSelection();
+      const selected = Boolean(el && sel);
+      if (selected) {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      showToast(
+        selected
+          ? "複製失敗，Token 已選取，請直接按 Ctrl/Cmd + C"
+          : "複製失敗，請手動選取上方 Token 再複製",
+        "error",
+      );
+    }
+  };
 
   const handleCreate = async () => {
     setCreating(true);
@@ -296,17 +334,20 @@ function DemoTokenSection({ active }) {
     }
   };
 
-  const handleDelete = (id) => {
-    setDeleteTokenId(id);
-  };
-
+  // 撤銷失敗時故意不關視窗、也不重整列表：那把 Token 可能還有效，
+  // 要讓管理者留在原地看到它還在，而不是回到一個看起來已經處理完的列表。
   const performDeleteToken = async () => {
-    const id = deleteTokenId;
-    setDeleteTokenId(null);
+    setDeletingToken(true);
     try {
-      await api.delete(`/api/auth/demo-tokens/${id}`);
+      await api.delete(`/api/auth/demo-tokens/${deleteToken.id}`);
+      showToast(`Token「${deleteToken.token}」已撤銷`, "success");
+      setDeleteToken(null);
       fetchTokens();
-    } catch { /* ignore */ }
+    } catch (e) {
+      showToast(e.response?.data?.detail || "撤銷失敗，此 Token 可能仍然有效", "error");
+    } finally {
+      setDeletingToken(false);
+    }
   };
 
   const fmtDate = (iso) => {
@@ -371,13 +412,13 @@ function DemoTokenSection({ active }) {
       {newToken && (
         <div style={{ background: "#1f3a1f", border: "1px solid #238636", borderRadius: 8, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 12, color: "#8b949e" }}>新 Token：</span>
-          <span style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: "#3fb950", letterSpacing: 2 }}>{newToken}</span>
+          <span ref={tokenRef} style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: "#3fb950", letterSpacing: 2 }}>{newToken}</span>
           <span style={{ fontSize: 11, color: "#8b949e" }}>請立即複製，此提示關閉後不再顯示</span>
           <button
-            onClick={() => { navigator.clipboard?.writeText(newToken); }}
-            style={{ marginLeft: "auto", padding: "4px 12px", borderRadius: 4, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 12 }}
+            onClick={handleCopy}
+            style={{ marginLeft: "auto", padding: "4px 12px", borderRadius: 4, background: copied ? "#1f6feb" : "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 12, minWidth: 72 }}
           >
-            複製
+            {copied ? "✓ 已複製" : "複製"}
           </button>
           <button
             onClick={() => setNewToken(null)}
@@ -445,7 +486,7 @@ function DemoTokenSection({ active }) {
                           <button onClick={() => handleToggle(t.id)} style={{ ...iconActionBtn, color: t.is_active ? "#8b949e" : "#3fb950", borderColor: t.is_active ? "#30363d" : "#238636" }}>
                             {t.is_active ? "停用" : "啟用"}
                           </button>
-                          <button onClick={() => handleDelete(t.id)} style={{ ...iconActionBtn, color: "#f85149", borderColor: "#da363344" }}>刪除</button>
+                          <button onClick={() => setDeleteToken(t)} style={{ ...iconActionBtn, color: "#f85149", borderColor: "#da363344" }}>刪除</button>
                         </div>
                       </td>
                     </tr>
@@ -461,11 +502,13 @@ function DemoTokenSection({ active }) {
           </div>
         );
       })()}
-      {deleteTokenId && (
+      {deleteToken && (
         <ConfirmModal
-          message="確定刪除此 Token？"
+          message={`確定撤銷 Token「${deleteToken.token}」${deleteToken.label ? `（${deleteToken.label}）` : ""}？\n撤銷後持有者無法再用它登入，此操作無法復原。`}
+          confirmText={deletingToken ? "撤銷中…" : "確認撤銷"}
+          confirmDisabled={deletingToken}
           onConfirm={performDeleteToken}
-          onClose={() => setDeleteTokenId(null)}
+          onClose={() => { setDeleteToken(null); setDeletingToken(false); }}
         />
       )}
     </div>
@@ -522,14 +565,16 @@ export default function UsersPage({ active, role }) {
   }, [fetchUsers]);
 
   const handleToggleActive = async (user) => {
+    const action = user.is_active ? "停用" : "啟用";
     try {
       await api.patch(`/api/auth/users/${user.id}`, {
         is_active: !user.is_active,
       });
+      showToast(`已${action}「${user.display_name}」`, "success");
       fetchUsers();
     } catch (e) {
       console.error(e);
-      showToast("激活狀態更新失敗", "error");
+      showToast(e.response?.data?.detail || `「${user.display_name}」${action}失敗`, "error");
     }
   };
 
