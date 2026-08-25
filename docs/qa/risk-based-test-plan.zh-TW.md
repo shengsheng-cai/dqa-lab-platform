@@ -36,7 +36,7 @@
 | **R-09** | 登入憑證跑到可以被撿去重放的地方——網址、access log，或任何在請求結束後還留著的紀錄 | High | Medium | P1 | `test_ws_auth.py`、`ws-auth.spec.js` | 涵蓋的是這個應用自己控制得到的憑證；部署平台的代理或日誌管線自己會記下什麼，不是測試套件觀察得到的範圍 |
 | **R-10** | 核心背景工作停掉，服務對外卻仍宣稱自己正常 | Medium | Low | P2 | `test_health.py` | 涵蓋的是探測說不說實話；模擬器主迴圈本身仍然沒有外層防護，部署端要不要接監控也不在這裡 |
 | **R-11** | 刪掉一筆資料後，其他資料仍指向已經不存在的東西，因為宣告的關聯根本沒有生效 | Medium | Medium | P2 | `test_foreign_key_enforcement.py`、`test_schema_migrations.py` | 涵蓋的是 schema 宣告了什麼、資料庫又照做了什麼；已經含有孤兒的資料庫會被 migration 擋下而不是自動修補，那仍然是人要決定的事 |
-| **R-12** | 不可逆的操作單擊即生效，把正在進行中的工作直接毀掉 | Medium | Medium | P1 | `tests/e2e/specs/device-stop-confirm.spec.js`、`tests/e2e/specs/fixture-loan.spec.js`、`tests/e2e/specs/maintenance-block.spec.js`、`tests/e2e/specs/purchase-arrival-confirm.spec.js` | 目前只擋住傷害最大的幾個動作。刪除採購單或排程，以及治具列上直接送出的快速盤點欄位，都還是按一下就生效，或是確認訊息沒有寫出它要動的是哪一筆；這些仍在待補清單裡 |
+| **R-12** | 不可逆的操作單擊即生效，把正在進行中的工作直接毀掉 | Medium | Medium | P1 | `tests/e2e/specs/device-stop-confirm.spec.js`、`tests/e2e/specs/fixture-loan.spec.js`、`tests/e2e/specs/maintenance-block.spec.js`、`tests/e2e/specs/purchase-arrival-confirm.spec.js`、`tests/e2e/specs/users-page-feedback.spec.js` | 目前只擋住傷害最大的幾個動作。刪除採購單或排程，以及治具列上直接送出的快速盤點欄位，都還是按一下就生效，或是確認訊息沒有寫出它要動的是哪一筆；這些仍在待補清單裡 |
 
 ## 4. 執行順序
 
