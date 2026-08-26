@@ -1241,7 +1241,12 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
       {deletePOTarget && (
         <ConfirmModal
           title="刪除採購單"
-          message="確認刪除此採購單？"
+          message={[
+            "刪除後這張採購單不會留下紀錄，此操作無法復原。",
+            "",
+            `治具：${deletePOTarget.fixture_label}`,
+            `數量：${deletePOTarget.quantity}`,
+          ].join("\n")}
           type="danger"
           confirmText="刪除"
           onConfirm={performDelete}

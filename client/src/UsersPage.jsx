@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import api from "./api";
 import { useToast } from "./components/useToast";
+import ConfirmModal from "./components/ConfirmModal";
 import { C } from "./styles/theme";
 
 const ROLE_LABELS = { admin: "管理者" };
@@ -169,72 +170,6 @@ function UserModal({ user, onClose, onSaved }) {
             }}
           >
             {loading ? "處理中..." : isEdit ? "儲存" : "新增"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmModal({ message, onConfirm, onClose, confirmText = "確認刪除", confirmDisabled = false }) {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 2100,
-      }}
-    >
-      <div
-        style={{
-          background: "#161b22",
-          border: "1px solid #30363d",
-          borderRadius: 12,
-          padding: 24,
-          width: 320,
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-      >
-        <div style={{ fontSize: 14, color: "#cdd9e5", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{message}</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={onClose}
-            style={{
-              flex: 1,
-              padding: "8px",
-              borderRadius: 6,
-              background: "transparent",
-              color: "#8b949e",
-              border: "1px solid #30363d",
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-            取消
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={confirmDisabled}
-            style={{
-              flex: 1,
-              padding: "8px",
-              borderRadius: 6,
-              background: "#da3633",
-              color: "#fff",
-              border: "none",
-              cursor: confirmDisabled ? "not-allowed" : "pointer",
-              fontSize: 13,
-              fontWeight: 600,
-              opacity: confirmDisabled ? 0.6 : 1,
-            }}
-          >
-            {confirmText}
           </button>
         </div>
       </div>
@@ -504,11 +439,13 @@ function DemoTokenSection({ active }) {
       })()}
       {deleteToken && (
         <ConfirmModal
+          title="撤銷訪客 Token"
           message={`確定撤銷 Token「${deleteToken.token}」${deleteToken.label ? `（${deleteToken.label}）` : ""}？\n撤銷後持有者無法再用它登入，此操作無法復原。`}
+          type="danger"
           confirmText={deletingToken ? "撤銷中…" : "確認撤銷"}
           confirmDisabled={deletingToken}
           onConfirm={performDeleteToken}
-          onClose={() => { setDeleteToken(null); setDeletingToken(false); }}
+          onCancel={() => { setDeleteToken(null); setDeletingToken(false); }}
         />
       )}
     </div>
@@ -543,6 +480,7 @@ export default function UsersPage({ active, role }) {
   const [loadError, setLoadError] = useState("");
   const [modalUser, setModalUser] = useState(undefined); // undefined=隱藏, null=新增, obj=編輯
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const { showToast } = useToast();
 
   const fetchUsers = useCallback(async () => {
@@ -578,16 +516,22 @@ export default function UsersPage({ active, role }) {
     }
   };
 
+  // 只有成功才把視窗收掉。失敗時人還在，畫面不能看起來已經處理完，
+  // 不然使用者以為刪掉了，那個人其實還能登入。
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    const name = deleteTarget.display_name;
+    setDeleting(true);
     try {
       await api.delete(`/api/auth/users/${deleteTarget.id}`);
+      showToast(`已刪除「${name}」`, "success");
       setDeleteTarget(null);
       fetchUsers();
     } catch (e) {
-      showToast(e.response?.data?.detail || "刪除失敗", "error");
+      console.error(e);
+      showToast(e.response?.data?.detail || `「${name}」刪除失敗`, "error", 4000, e.response?.data?.hint);
     } finally {
-      setDeleteTarget(null);
+      setDeleting(false);
     }
   };
 
@@ -704,9 +648,13 @@ export default function UsersPage({ active, role }) {
       {/* 刪除確認 Modal */}
       {deleteTarget && (
         <ConfirmModal
+          title="刪除人員"
           message={`確定要刪除「${deleteTarget.display_name}」？此操作無法復原。`}
+          type="danger"
+          confirmText={deleting ? "刪除中…" : "確認刪除"}
+          confirmDisabled={deleting}
           onConfirm={handleDelete}
-          onClose={() => setDeleteTarget(null)}
+          onCancel={() => { setDeleteTarget(null); setDeleting(false); }}
         />
       )}
     </div>

@@ -580,6 +580,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
 
     if (newCompleted[stepId]) {
       setConfirmModal({
+        title: "取消步驟",
         message: `取消「Step ${stepId}」將清除後續所有步驟，確定？`,
         onConfirm: async () => {
           steps.slice(stepIndex).forEach((s) => delete newCompleted[s.step_id]);
@@ -691,6 +692,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
                     <button
                       onClick={() => {
                         setConfirmModal({
+                          title: "提前結束測試",
                           message: "確定提前結束測試？設備將跳過剩餘步驟，立即開始降溫回待機狀態。",
                           onConfirm: async () => {
                             try {
