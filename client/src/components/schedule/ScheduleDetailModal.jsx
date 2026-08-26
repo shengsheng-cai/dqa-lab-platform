@@ -489,7 +489,13 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
     {showDeleteConfirm && (
       <ConfirmModal
         title="刪除排程"
-        message="確定刪除此排程？此動作無法復原。"
+        message={[
+          "刪除後這筆排程不會留下紀錄，此動作無法復原。",
+          "",
+          `專案：${schedule.project_number} / ${schedule.sample_name}`,
+          `設備：${schedule.device_id || "—"}`,
+          `狀態：${schedule.status}`,
+        ].join("\n")}
         type="danger"
         confirmText="刪除"
         onConfirm={performDel}

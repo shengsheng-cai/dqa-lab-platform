@@ -26,6 +26,9 @@
 - 治具歸還一律開 `ReturnModal`（選正常／損壞／遺失、填備註、改實際歸還日，損壞與遺失要二次確認），不在列上直接送出
 - SchedulePage 的甘特圖是 `flexShrink:0` 固定區塊（308px），永遠可見，**不可改為可捲動**
 - 「紀錄」與「感測器 QC 控制圖」是 Modal，不是 tab；state 放在 ControlCenter 主元件
+- **站內只有一支確認視窗**：`components/ConfirmModal.jsx`。**不要在頁面檔案裡自己再寫一支**，也不要用瀏覽器原生的 `window.confirm`。以前 UsersPage 自己有一支同名的，結果人員管理頁的兩個確認視窗跟站內其他九個長得不一樣、能力還互補（一邊有標題與危險分級，一邊有送出中停用），而同名也會讓人誤以為在讀共用元件。呼叫時**一定要給 `title`**，那個字同時是視窗標題與 `aria-label`；送出中要擋重複送出就給 `confirmDisabled`，但**取消鈕不跟著停用**——送出沒有逾時可靠，卡住時至少還有路可以離開
+- **刪除的確認訊息要寫出刪的是哪一筆**：確認視窗蓋住的正是操作人員要核對的那一列，只寫「確定刪除？」的話，點錯列時最後一關也救不回來。採購單寫治具與數量、排程寫專案與樣品、維護紀錄寫設備與類型與日期（`FixturePage.jsx` 的 `PurchaseTab`、`ScheduleDetailModal.jsx`、`MaintenancePage.jsx`）
+- **失敗不要把確認視窗關掉**：只有成功才收掉視窗並講出動到的是誰，失敗留在原地並寫出具體錯誤（`UsersPage.jsx` 的刪除人員與撤銷 Token 是範本）。失敗還收掉視窗的話，畫面會回到一個看起來已經處理完的列表，但那筆其實還在
 - 刪除設備不可用時段一律開 `ConfirmModal`（`ManageBlockedPeriodsModal.jsx`），訊息要列出設備、起訖與原因：那一列同時擋著排程排入與現場啟動測試，刪掉等於把鎖拿掉，而畫面上只會看到一句「已刪除」
 - 採購「確認到貨」一律開 `ConfirmModal`（`FixturePage.jsx` 的 `PurchaseTab`），列出治具、到貨數量與「庫存 X → Y」：一按同時改採購狀態與治具庫存，而 `arrived` 是終態，畫面上沒有回到待採購的路
 - 治具總表「借出」那格是**一顆有文字的按鈕**（`FixturePage.jsx`），不是可點的數字：它是借用明細與「歸還」的唯一入口，只放一個 9px 三角形的話，找不到的人會以為系統沒有歸還流程。要保留可聚焦、Enter／Space 生效（用原生 `<button>` 就有）、`aria-expanded` 表達展開狀態、`aria-controls` 指向明細列。數量 0 時不給按鈕

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import api from "./api";
 import { DEVICE_IDS } from "./constants";
 import { useToast } from "./components/useToast";
+import ConfirmModal from "./components/ConfirmModal";
 import DatePicker from "./components/fixture/DatePicker";
 import DateTimePicker from "./components/schedule/DateTimePicker";
 import { localDateStamp } from "./utils/timezone";
@@ -89,7 +90,8 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
   const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { record, type }
 
   const fetchCalibrations = useCallback(async () => {
     try {
@@ -182,19 +184,35 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
     }
   };
 
-  const handleDelete = async (id, type) => {
-    if (!window.confirm("確定刪除？")) return;
-    setDeleting(id);
+  // 確認視窗蓋住的就是要刪的那一列，所以刪的是哪一筆只能寫在訊息裡：
+  // 兩張表都是一堆日期，離開那一列就認不出來了。
+  const describeDeleteTarget = ({ record, type }) =>
+    type === "calibrations"
+      ? {
+        title: "刪除校驗紀錄",
+        lines: [`設備：${selectedDevice}`, "類型：校驗紀錄", `校驗日期：${formatDateOnly(record.calibration_date)}`],
+      }
+      : {
+        title: "刪除維護紀錄",
+        lines: [`設備：${selectedDevice}`, `類型：${maintenanceTypeLabel(record.maintenance_type)}`, `維護日期：${formatLocalDateTime(record.maintenance_date)}`],
+      };
+
+  const deleteInfo = deleteTarget ? describeDeleteTarget(deleteTarget) : null;
+
+  const performDelete = async () => {
+    if (!deleteTarget) return;
+    const { record, type } = deleteTarget;
+    setDeleting(true);
     try {
-      if (type === "calibrations") await api.delete(`/api/devices/${selectedDevice}/calibrations/${id}`);
-      else await api.delete(`/api/devices/${selectedDevice}/maintenances/${id}`);
+      await api.delete(`/api/devices/${selectedDevice}/${type}/${record.id}`);
       showToast("已刪除", "success");
+      setDeleteTarget(null);
       if (type === "calibrations") fetchCalibrations(); else fetchMaintenances();
       onCalibrationChange?.();
     } catch (e) {
       showToast(e.response?.data?.detail || "刪除失敗", "error");
     } finally {
-      setDeleting(null);
+      setDeleting(false);
     }
   };
 
@@ -240,7 +258,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                   {role === "admin" && (
                     <td style={tdS}>
                       <button onClick={() => openEdit(c, "calibrations")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.surfaceHover, border: `1px solid ${C.border}`, color: C.textMuted, cursor: "pointer" }}>編輯</button>
-                      <button onClick={() => handleDelete(c.id, "calibrations")} disabled={deleting === c.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.errorBg, border: "1px solid #5a2d2d", color: C.error, cursor: "pointer" }}>刪除</button>
+                      <button onClick={() => setDeleteTarget({ record: c, type: "calibrations" })} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.errorBg, border: "1px solid #5a2d2d", color: C.error, cursor: "pointer" }}>刪除</button>
                     </td>
                   )}
                 </tr>
@@ -274,7 +292,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                   {role === "admin" && (
                     <td style={tdS}>
                       <button onClick={() => openEdit(m, "maintenances")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.surfaceHover, border: `1px solid ${C.border}`, color: C.textMuted, cursor: "pointer" }}>編輯</button>
-                      <button onClick={() => handleDelete(m.id, "maintenances")} disabled={deleting === m.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.errorBg, border: "1px solid #5a2d2d", color: C.error, cursor: "pointer" }}>刪除</button>
+                      <button onClick={() => setDeleteTarget({ record: m, type: "maintenances" })} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.errorBg, border: "1px solid #5a2d2d", color: C.error, cursor: "pointer" }}>刪除</button>
                     </td>
                   )}
                 </tr>
@@ -338,6 +356,18 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
             </div>
           </div>
         </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmModal
+          title={deleteInfo.title}
+          message={["刪除後這筆紀錄不會保留，此操作無法復原。", "", ...deleteInfo.lines].join("\n")}
+          type="danger"
+          confirmText={deleting ? "刪除中..." : "刪除"}
+          confirmDisabled={deleting}
+          onConfirm={performDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );

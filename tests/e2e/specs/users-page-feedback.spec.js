@@ -139,3 +139,46 @@ test("人員啟用切換的成功與失敗都要說出是誰", async ({ page }) 
     await expect(row.getByRole("button", { name: "啟用", exact: true })).toBeVisible();
   });
 });
+
+// 刪除人員以前是：成功沒有任何訊息，失敗照樣把確認視窗關掉。
+// 後者比較糟——畫面回到一個看起來已經處理完的列表，但那個人其實還在、還能登入。
+// 同一頁的撤銷 Token 早就是「失敗留在原地」，兩種相反的做法並存。
+test("刪除人員的成功與失敗都要說出是誰，失敗還要留在原地", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "人員管理" }).click();
+  const userTable = userTableOf(page);
+
+  await test.step("先建一位測試人員", async () => {
+    await page.getByRole("button", { name: "+ 新增" }).click();
+    await page.getByPlaceholder("例：王小明").fill("刪除測試員");
+    await page.getByPlaceholder("例：管理者、工程師、保管人").fill("工程師");
+    await page.getByRole("button", { name: "新增", exact: true }).click();
+    await expect(userTable.getByRole("row").filter({ hasText: "刪除測試員" })).toBeVisible();
+  });
+
+  const row = userTable.getByRole("row").filter({ hasText: "刪除測試員" });
+  const dialog = page.getByRole("dialog", { name: "刪除人員" });
+
+  await test.step("失敗要留在原地：人還在，視窗就不能收掉", async () => {
+    await page.route("**/api/auth/users/*", (route) =>
+      route.request().method() === "DELETE"
+        ? route.fulfill({ status: 500, contentType: "application/json", body: '{"detail":null}' })
+        : route.continue(),
+    );
+    await row.getByRole("button", { name: "刪除", exact: true }).click();
+    await dialog.getByRole("button", { name: "確認刪除" }).click();
+
+    await expect(page.getByText("「刪除測試員」刪除失敗")).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await expect(row).toBeVisible();
+  });
+
+  await test.step("成功才收掉視窗，並講出刪掉的是誰", async () => {
+    await page.unroute("**/api/auth/users/*");
+    await dialog.getByRole("button", { name: "確認刪除" }).click();
+
+    await expect(page.getByText("已刪除「刪除測試員」")).toBeVisible();
+    await expect(dialog).toBeHidden();
+    await expect(row).toHaveCount(0);
+  });
+});

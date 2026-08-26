@@ -42,6 +42,7 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 - **登入連錯 5 次會鎖 IP 10 分鐘**（記憶體計數）。寫負向測試時小心，每個測試檔重開後端剛好會清掉
 - **訪客相關測試**要設 `DEMO_PASSWORD`，沒設後端會直接放行、測起來是假的。`loginAsGuest` 拿這個 master key 直接進，不用先開訪客 token
 - **Toast 和 Modal 都有 ✕ 關閉鈕**，用 `getByRole('button',{name:'✕'})` 會 strict-mode 撞名（畫面上同時有兩顆）。要關某個 modal，就把定位 scope 在那個 modal 裡（toast 不在 modal 的 DOM 子樹），別在整頁找 ✕。
+- **確認視窗用 `getByRole('dialog', { name: '標題' })` 定位**：`ConfirmModal` 有 `role="dialog"`，標題就是它的 accessible name。其他 modal（`ModalShell`、`ScheduleModalShell` 撐著的那些）還沒有 dialog 角色，只能沿用「把定位 scope 在含某個獨有文字的容器裡」那種綁 DOM 巢狀的寫法——那種寫法前端多包一層 div 就會定到別的節點，能用 role 就不要用它
 - 定位優先用畫面文字，前端目前沒有 test id
 
 ## Backend 單元測試（pytest）
