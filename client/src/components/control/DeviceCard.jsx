@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import {
   parseUtcDate,
-  STATUS_CONFIG,
+  deviceStatusBadge,
   ACTIVE_STATUSES,
   IDLE_STATUS,
   FINISHING_STATUS,
@@ -62,7 +62,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
   // is_blocked 可能與執行狀態同時存在；設備仍在運轉時要顯示真實狀態，
   // 只有底層狀態為 IDLE 才改用不可用樣式。
   const isBlocked = device.is_blocked && device.status === IDLE_STATUS;
-  const cfg = isBlocked ? STATUS_CONFIG.BLOCKED : (STATUS_CONFIG[device.status] || STATUS_CONFIG.OFFLINE);
+  const cfg = deviceStatusBadge(device.status, isBlocked);
   const remaining = useCountdown(device.estimated_end_at);
   const isActive = ACTIVE_STATUSES.includes(device.status);
   const isEmergency = device.status === EMERGENCY_STATUS;
@@ -119,8 +119,8 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
               📊
             </button>
           )}
-          <span style={{ fontSize: 10, fontWeight: 600, color: cfg.color, whiteSpace: "nowrap" }}>
-            {cfg.label}
+          <span title={cfg.code} style={{ fontSize: 10, fontWeight: 600, color: cfg.color, whiteSpace: "nowrap" }}>
+            {cfg.zh}
           </span>
         </span>
       </div>

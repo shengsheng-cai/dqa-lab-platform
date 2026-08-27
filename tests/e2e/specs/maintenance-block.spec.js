@@ -22,7 +22,7 @@ test.beforeAll(resetBackend);
 // 每台都 disable 了，也會「看起來選不到」。所以同一個下拉裡再證明「健康的機器照樣選得到」——
 // 這樣綠燈才代表 disable 是針對維護、不是整排壞掉。
 
-const MAINT_DEVICE = "CH-05"; // demo 重灌後穩定為 IDLE、沒有排程掛著，封鎖後會顯示成 BLOCKED
+const MAINT_DEVICE = "CH-05"; // demo 重灌後穩定為 IDLE、沒有排程掛著，封鎖後會顯示成「不可用」
 const HEALTHY_DEVICE = "CH-04"; // demo 重灌後為 IDLE 且未封鎖 → 下拉裡照樣選得到
 const PROJECT_NO = "E2E-MAINT-001";
 const SAMPLE_NAME = "E2E 維護測試樣品";
@@ -56,9 +56,9 @@ test("設備標成維護後，確認排程時就選不到它", async ({ page }) 
     const deviceSelect = page.locator("select")
       .filter({ has: page.locator("option", { hasText: "自動選擇最早可用設備" }) });
 
-    // 負向：維護那台標成 (BLOCKED) 且不能選——把「選不到」綁死在「因為維護」
+    // 負向：維護那台標成「不可用」且不能選——把「選不到」綁死在「因為維護」
     const maintOption = deviceSelect.locator("option", { hasText: MAINT_DEVICE });
-    await expect(maintOption).toHaveText(new RegExp(`${MAINT_DEVICE} \\(BLOCKED\\)`));
+    await expect(maintOption).toHaveText(`${MAINT_DEVICE}（不可用）`);
     await expect(maintOption).toBeDisabled();
 
     // 正向對照：健康那台照樣選得到，證明不是整排 disable、下拉本身是好的

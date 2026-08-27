@@ -16,6 +16,22 @@
 - 取日期用 `localDateStamp`，**不要寫 `toISOString().slice(0,10)`**——那是 UTC，台北凌晨會少一天
 - 判斷一支 utility 有沒有人用，不能只 grep 原名：`constants.js` 會把 `parseUTC` 改名成 `parseUtcDate` 再轉出去，要連別名一起找
 
+## 後端代碼不要直接顯示給使用者
+
+畫面上不得出現後端的內部代碼（設備狀態、`sim_phase`、異常類型這一類），一律經對照表翻成中文。
+這條擋的是「使用者得先看懂英文 enum 才知道現在怎麼了」。
+
+- **對照表放哪**：設備狀態與相位在 `constants.js`（它已經有 `STATUS_CONFIG`、`SIM_PHASE_LABEL`、
+  `deviceStatusZh`、`deviceStatusBadge`）；其他領域的放 `utils/`，`utils/maintenance.js` 與
+  `utils/errorTypes.js` 是範本。同一份代碼不要在兩個地方各翻一次
+- **沒收錄的值要看得出來**，不能變空白、也不能只把原碼丟出去：寫成「其他異常（原碼）」「未知類型（原碼）」
+  這種形式。空白比顯示英文更糟——使用者看到的是「這裡本來就沒東西」，不是「有東西我看不懂」
+- **需要原碼除錯就放 `title`**，不要放進可見文字
+- **判斷仍然用代碼**，不要拿中文字串當條件。顯示走對照表、邏輯走 enum，兩件事分開
+- **排程狀態是例外**：後端 `ScheduleStatus` 的值本來就是中文（待審核／已確認／進行中……），直接渲染即可
+- 漏收一個不會有任何錯誤訊息，只會安靜地少一塊。相位那份由
+  `backend/tests/test_sim_phase_labels.py` 擋著；新增對照表時想一下同樣的漏法要怎麼擋
+
 ## 佈局上不可改的決定
 
 畫面現在長什麼樣，打開 `ControlCenter.jsx` 就看得到；這裡只列改動前要先知道的決定。

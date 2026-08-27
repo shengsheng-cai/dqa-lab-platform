@@ -377,7 +377,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                       const blocked = st === "EMERGENCY" || st === "BLOCKED";
                       return (
                         <option key={id} value={id} disabled={blocked}>
-                          {id}{st ? ` (${st})` : ""}
+                          {id}{st ? `（${deviceStatusZh(st)}）` : ""}
                         </option>
                       );
                     })}

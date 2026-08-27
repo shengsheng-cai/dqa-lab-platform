@@ -1,7 +1,7 @@
 import React from "react";
 import TempChart from "./TempChart";
 import ExecutionInfoPanel from "./ExecutionInfoPanel";
-import { STATUS_CONFIG, DEVICE_IDS, ACTIVE_STATUSES, FINISHING_STATUS, OFFLINE_STATUS, EMERGENCY_STATUS } from "../../constants";
+import { deviceStatusBadge, deviceStatusZh, DEVICE_IDS, ACTIVE_STATUSES, FINISHING_STATUS, IDLE_STATUS, OFFLINE_STATUS, EMERGENCY_STATUS } from "../../constants";
 import { formatLocal } from "../../utils/timezone";
 
 const MonitorSide = ({
@@ -13,7 +13,7 @@ const MonitorSide = ({
   onSelectDevice,
   embedded = false,
 }) => {
-  const sc = STATUS_CONFIG[data.status] || STATUS_CONFIG.OFFLINE;
+  const sc = deviceStatusBadge(data.status);
   const isActive = ACTIVE_STATUSES.includes(data.status);
   const isFinishing = data.status === FINISHING_STATUS;
   const isOffline = data.status === OFFLINE_STATUS;
@@ -28,6 +28,7 @@ const MonitorSide = ({
           <div className="status-row">
             <span className={`status-dot ${data.status.toLowerCase()}`} />
             <span
+              title={sc.code}
               style={{
                 padding: "2px 8px",
                 borderRadius: 4,
@@ -39,7 +40,7 @@ const MonitorSide = ({
                 letterSpacing: 0.5,
               }}
             >
-              {data.status}
+              {sc.zh}
             </span>
             <span className="update-time">{formatLocal(data.timestamp, "time")}</span>
           </div>
@@ -78,7 +79,7 @@ const MonitorSide = ({
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {DEVICE_IDS.map((id) => {
               const d = allDevices[id];
-              const s = STATUS_CONFIG[d?.status] || STATUS_CONFIG.OFFLINE;
+              const s = deviceStatusBadge(d?.status);
               const isSelected = id === selectedDevice;
               return (
                 <button
@@ -117,7 +118,7 @@ const MonitorSide = ({
                 ? "⚠️ 緊急停止已觸發"
                 : isOffline
                   ? "等待後端連線"
-                  : "STANDBY (IDLE)"}
+                  : deviceStatusZh(IDLE_STATUS)}
         </div>
       </div>
 

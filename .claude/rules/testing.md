@@ -67,7 +67,7 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 
 - 測試檔放在 `client/src/__tests__/`，命名 `*.test.js`
 - 執行：`cd client && npm test`；監看模式：`npm run test:watch`。**一律走 npm script**，不要直接跑 `npx vitest run`——時區是釘在 script 上的（見下）
-- 測試目標：**純邏輯**的 utility 函式 —— `errorMessages.js`、`timezone.js`、`validation.js`、`download.js` 的 `buildReportFilename`、`executionPayload.js` 的 `buildExecutionPayload`
+- 測試目標：**純邏輯**的函式——`client/src/utils/` 與 `constants.js` 裡不碰 DOM、不打網路的那些（對照表、格式化、驗證、組 payload）。現在有哪幾支看 `client/src/__tests__/`，這裡不列，列了就會漂
 - 碰 DOM 或網路的不放進 Vitest（如 `download.js` 的 `downloadBlob`，它建 `<a>` 點下去）；不做 Vitest 元件渲染測試，重要流程由 Playwright E2E 驗證，其餘畫面再人工檢查
 - 時區固定在 `Asia/Taipei`，釘在 `package.json` 的 test script（`TZ=...` 前綴）。`formatLocal` / `parseDateOnlyLocal` 的正確性就是「UTC 轉本地」，不釘的話本機（+08）跟 CI（UTC）會得到不同字串。`vite.config.js` 的 `test.env.TZ` 是給繞過 npm script 的跑法補的，但它只在 vitest 預設的 forks 模式有效，別把它當唯一保險。`timezone.test.js` 第一條就在確認時區，它紅了代表釘子鬆了，去修釘子、不要改後面的期望值
 - `Intl` 輸出的日期時間分隔符不是一般空格（目前 ICU 是 U+2009），且會隨 Node 版本變。斷言前先用 `s.replace(/\s/g, " ")` 正規化，不然會出現「看起來一模一樣卻不相等」的紅字

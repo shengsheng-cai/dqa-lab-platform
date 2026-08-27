@@ -19,7 +19,7 @@ test.describe("正常停止的防誤觸確認", () => {
     // 少了 visible 過濾會選到看不見的那顆、卡到逾時。
     await page.getByText(DEVICE, { exact: true }).filter({ visible: true }).first().click();
     const panel = page.locator("section.operation-box").first();
-    await expect(panel).toContainText(`${DEVICE} — RUNNING`);
+    await expect(panel).toContainText(`${DEVICE} — 執行中`);
 
     await page.getByRole("button", { name: "⏹ 正常停止" }).click();
 
@@ -35,6 +35,6 @@ test.describe("正常停止的防誤觸確認", () => {
     await expect(dialogTitle).toBeHidden();
 
     // 取消就是什麼都沒發生：設備還在跑，沒有偷偷把停止送出去。
-    await expect(panel).toContainText(`${DEVICE} — RUNNING`);
+    await expect(panel).toContainText(`${DEVICE} — 執行中`);
   });
 });
