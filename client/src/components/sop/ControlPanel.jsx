@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  STATUS_CONFIG,
+  deviceStatusBadge,
   ACTIVE_STATUSES,
   FINISHING_STATUS,
   OFFLINE_STATUS,
@@ -17,7 +17,7 @@ const ControlPanel = ({
   onAction,
   isBlocked,
 }) => {
-  const sc = isBlocked ? STATUS_CONFIG.BLOCKED : (STATUS_CONFIG[data.status] || STATUS_CONFIG.OFFLINE);
+  const sc = deviceStatusBadge(data.status, isBlocked);
   const isOffline = data.status === OFFLINE_STATUS;
   const isEmergency = data.status === EMERGENCY_STATUS;
   const isFinishing = data.status === FINISHING_STATUS;
@@ -41,6 +41,7 @@ const ControlPanel = ({
         <span className="pulse-icon" />
         <h2>系統控制面板</h2>
         <span
+          title={sc.code}
           style={{
             marginLeft: "auto",
             padding: "2px 10px",
@@ -52,7 +53,7 @@ const ControlPanel = ({
             border: `1px solid ${sc.color}44`,
           }}
         >
-          {selectedDevice} — {isBlocked ? "不可用" : data.status}
+          {selectedDevice} — {sc.zh}
         </span>
       </div>
 

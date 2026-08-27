@@ -67,7 +67,7 @@ test("申請排程並確認後，系統會自動選機並把設備開起來", as
     const deviceId = (await row.textContent()).match(/CH-0\d/)[0];
     const card = page
       .locator("div")
-      .filter({ hasText: new RegExp(`^${deviceId}[\\s\\S]*RUNNING`) })
+      .filter({ hasText: new RegExp(`^${deviceId}[\\s\\S]*執行中`) })
       .last();
     await expect(card).toBeVisible();
   });

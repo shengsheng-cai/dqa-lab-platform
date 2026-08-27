@@ -92,7 +92,7 @@ test("設備收尾時，條件銜接按鈕保留在原位、停用並說明原�
   await page.getByRole("button", { name: "⏹ 正常停止" }).click();
   await page.getByRole("button", { name: "確認", exact: true }).click();
   await expect(page.locator("section.operation-box").first()).toContainText(
-    `${RUNNING_DEVICE} — FINISHING`,
+    `${RUNNING_DEVICE} — 收尾降溫中`,
   );
 
   await page.getByRole("button", { name: /^排程/ }).click();

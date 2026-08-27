@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import api from "./api";
 import { formatLocal } from "./utils/timezone";
+import { errorTypeLabel, EMERGENCY_ERROR_TYPE } from "./utils/errorTypes";
 
 function fmtDatetime(str) {
   if (!str) return "—";
@@ -103,7 +104,7 @@ const ErrorLog = ({ active = true }) => {
               marginTop: 6,
             }}
           >
-            {logs.filter((l) => l.error_type === "EMERGENCY").length}
+            {logs.filter((l) => l.error_type === EMERGENCY_ERROR_TYPE).length}
           </div>
         </div>
         <div style={{ ...card, borderLeft: "3px solid #f0a500" }}>
@@ -164,7 +165,7 @@ const ErrorLog = ({ active = true }) => {
             marginBottom: 16,
           }}
         >
-          異常紀錄列表 ERROR LOG
+          異常紀錄列表
         </div>
         {loading ? (
           <div
@@ -235,6 +236,7 @@ const ErrorLog = ({ active = true }) => {
                   </td>
                   <td style={{ padding: "10px 12px" }}>
                     <span
+                      title={log.error_type}
                       style={{
                         padding: "2px 8px",
                         borderRadius: 4,
@@ -243,9 +245,10 @@ const ErrorLog = ({ active = true }) => {
                         color: "#f85149",
                         background: "#2d0f0f",
                         border: "1px solid #f8514944",
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      {log.error_type}
+                      {errorTypeLabel(log.error_type)}
                     </span>
                   </td>
                   <td
