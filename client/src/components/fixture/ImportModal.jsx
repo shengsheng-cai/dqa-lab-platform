@@ -2,6 +2,7 @@ import { useState } from "react";
 import api from "../../api";
 import { downloadBlob } from "../../utils/download";
 import { useToast } from "../useToast";
+import { btnBare } from "../../styles/common";
 import ModalShell from "./ModalShell";
 
 export default function ImportModal({ onClose, onSuccess }) {
@@ -77,7 +78,7 @@ export default function ImportModal({ onClose, onSuccess }) {
             <span style={{ color: "#cdd9e5", fontWeight: 600 }}>以欄標題對應欄位，欄位順序不限</span>
             <button
               onClick={() => downloadBlob("/api/fixtures/template", "fixture_template.xlsx")}
-              style={{ background: "transparent", border: "none", color: "#58a6ff", fontSize: 11, cursor: "pointer", padding: 0 }}
+              style={{ ...btnBare, color: "#58a6ff", fontSize: 11 }}
             >
               下載標準範本
             </button>
@@ -95,6 +96,7 @@ export default function ImportModal({ onClose, onSuccess }) {
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
+          // eslint-disable-next-line no-restricted-syntax -- 整塊可點是滑鼠的便利，鍵盤入口是裡面的「選擇檔案」按鈕
           onClick={() => document.getElementById("fixture-file-input").click()}
           style={{
             border: `2px dashed ${dragging ? "#58a6ff" : file ? "#238636" : "#30363d"}`,
@@ -127,13 +129,20 @@ export default function ImportModal({ onClose, onSuccess }) {
             <>
               <div style={{ fontSize: 22, marginBottom: 4 }}>📂</div>
               <div style={{ fontSize: 13, color: "#8b949e" }}>
-                拖曳 Excel 到這裡，或點擊選擇檔案
+                拖曳 Excel 到這裡
               </div>
               <div style={{ fontSize: 11, color: "#484f58", marginTop: 4 }}>
                 支援 .xlsx / .xls
               </div>
             </>
           )}
+          {/* 那個 file input 是 display:none，Tab 停不上去，所以要有這顆 */}
+          <button
+            onClick={(e) => { e.stopPropagation(); document.getElementById("fixture-file-input").click(); }}
+            style={{ ...btnBare, marginTop: 8, color: "#58a6ff", textDecoration: "underline", fontSize: 12 }}
+          >
+            {file ? "重新選擇檔案" : "選擇檔案"}
+          </button>
         </div>
 
         {result && (

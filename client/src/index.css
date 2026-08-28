@@ -47,8 +47,13 @@ body {
   animation: fab-pulse 2.2s ease-out infinite;
 }
 
+/* 用鍵盤操作時要看得出來焦點停在哪一個。半透明的框在這個深色底上對比不足，一律用實色；
+   元素本身多半有自己的邊框，外框往外推 2px 才不會糊在一起。 */
 input:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid #58a6ff66;
-  outline-offset: 1px;
+textarea:focus-visible,
+button:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid #58a6ff;
+  outline-offset: 2px;
 }

@@ -10,6 +10,7 @@ export default function ModalShell({ children, width = 420, maxHeight, gap, onCl
         justifyContent: "center",
         zIndex: 2000,
       }}
+      // eslint-disable-next-line no-restricted-syntax -- 點背景關掉是滑鼠的便利，鍵盤路徑是視窗裡的 ✕
       onClick={onClose}
     >
       <div

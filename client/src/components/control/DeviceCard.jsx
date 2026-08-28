@@ -10,6 +10,7 @@ import {
 } from "../../constants";
 import { conditionLabel } from "./deviceCardUtils";
 import { C } from "../../styles/theme";
+import { btnBare } from "../../styles/common";
 
 const CALIB_BADGE_CFG = {
   due_soon: { bg: C.warningBg,    color: C.warningAlt, borderColor: `${C.warningAlt}44`, label: "校驗即將到期" },
@@ -90,6 +91,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
 
   return (
     <div
+      // eslint-disable-next-line no-restricted-syntax -- 整張卡可點是滑鼠的便利，鍵盤入口是下面編號那顆按鈕
       onClick={onClick}
       style={{
         padding: "6px 8px",
@@ -106,7 +108,18 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: "#cdd9e5", display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-          {device.device_id}
+          {/* 整張卡不能直接當按鈕——裡面已經有 📊 與「確認」，按鈕不能包按鈕。
+              所以把編號做成這張卡唯一的鍵盤入口，滑鼠點整張卡的行為維持不變。
+              排程頁那欄是唯讀的（沒有 onClick），那裡就不要造出按了沒反應的焦點停留點。 */}
+          {onClick ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onClick(); }}
+              aria-current={isSelected ? "true" : undefined}
+              style={btnBare}
+            >
+              {device.device_id}
+            </button>
+          ) : device.device_id}
           <CalibBadge status={calibrationStatus} />
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -114,7 +127,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
             <button
               onClick={(e) => { e.stopPropagation(); onShowQc(device.device_id); }}
               title="感測器 QC 控制圖"
-              style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", fontSize: 12, color: "#58a6ff", lineHeight: 1, opacity: 0.7 }}
+              style={{ ...btnBare, padding: "0 2px", fontSize: 12, color: "#58a6ff", lineHeight: 1, opacity: 0.7 }}
             >
               📊
             </button>

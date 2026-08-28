@@ -1,4 +1,5 @@
 import { C } from "../../styles/theme";
+import { btnBare } from "../../styles/common";
 import { useState, useEffect } from "react";
 
 export default function ConditionPicker({ standardsTree, selected, onChange, initialStd, initialVer }) {
@@ -25,37 +26,43 @@ export default function ConditionPicker({ standardsTree, selected, onChange, ini
 
   return (
     <div style={{ display: "flex", gap: 8, height: 260 }}>
-      <div style={{ width: 120, borderRight: "1px solid #30363d", overflowY: "auto" }}>
+      <div style={{ width: 120, borderRight: "1px solid #30363d", overflowY: "auto", padding: 4 }}>
         {Object.keys(standardsTree).map((std) => (
-          <div
+          <button
             key={std}
             onClick={() => { setActiveStd(std); setActiveVer(""); }}
+            aria-current={activeStd === std ? "true" : undefined}
             style={{
-              padding: "6px 8px", fontSize: 12, cursor: "pointer",
+              ...btnBare,
+              display: "block", width: "100%", textAlign: "left",
+              padding: "6px 8px", fontSize: 12,
               background: activeStd === std ? C.accentSurface : "transparent",
               color: activeStd === std ? "#79c0ff" : "#8b949e",
               borderRadius: 4,
             }}
           >
             {std}
-          </div>
+          </button>
         ))}
       </div>
 
-      <div style={{ width: 140, borderRight: "1px solid #30363d", overflowY: "auto" }}>
+      <div style={{ width: 140, borderRight: "1px solid #30363d", overflowY: "auto", padding: 4 }}>
         {activeStd && Object.keys(standardsTree[activeStd]?.versions || {}).map((ver) => (
-          <div
+          <button
             key={ver}
             onClick={() => setActiveVer(ver)}
+            aria-current={activeVer === ver ? "true" : undefined}
             style={{
-              padding: "6px 8px", fontSize: 11, cursor: "pointer",
+              ...btnBare,
+              display: "block", width: "100%", textAlign: "left",
+              padding: "6px 8px", fontSize: 11,
               background: activeVer === ver ? "#1a3828" : "transparent",
               color: activeVer === ver ? "#7ee787" : "#8b949e",
               borderRadius: 4,
             }}
           >
             {ver}
-          </div>
+          </button>
         ))}
       </div>
 

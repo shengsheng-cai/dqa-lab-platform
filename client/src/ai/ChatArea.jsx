@@ -312,7 +312,6 @@ const S = {
     fontSize: 14,
     padding: "10px 14px",
     resize: "none",
-    outline: "none",
     fontFamily: "inherit",
     lineHeight: 1.6,
     overflow: "hidden",

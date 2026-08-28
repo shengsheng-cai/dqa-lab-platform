@@ -116,6 +116,7 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
+            aria-current={activeTab === t.key ? "true" : undefined}
             style={{ padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: activeTab === t.key ? `2px solid ${C.accent}` : "2px solid transparent", color: activeTab === t.key ? C.textPrimary : C.textMuted, transition: "color .15s, background .15s" }}
             onMouseEnter={(e) => { if (activeTab !== t.key) e.currentTarget.style.background = C.surfaceHover; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -383,6 +384,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
 
       {/* 紀錄 Modal */}
       {recordsOpen && (
+        // eslint-disable-next-line no-restricted-syntax -- 點背景關掉是滑鼠的便利，鍵盤路徑是視窗裡的 ✕
         <div onClick={() => setRecordsOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(900px, 92vw)", height: "min(620px, 85vh)", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <div style={{ display: "flex", alignItems: "center", padding: "10px 16px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
@@ -391,7 +393,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
             </div>
             <div style={{ display: "flex", padding: "0 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: C.bg }}>
               {[{ key: "errors", label: "異常紀錄" }, { key: "executions", label: "執行紀錄" }, { key: "audit", label: "稽核紀錄" }].map((t) => (
-                <button key={t.key} onClick={() => setRecordsSubTab(t.key)} style={{ padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: recordsSubTab === t.key ? `2px solid ${C.accent}` : "2px solid transparent", color: recordsSubTab === t.key ? C.textPrimary : C.textMuted }}>
+                <button key={t.key} onClick={() => setRecordsSubTab(t.key)} aria-current={recordsSubTab === t.key ? "true" : undefined} style={{ padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: recordsSubTab === t.key ? `2px solid ${C.accent}` : "2px solid transparent", color: recordsSubTab === t.key ? C.textPrimary : C.textMuted }}>
                   {t.label}
                 </button>
               ))}
@@ -436,6 +438,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
       )}
 
       {/* 點背景關閉 */}
+      {/* eslint-disable-next-line no-restricted-syntax -- 點背景收起 AI 面板是滑鼠的便利，鍵盤路徑是面板裡的關閉鈕 */}
       {aiOpen && <div onClick={() => setAiOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 198 }} />}
 
       {/* AI 滑入面板 */}

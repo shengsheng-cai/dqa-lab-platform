@@ -67,7 +67,7 @@ export const closeBtn = {
 export const inputStyle = {
   width: "100%", background: C.bg, border: `1px solid ${C.border}`,
   borderRadius: 6, padding: "7px 10px", color: C.textPrimary,
-  fontSize: 13, boxSizing: "border-box", outline: "none",
+  fontSize: 13, boxSizing: "border-box",
   colorScheme: "dark",
 };
 export const labelStyle = { fontSize: 12, color: C.textMuted, marginBottom: 4, fontWeight: 600 };

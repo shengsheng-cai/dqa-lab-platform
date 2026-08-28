@@ -2,6 +2,7 @@ import { overlayStyle, modalStyle, modalHeader, closeBtn } from "./scheduleUtils
 
 export default function ScheduleModalShell({ title, width = 540, maxHeight, onClose, children }) {
   return (
+    // eslint-disable-next-line no-restricted-syntax -- 點背景關掉是滑鼠的便利，鍵盤路徑是視窗裡的 ✕
     <div style={overlayStyle} onClick={onClose}>
       <div
         style={{

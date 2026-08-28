@@ -56,7 +56,7 @@ maintenance constraints, reporting, and cross-module consistency.
 
 | Level | Purpose | Primary location | Notes |
 |---|---|---|---|
-| Static checks | Catch backend and frontend quality violations before execution | `ruff check backend/`, `npm run lint` | Runs in CI |
+| Static checks | Catch backend and frontend quality violations before execution, plus the accessibility floor the browser tests can only sample | `ruff check backend/`, `npm run lint` | Runs in CI. ESLint also rejects mouse handlers on non-interactive tags, `<a>` without `href`, a button nested in a button, and inline `outline: "none"`; deliberate exceptions carry a disable comment naming the keyboard entry point, and a stale one fails the build |
 | Backend unit/integration | Exercise API, database, service, failure, and state-machine behavior | `backend/tests/` | Uses real in-memory SQLite; cross-module flows patch all participating `SessionLocal` references |
 | Frontend unit | Verify deterministic client utilities | `client/src/__tests__/` | Vitest; no jsdom component suite, while selected critical flows are exercised through browser tests |
 | Browser E2E | Prove critical workflows from the user's point of view | `tests/e2e/specs/` | Playwright, isolated backend/database, sequential execution, no retries |

@@ -15,10 +15,10 @@ import StocktakeModal from "./components/fixture/StocktakeModal";
 import CreatePurchaseModal from "./components/fixture/CreatePurchaseModal";
 import ConfirmModal from "./components/ConfirmModal";
 import { C } from "./styles/theme";
-import { thStyle, tdStyle, btnPrimary, btnDanger } from "./styles/common";
+import { thStyle, tdStyle, btnPrimary, btnDanger, btnBare } from "./styles/common";
 import { isUnlinkedKeeper } from "./utils/keeper";
 
-function ResizableTh({ children, defaultWidth, style, onClick }) {
+function ResizableTh({ children, defaultWidth, style, onClick, ariaSort }) {
   const [width, setWidth] = useState(defaultWidth || null);
   const startX = useRef(null);
   const startW = useRef(null);
@@ -47,13 +47,21 @@ function ResizableTh({ children, defaultWidth, style, onClick }) {
     document.addEventListener("mouseup", onUp);
   };
 
+  // 排序是一個動作，要用按鈕承載，鍵盤才排得動。可排序時內距要跟著移到按鈕上，
+  // 整格才都按得到——留在 <th> 上的話，游標一路說可以按，實際上只有文字那一小塊有反應。
+  const { padding, ...thRest } = style || {};
   return (
     <th
-      style={{ ...style, width: width != null ? width : undefined, position: "relative", overflow: "hidden" }}
+      style={{ ...thRest, padding: onClick ? 0 : padding, width: width != null ? width : undefined, position: "relative", overflow: "hidden" }}
+      // eslint-disable-next-line no-restricted-syntax -- 這是拖曳調欄寬，不是入口；欄寬是視覺便利，不做鍵盤版本
       onMouseDown={onMouseDown}
-      onClick={onClick}
+      aria-sort={ariaSort}
     >
-      {children}
+      {onClick ? (
+        <button onClick={onClick} style={{ ...btnBare, display: "block", width: "100%", textAlign: "left", padding }}>
+          {children}
+        </button>
+      ) : children}
       <span
         data-resize="1"
         style={{
@@ -139,6 +147,11 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("asc"); }
   };
+  // 不能排的欄位不給 aria-sort；能排但目前沒排在這一欄的是 "none"
+  const ariaSortFor = (key) =>
+    !key ? undefined
+    : sortKey !== key ? "none"
+    : sortDir === "asc" ? "ascending" : "descending";
   const fetchAll = useCallback(async () => {
     if (!active) return;
     setLoading(true);
@@ -251,11 +264,12 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
         <button
           style={tabStyle("inventory")}
           onClick={() => setActiveTab("inventory")}
+          aria-current={activeTab === "inventory" ? "true" : undefined}
         >
           治具總表
         </button>
         {canOperate && (
-          <button style={tabStyle("records")} onClick={() => setActiveTab("records")}>
+          <button style={tabStyle("records")} onClick={() => setActiveTab("records")} aria-current={activeTab === "records" ? "true" : undefined}>
             記錄
           </button>
         )}
@@ -405,16 +419,14 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                     <ResizableTh
                       key={label}
                       defaultWidth={width}
-                      style={{
-                        ...thStyle,
-                        cursor: key ? "pointer" : "default",
-                        userSelect: "none",
-                      }}
-                      onClick={() => key && handleSort(key)}
+                      style={{ ...thStyle, userSelect: "none" }}
+                      onClick={key ? () => handleSort(key) : undefined}
+                      ariaSort={ariaSortFor(key)}
                     >
                       {label}
+                      {/* 方向已經由 aria-sort 講清楚了，這個箭頭只服務眼睛 */}
                       {key && sortKey === key && (
-                        <span style={{ marginLeft: 3, fontSize: 9 }}>
+                        <span aria-hidden="true" style={{ marginLeft: 3, fontSize: 9 }}>
                           {sortDir === "asc" ? "↑" : "↓"}
                         </span>
                       )}
@@ -696,7 +708,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
         <div>
           <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
             {[["damaged", "損壞／遺失"], ["inv_log", "盤點紀錄"]].map(([key, label]) => (
-              <button key={key} onClick={() => setRecordsSubTab(key)} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 6, cursor: "pointer", background: recordsSubTab === key ? C.surfaceHover : "transparent", color: recordsSubTab === key ? C.textPrimary : C.textMuted, border: `1px solid ${recordsSubTab === key ? C.border : "transparent"}` }}>
+              <button key={key} onClick={() => setRecordsSubTab(key)} aria-current={recordsSubTab === key ? "true" : undefined} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 6, cursor: "pointer", background: recordsSubTab === key ? C.surfaceHover : "transparent", color: recordsSubTab === key ? C.textPrimary : C.textMuted, border: `1px solid ${recordsSubTab === key ? C.border : "transparent"}` }}>
                 {label}
               </button>
             ))}
@@ -1133,11 +1145,20 @@ function InventoryLogTab({ refreshKey, allFixtures, onChanged }) {
         const batchTime = formatLocal(key, "datetime");
         return (
           <div key={key} style={{ borderBottom: `1px solid ${C.surfaceHover}` }}>
+            {/* 這一列裡已經有「刪除此批次」按鈕，按鈕不能包按鈕，所以整列不能改成按鈕 */}
             <div
+              // eslint-disable-next-line no-restricted-syntax -- 整列可點是滑鼠的便利，鍵盤入口是批次時間那顆按鈕
               onClick={() => setExpandedBatch(isOpen ? null : key)}
               style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", background: isOpen ? C.surfaceAlt : "transparent", userSelect: "none" }}
             >
-              <span style={{ fontSize: 12, color: "#adbac7", fontWeight: 600 }}>{i === 0 ? "最新　" : ""}{batchTime}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setExpandedBatch(isOpen ? null : key); }}
+                aria-expanded={isOpen}
+                aria-controls={`stocktake-batch-${i}`}
+                style={{ ...btnBare, fontSize: 12, color: "#adbac7", fontWeight: 600 }}
+              >
+                {i === 0 ? "最新　" : ""}{batchTime}
+              </button>
               <span style={{ fontSize: 11, color: C.textDim }}>{rows.length} 筆</span>
               {diffCount > 0 && <span style={{ fontSize: 11, color: C.error, fontWeight: 600 }}>差異 {diffCount} 筆</span>}
               <button
@@ -1149,7 +1170,9 @@ function InventoryLogTab({ refreshKey, allFixtures, onChanged }) {
               </button>
               <span style={{ color: C.textDim, fontSize: 12 }}>{isOpen ? "▲" : "▼"}</span>
             </div>
-            {isOpen && <BatchTable rows={rows} setLogs={setLogs} allFixtures={allFixtures} onChanged={onChanged} />}
+            <div id={`stocktake-batch-${i}`}>
+              {isOpen && <BatchTable rows={rows} setLogs={setLogs} allFixtures={allFixtures} onChanged={onChanged} />}
+            </div>
           </div>
         );
       })}
