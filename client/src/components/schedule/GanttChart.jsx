@@ -1,4 +1,5 @@
 import { C } from "../../styles/theme";
+import { btnBare } from "../../styles/common";
 import { useRef, useEffect } from "react";
 import { DEVICE_IDS, parseUtcDate } from "../../constants";
 import { HOUR_PX, DAY_PX, ROW_H, HEADER_H, LABEL_W, STATUS_COLOR, fmtDt } from "./scheduleUtils";
@@ -158,20 +159,27 @@ export default function GanttChart({ schedules, blockedPeriods, rangeStart, rang
                     const clampRight = Math.min(totalPx, right);
                     const color = STATUS_COLOR[s.status] || STATUS_COLOR["待審核"];
                     const blockW = clampRight - clampLeft;
+                    // 區塊夠寬時畫面會多顯示條件進度，名稱要含得住看得到的字
+                    const progress = s.status === "進行中" && (s.conditions?.length ?? 0) > 1
+                      ? ` (${(s.current_condition_index ?? 0) + 1}/${s.conditions.length})`
+                      : "";
+                    // title 只在滑鼠 hover 時出現，鍵盤聚焦不會觸發，所以同一份內容用 aria-label 再給一次
                     return (
-                      <div
+                      <button
                         key={s.id}
                         onClick={() => onClickSchedule(s)}
                         title={`${s.project_number} / ${s.sample_name}\n${s.status}\n${fmtDt(s.start_time)} → ${fmtDt(s.end_time)}`}
+                        aria-label={`${s.project_number} ${s.sample_name}${progress}，${s.status}，${fmtDt(s.start_time)} 到 ${fmtDt(s.end_time)}`}
                         style={{
+                          ...btnBare,
                           position: "absolute", left: clampLeft, top: 6,
                           width: Math.max(blockW, 4), height: ROW_H - 12,
                           background: color.bg,
                           border: `1px solid ${color.border}`,
-                          borderRadius: 4, cursor: "pointer", zIndex: 2,
+                          borderRadius: 4, zIndex: 2,
                           overflow: "hidden",
                           display: "flex", alignItems: "center",
-                          paddingLeft: 5,
+                          padding: "0 0 0 5px",
                         }}
                       >
                         {blockW > 30 && (
@@ -181,13 +189,10 @@ export default function GanttChart({ schedules, blockedPeriods, rangeStart, rang
                             textOverflow: "ellipsis",
                             fontWeight: 600,
                           }}>
-                            {s.project_number} {s.sample_name}
-                            {s.status === "進行中" && (s.conditions?.length ?? 0) > 1
-                              ? ` (${(s.current_condition_index ?? 0) + 1}/${s.conditions.length})`
-                              : ""}
+                            {s.project_number} {s.sample_name}{progress}
                           </span>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>

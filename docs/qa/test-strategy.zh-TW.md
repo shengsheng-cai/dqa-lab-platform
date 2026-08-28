@@ -49,7 +49,7 @@
 
 | 層級 | 目的 | 位置 | 備註 |
 |---|---|---|---|
-| 靜態檢查 | 在執行前先抓出後端與前端的品質問題 | `ruff check backend/`、`npm run lint` | CI 會跑 |
+| 靜態檢查 | 在執行前先抓出後端與前端的品質問題，以及瀏覽器測試只能抽樣的可存取性底線 | `ruff check backend/`、`npm run lint` | CI 會跑。ESLint 另外擋下非互動標籤綁滑鼠事件、`<a>` 沒有 `href`、按鈕包按鈕，以及 inline 的 `outline: "none"`；刻意的例外要寫 disable 註解指出鍵盤入口是哪一顆，而失效的註解會讓建置失敗 |
 | 後端單元／整合 | 驗證 API、資料庫、service、失敗路徑與狀態機行為 | `backend/tests/` | 使用真實的 in-memory SQLite；跨模組流程會把所有參與的 `SessionLocal` 一起 patch |
 | 前端單元 | 驗證前端的確定性工具函式 | `client/src/__tests__/` | Vitest；不做 jsdom 元件測試，關鍵流程改由瀏覽器測試涵蓋 |
 | 瀏覽器 E2E | 從使用者視角證明關鍵流程可用 | `tests/e2e/specs/` | Playwright，獨立後端與資料庫，循序執行，不重試 |

@@ -201,12 +201,12 @@ export default function RightPanel({ role, onClose, onApplySchedule }) {
                   borderRadius: 3,
                   color: "#cdd9e5",
                   padding: "2px 8px",
-                  outline: "none",
                 }}
                 placeholder="對話名稱"
               />
             ) : (
               <span
+                // eslint-disable-next-line no-restricted-syntax -- 這是重新命名的唯一入口，鍵盤進不去，已記在待補 TODO-44
                 onDoubleClick={startRename}
                 title="雙擊重新命名"
                 style={{

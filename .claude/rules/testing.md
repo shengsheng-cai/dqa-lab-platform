@@ -43,6 +43,10 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 - **訪客相關測試**要設 `DEMO_PASSWORD`，沒設後端會直接放行、測起來是假的。`loginAsGuest` 拿這個 master key 直接進，不用先開訪客 token
 - **Toast 和 Modal 都有 ✕ 關閉鈕**，用 `getByRole('button',{name:'✕'})` 會 strict-mode 撞名（畫面上同時有兩顆）。要關某個 modal，就把定位 scope 在那個 modal 裡（toast 不在 modal 的 DOM 子樹），別在整頁找 ✕。
 - **確認視窗用 `getByRole('dialog', { name: '標題' })` 定位**：`ConfirmModal` 有 `role="dialog"`，標題就是它的 accessible name。其他 modal（`ModalShell`、`ScheduleModalShell` 撐著的那些）還沒有 dialog 角色，只能沿用「把定位 scope 在含某個獨有文字的容器裡」那種綁 DOM 巢狀的寫法——那種寫法前端多包一層 div 就會定到別的節點，能用 role 就不要用它
+- **`focus()` 只證明「這是按鈕、Enter 有反應」，不證明「Tab 走得到」**。用程式指定焦點會跳過
+  tab 順序，所以被設成跳過（`tabIndex={-1}`）、被別的東西蓋住、或藏在沒顯示的分支裡，測試照樣
+  會綠。要驗 Tab 順序就得真的連按 Tab、記錄焦點依序停在哪（`keyboard-navigation.spec.js` 最後
+  一條是這樣寫的）。兩種都需要，但不要拿前者當後者用
 - 定位優先用畫面文字，前端目前沒有 test id
 
 ## Backend 單元測試（pytest）

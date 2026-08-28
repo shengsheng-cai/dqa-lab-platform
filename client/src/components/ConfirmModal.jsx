@@ -72,6 +72,7 @@ export default function ConfirmModal({
         justifyContent: "center",
         zIndex: 3000,
       }}
+      // eslint-disable-next-line no-restricted-syntax -- 點背景取消是滑鼠的便利，鍵盤路徑是視窗裡的取消鈕
       onClick={onCancel}
     >
       <div

@@ -11,6 +11,7 @@ import {
   fmtDt, fmtHours, primaryBtn, scheduleIconBtn,
 } from "./components/schedule/scheduleUtils";
 import { C } from "./styles/theme";
+import { btnBare } from "./styles/common";
 
 export default function SchedulePage({ active, role, initConditions, onInitCondsConsumed, onScheduleChanged, liveDeviceStatuses = {}, liveDeviceFreeAt = {}, liveDeviceMaintenance = {}, liveDeviceSnapshotReady = false }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -179,6 +180,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
                 <button
                   key={s}
                   onClick={() => setFilterStatus(s)}
+                  aria-current={active ? "true" : undefined}
                   style={{
                     padding: "4px 12px", fontSize: 12, borderRadius: 20,
                     cursor: "pointer",
@@ -230,6 +232,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
                   return (
                     <tr
                       key={s.id}
+                      // eslint-disable-next-line no-restricted-syntax -- 整列可點是滑鼠的便利，鍵盤入口是專案號碼那顆按鈕
                       onClick={() => setSelectedSchedule(s)}
                       style={{
                         borderBottom: `1px solid ${C.surfaceHover}`, cursor: "pointer",
@@ -245,7 +248,16 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
                           border: `1px solid ${color.border}`, whiteSpace: "nowrap",
                         }}>{s.status}</span>
                       </td>
-                      <td style={{ padding: "6px 8px", color: C.textPrimary, fontFamily: "monospace" }}>{s.project_number}</td>
+                      <td style={{ padding: "6px 8px", color: C.textPrimary, fontFamily: "monospace" }}>
+                        {/* aria-label 不能只有號碼，聽的人得知道按下去會開什麼 */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelectedSchedule(s); }}
+                          aria-label={`開啟 ${s.project_number} 的排程詳情`}
+                          style={btnBare}
+                        >
+                          {s.project_number}
+                        </button>
+                      </td>
                       <td style={{ padding: "6px 8px", color: C.textPrimary }}>{s.sample_name}</td>
                       <td style={{ padding: "6px 8px", color: C.textMuted }}>{s.applicant_name || "—"}</td>
                       <td style={{ padding: "6px 8px", color: C.textMuted, fontFamily: "monospace" }}>{s.device_id || "—"}</td>

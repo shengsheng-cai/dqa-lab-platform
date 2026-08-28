@@ -17,6 +17,17 @@ export const tdStyle = {
   borderBottom: `1px solid ${C.surfaceHover}`,
 };
 
+// 看起來像純文字、但真的是按鈕。可點的入口一律用 <button>，這份負責把瀏覽器的
+// 預設外觀清掉，版面與顏色由呼叫點自己覆蓋。
+export const btnBare = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  font: "inherit",
+  color: "inherit",
+  cursor: "pointer",
+};
+
 // buttons (small, 12px — for page-level actions)
 export const btnPrimary = {
   padding: "5px 12px",

@@ -99,6 +99,7 @@ export default function ExecutionList({ active, role }) {
                         <PhotoBadge has={ex.photo_after} label="結束" />
                         <button
                           onClick={() => setExpandedId(expandedId === ex.id ? null : ex.id)}
+                          aria-expanded={expandedId === ex.id}
                           style={{ fontSize: 10, padding: "1px 6px", borderRadius: 3, cursor: "pointer", background: "transparent", border: "1px solid #30363d", color: "#8b949e" }}
                         >
                           補充

@@ -459,7 +459,6 @@ const inputS = {
   borderRadius: 6,
   color: "#cdd9e5",
   fontSize: 13,
-  outline: "none",
   width: 180,
 };
 

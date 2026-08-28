@@ -24,6 +24,7 @@ const SensorQcModal = ({ deviceId, onClose, onViewDeviceStatus }) => {
 
   return (
     <div
+      // eslint-disable-next-line no-restricted-syntax -- 點背景關掉是滑鼠的便利，鍵盤路徑是視窗裡的 ✕
       onClick={onClose}
       style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)" }}
     >
