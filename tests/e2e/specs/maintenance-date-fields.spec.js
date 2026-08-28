@@ -33,7 +33,13 @@ test("校驗使用日期選擇器且不顯示午夜，維護事件保留時分",
 
     const calibrationDate = await selectedDate(page, "校驗日期");
     await page.getByRole("button", { name: "儲存", exact: true }).click();
-    await expect(page.getByText("新增成功", { exact: true })).toBeVisible();
+    const calibrationToast = page.getByText("新增成功", { exact: true });
+    await expect(calibrationToast).toBeVisible();
+    // toast 會堆疊、每顆活 3 秒，這個 test 連存兩次。留著的話下一步會同時看到兩顆同樣的字，
+    // 而改用 .last() 會在新 toast 還沒出現時 match 到這顆舊的，變成假綠——所以直接關掉。
+    // 這個時間點 modal 已經關掉，畫面上只有 toast 這一顆 ✕
+    await page.getByRole("button", { name: "✕" }).click();
+    await expect(calibrationToast).toBeHidden();
     await expect(page.getByRole("cell", { name: calibrationDate, exact: true }).first()).toBeVisible();
     await expect(page.getByText(`${calibrationDate} 00:00`, { exact: true })).toHaveCount(0);
   });
