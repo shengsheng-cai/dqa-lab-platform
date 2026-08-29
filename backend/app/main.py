@@ -7,7 +7,7 @@ import os
 import asyncio
 import time
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from .sop import router as sop_router, execution_router
@@ -18,7 +18,7 @@ from .errors import router as errors_router
 from .ai import router as ai_router
 from .rag import warmup_rag
 from .line import router as line_router
-from .auth import router as auth_router, require_admin
+from .auth import router as auth_router, current_user
 from .fixtures import router as fixtures_router
 from .fixture_excel import router as fixture_excel_router
 from .purchase_orders import router as purchase_orders_router
@@ -156,6 +156,23 @@ def _build_runtime_info() -> dict:
         "platform": {"hf_space": is_hf_space},
         "capabilities": capabilities,
         "warnings": warnings,
+    }
+
+
+# 訪客看得到哪些能力旗標。新增 capability 時要在這裡決定要不要放行，
+# 不填就是只有管理者看得到。warnings 一律不給訪客——那幾句會寫出缺哪個環境變數。
+PUBLIC_CAPABILITIES = frozenset({"ai_enabled"})
+
+
+def _runtime_info_for(role: str | None, info: dict) -> dict:
+    """依角色裁掉 runtime-info。管理者拿完整內容，其餘只拿白名單裡的能力旗標。"""
+    if role == "admin":
+        return info
+    return {
+        "capabilities": {
+            k: v for k, v in info["capabilities"].items() if k in PUBLIC_CAPABILITIES
+        },
+        "warnings": [],
     }
 
 
@@ -338,9 +355,10 @@ async def health(request: Request):
 
 
 @app.get("/api/runtime-info", include_in_schema=False)
-def runtime_info(request: Request, _: None = Depends(require_admin)):
+def runtime_info(request: Request):
     info = getattr(app.state, "runtime_info", None) or _build_runtime_info()
-    return info
+    # 訪客也讀得到 ai_enabled：AI 面板要靠它才知道該不該停用輸入並寫出原因
+    return _runtime_info_for(current_user(request).role, info)
 
 
 @app.get("/robots.txt", include_in_schema=False)

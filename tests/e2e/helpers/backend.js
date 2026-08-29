@@ -22,7 +22,7 @@ const HEALTH_URL = `http://127.0.0.1:${PORT}/health`;
 // 這裡自己把 DATABASE_URL 算出來、明確傳給子程序，不從外面繼承。
 // 因為直接跑 `playwright test`（config 裡有寫可以這樣 debug）的時候不會經過 run-e2e.sh，
 // 沒人設 DATABASE_URL，init_db.py 就會回退去砍 backend/aicm.db——那是開發用的資料庫。
-const CHILD_ENV = { ...process.env, DATABASE_URL };
+const BASE_ENV = { ...process.env, DATABASE_URL };
 
 const PYTHON = existsSync(path.join(ROOT, "venv/bin/python"))
   ? path.join(ROOT, "venv/bin/python")
@@ -102,6 +102,15 @@ export async function stopBackend() {
 }
 
 export async function resetBackend() {
+  // 不收參數是刻意的：`test.beforeAll(resetBackend)` 會把 Playwright 的 fixtures
+  // 當第一個參數傳進來，如果這裡收，那包東西就會被當成環境變數塞給後端。
+  await resetBackendWithEnv({});
+}
+
+/** 跟 resetBackend 一樣，但可以蓋掉後端的環境變數（例如清掉 GEMINI_API_KEY 測 AI 停用畫面）。 */
+export async function resetBackendWithEnv(extraEnv) {
+  const env = { ...BASE_ENV, ...extraEnv };
+
   // 防呆：會刪資料庫檔，路徑必須在 /tmp 底下。
   // 擋的是「有人改了上面的 DB_PATH 常數卻沒想清楚」——刪錯就是砍掉開發用的資料庫。
   if (!DB_PATH.startsWith("/tmp/")) {
@@ -120,7 +129,7 @@ export async function resetBackend() {
     execFileSync(PYTHON, ["init_db.py"], {
       cwd: path.join(ROOT, "backend"),
       stdio: ["ignore", "ignore", "pipe"],
-      env: CHILD_ENV,
+      env,
     });
   } catch (err) {
     // 不要讓 seed 失敗只丟一句 Command failed，把 Python 的錯誤原文帶出來
@@ -134,7 +143,7 @@ export async function resetBackend() {
     {
       cwd: path.join(ROOT, "backend"),
       stdio: ["ignore", log, log],
-      env: CHILD_ENV,
+      env,
       detached: true, // 自成一個 process group，收尾時才能連子程序一起殺乾淨
     },
   );

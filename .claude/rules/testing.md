@@ -32,6 +32,11 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 後端不是靜態的：模擬器每秒寫感測資料、推設備狀態機，排程也會自己往前跑。
 所以每個測試檔都要自己重灌資料庫、重開後端。忘了寫不會報錯，只會變成偶爾紅一次的鬼故事。
 
+要驗「某個環境變數沒設」的畫面，用 `resetBackendWithEnv({ 變數: "" })` 開後端，
+不要去改 `run-e2e.sh`——那份是所有測試檔共用的。`ai-disabled.spec.js` 就是這樣把
+`GEMINI_API_KEY` 清掉，驗 AI 未設定時面板有沒有說出原因。`resetBackend` 刻意不收參數：
+`test.beforeAll(resetBackend)` 會把 Playwright 的 fixtures 當第一個參數傳進來。
+
 登入用 `helpers/login.js`：管理員 `loginAsAdmin(page)`、訪客 `loginAsGuest(page)`，不要每個檔案自己填帳密。
 
 ### 已經踩過的坑，不要再踩

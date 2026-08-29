@@ -2,7 +2,9 @@ import { useState, useRef } from "react";
 import useAIChat from "../../ai/useAIChat";
 import ChatArea from "../../ai/ChatArea";
 import { exportChat } from "../../ai/aiStorage";
+import { AI_DISABLED_REASON } from "../../ai/messageBubbleConstants";
 import ConfirmModal from "../ConfirmModal";
+import { C } from "../../styles/theme";
 
 const QUESTION_POOL = [
   { label: "查庫存", text: "目前治具庫存不足的有哪些？" },
@@ -29,7 +31,7 @@ function pickRandom(n, pool, exclude = []) {
   return shuffled.slice(0, n);
 }
 
-export default function RightPanel({ role, onClose, onApplySchedule }) {
+export default function RightPanel({ role, aiEnabled = true, onClose, onApplySchedule }) {
   const {
     activeId,
     conversations,
@@ -73,7 +75,14 @@ export default function RightPanel({ role, onClose, onApplySchedule }) {
   const activeTitle = activeConv?.title || "新對話";
   const canApplySchedule = role === "admin";
 
-  const isBlocked = loading || cooldownSeconds > 0;
+  // 「現在不能送，原因是什麼」只在這裡算一次，null 代表可以送。
+  // 快速問題、輸入框提示與送出鈕都讀它，免得每個地方各自拼一套條件。
+  const blockedReason = !aiEnabled
+    ? AI_DISABLED_REASON
+    : cooldownSeconds > 0
+      ? `AI 額度冷卻中，請稍候 ${cooldownSeconds} 秒...`
+      : null;
+  const isBlocked = loading || blockedReason !== null;
 
   const goPrev = () => {
     if (loading || total <= 1) return;
@@ -274,6 +283,24 @@ export default function RightPanel({ role, onClose, onApplySchedule }) {
           )}
         </div>
 
+        {/* AI 沒設定時就地說出原因。底下的介紹與範例問題照常顯示（只是按不動），
+            讓人看得出來這個功能長什麼樣，而不是打開一個空面板。 */}
+        {!aiEnabled && (
+          <div
+            style={{
+              padding: "8px 10px",
+              flexShrink: 0,
+              borderBottom: `1px solid ${C.border}`,
+              background: C.warningBg,
+              color: C.warningAlt,
+              fontSize: 12,
+              lineHeight: 1.5,
+            }}
+          >
+            {AI_DISABLED_REASON}。
+          </div>
+        )}
+
         {/* 快速問題 — flex-wrap chips 顯示完整問題文字 */}
         <div
           style={{
@@ -343,6 +370,7 @@ export default function RightPanel({ role, onClose, onApplySchedule }) {
             loading={loading}
             streamText={streamText}
             cooldownSeconds={cooldownSeconds}
+            blockedReason={blockedReason}
             input={input}
             chatAreaRef={chatAreaRef}
             bottomRef={bottomRef}

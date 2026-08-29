@@ -5,6 +5,7 @@ import { ToastProvider } from "./components/Toast";
 import { API_BASE } from "./api";
 import api from "./api";
 import { SESSION_DURATION } from "./constants";
+import { clearSession } from "./utils/session";
 
 function isSessionValid() {
   const userToken = localStorage.getItem("user_token");
@@ -14,14 +15,6 @@ function isSessionValid() {
   if (pwd && Date.now() - loginAt < SESSION_DURATION) return true;
   clearSession();
   return false;
-}
-
-function clearSession() {
-  localStorage.removeItem("demo_password");
-  localStorage.removeItem("demo_login_at");
-  localStorage.removeItem("user_token");
-  localStorage.removeItem("user_role");
-  localStorage.removeItem("user_display_name");
 }
 
 function getCurrentRole() {
