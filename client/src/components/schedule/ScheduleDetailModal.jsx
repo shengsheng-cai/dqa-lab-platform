@@ -6,7 +6,7 @@ import { DEVICE_IDS, deviceStatusZh, parseUtcDate } from "../../constants";
 import ScheduleModalShell from "./ScheduleModalShell";
 import {
   fmtDt, fmtHours, STATUS_COLOR,
-  inputStyle, labelStyle, primaryBtn, cancelBtn,
+  inputStyle, labelStyle, primaryBtn, cancelBtn, disabledStyle,
 } from "./scheduleUtils";
 import { C } from "../../styles/theme";
 
@@ -113,7 +113,10 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
     disabled: saving || !!liveDevice.blocker,
     title: liveDevice.blocker || undefined,
   };
-  const blockedStyle = liveDevice.blocker ? { opacity: 0.5, cursor: "not-allowed" } : null;
+  const blockedStyle = liveDevice.blocker ? disabledStyle : null;
+  // 跟 DB 裡現在那份一樣就停用「儲存備註」：同一份內容重複送出，人也分不出這次到底有沒有存到。
+  // 存好之後父層會把後端回來的那筆送回 schedule prop，所以這裡讀 prop 就是讀最新的真值。
+  const noteUnchanged = note === (schedule.note || "");
   const previewConditions = schedule.conditions?.join(",") || "";
 
   const fetchPreview = useCallback(() => {
@@ -175,7 +178,10 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
     setSaving(true);
     setError("");
     try {
-      const res = await api.patch(`/api/schedules/${schedule.id}`, { note: note || null });
+      // 送空字串不送 null：後端把 null 當成「這個欄位不要動」，轉了就永遠清不掉備註，
+      // 而畫面還是會跳出「備註已儲存」。
+      const res = await api.patch(`/api/schedules/${schedule.id}`, { note });
+      showToast("備註已儲存", "success");
       onUpdated(res.data);
     } catch (e) {
       setError(e.response?.data?.detail || "操作失敗");
@@ -477,7 +483,11 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                   );
                 })()}
                 {schedule.status !== "待審核" && (
-                  <button onClick={saveNote} disabled={saving} style={primaryBtn}>
+                  <button
+                    onClick={saveNote}
+                    disabled={saving || noteUnchanged}
+                    style={{ ...primaryBtn, ...(noteUnchanged ? disabledStyle : null) }}
+                  >
                     {saving ? "儲存中..." : "儲存備註"}
                   </button>
                 )}
