@@ -215,7 +215,7 @@ export default function RightPanel({ role, aiEnabled = true, onClose, onApplySch
               />
             ) : (
               <span
-                // eslint-disable-next-line no-restricted-syntax -- 這是重新命名的唯一入口，鍵盤進不去，已記在待補 TODO-44
+                // eslint-disable-next-line no-restricted-syntax -- 雙擊是滑鼠的捷徑，鍵盤入口是右邊那顆「改名」
                 onDoubleClick={startRename}
                 title="雙擊重新命名"
                 style={{
@@ -233,6 +233,19 @@ export default function RightPanel({ role, aiEnabled = true, onClose, onApplySch
               </span>
             )}
           </div>
+
+          {/* 改名 — 名稱那段只有滑鼠雙擊，這顆是鍵盤走得到的入口 */}
+          {!renaming && (
+            <button
+              onClick={startRename}
+              title="重新命名對話"
+              // 唸出來要含得住看得到的「改名」，不然聽的跟看的會對不起來
+              aria-label={`改名：${activeTitle}`}
+              style={iconBtnS(false)}
+            >
+              改名
+            </button>
+          )}
 
           {/* 匯出 */}
           <button

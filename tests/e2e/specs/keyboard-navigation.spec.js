@@ -119,6 +119,24 @@ test("盤點批次用鍵盤展得開", async ({ page }) => {
   await expect(batch).toHaveAttribute("aria-expanded", "true");
 });
 
+test("AI 對話用鍵盤改得了名字", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByTitle("AI 諮詢").click();
+
+  // 名稱那段掛著 onDoubleClick 當滑鼠捷徑，帶著 eslint-disable；
+  // 這條盯的是它旁邊那顆按鈕，也就是鍵盤真正走得到的入口。
+  const rename = page.getByRole("button", { name: /^改名：/ });
+  await rename.focus();
+  await page.keyboard.press("Enter");
+
+  const field = page.getByPlaceholder("對話名稱");
+  await expect(field).toBeFocused();
+  await field.fill("低溫測試討論");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText("低溫測試討論")).toBeVisible();
+});
+
 test("設備卡真的排在 Tab 順序裡，不是只有程式指定焦點才進得去", async ({ page }) => {
   await loginAsAdmin(page);
 
