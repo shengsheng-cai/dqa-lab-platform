@@ -1,12 +1,14 @@
 import api from "../api";
 import { localDateStamp } from "./timezone";
+import { describeLoadError } from "./loadError";
 
 /**
- * 下載後端 blob 並觸發瀏覽器儲存對話框。
+ * 下載後端 blob 並觸發瀏覽器儲存對話框。失敗會往外丟，不對外公開——
+ * 呼叫點一律走下面的 downloadOrFail，免得又出現一個無聲失敗的下載。
  * @param {string} path   API 路徑（相對）
  * @param {string} filename  下載後的檔名
  */
-export async function downloadBlob(path, filename) {
+async function downloadBlob(path, filename) {
   const res = await api.get(path, { responseType: "blob" });
   const url = window.URL.createObjectURL(new Blob([res.data]));
   const a = document.createElement("a");
@@ -16,6 +18,24 @@ export async function downloadBlob(path, filename) {
   a.click();
   a.remove();
   window.URL.revokeObjectURL(url);
+}
+
+/**
+ * 下載，失敗時把原因交給呼叫點講出來。
+ *
+ * 下載失敗以前是無聲的：按鈕轉一圈變回原樣，使用者不知道是沒權限、後端掛了，
+ * 還是自己按錯。訊息要送 toast 還是寫在畫面上，各頁的回饋管道不同，所以由 onFail 決定。
+ *
+ * @param {string} path      API 路徑
+ * @param {string} filename  下載後的檔名
+ * @param {(msg: string) => void} onFail  失敗時收到一句可以直接顯示的話
+ */
+export async function downloadOrFail(path, filename, onFail) {
+  try {
+    await downloadBlob(path, filename);
+  } catch (e) {
+    onFail(`下載失敗：${describeLoadError(e)}`);
+  }
 }
 
 /** 不能當檔名的字元一律換成底線 */

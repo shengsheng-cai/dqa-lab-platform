@@ -81,7 +81,11 @@ const _COMPILED_TRANSLATIONS = Object.entries(ERROR_TRANSLATION_MAP).map(
   ([pattern, msg]) => [new RegExp(pattern, "i"), msg]
 );
 
-export function translateErrorMessage(technicalMessage, fallback = "操作失敗，請稍後重試") {
+// 認不出來的訊息會被換成這句。它代表「翻不出來」，不是一個真的原因，
+// 所以 loadError.js 收到這句時要當作沒有訊息、改用狀態碼講得更具體。
+export const GENERIC_ERROR = "操作失敗，請稍後重試";
+
+export function translateErrorMessage(technicalMessage, fallback = GENERIC_ERROR) {
   if (!technicalMessage || typeof technicalMessage !== "string") {
     return fallback;
   }

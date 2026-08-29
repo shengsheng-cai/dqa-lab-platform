@@ -12,6 +12,19 @@ import { conditionLabel } from "./deviceCardUtils";
 import { C } from "../../styles/theme";
 import { btnBare } from "../../styles/common";
 
+const qcBtnStyle = {
+  ...btnBare,
+  padding: "2px 5px",
+  fontSize: 9,
+  fontWeight: 700,
+  color: C.accent,
+  lineHeight: 1.3,
+  letterSpacing: 0.3,
+  border: `1px solid ${C.border}`,
+  borderRadius: 4,
+  whiteSpace: "nowrap",
+};
+
 const CALIB_BADGE_CFG = {
   due_soon: { bg: C.warningBg,    color: C.warningAlt, borderColor: `${C.warningAlt}44`, label: "校驗即將到期" },
   overdue:  { bg: C.errorBg,      color: C.error,      borderColor: `${C.error}44`,      label: "校驗逾期"    },
@@ -124,12 +137,15 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {onShowQc && (
+            /* 只有一個 📊 的話，沒人知道那顆按下去會發生什麼。title 只有滑鼠 hover 看得到，
+               鍵盤與讀螢幕都碰不到，所以名稱用 aria-label 給，圖示本身當裝飾。 */
             <button
               onClick={(e) => { e.stopPropagation(); onShowQc(device.device_id); }}
+              aria-label={`開啟 ${device.device_id} 的感測器 QC 圖`}
               title="感測器 QC 控制圖"
-              style={{ ...btnBare, padding: "0 2px", fontSize: 12, color: "#58a6ff", lineHeight: 1, opacity: 0.7 }}
+              style={qcBtnStyle}
             >
-              📊
+              QC 圖
             </button>
           )}
           <span title={cfg.code} style={{ fontSize: 10, fontWeight: 600, color: cfg.color, whiteSpace: "nowrap" }}>

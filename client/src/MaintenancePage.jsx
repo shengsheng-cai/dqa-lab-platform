@@ -17,6 +17,8 @@ import {
   toLocalDateTimeInput,
 } from "./utils/maintenance";
 import { C } from "./styles/theme";
+import { describeLoadError } from "./utils/loadError";
+import { ListStateRow, StaleBanner } from "./components/ListState";
 
 const pickerStyle = {
   background: C.bg,
@@ -92,19 +94,43 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null); // { record, type }
+  const [calError, setCalError] = useState("");
+  const [maintError, setMaintError] = useState("");
+  const [calLoaded, setCalLoaded] = useState(false);
+  const [maintLoaded, setMaintLoaded] = useState(false);
 
+  // 兩張表各自記自己的失敗原因：校驗讀得到、維護讀不到時，不要兩張一起變成錯誤畫面
   const fetchCalibrations = useCallback(async () => {
     try {
       const res = await api.get(`/api/devices/${selectedDevice}/calibrations`);
       setCalibrations(res.data);
-    } catch { /* ignore */ }
+      setCalError("");
+    } catch (e) {
+      setCalError(describeLoadError(e));
+    } finally {
+      setCalLoaded(true);
+    }
   }, [selectedDevice]);
 
   const fetchMaintenances = useCallback(async () => {
     try {
       const res = await api.get(`/api/devices/${selectedDevice}/maintenances`);
       setMaintenances(res.data);
-    } catch { /* ignore */ }
+      setMaintError("");
+    } catch (e) {
+      setMaintError(describeLoadError(e));
+    } finally {
+      setMaintLoaded(true);
+    }
+  }, [selectedDevice]);
+
+  // 換設備時先清掉手上的資料：讀取失敗時會保留上次讀到的內容，沒清的話那份會是
+  // 「上一台設備的紀錄」掛在新設備底下，比空白更難發現。
+  useEffect(() => {
+    setCalibrations([]);
+    setMaintenances([]);
+    setCalLoaded(false);
+    setMaintLoaded(false);
   }, [selectedDevice]);
 
   useEffect(() => {
@@ -240,13 +266,22 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
             <span style={sectionTitle}>校驗紀錄</span>
             {role === "admin" && <button onClick={() => openCreate("calibrations")} style={addBtn}>+ 新增</button>}
           </div>
+          {calError && calibrations.length > 0 && (
+            <StaleBanner error={calError} onRetry={fetchCalibrations} />
+          )}
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>{["校驗日期", "下次校驗日期", "間隔", "結果", ...(role === "admin" ? ["操作"] : [])].map(h => <th key={h} style={thS}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {calibrations.length === 0 ? (
-                <tr><td colSpan={role === "admin" ? 5 : 4} style={{ ...tdS, color: C.textDim, textAlign: "center", padding: "16px 0" }}>尚無校驗紀錄</td></tr>
+                <ListStateRow
+                  colSpan={role === "admin" ? 5 : 4}
+                  loading={!calLoaded}
+                  error={calError}
+                  empty="尚無校驗紀錄"
+                  onRetry={fetchCalibrations}
+                />
               ) : calibrations.map(c => (
                 <tr key={c.id}>
                   <td style={tdS}>{formatDateOnly(c.calibration_date)}</td>
@@ -273,13 +308,22 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
             <span style={sectionTitle}>維護紀錄</span>
             {role === "admin" && <button onClick={() => openCreate("maintenances")} style={addBtn}>+ 新增</button>}
           </div>
+          {maintError && maintenances.length > 0 && (
+            <StaleBanner error={maintError} onRetry={fetchMaintenances} />
+          )}
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>{["維護日期", "類型", "說明", "執行人員", "下次維護日期", ...(role === "admin" ? ["操作"] : [])].map(h => <th key={h} style={thS}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {maintenances.length === 0 ? (
-                <tr><td colSpan={6} style={{ ...tdS, color: C.textDim, textAlign: "center", padding: "16px 0" }}>尚無維護紀錄</td></tr>
+                <ListStateRow
+                  colSpan={role === "admin" ? 6 : 5}
+                  loading={!maintLoaded}
+                  error={maintError}
+                  empty="尚無維護紀錄"
+                  onRetry={fetchMaintenances}
+                />
               ) : maintenances.map(m => (
                 <tr key={m.id}>
                   <td style={tdS}>{formatLocalDateTime(m.maintenance_date)}</td>

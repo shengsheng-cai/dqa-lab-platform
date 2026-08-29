@@ -3,6 +3,8 @@ import api from "./api";
 import { useToast } from "./components/useToast";
 import ConfirmModal from "./components/ConfirmModal";
 import { C } from "./styles/theme";
+import { describeLoadError } from "./utils/loadError";
+import { ListStateRow, StaleBanner } from "./components/ListState";
 
 const ROLE_LABELS = { admin: "管理者" };
 const ROLE_COLORS = { admin: "#f85149" };
@@ -192,14 +194,23 @@ function DemoTokenSection({ active }) {
   const [deleteToken, setDeleteToken] = useState(null);
   const [deletingToken, setDeletingToken] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [loaded, setLoaded] = useState(false);
   const tokenRef = useRef(null);
 
+  // 讀不到 Token 清單時絕對不能顯示成「還沒建立過」：那句話會請管理者再發一把新憑證，
+  // 而實際情況可能只是後端斷線，現有的 Token 都還在。
   const fetchTokens = useCallback(async () => {
     if (!active) return;
     try {
       const res = await api.get("/api/auth/demo-tokens");
       setTokens(res.data);
-    } catch { /* ignore */ }
+      setLoadError("");
+    } catch (e) {
+      setLoadError(describeLoadError(e));
+    } finally {
+      setLoaded(true);
+    }
   }, [active]);
 
   useEffect(() => { fetchTokens(); }, [fetchTokens]);
@@ -371,6 +382,10 @@ function DemoTokenSection({ active }) {
           : tokens;
         const hiddenCount = tokens.length - visible.length;
         return (
+          <>
+          {loadError && visible.length > 0 && (
+            <StaleBanner error={loadError} onRetry={fetchTokens} />
+          )}
           <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
@@ -399,9 +414,15 @@ function DemoTokenSection({ active }) {
               </thead>
               <tbody>
                 {visible.length === 0 ? (
-                  <tr><td colSpan={5} style={{ padding: "28px 0", textAlign: "center", color: "#484f58", fontSize: 13 }}>
-                    {tokens.length === 0 ? "尚無訪客 Token，點擊「+ 生成」建立第一個" : `所有 Token 已失效（共 ${tokens.length} 筆）`}
-                  </td></tr>
+                  <ListStateRow
+                    colSpan={5}
+                    loading={!loaded}
+                    error={loadError}
+                    empty={tokens.length === 0
+                      ? "尚無訪客 Token，點擊「+ 生成」建立第一個"
+                      : `所有 Token 已失效（共 ${tokens.length} 筆）`}
+                    onRetry={fetchTokens}
+                  />
                 ) : visible.map((t) => {
                   const invalid = !t.is_active || t.expired || t.used_up;
                   return (
@@ -435,6 +456,7 @@ function DemoTokenSection({ active }) {
               </div>
             )}
           </div>
+          </>
         );
       })()}
       {deleteToken && (
@@ -491,7 +513,8 @@ export default function UsersPage({ active, role }) {
       setUsers(res.data);
     } catch (e) {
       console.error(e);
-      setLoadError(e.response?.status === 403 ? ADMIN_ONLY_ERROR : "人員資料載入失敗");
+      // 403 走頁面層的「此頁僅限管理者」，其餘要講得出是連不上還是伺服器出錯
+      setLoadError(e.response?.status === 403 ? ADMIN_ONLY_ERROR : describeLoadError(e));
     } finally {
       setLoading(false);
     }
@@ -569,6 +592,9 @@ export default function UsersPage({ active, role }) {
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
         {/* ── 左側：人員管理 ── */}
         <div style={{ flex: "0 0 38%", minWidth: 0 }}>
+          {loadError && users.length > 0 && (
+            <StaleBanner error={loadError} onRetry={fetchUsers} />
+          )}
           <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
@@ -588,12 +614,14 @@ export default function UsersPage({ active, role }) {
                 </tr>
               </thead>
               <tbody>
-                {loadError ? (
-                  <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: C.error }}>{loadError}</td></tr>
-                ) : loading ? (
-                  <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: "#8b949e" }}>載入中...</td></tr>
-                ) : users.length === 0 ? (
-                  <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: "#8b949e" }}>尚無人員資料</td></tr>
+                {users.length === 0 ? (
+                  <ListStateRow
+                    colSpan={4}
+                    loading={loading}
+                    error={loadError}
+                    empty="尚無人員資料"
+                    onRetry={fetchUsers}
+                  />
                 ) : (
                   users.map((u) => (
                     <tr

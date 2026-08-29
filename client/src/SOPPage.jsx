@@ -820,7 +820,10 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
             );
           })()}
 
-          {!isActive && !isFinishing && !isBlocked && (
+          {/* 緊急停止中不給選下一次的測試：這時畫面要講的是現場安全與怎麼降溫，
+              夾一整段「選法規 → 確認條件 → 安全確認 → 確認啟動」只會讓人以為還能開新測試。
+              上方控制面板已經寫了發生什麼事、下一步按哪一顆。 */}
+          {!isActive && !isFinishing && !isBlocked && !isEmergency && (
             <>
               <section
                 className="operation-box"

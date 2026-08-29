@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { downloadBlob, buildReportFilename } from "../../utils/download";
+import { downloadOrFail, buildReportFilename } from "../../utils/download";
 import { buildExecutionPayload } from "../../utils/executionPayload";
 import api from "../../api";
 import { useToast } from "../useToast";
@@ -27,25 +27,23 @@ const ExecutionPanel = ({
   const downloadReport = async (execId) => {
     if (downloadingCsv) return;
     setDownloadingCsv(true);
-    try {
-      await downloadBlob(`/api/reports/csv/${execId}`, _filename(execId, "csv"));
-    } catch (err) {
-      onError(`❌ CSV 下載失敗：${err?.response?.data?.detail || "請確認後端連線"}`);
-    } finally {
-      setDownloadingCsv(false);
-    }
+    await downloadOrFail(
+      `/api/reports/csv/${execId}`,
+      _filename(execId, "csv"),
+      (msg) => onError(`❌ CSV ${msg}`),
+    );
+    setDownloadingCsv(false);
   };
 
   const downloadPdfReport = async (execId) => {
     if (downloadingPdf) return;
     setDownloadingPdf(true);
-    try {
-      await downloadBlob(`/api/reports/pdf/${execId}`, _filename(execId, "pdf"));
-    } catch (err) {
-      onError(`❌ PDF 下載失敗：${err?.response?.data?.detail || "請確認後端連線"}`);
-    } finally {
-      setDownloadingPdf(false);
-    }
+    await downloadOrFail(
+      `/api/reports/pdf/${execId}`,
+      _filename(execId, "pdf"),
+      (msg) => onError(`❌ PDF ${msg}`),
+    );
+    setDownloadingPdf(false);
   };
 
   const saveExecution = async () => {
