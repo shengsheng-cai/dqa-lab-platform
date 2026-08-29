@@ -49,6 +49,7 @@ const SelectGroup = ({ step, title, items, selected, onSelect, accent }) => {
             <button
               key={key}
               onClick={() => onSelect(key)}
+              aria-current={active ? "true" : undefined}
               style={{
                 padding: "6px 12px",
                 borderRadius: 6,

@@ -90,6 +90,7 @@ export default function AuditLog({ active }) {
           <button
             key={key}
             onClick={() => setFilter(key)}
+            aria-current={filter === key ? "true" : undefined}
             style={{
               fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer",
               background: filter === key ? "#1f6feb" : "transparent",

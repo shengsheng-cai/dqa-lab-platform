@@ -59,6 +59,7 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
             <button
               key={v}
               onClick={() => { setCondition(v); setConfirmed(false); }}
+              aria-current={condition === v ? "true" : undefined}
               style={{
                 flex: 1,
                 padding: "7px",
