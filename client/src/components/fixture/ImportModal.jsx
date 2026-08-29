@@ -1,6 +1,6 @@
 import { useState } from "react";
 import api from "../../api";
-import { downloadBlob } from "../../utils/download";
+import { downloadOrFail } from "../../utils/download";
 import { useToast } from "../useToast";
 import { btnBare } from "../../styles/common";
 import ModalShell from "./ModalShell";
@@ -77,7 +77,8 @@ export default function ImportModal({ onClose, onSuccess }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
             <span style={{ color: "#cdd9e5", fontWeight: 600 }}>以欄標題對應欄位，欄位順序不限</span>
             <button
-              onClick={() => downloadBlob("/api/fixtures/template", "fixture_template.xlsx")}
+              onClick={() => downloadOrFail("/api/fixtures/template", "fixture_template.xlsx",
+                (msg) => showToast(msg, "error"))}
               style={{ ...btnBare, color: "#58a6ff", fontSize: 11 }}
             >
               下載標準範本

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import api from "./api";
-import { downloadBlob } from "./utils/download";
+import { downloadOrFail } from "./utils/download";
 import { formatLocal, parseUTC, parseDateOnlyLocal } from "./utils/timezone";
 import { isNonnegativeInteger } from "./utils/validation";
 import { useToast } from "./components/useToast";
@@ -280,7 +280,8 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
               defaultValue=""
               onChange={(e) => {
                 if (e.target.value === "export") {
-                  downloadBlob("/api/fixtures/export", "fixtures_export.xlsx");
+                  downloadOrFail("/api/fixtures/export", "fixtures_export.xlsx",
+                    (msg) => showToast(msg, "error"));
                 } else if (e.target.value === "import") {
                   setShowImportModal(true);
                 }

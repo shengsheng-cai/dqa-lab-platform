@@ -1,9 +1,11 @@
 import { useState, useEffect, Fragment } from "react";
 import api from "./api";
 import { POLL_GENERAL_MS } from "./constants";
-import { downloadBlob, buildReportFilename } from "./utils/download";
+import { downloadOrFail, buildReportFilename } from "./utils/download";
 import { formatLocal } from "./utils/timezone";
 import { useToast } from "./components/useToast";
+import { describeLoadError } from "./utils/loadError";
+import { ListState, StaleBanner } from "./components/ListState";
 
 function fmtDatetime(str) {
   if (!str) return "—";
@@ -16,9 +18,15 @@ export default function ExecutionList({ active, role }) {
   const [downloading, setDownloading] = useState({});
   const [uploading, setUploading] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [loadError, setLoadError] = useState("");
+  const [loaded, setLoaded] = useState(false);
 
+  // 讀失敗時不清空 executions：那份是使用者剛才看到的資料，清掉會像被刪光了
   const fetchList = () =>
-    api.get("/api/reports/list").then((r) => setExecutions(r.data)).catch(() => {});
+    api.get("/api/reports/list")
+      .then((r) => { setExecutions(r.data); setLoadError(""); })
+      .catch((e) => setLoadError(describeLoadError(e)))
+      .finally(() => setLoaded(true));
 
   useEffect(() => {
     if (!active) return;
@@ -30,14 +38,13 @@ export default function ExecutionList({ active, role }) {
   const downloadReport = async (ex, format = "csv") => {
     if (downloading[format]) return;
     setDownloading((prev) => ({ ...prev, [format]: ex.id }));
-    try {
-      const prefix = `${ex.device_id}_${ex.sop_id || "report"}`;
-      await downloadBlob(`/api/reports/${format}/${ex.id}`, buildReportFilename(prefix, ex.id, format));
-    } catch {
-      /* ignore */
-    } finally {
-      setDownloading((prev) => ({ ...prev, [format]: null }));
-    }
+    const prefix = `${ex.device_id}_${ex.sop_id || "report"}`;
+    await downloadOrFail(
+      `/api/reports/${format}/${ex.id}`,
+      buildReportFilename(prefix, ex.id, format),
+      (msg) => showToast(msg, "error"),
+    );
+    setDownloading((prev) => ({ ...prev, [format]: null }));
   };
 
   const uploadPhoto = async (exId, photoType, file) => {
@@ -72,8 +79,11 @@ export default function ExecutionList({ active, role }) {
         <span style={{ color: "#58a6ff", fontWeight: 700, fontSize: 18 }}>📋 執行紀錄</span>
         <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 10, background: "#21262d", color: "#8b949e" }}>{executions.length} 筆</span>
       </div>
+      {loadError && executions.length > 0 && (
+        <StaleBanner error={loadError} onRetry={fetchList} />
+      )}
       {executions.length === 0 ? (
-        <div style={{ color: "#484f58", textAlign: "center", padding: "40px 0" }}>尚無執行紀錄</div>
+        <ListState loading={!loaded} error={loadError} empty="尚無執行紀錄" onRetry={fetchList} />
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>

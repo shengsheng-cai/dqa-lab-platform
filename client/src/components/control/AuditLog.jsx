@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import api from "../../api.js";
-import { downloadBlob } from "../../utils/download.js";
+import { downloadOrFail } from "../../utils/download.js";
 import { localDateStamp } from "../../utils/timezone.js";
 import { parseUtcDate } from "../../constants";
+import { describeLoadError } from "../../utils/loadError.js";
+import { ListState, StaleBanner } from "../ListState.jsx";
+import { useToast } from "../useToast.js";
 
 const ACTION_LABELS = {
   CREATE: "申請排程",
@@ -46,16 +49,20 @@ function fmtAuditTime(ts) {
 }
 
 export default function AuditLog({ active }) {
+  const { showToast } = useToast();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [filter, setFilter] = useState("all");
 
+  // 訪客沒有稽核權限，這裡會拿到 403。以前錯誤被吞掉，畫面寫「尚無稽核紀錄」，
+  // 看起來像系統真的沒有留任何紀錄。
   const load = useCallback(() => {
     setLoading(true);
     api
       .get("/api/audit-logs?limit=300")
-      .then((r) => setLogs(r.data))
-      .catch(() => {})
+      .then((r) => { setLogs(r.data); setLoadError(""); })
+      .catch((e) => setLoadError(describeLoadError(e)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -68,7 +75,11 @@ export default function AuditLog({ active }) {
   const filtered = filter === "all" ? logs : logs.filter((l) => l.entity_type === filter);
 
   const handleExport = () => {
-    downloadBlob("/api/audit-logs/export", `audit_${localDateStamp("-")}.csv`);
+    downloadOrFail(
+      "/api/audit-logs/export",
+      `audit_${localDateStamp("-")}.csv`,
+      (msg) => showToast(msg, "error"),
+    );
   };
 
   return (
@@ -91,8 +102,10 @@ export default function AuditLog({ active }) {
         ))}
         <button
           onClick={load}
-          style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, cursor: "pointer", background: "transparent", border: "1px solid #30363d", color: "#8b949e" }}
-        >↺</button>
+          style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer", background: "transparent", border: "1px solid #30363d", color: "#8b949e" }}
+        >
+          <span aria-hidden="true">↺</span> 重新整理
+        </button>
         <button
           onClick={handleExport}
           style={{ marginLeft: "auto", fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer", background: "#21262d", border: "1px solid #30363d", color: "#cdd9e5" }}
@@ -103,10 +116,16 @@ export default function AuditLog({ active }) {
 
       {/* Table */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {loading ? (
-          <div style={{ textAlign: "center", color: "#484f58", fontSize: 12, padding: 40 }}>載入中…</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#484f58", fontSize: 12, padding: 40 }}>尚無稽核紀錄</div>
+        {loadError && filtered.length > 0 && (
+          <StaleBanner error={loadError} onRetry={load} />
+        )}
+        {filtered.length === 0 ? (
+          <ListState
+            loading={loading}
+            error={loadError}
+            empty={filter === "all" ? "尚無稽核紀錄" : "這個分類沒有紀錄"}
+            onRetry={load}
+          />
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
             <thead>
