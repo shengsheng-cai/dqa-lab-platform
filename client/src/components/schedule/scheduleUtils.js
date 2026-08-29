@@ -79,6 +79,8 @@ export const scheduleIconBtn = {
   background: "transparent", border: `1px solid ${C.border}`, color: C.textMuted,
   padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontSize: 14, lineHeight: 1,
 };
+/** 疊在按鈕 style 上，表示「這顆現在不能按」。 */
+export const disabledStyle = { opacity: 0.5, cursor: "not-allowed" };
 export const cancelBtn = {
   background: "transparent", border: `1px solid ${C.border}`, color: C.textMuted,
   padding: "7px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13,

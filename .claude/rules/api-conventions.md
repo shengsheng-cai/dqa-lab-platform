@@ -135,6 +135,17 @@ async def my_route(...):
   伺服器無從得知客戶端在哪一時區，所以前端送時間一定要帶 `Z` 或 offset
 - 唯一例外是 device state cache 的 `started_at`：cache 保留 aware UTC 供 API／排程計算，所有狀態動作都經 `DeviceStateManager._persist`，再由模組內的 `_save` 正規化成 naive UTC 後落盤。同 transaction 的 `SopExecution.test_started_at` 由**同一個瞬間**去掉時區得到（`started_at.replace(tzinfo=None)`），不另外呼叫 `_now_utc_naive()`——測試結束後 SOP 頁面存的那列要靠這個時間戳認回開始那列來繼承案件（`sop.py` 的 `_find_origin_schedule_id_db`），各自取 now() 會差幾微秒而認不回來
 
+## PATCH 的欄位語意：null 是「不要動」，不是「清空」
+
+PATCH 端點一律用 `if body.欄位 is not None:` 判斷這次要不要改那個欄位，所以送 `null` 等於
+「這欄跳過」。**前端要把欄位清掉就送空字串，不要送 `null`。**
+
+排程備註踩過這個坑：前端送 `note: note || null`，使用者把文字框刪光按儲存，後端原封不動，
+畫面卻跳出「備註已儲存」，重開視窗備註又回來了。`rejection_note` 是同一種寫法，同樣清不掉。
+
+要真正支援「設成 null」得改用 pydantic 的 `model_fields_set` 區分「沒送這個欄位」與
+「送了但值是 null」，那會動到每一支 PATCH 端點，目前不做。
+
 ## 自動排程邏輯
 
 所有計算邏輯集中在 `schedule_service.py`（service layer），routes 只負責 HTTP 入出。

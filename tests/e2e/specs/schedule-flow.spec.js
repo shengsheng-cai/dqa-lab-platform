@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { resetBackend } from "../helpers/backend.js";
 import { loginAsAdmin } from "../helpers/login.js";
+import { closeModal } from "../helpers/modal.js";
 
 // 每個測試檔跑之前把後端重來一次，跟其他檔案的狀態完全切開
 test.beforeAll(resetBackend);
@@ -76,5 +77,47 @@ test("申請排程並確認後，系統會自動選機並把設備開起來", as
     // BUG-001 修好後的回歸保護：確認成功會自動重抓一次，這一列不用手動刷新就轉「進行中」。
     // 若有人退回「確認後不重抓」的舊行為，這一步會失敗。
     await expect(row).toContainText("進行中");
+  });
+});
+
+// 儲存備註的成功回饋。這條同時擋兩件事：成功時要說出來（以前只有失敗會講話，成功是沉默的），
+// 而且那句話要在 live region 裡，螢幕閱讀器才聽得到——toast 是全站唯一的操作結果回饋。
+// 用 getByRole("status") 定位就是在驗第二件事：定得到，代表它真的在 live region 裡。
+test("儲存備註成功會說出來，沒有變更時按鈕不給按", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: /^排程/ }).click();
+
+  // 挑已完成那筆：狀態不會被模擬器推著走，測起來不會偶爾紅一次
+  await page.getByRole("row").filter({ hasText: "PRJ-2025-072" }).click();
+  const save = page.getByRole("button", { name: "儲存備註" });
+  const note = page.getByPlaceholder("可選");
+
+  await test.step("剛打開沒有未存的變更，按鈕停用", async () => {
+    await expect(save).toBeDisabled();
+  });
+
+  await test.step("改了備註才給按，存完要說出「備註已儲存」", async () => {
+    await note.fill("E2E 備註");
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(page.getByRole("status")).toContainText("備註已儲存");
+  });
+
+  await test.step("存完又回到沒有未存的變更", async () => {
+    await expect(save).toBeDisabled();
+  });
+
+  // 清空是最容易假成功的一條：前端若把空備註送成 null，後端會當成「這欄不要動」而保留舊值，
+  // 畫面卻照樣說已儲存。所以這裡重開視窗，看 DB 裡真的變空了沒有。
+  await test.step("清空備註要真的存得掉，重開視窗不會又長回來", async () => {
+    await note.fill("");
+    await save.click();
+    // 不看 toast：上一步那則同樣寫著「備註已儲存」，3 秒內還在畫面上，會分不出是哪一次。
+    // 按鈕重新變回停用是這次存完才會發生的事，拿它當完成訊號。
+    await expect(save).toBeDisabled();
+
+    await closeModal(page, "排程詳情");
+    await page.getByRole("row").filter({ hasText: "PRJ-2025-072" }).click();
+    await expect(note).toHaveValue("");
   });
 });
