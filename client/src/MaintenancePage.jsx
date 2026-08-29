@@ -253,7 +253,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
       {/* 設備切換 */}
       <div style={{ display: "flex", gap: 6, padding: "10px 16px", flexShrink: 0, borderBottom: `1px solid ${C.border}` }}>
         {DEVICE_IDS.map(id => (
-          <button key={id} onClick={() => setSelectedDevice(id)} style={{ padding: "4px 10px", fontSize: 12, borderRadius: 5, cursor: "pointer", background: selectedDevice === id ? C.accentDark : C.surfaceHover, border: `1px solid ${selectedDevice === id ? C.accentDark : C.border}`, color: selectedDevice === id ? C.white : C.textMuted, fontWeight: selectedDevice === id ? 700 : 400 }}>{id}</button>
+          <button key={id} onClick={() => setSelectedDevice(id)} aria-current={selectedDevice === id ? "true" : undefined} style={{ padding: "4px 10px", fontSize: 12, borderRadius: 5, cursor: "pointer", background: selectedDevice === id ? C.accentDark : C.surfaceHover, border: `1px solid ${selectedDevice === id ? C.accentDark : C.border}`, color: selectedDevice === id ? C.white : C.textMuted, fontWeight: selectedDevice === id ? 700 : 400 }}>{id}</button>
         ))}
       </div>
 

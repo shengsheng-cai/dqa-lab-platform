@@ -190,6 +190,7 @@ function LoginPage({ onLogin }) {
                   setMode("user");
                   setError("");
                 }}
+                aria-current={mode === "user" ? "true" : undefined}
                 style={{
                   flex: 1,
                   fontSize: 12,
@@ -209,6 +210,7 @@ function LoginPage({ onLogin }) {
                   setMode("demo");
                   setError("");
                 }}
+                aria-current={mode === "demo" ? "true" : undefined}
                 style={{
                   flex: 1,
                   fontSize: 12,

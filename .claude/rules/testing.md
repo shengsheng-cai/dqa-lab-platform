@@ -52,7 +52,15 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
   tab 順序，所以被設成跳過（`tabIndex={-1}`）、被別的東西蓋住、或藏在沒顯示的分支裡，測試照樣
   會綠。要驗 Tab 順序就得真的連按 Tab、記錄焦點依序停在哪（`keyboard-navigation.spec.js` 最後
   一條是這樣寫的）。兩種都需要，但不要拿前者當後者用
-- 定位優先用畫面文字，前端目前沒有 test id
+- **切分頁之後，要先等新頁面出現再動手**。所有頁面一直掛在 DOM 上，只靠 `display:none` 切換，
+  所以點完分頁鈕的那一瞬間舊頁面還在：斷言會先打在舊頁面的同名按鈕上，等畫面真的換過去，
+  `focus()` 拿到的那顆已經被藏起來，後面的 Enter 打在空處。先 `await expect(新頁面獨有的文字).toBeVisible()`
+  再開始操作（維護頁那條測試踩過，單獨跑會過、整支跑就紅）
+- **點東西用 `getByRole`，不要用 `getByText`**：`getByText` 連 `display:none` 裡的元素都撈得到
+  （所有分頁都掛著），所以得再接 `.filter({ visible: true }).first()` 才對得起來；`getByRole`
+  本來就不看隱藏的元素。而且這個專案要擋的正是「按鈕被改回普通方框」，用文字點的話那種退步照樣會綠。
+  另外 `name` 預設是**子字串**比對，同一個視窗裡同時有「損壞」和「確定標記為損壞？」這種情形要加 `exact: true`
+- 定位優先用畫面上看得到的文字當名稱（`getByRole` 的 `name`），前端目前沒有 test id
 
 ## Backend 單元測試（pytest）
 

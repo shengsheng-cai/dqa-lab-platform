@@ -89,8 +89,9 @@ function CollapsibleBubble({ children, contentKey }) {
       </div>
       {overflow && (
         <div style={expanded ? S.collapseBarExpanded : S.collapseBar}>
-          <button style={S.collapseBtn} onClick={() => setExpanded((v) => !v)}>
-            {expanded ? "收合 ▲" : "顯示更多 ▼"}
+          <button style={S.collapseBtn} onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+            {expanded ? "收合" : "顯示更多"}
+            <span aria-hidden="true">{expanded ? " ▲" : " ▼"}</span>
           </button>
         </div>
       )}

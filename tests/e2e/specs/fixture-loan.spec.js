@@ -108,7 +108,11 @@ test("歸還標記損壞需二次確認，備註會留進損壞／遺失紀錄",
   await test.step("開歸還 Modal，選損壞並填備註", async () => {
     await loansToggle(page, IFACE).click();
     await adminLoanRow(page).getByRole("button", { name: "歸還" }).click();
-    await page.getByRole("button", { name: "損壞" }).click();
+    const damaged = page.getByRole("button", { name: "損壞", exact: true });
+    // 歸還狀況以前只有顏色在表示選中哪一個，這裡順帶釘住它說得出來
+    await expect(damaged).not.toHaveAttribute("aria-current", "true");
+    await damaged.click();
+    await expect(damaged).toHaveAttribute("aria-current", "true");
     await page.getByPlaceholder("備註（選填）").fill(NOTE);
 
     // 第一次按只會把按鈕變成警告字樣，要再按一次才真的送出

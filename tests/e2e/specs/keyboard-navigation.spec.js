@@ -33,6 +33,61 @@ test("設備卡用鍵盤就能換要看哪一台", async ({ page }) => {
   await expect(ch02).toHaveAttribute("aria-current", "true");
 });
 
+// 以下三條補的是同一件事：畫面上「現在選中哪一個」只用背景色和字重表達，
+// 顏色對螢幕閱讀器不存在。設備卡、排程篩選、分頁列在前一批已經處理，這三處是同類的漏網。
+
+test("維護頁的設備切換說得出目前選的是哪一台", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "維護", exact: true }).click();
+  await expect(page.getByText("校驗紀錄", { exact: true })).toBeVisible();
+
+  const ch01 = page.getByRole("button", { name: "CH-01", exact: true });
+  const ch03 = page.getByRole("button", { name: "CH-03", exact: true });
+  await expect(ch01).toHaveAttribute("aria-current", "true");
+  await expect(ch03).not.toHaveAttribute("aria-current", "true");
+
+  await ch03.focus();
+  await page.keyboard.press("Enter");
+
+  await expect(ch03).toHaveAttribute("aria-current", "true");
+  await expect(ch01).not.toHaveAttribute("aria-current", "true");
+});
+
+test("SOP 選法規說得出目前選的是哪一條", async ({ page }) => {
+  await loginAsAdmin(page);
+  // 選法規只在待機的設備上出現，跑測試中的那台顯示的是進行中的畫面。seed 固定讓 CH-05 待機。
+  await page.getByRole("button", { name: "CH-05", exact: true }).click();
+  await expect(page.getByText("選擇法規", { exact: true })).toBeVisible();
+
+  const iec = page.getByRole("button", { name: "IEC 60068 基礎環境測試", exact: true });
+  const dnv = page.getByRole("button", { name: "DNV 船舶設備環境認證", exact: true });
+  // 先選 IEC，後面換 DNV 才有「上一顆要放掉」可以驗
+  await iec.focus();
+  await page.keyboard.press("Enter");
+  await expect(iec).toHaveAttribute("aria-current", "true");
+
+  await dnv.focus();
+  await page.keyboard.press("Enter");
+
+  await expect(dnv).toHaveAttribute("aria-current", "true");
+  await expect(iec).not.toHaveAttribute("aria-current", "true");
+});
+
+test("登入頁的帳號與訪客分頁說得出目前在哪一個", async ({ page }) => {
+  // 這條刻意不登入：登入頁是第一個畫面，選錯分頁的人會一直找不到要填的欄位
+  await page.goto("/");
+
+  const user = page.getByRole("button", { name: "帳號登入", exact: true });
+  const guest = page.getByRole("button", { name: "訪客模式", exact: true });
+  await expect(user).toHaveAttribute("aria-current", "true");
+
+  await guest.focus();
+  await page.keyboard.press("Enter");
+
+  await expect(guest).toHaveAttribute("aria-current", "true");
+  await expect(user).not.toHaveAttribute("aria-current", "true");
+});
+
 test("排程表格與甘特圖用鍵盤就能打開詳情", async ({ page }) => {
   await loginAsAdmin(page);
   await page.getByRole("button", { name: /^排程/ }).click();
