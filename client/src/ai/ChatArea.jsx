@@ -34,6 +34,7 @@ export default function ChatArea({
   loading,
   streamText,
   cooldownSeconds = 0,
+  blockedReason = null,
   input,
   chatAreaRef,
   bottomRef,
@@ -49,6 +50,9 @@ export default function ChatArea({
   compact = false,
 }) {
   const isCooling = cooldownSeconds > 0;
+  // blockedReason 由 RightPanel 算好傳進來（null 代表可以送），這裡只負責呈現
+  const inputBlocked = blockedReason !== null;
+  const sendDisabled = !input.trim() || inputBlocked;
 
   return (
     <div style={S.main}>
@@ -78,27 +82,27 @@ export default function ChatArea({
               ].map((q) => (
                 <button
                   key={q}
-                  onClick={() => !isCooling && onSend(q)}
-                  disabled={isCooling}
+                  onClick={() => !inputBlocked && onSend(q)}
+                  disabled={inputBlocked}
                   style={{
                     background: "#0d1117",
                     border: "1px solid #30363d",
                     borderRadius: 8,
-                    color: isCooling ? "#6e7681" : "#8b949e",
+                    color: inputBlocked ? "#6e7681" : "#8b949e",
                     fontSize: 13,
                     padding: "10px 14px",
                     textAlign: "left",
-                    cursor: isCooling ? "not-allowed" : "pointer",
+                    cursor: inputBlocked ? "not-allowed" : "pointer",
                     transition: "border-color .15s, color .15s",
-                    opacity: isCooling ? 0.5 : 1,
+                    opacity: inputBlocked ? 0.5 : 1,
                   }}
                   onMouseEnter={(e) => {
-                    if (isCooling) return;
+                    if (inputBlocked) return;
                     e.currentTarget.style.borderColor = "#58a6ff";
                     e.currentTarget.style.color = "#cdd9e5";
                   }}
                   onMouseLeave={(e) => {
-                    if (isCooling) return;
+                    if (inputBlocked) return;
                     e.currentTarget.style.borderColor = "#30363d";
                     e.currentTarget.style.color = "#8b949e";
                   }}
@@ -145,18 +149,16 @@ export default function ChatArea({
           }}
           style={{
             ...S.textarea,
-            opacity: isCooling ? 0.5 : 1,
+            opacity: inputBlocked ? 0.5 : 1,
           }}
           value={input}
           onChange={onInputChange}
           onKeyDown={onKeyDown}
           placeholder={
-            isCooling
-              ? `AI 額度冷卻中，請稍候 ${cooldownSeconds} 秒...`
-              : "描述你的測試需求，Enter 送出，Shift+Enter 換行..."
+            blockedReason ?? "描述你的測試需求，Enter 送出，Shift+Enter 換行..."
           }
           rows={3}
-          disabled={loading || isCooling}
+          disabled={loading || inputBlocked}
         />
         {loading ? (
           <button
@@ -187,15 +189,15 @@ export default function ChatArea({
           <button
             style={{
               ...S.sendBtn,
-              opacity: !input.trim() ? 0.4 : 1,
-              cursor: !input.trim() ? "not-allowed" : "pointer",
+              opacity: sendDisabled ? 0.4 : 1,
+              cursor: sendDisabled ? "not-allowed" : "pointer",
             }}
             onClick={() => {
               onSend();
               if (textareaRef.current)
                 textareaRef.current.style.height = "auto";
             }}
-            disabled={!input.trim()}
+            disabled={sendDisabled}
           >
             送出
           </button>

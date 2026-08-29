@@ -13,8 +13,9 @@ test.beforeAll(resetBackend);
 // 把 [META:] 從畫面剝掉、sop_ids 一路 prop 傳到排程視窗、預填成已選條件。
 //
 // 「假 AI」怎麼做：用 route 攔掉 AI 串流端點，直接回一段固定文字（答覆＋結尾的
-// [META:{sop_ids}] marker），完全不碰 Gemini，決定論。前端沒有「AI 未設定就鎖住輸入」
-// 的閘門，所以測試後端沒金鑰也送得出去。
+// [META:{sop_ids}] marker），完全不碰 Gemini，決定論。前端現在會依 runtime-info 的
+// ai_enabled 鎖住輸入，但 run-e2e.sh 有塞一把假金鑰，所以這支照樣送得出去；
+// 沒金鑰時的停用畫面由 ai-disabled.spec.js 蓋。
 
 // 兩條同標準同版本的條件，對應真實 sop_id 與其顯示名稱（backend/app/standards/iec60068.py）
 const SOP_ID_1 = "iec60068_ab_-25_16h";

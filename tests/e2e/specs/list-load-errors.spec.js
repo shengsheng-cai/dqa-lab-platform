@@ -46,3 +46,46 @@ test.describe("列表讀取失敗時說得出原因", () => {
     await expect(page.getByLabel("有效 Token：讀取失敗")).toBeVisible();
   });
 });
+
+// AI 不是清單，但病一樣：後端明明回了「AI 服務未設定，請聯絡管理員」，
+// 前端收到非 2xx 一律蓋成「連線失敗，請確認後端是否正常運行」，
+// 於是沒設金鑰、被限流、權限不足在畫面上長得一模一樣。
+//
+// AI 串流走的是原生 fetch，繞過 api.js 的攔截器，所以 401 也得自己接——
+// 否則 Token 過期只會在對話裡留一句話，人留在已經失效的畫面上。
+test.describe("AI 送出失敗的處理", () => {
+  test("顯示後端回的那句話，不是籠統的連線失敗", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.route("**/api/ai/standards-query-stream", (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "AI 服務未設定，請聯絡管理員" }),
+      }));
+
+    await page.getByTitle("AI 諮詢").click();
+    await page.getByPlaceholder(/描述你的測試需求/).fill("工業設備要做哪些低溫測試？");
+    await page.getByRole("button", { name: "送出", exact: true }).click();
+
+    await expect(page.getByText("AI 服務未設定，請聯絡管理員")).toBeVisible();
+    await expect(page.getByText("連線失敗，請確認後端是否正常運行")).toBeHidden();
+  });
+
+  test("Token 失效時把人送回登入頁，不是在對話裡留一句話", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.route("**/api/ai/standards-query-stream", (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Token 已失效，請重新登入" }),
+      }));
+
+    await page.getByTitle("AI 諮詢").click();
+    await page.getByPlaceholder(/描述你的測試需求/).fill("隨便問一句");
+    await page.getByRole("button", { name: "送出", exact: true }).click();
+
+    await expect(page.getByPlaceholder("密碼")).toBeVisible();
+    // 憑證要真的清掉，不然重整又會用失效的 Token 進去
+    expect(await page.evaluate(() => localStorage.getItem("user_token"))).toBeNull();
+  });
+});

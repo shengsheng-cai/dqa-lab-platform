@@ -11,6 +11,8 @@
 新增 API 端點時，寫入操作一律使用 `Depends(require_admin)`；不要在路由內手動比較角色。
 唯讀感測器端點（如 `GET /api/devices/{id}/sensor-stats`、`GET /api/devices/{id}/history`）不需 role 檢查，guest 可存取。
 
+唯讀端點若夾帶部署細節，用**白名單裁掉回應內容**，不要整支擋掉：`GET /api/runtime-info` 訪客也讀得到，但只拿得到 `PUBLIC_CAPABILITIES` 裡的能力旗標（目前只有 `ai_enabled`——AI 面板要靠它才知道該不該停用輸入並就地寫出原因）；`warnings` 那幾句會寫出缺哪個環境變數，其餘旗標也是部署細節，一律不給訪客。新增 capability 時要在那份白名單決定放不放行，不填就是只有管理者看得到。`backend/tests/test_runtime_info.py` 用全等比對釘住訪客那份，多漏一個鍵就會紅。
+
 ### WebSocket 憑證不放網址
 
 網址會被 Uvicorn 的 access log 原樣記下來，長效 token 進了日誌就能被撿去重放（BUG-011）。

@@ -207,6 +207,9 @@ export default function ControlCenter({ role, displayName, onLogout }) {
   const [sensorModalDevice, setSensorModalDevice] = useState(null);
   const [calibrationStatusMap, setCalibrationStatusMap] = useState({});
   const [runtimeWarnings, setRuntimeWarnings] = useState([]);
+  // 預設當成可用：讀不到 runtime-info 時寧可讓人送出後看後端的實話，
+  // 也不要因為一次讀取失敗就把面板鎖起來。
+  const [aiEnabled, setAiEnabled] = useState(true);
   const handleInitCondsConsumed = useCallback(() => setScheduleInitConds(null), []);
   const { showToast } = useToast();
   const [scheduleCounts, setScheduleCounts] = useState({ pending: 0, confirmed: 0, running: 0, done: 0, error: 0 });
@@ -325,14 +328,16 @@ export default function ControlCenter({ role, displayName, onLogout }) {
     return () => clearInterval(t);
   }, [fetchCalStatus]);
 
+  // 訪客也要打這支：AI 面板要靠 ai_enabled 才知道該不該停用輸入。
+  // 後端只發給訪客這一項，warnings 那幾句會寫出缺哪個環境變數，維持只給管理者。
   useEffect(() => {
-    if (role !== "admin") return;
     let cancelled = false;
     api.get("/api/runtime-info")
       .then((res) => {
         if (cancelled) return;
         const next = Array.isArray(res.data?.warnings) ? res.data.warnings : [];
         setRuntimeWarnings(next);
+        setAiEnabled(res.data?.capabilities?.ai_enabled !== false);
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -443,7 +448,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
 
       {/* AI 滑入面板 */}
       <div style={{ position: "fixed", top: 0, right: 0, height: "100%", width: 500, zIndex: 199, transform: aiOpen ? "translateX(0)" : "translateX(100%)", transition: "transform .2s ease", background: C.bg, borderLeft: `1px solid ${C.border}`, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <RightPanel role={role} onClose={() => setAiOpen(false)} onApplySchedule={handleApplySchedule} />
+        <RightPanel role={role} aiEnabled={aiEnabled} onClose={() => setAiOpen(false)} onApplySchedule={handleApplySchedule} />
       </div>
 
       {role === "guest" && (

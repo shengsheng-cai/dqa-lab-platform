@@ -6,7 +6,8 @@ import {
   createConversation,
   deleteConversation as _deleteConv,
 } from "./aiStorage";
-import { API_BASE, buildAuthHeaders } from "../api";
+import { API_BASE, buildAuthHeaders, handleUnauthorized } from "../api";
+import { describeResponseError } from "../utils/loadError";
 
 const MAX_HISTORY = 4;
 // Matches \n[META:{...}] — sop_ids values never contain }, so [^}]* is safe
@@ -305,7 +306,20 @@ export default function useAIChat() {
           body: JSON.stringify({ message: rawMsg, history }),
           signal: controller.signal,
         });
-        if (!res.ok) throw new Error("串流請求失敗");
+        if (!res.ok) {
+          // 這條路走的是原生 fetch，沒有 api.js 的攔截器，401 要自己接：
+          // 只在對話裡留一句「請重新登入」的話，等於把人留在已經失效的畫面上。
+          if (res.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+
+          // 串流一旦開始就改不了 HTTP 狀態，所以剩下的都是「還沒開始講就被擋下來」：
+          // 沒設 API key、被限流、權限不足。後端那句話本來就是要給人看的，別蓋掉。
+          const err = new Error(await describeResponseError(res));
+          err.userFacing = true;
+          throw err;
+        }
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -346,13 +360,15 @@ export default function useAIChat() {
         }
       } catch (err) {
         if (err.name !== "AbortError") {
+          // 只有上面整理過的訊息才直接給使用者看；其餘（斷網、解析失敗）
+          // 的原文是給開發者的，換成一句看得懂的話。
+          const reason = err.userFacing
+            ? err.message
+            : "連線失敗，請確認後端是否正常運行。";
           updateMessages(
             [
               ...newMessages,
-              {
-                role: "assistant",
-                content: "⚠️ 連線失敗，請確認後端是否正常運行。",
-              },
+              { role: "assistant", content: `⚠️ ${reason}` },
             ],
             sendingConvId,
           );

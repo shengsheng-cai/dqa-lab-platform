@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeLoadError } from "../utils/loadError";
+import { describeLoadError, describeResponseError } from "../utils/loadError";
 import { GENERIC_ERROR } from "../errorMessages";
 
 describe("describeLoadError", () => {
@@ -48,5 +48,41 @@ describe("describeLoadError", () => {
     const blobBody = new Blob(['{"detail":"需要管理者權限"}'], { type: "application/json" });
     expect(describeLoadError({ response: { status: 403, data: blobBody } }))
       .toBe("需要管理者權限才能查看");
+  });
+});
+
+// AI 串流要邊收邊顯示，走的是原生 fetch，沒有 axios 攔截器，上面那支吃的 e.response
+// 也不存在。這支負責從 Response 把後端那句話拿出來。
+describe("describeResponseError", () => {
+  const jsonResponse = (status, body) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  it("uses the backend detail when there is one", async () => {
+    // AI 沒設定時後端回的就是這句，它本來就是寫給使用者看的
+    const res = jsonResponse(503, { detail: "AI 服務未設定，請聯絡管理員" });
+    await expect(describeResponseError(res)).resolves.toBe("AI 服務未設定，請聯絡管理員");
+  });
+
+  it("falls back to the status code when the body has no detail", async () => {
+    await expect(describeResponseError(jsonResponse(403, {}))).resolves
+      .toBe("需要管理者權限才能查看");
+    await expect(describeResponseError(jsonResponse(500, { detail: "   " }))).resolves
+      .toBe("伺服器錯誤（500），請稍後重試");
+    await expect(describeResponseError(jsonResponse(418, {}))).resolves
+      .toBe("讀取失敗（418）");
+  });
+
+  it("ignores the generic fallback so the status code still gets through", async () => {
+    await expect(describeResponseError(jsonResponse(500, { detail: GENERIC_ERROR }))).resolves
+      .toBe("伺服器錯誤（500），請稍後重試");
+  });
+
+  it("survives a body that is not JSON", async () => {
+    // 代理伺服器或 nginx 擋下來時回的是 HTML，不能讓解析失敗變成沒有訊息
+    const res = new Response("<html>502 Bad Gateway</html>", { status: 502 });
+    await expect(describeResponseError(res)).resolves.toBe("伺服器錯誤（502），請稍後重試");
   });
 });
