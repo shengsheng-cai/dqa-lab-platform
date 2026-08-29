@@ -31,7 +31,15 @@ export function ToastProvider({ children }) {
 
 function ToastContainer({ toasts, onRemove }) {
   return (
+    // live region 標在這個永遠掛著的容器上：螢幕閱讀器念的是「已存在的區域裡多了什麼」，
+    // 標在每一則 toast 自己身上會來不及被念到。用 polite 不用 assertive，是不要打斷
+    // 使用者當下正在聽的句子——操作結果等他念完再接上就夠了。
+    // aria-live 跟 role 隱含的值一樣，明寫是保守；aria-atomic 一定要覆寫成 false，
+    // 否則第二則跳出來時，還掛在畫面上的第一則會被整區重念一次。
     <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="false"
       style={{
         position: "fixed",
         bottom: 20,
@@ -99,7 +107,7 @@ function ToastItem({ toast, onRemove }) {
         pointerEvents: "auto",
       }}
     >
-      <span style={{ fontSize: 16, flexShrink: 0 }}>{style.icon}</span>
+      <span aria-hidden="true" style={{ fontSize: 16, flexShrink: 0 }}>{style.icon}</span>
       <span style={{ flex: 1 }}>
         {toast.message}
         {toast.hint && (
@@ -110,6 +118,7 @@ function ToastItem({ toast, onRemove }) {
       </span>
       <button
         onClick={() => onRemove(toast.id)}
+        aria-label="關閉通知"
         style={{
           background: "transparent",
           border: "none",
