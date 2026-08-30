@@ -54,37 +54,13 @@ export default function SetKeeperModal({ fixture, onClose, onSubmit }) {
 
   return (
     <>
-    <ModalShell width={360} gap={12} onClose={onClose}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
-          設定保管人
-        </div>
-        <div style={{ fontSize: 13, color: "#8b949e" }}>
-          {fixture.interface_type} — {fixture.form_factor}
-          {fixture.keeper_name && (
-            <span style={{ marginLeft: 8, color: unlinked ? "#f0a500" : "#58a6ff" }}>
-              目前：{fixture.keeper_name}
-            </span>
-          )}
-        </div>
-        {unlinked && (
-          <div style={{ fontSize: 12, color: "#f0a500", background: "#2d2200", border: "1px solid #f0a50044", borderRadius: 6, padding: "8px 10px", lineHeight: 1.6 }}>
-            「{fixture.keeper_name}」是舊資料留下的文字，還沒連到系統裡的人員。
-            從下面挑一個人就會連起來；維持「無保管人」並確認，則會把這段文字清掉。
-          </div>
-        )}
-        <select
-          value={keeperUserId}
-          onChange={(e) => setKeeperUserId(e.target.value)}
-          style={inputStyle}
-        >
-          <option value="">— 無保管人 —</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.display_name}（{u.role}）
-            </option>
-          ))}
-        </select>
-        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+    <ModalShell
+      title="設定保管人"
+      width={360}
+      gap={12}
+      onClose={onClose}
+      footer={
+        <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={onClose}
             style={{
@@ -118,6 +94,34 @@ export default function SetKeeperModal({ fixture, onClose, onSubmit }) {
             {loading ? "儲存中..." : "確認"}
           </button>
         </div>
+      }
+    >
+    <div style={{ fontSize: 13, color: "#8b949e" }}>
+      {fixture.interface_type} — {fixture.form_factor}
+      {fixture.keeper_name && (
+        <span style={{ marginLeft: 8, color: unlinked ? "#f0a500" : "#58a6ff" }}>
+          目前：{fixture.keeper_name}
+        </span>
+      )}
+    </div>
+    {unlinked && (
+      <div style={{ fontSize: 12, color: "#f0a500", background: "#2d2200", border: "1px solid #f0a50044", borderRadius: 6, padding: "8px 10px", lineHeight: 1.6 }}>
+        「{fixture.keeper_name}」是舊資料留下的文字，還沒連到系統裡的人員。
+        從下面挑一個人就會連起來；維持「無保管人」並確認，則會把這段文字清掉。
+      </div>
+    )}
+    <select
+      value={keeperUserId}
+      onChange={(e) => setKeeperUserId(e.target.value)}
+      style={inputStyle}
+    >
+      <option value="">— 無保管人 —</option>
+      {users.map((u) => (
+        <option key={u.id} value={u.id}>
+          {u.display_name}（{u.role}）
+        </option>
+      ))}
+    </select>
     </ModalShell>
     {confirmClear && (
       <ConfirmModal

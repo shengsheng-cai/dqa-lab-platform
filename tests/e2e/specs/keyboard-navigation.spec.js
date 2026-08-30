@@ -206,3 +206,106 @@ test("設備卡真的排在 Tab 順序裡，不是只有程式指定焦點才進
 
   expect([...reached].sort()).toEqual(["CH-01", "CH-02", "CH-03", "CH-04", "CH-05"]);
 });
+
+// ── 彈出視窗 ──────────────────────────────────────────────────
+//
+// 視窗以前是各寫各的遮罩，於是三件事沒人做：Esc 關不掉、開啟時焦點還留在被蓋住的
+// 那顆按鈕上、關掉之後焦點也回不去。現在都由 components/ModalFrame.jsx 負責，
+// 這幾條就是釘住那支外框——它的遮罩帶著一個 eslint-disable，光看語法證明不了
+// 鍵盤真的有路可走。
+
+test("開視窗時焦點會進到視窗裡，Esc 關掉之後回到原本那顆按鈕", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "治具", exact: true }).click();
+
+  const openBtn = page.getByRole("button", { name: "+ 新增治具" });
+  await openBtn.click();
+
+  const dialog = page.getByRole("dialog", { name: "新增治具" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(openBtn).toBeFocused();
+});
+
+test("視窗疊視窗時，Esc 只關掉最上面那個", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "治具", exact: true }).click();
+
+  await page.getByRole("row").filter({ hasText: "M.2" }).first()
+    .getByRole("button", { name: "保管人" }).click();
+  const keeperDialog = page.getByRole("dialog", { name: "設定保管人" });
+  await expect(keeperDialog).toBeVisible();
+
+  // 選單停在「無保管人」按確認，會再跳一層確認視窗
+  await keeperDialog.locator("select").selectOption({ label: "— 無保管人 —" });
+  await keeperDialog.getByRole("button", { name: "確認", exact: true }).click();
+  const confirmDialog = page.getByRole("dialog", { name: "清除保管人" });
+  await expect(confirmDialog).toBeVisible();
+
+  // 這一下如果兩層一起關，使用者填到一半的東西就沒了
+  await page.keyboard.press("Escape");
+  await expect(confirmDialog).toBeHidden();
+  await expect(keeperDialog).toBeVisible();
+});
+
+test("視窗換成另一個視窗，關掉之後焦點仍回到原本那一列", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: /^排程/ }).click();
+
+  // 確認排程之後，詳情視窗會被結果視窗取代。來源那顆按鈕在詳情視窗裡、
+  // 跟著一起消失，所以結果視窗要認的是「開詳情的那一列」，不是消失的那一顆。
+  const row = page.getByRole("row").filter({ hasText: "待審核" }).first();
+  const opener = row.getByRole("button").first();
+  // 確認之後這一列就不是「待審核」了，先把按鈕上的專案號碼記下來再比對
+  const openerText = (await opener.textContent()).trim();
+  await opener.focus();
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("dialog", { name: "排程詳情" })).toBeVisible();
+  await page.getByRole("button", { name: "確認排程" }).click();
+
+  const result = page.getByRole("dialog", { name: "排程已確認" });
+  await expect(result).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(result).toBeHidden();
+
+  await expect(page.locator(":focus")).toHaveText(openerText);
+});
+
+test("視窗疊視窗，關掉上層之後焦點回到開它的那顆按鈕", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "治具", exact: true }).click();
+
+  await page.getByRole("row").filter({ hasText: "M.2" }).first()
+    .getByRole("button", { name: "保管人" }).click();
+  const keeperDialog = page.getByRole("dialog", { name: "設定保管人" });
+  await keeperDialog.locator("select").selectOption({ label: "— 無保管人 —" });
+
+  const confirmBtn = keeperDialog.getByRole("button", { name: "確認", exact: true });
+  await confirmBtn.click();
+  await expect(page.getByRole("dialog", { name: "清除保管人" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "清除保管人" })).toBeHidden();
+
+  // 下層視窗還開著，焦點要回到剛按的那一顆，不是回到更外面
+  await expect(confirmBtn).toBeFocused();
+});
+
+test("視窗裡有 autoFocus 的欄位時，游標直接落在欄位上", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "人員管理" }).click();
+
+  const openBtn = page.getByRole("button", { name: "+ 新增" });
+  await openBtn.click();
+  await expect(page.getByRole("dialog", { name: "新增人員" })).toBeVisible();
+
+  // 外框搶焦點的話這裡會落在 dialog 上，使用者得多按一次 Tab 才能打字
+  await expect(page.getByPlaceholder("例：王小明")).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(openBtn).toBeFocused();
+});

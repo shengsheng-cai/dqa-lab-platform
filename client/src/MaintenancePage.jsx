@@ -3,6 +3,7 @@ import api from "./api";
 import { DEVICE_IDS } from "./constants";
 import { useToast } from "./components/useToast";
 import ConfirmModal from "./components/ConfirmModal";
+import ModalFrame from "./components/ModalFrame";
 import DatePicker from "./components/fixture/DatePicker";
 import DateTimePicker from "./components/schedule/DateTimePicker";
 import { localDateStamp } from "./utils/timezone";
@@ -247,6 +248,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
   const sectionHeader = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0 6px" };
   const sectionTitle = { fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 1 };
   const addBtn = { padding: "3px 10px", fontSize: 11, borderRadius: 5, cursor: "pointer", background: `${C.accentDark}22`, border: `1px solid ${C.accentDark}`, color: C.accent };
+  const modalTitle = `${editItem ? "編輯" : "新增"}${modalType === "calibrations" ? "校驗紀錄" : "維護紀錄"} — ${selectedDevice}`;
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: C.bg, color: C.textPrimary, overflow: "hidden" }}>
@@ -348,12 +350,26 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
 
       {/* Modal */}
       {showModal && (
-        // eslint-disable-next-line no-restricted-syntax -- 點背景關掉是滑鼠的便利，鍵盤路徑是視窗裡的取消鈕
-        <div onClick={() => setShowModal(false)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.6)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(480px, 92vw)", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>
-              {editItem ? "編輯" : "新增"}{modalType === "calibrations" ? "校驗紀錄" : "維護紀錄"} — {selectedDevice}
+        <ModalFrame
+          title={modalTitle}
+          zIndex={400}
+          onClose={() => setShowModal(false)}
+          boxStyle={{ width: "min(480px, 92vw)", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, gap: 14 }}
+          bodyStyle={{ padding: "0 24px", display: "flex", flexDirection: "column", gap: 14 }}
+          header={
+            <div style={{ padding: "24px 24px 0", fontSize: 14, fontWeight: 700, color: C.textPrimary }}>
+              {modalTitle}
             </div>
+          }
+          footer={
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "0 24px 24px" }}>
+              <button onClick={() => setShowModal(false)} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 5, background: "transparent", border: `1px solid ${C.border}`, color: C.textMuted, cursor: "pointer" }}>取消</button>
+              <button onClick={handleSave} disabled={saving} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 5, background: saving ? C.surfaceHover : C.accentDark, border: "none", color: C.white, cursor: saving ? "not-allowed" : "pointer", fontWeight: 600 }}>
+                {saving ? "儲存中..." : "儲存"}
+              </button>
+            </div>
+          }
+        >
             {modalType === "calibrations" ? (
               <>
                 <DateFieldRow label="校驗日期" value={form.calibration_date} onChange={v => setForm(f => ({ ...f, calibration_date: v }))} />
@@ -393,14 +409,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                 <DateFieldRow label="下次維護日期" value={form.next_maintenance_date} onChange={v => setForm(f => ({ ...f, next_maintenance_date: v }))} optional />
               </>
             )}
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-              <button onClick={() => setShowModal(false)} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 5, background: "transparent", border: `1px solid ${C.border}`, color: C.textMuted, cursor: "pointer" }}>取消</button>
-              <button onClick={handleSave} disabled={saving} style={{ padding: "5px 14px", fontSize: 12, borderRadius: 5, background: saving ? C.surfaceHover : C.accentDark, border: "none", color: C.white, cursor: saving ? "not-allowed" : "pointer", fontWeight: 600 }}>
-                {saving ? "儲存中..." : "儲存"}
-              </button>
-            </div>
-          </div>
-        </div>
+        </ModalFrame>
       )}
 
       {deleteTarget && (

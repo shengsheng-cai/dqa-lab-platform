@@ -49,116 +49,14 @@ export default function StocktakeModal({ fixtures, onClose, onComplete }) {
   };
 
   return (
-    <ModalShell width={600} maxHeight="80vh" onClose={onClose}>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#cdd9e5" }}>月盤點</div>
-          <div style={{ fontSize: 12, color: "#8b949e", marginTop: 4 }}>
-            對照系統庫存，輸入實際清點數量。數量不符的項目會標示差異。
-          </div>
-        </div>
-
-        {active.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 60px", gap: "4px 8px", alignItems: "center", padding: "0 10px 8px", borderBottom: "1px solid #30363d", marginBottom: 8 }}>
-            <div style={{ fontSize: 11, color: "#8b949e" }}>治具</div>
-            <div style={{ fontSize: 11, color: "#8b949e", textAlign: "center" }}>系統庫存</div>
-            <div style={{ fontSize: 11, color: "#8b949e", textAlign: "center" }}>實際清點</div>
-            <div style={{ fontSize: 11, color: "#8b949e", textAlign: "center" }}>差異</div>
-          </div>
-        )}
-
-        {active.length === 0 && (
-          <div style={{
-            padding: "18px 10px", textAlign: "center",
-            fontSize: 13, color: "#8b949e",
-            border: "1px dashed #30363d", borderRadius: 6,
-          }}>
-            沒有可盤點的項目：{excluded.length} 種治具目前有借出或預約在外，現場數不到完整數量。
-            <div style={{ fontSize: 12, marginTop: 6, color: "#6e7681" }}>
-              等治具歸還後再盤，或先處理下方列出的項目。
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {active.map((f) => {
-            const actual = actuals[f.id];
-            const actualNum = actual !== undefined ? parseInt(actual) : f.total_quantity;
-            const isDiff = actual !== undefined && actualNum !== f.total_quantity;
-            const diff = actualNum - f.total_quantity;
-            return (
-              <div
-                key={f.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 90px 90px 60px",
-                  gap: "4px 8px",
-                  alignItems: "center",
-                  padding: "8px 10px",
-                  background: isDiff ? "#3d1f1a" : "#0d1117",
-                  borderRadius: 6,
-                  border: `1px solid ${isDiff ? "#da3633" : "#30363d"}`,
-                }}
-              >
-                <div style={{ fontSize: 12, color: "#cdd9e5" }}>
-                  {f.interface_type} / {f.form_factor}
-                </div>
-                <div style={{ fontSize: 13, color: "#8b949e", textAlign: "center" }}>
-                  {f.total_quantity}
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  value={actual !== undefined ? actual : f.total_quantity}
-                  onChange={(e) => setActuals((p) => ({ ...p, [f.id]: e.target.value }))}
-                  style={{
-                    width: "100%",
-                    padding: "5px 8px",
-                    borderRadius: 4,
-                    border: `1px solid ${isDiff ? "#f85149" : "#30363d"}`,
-                    background: "#0d1117",
-                    color: isDiff ? "#f85149" : "#cdd9e5",
-                    fontSize: 13,
-                    textAlign: "center",
-                    boxSizing: "border-box",
-                  }}
-                />
-                <div style={{ fontSize: 12, fontWeight: 600, textAlign: "center", color: isDiff ? (diff > 0 ? "#3fb950" : "#f85149") : "#444d56" }}>
-                  {isDiff ? (diff > 0 ? `▲ +${diff}` : `▼ ${diff}`) : "—"}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {excluded.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 6 }}>
-              未納入本次盤點（{excluded.length} 種）：有借出或預約在外，數量無法在現場核對
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {excluded.map((f) => (
-                <div
-                  key={f.id}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "7px 10px", borderRadius: 6,
-                    background: "#0d1117", border: "1px dashed #30363d",
-                    fontSize: 12, color: "#6e7681",
-                  }}
-                >
-                  <span>{f.interface_type} / {f.form_factor}</span>
-                  <span>
-                    系統庫存 {f.total_quantity}
-                    {f.loaned_quantity > 0 && `・借出 ${f.loaned_quantity}`}
-                    {f.reserved_quantity > 0 && `・預約 ${f.reserved_quantity}`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: 8, marginTop: 20, alignItems: "center", justifyContent: "flex-end" }}>
+    <ModalShell
+      title="月盤點"
+      subtitle="對照系統庫存，輸入實際清點數量。數量不符的項目會標示差異。"
+      width={600}
+      maxHeight="80vh"
+      onClose={onClose}
+      footer={
+        <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
           <span style={{ fontSize: 12, color: "#8b949e", marginRight: "auto" }}>
             本次盤點涵蓋 {active.length} 種，未納入 {excluded.length} 種
           </span>
@@ -193,6 +91,109 @@ export default function StocktakeModal({ fixtures, onClose, onComplete }) {
             {loading ? "提交中..." : "完成盤點"}
           </button>
         </div>
+      }
+    >
+    {active.length > 0 && (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 60px", gap: "4px 8px", alignItems: "center", padding: "0 10px 8px", borderBottom: "1px solid #30363d", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: "#8b949e" }}>治具</div>
+        <div style={{ fontSize: 11, color: "#8b949e", textAlign: "center" }}>系統庫存</div>
+        <div style={{ fontSize: 11, color: "#8b949e", textAlign: "center" }}>實際清點</div>
+        <div style={{ fontSize: 11, color: "#8b949e", textAlign: "center" }}>差異</div>
+      </div>
+    )}
+
+    {active.length === 0 && (
+      <div style={{
+        padding: "18px 10px", textAlign: "center",
+        fontSize: 13, color: "#8b949e",
+        border: "1px dashed #30363d", borderRadius: 6,
+      }}>
+        沒有可盤點的項目：{excluded.length} 種治具目前有借出或預約在外，現場數不到完整數量。
+        <div style={{ fontSize: 12, marginTop: 6, color: "#6e7681" }}>
+          等治具歸還後再盤，或先處理下方列出的項目。
+        </div>
+      </div>
+    )}
+
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {active.map((f) => {
+        const actual = actuals[f.id];
+        const actualNum = actual !== undefined ? parseInt(actual) : f.total_quantity;
+        const isDiff = actual !== undefined && actualNum !== f.total_quantity;
+        const diff = actualNum - f.total_quantity;
+        return (
+          <div
+            key={f.id}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 90px 90px 60px",
+              gap: "4px 8px",
+              alignItems: "center",
+              padding: "8px 10px",
+              background: isDiff ? "#3d1f1a" : "#0d1117",
+              borderRadius: 6,
+              border: `1px solid ${isDiff ? "#da3633" : "#30363d"}`,
+            }}
+          >
+            <div style={{ fontSize: 12, color: "#cdd9e5" }}>
+              {f.interface_type} / {f.form_factor}
+            </div>
+            <div style={{ fontSize: 13, color: "#8b949e", textAlign: "center" }}>
+              {f.total_quantity}
+            </div>
+            <input
+              type="number"
+              min="0"
+              value={actual !== undefined ? actual : f.total_quantity}
+              onChange={(e) => setActuals((p) => ({ ...p, [f.id]: e.target.value }))}
+              style={{
+                width: "100%",
+                padding: "5px 8px",
+                borderRadius: 4,
+                border: `1px solid ${isDiff ? "#f85149" : "#30363d"}`,
+                background: "#0d1117",
+                color: isDiff ? "#f85149" : "#cdd9e5",
+                fontSize: 13,
+                textAlign: "center",
+                boxSizing: "border-box",
+              }}
+            />
+            <div style={{ fontSize: 12, fontWeight: 600, textAlign: "center", color: isDiff ? (diff > 0 ? "#3fb950" : "#f85149") : "#444d56" }}>
+              {isDiff ? (diff > 0 ? `▲ +${diff}` : `▼ ${diff}`) : "—"}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    {excluded.length > 0 && (
+      <div style={{ marginTop: 16 }}>
+        <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 6 }}>
+          未納入本次盤點（{excluded.length} 種）：有借出或預約在外，數量無法在現場核對
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {excluded.map((f) => (
+            <div
+              key={f.id}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "7px 10px", borderRadius: 6,
+                background: "#0d1117", border: "1px dashed #30363d",
+                fontSize: 12, color: "#6e7681",
+              }}
+            >
+              <span>{f.interface_type} / {f.form_factor}</span>
+              <span>
+                系統庫存 {f.total_quantity}
+                {f.loaned_quantity > 0 && `・借出 ${f.loaned_quantity}`}
+                {f.reserved_quantity > 0 && `・預約 ${f.reserved_quantity}`}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
     </ModalShell>
   );
 }

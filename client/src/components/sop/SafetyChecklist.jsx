@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import useEscapeToClose from "../../useEscapeToClose";
 
 const SAFETY_CHECKS = [
   "測試孔是否用塑膠塞及抹布將兩邊塞緊，以免水氣跑出。",
@@ -51,9 +52,12 @@ const SafetyChecklist = ({
     setShowModal(false);
   };
 
+  useEscapeToClose(handleModalCancel, showModal);
+
+  // Enter 只在輸入框裡有意義（打完名字直接送出）；Esc 走共用的那支，
+  // 焦點不在輸入框時也關得掉。
   const handleModalKeyDown = (e) => {
     if (e.key === "Enter") handleModalConfirm();
-    if (e.key === "Escape") handleModalCancel();
   };
 
   return (

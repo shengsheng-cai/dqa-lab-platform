@@ -43,110 +43,115 @@ export default function CreatePurchaseModal({ fixtures, preFill, onClose, onSubm
   const labelStyle = { fontSize: 12, color: "#8b949e", marginBottom: 4 };
 
   return (
-    <ModalShell width={420} gap={14} onClose={onClose}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
-          新增採購單
+    <ModalShell
+      title="新增採購單"
+      width={420}
+      gap={14}
+      onClose={onClose}
+      footer={
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {error && <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: "7px 18px",
+                borderRadius: 6,
+                border: "1px solid #30363d",
+                background: "transparent",
+                color: "#8b949e",
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              style={{
+                padding: "7px 18px",
+                borderRadius: 6,
+                border: "none",
+                background: "#238636",
+                color: "#fff",
+                cursor: loading ? "not-allowed" : "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                opacity: loading ? 0.7 : 1,
+              }}
+            >
+              {loading ? "送出中..." : "建立採購單"}
+            </button>
+          </div>
         </div>
+      }
+    >
+    <div>
+      <div style={labelStyle}>治具 *</div>
+      <select
+        value={fixtureId}
+        onChange={(e) => setFixtureId(e.target.value)}
+        style={inputStyle}
+      >
+        <option value="">請選擇治具</option>
+        {fixtures.map((f) => (
+          <option key={f.id} value={String(f.id)}>
+            {f.interface_type} / {f.form_factor}
+            {f.size ? ` (${f.size})` : ""}
+            {" — "}可借 {f.available_quantity}
+          </option>
+        ))}
+      </select>
+    </div>
 
-        <div>
-          <div style={labelStyle}>治具 *</div>
-          <select
-            value={fixtureId}
-            onChange={(e) => setFixtureId(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">請選擇治具</option>
-            {fixtures.map((f) => (
-              <option key={f.id} value={String(f.id)}>
-                {f.interface_type} / {f.form_factor}
-                {f.size ? ` (${f.size})` : ""}
-                {" — "}可借 {f.available_quantity}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div>
+      <div style={labelStyle}>採購數量 *</div>
+      <input
+        type="number"
+        min={1}
+        value={quantity}
+        onChange={(e) => setQuantity(e.target.value)}
+        style={inputStyle}
+      />
+    </div>
 
-        <div>
-          <div style={labelStyle}>採購數量 *</div>
-          <input
-            type="number"
-            min={1}
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
+    <div>
+      <div style={labelStyle}>廠商（選填）</div>
+      <input
+        type="text"
+        value={vendor}
+        onChange={(e) => setVendor(e.target.value)}
+        placeholder="廠商名稱"
+        style={inputStyle}
+      />
+    </div>
 
-        <div>
-          <div style={labelStyle}>廠商（選填）</div>
-          <input
-            type="text"
-            value={vendor}
-            onChange={(e) => setVendor(e.target.value)}
-            placeholder="廠商名稱"
-            style={inputStyle}
-          />
-        </div>
+    <div>
+      <div style={labelStyle}>單價（選填）</div>
+      <input
+        type="number"
+        min={0}
+        step="0.01"
+        value={unitPrice}
+        onChange={(e) => setUnitPrice(e.target.value)}
+        placeholder="0.00"
+        style={inputStyle}
+      />
+    </div>
 
-        <div>
-          <div style={labelStyle}>單價（選填）</div>
-          <input
-            type="number"
-            min={0}
-            step="0.01"
-            value={unitPrice}
-            onChange={(e) => setUnitPrice(e.target.value)}
-            placeholder="0.00"
-            style={inputStyle}
-          />
-        </div>
+    <div>
+      <div style={labelStyle}>備註（選填）</div>
+      <input
+        type="text"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="例：急需、替換損壞品..."
+        style={inputStyle}
+      />
+    </div>
 
-        <div>
-          <div style={labelStyle}>備註（選填）</div>
-          <input
-            type="text"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="例：急需、替換損壞品..."
-            style={inputStyle}
-          />
-        </div>
 
-        {error && <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>}
-
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: "7px 18px",
-              borderRadius: 6,
-              border: "1px solid #30363d",
-              background: "transparent",
-              color: "#8b949e",
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-            取消
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            style={{
-              padding: "7px 18px",
-              borderRadius: 6,
-              border: "none",
-              background: "#238636",
-              color: "#fff",
-              cursor: loading ? "not-allowed" : "pointer",
-              fontSize: 13,
-              fontWeight: 600,
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading ? "送出中..." : "建立採購單"}
-          </button>
-        </div>
     </ModalShell>
   );
 }

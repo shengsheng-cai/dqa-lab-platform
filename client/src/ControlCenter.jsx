@@ -12,6 +12,7 @@ import ExecutionList from "./ExecutionList";
 import MaintenancePage from "./MaintenancePage";
 import RightPanel from "./components/control/RightPanel";
 import SensorQcModal from "./components/control/SensorQcModal";
+import ModalFrame from "./components/ModalFrame";
 import AuditLog from "./components/control/AuditLog";
 import TopBar from "./components/control/TopBar";
 import { conditionLabel } from "./components/control/deviceCardUtils";
@@ -59,6 +60,9 @@ function BannerConfirmBtn({ device, schedule, onConfirmCondition }) {
 }
 
 // ── CenterPanel ───────────────────────────────────────────────────────────────
+
+// 視窗標題同時是螢幕閱讀器唸的名稱與 E2E 的定位依據，只留一份
+const RECORDS_TITLE = "紀錄";
 
 const TABS = [
   { key: "device", label: "設備" },
@@ -389,21 +393,28 @@ export default function ControlCenter({ role, displayName, onLogout }) {
 
       {/* 紀錄 Modal */}
       {recordsOpen && (
-        // eslint-disable-next-line no-restricted-syntax -- 點背景關掉是滑鼠的便利，鍵盤路徑是視窗裡的 ✕
-        <div onClick={() => setRecordsOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(900px, 92vw)", height: "min(620px, 85vh)", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", padding: "10px 16px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-              <span style={{ flex: 1, fontWeight: 700, fontSize: 13, color: C.textPrimary }}>紀錄</span>
-              <button onClick={() => setRecordsOpen(false)} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 16, cursor: "pointer", padding: "0 4px" }}>✕</button>
-            </div>
-            <div style={{ display: "flex", padding: "0 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: C.bg }}>
-              {[{ key: "errors", label: "異常紀錄" }, { key: "executions", label: "執行紀錄" }, { key: "audit", label: "稽核紀錄" }].map((t) => (
-                <button key={t.key} onClick={() => setRecordsSubTab(t.key)} aria-current={recordsSubTab === t.key ? "true" : undefined} style={{ padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: recordsSubTab === t.key ? `2px solid ${C.accent}` : "2px solid transparent", color: recordsSubTab === t.key ? C.textPrimary : C.textMuted }}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
+        <ModalFrame
+          title={RECORDS_TITLE}
+          zIndex={300}
+          onClose={() => setRecordsOpen(false)}
+          boxStyle={{ width: "min(900px, 92vw)", height: "min(620px, 85vh)", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}
+          bodyStyle={{ overflow: "hidden" }}
+          header={
+            <>
+              <div style={{ display: "flex", alignItems: "center", padding: "10px 16px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+                <span style={{ flex: 1, fontWeight: 700, fontSize: 13, color: C.textPrimary }}>{RECORDS_TITLE}</span>
+                <button onClick={() => setRecordsOpen(false)} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 16, cursor: "pointer", padding: "0 4px" }}>✕</button>
+              </div>
+              <div style={{ display: "flex", padding: "0 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: C.bg }}>
+                {[{ key: "errors", label: "異常紀錄" }, { key: "executions", label: "執行紀錄" }, { key: "audit", label: "稽核紀錄" }].map((t) => (
+                  <button key={t.key} onClick={() => setRecordsSubTab(t.key)} aria-current={recordsSubTab === t.key ? "true" : undefined} style={{ padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "transparent", border: "none", borderBottom: recordsSubTab === t.key ? `2px solid ${C.accent}` : "2px solid transparent", color: recordsSubTab === t.key ? C.textPrimary : C.textMuted }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          }
+        >
               <div style={{ display: recordsSubTab === "errors" ? "block" : "none", height: "100%" }}>
                 <ErrorLog active={recordsOpen && recordsSubTab === "errors"} />
               </div>
@@ -413,9 +424,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
               <div style={{ display: recordsSubTab === "audit" ? "block" : "none", height: "100%" }}>
                 <AuditLog active={recordsOpen && recordsSubTab === "audit"} />
               </div>
-            </div>
-          </div>
-        </div>
+        </ModalFrame>
       )}
 
       {sensorModalDevice && (

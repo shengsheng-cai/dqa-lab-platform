@@ -45,61 +45,12 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
   const conditionLabel = CONDITIONS.find(([v]) => v === condition)?.[1] ?? condition;
 
   return (
-    <ModalShell width={380} gap={12} onClose={onClose}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>
-          歸還確認
-        </div>
-        <div style={{ fontSize: 13, color: C.textMuted }}>
-          {loan.fixture_interface} — {loan.fixture_form_factor}
-          <br />
-          借用人：{loan.borrower_name}
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {CONDITIONS.map(([v, l]) => (
-            <button
-              key={v}
-              onClick={() => { setCondition(v); setConfirmed(false); }}
-              aria-current={condition === v ? "true" : undefined}
-              style={{
-                flex: 1,
-                padding: "7px",
-                borderRadius: 6,
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: condition === v ? 700 : 400,
-                background:
-                  condition === v
-                    ? v === "normal"
-                      ? C.successBgMid
-                      : C.errorSurface
-                    : "transparent",
-                color:
-                  condition === v
-                    ? v === "normal"
-                      ? C.success
-                      : C.error
-                    : C.textMuted,
-                border: `1px solid ${condition === v ? (v === "normal" ? C.successDark : C.error) : C.border}`,
-              }}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-        <div>
-          <div style={labelStyle}>實際歸還日期</div>
-          <DatePicker
-            value={returnDate}
-            onChange={setReturnDate}
-            style={inputStyle}
-          />
-        </div>
-        <textarea
-          placeholder="備註（選填）"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          style={{ ...inputStyle, resize: "none", height: 60 }}
-        />
+    <ModalShell
+      title="歸還確認"
+      width={380}
+      gap={12}
+      onClose={onClose}
+      footer={
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={onClose}
@@ -138,6 +89,59 @@ export default function ReturnModal({ loan, onClose, onSubmit }) {
                 : "確認歸還"}
           </button>
         </div>
+      }
+    >
+    <div style={{ fontSize: 13, color: C.textMuted }}>
+      {loan.fixture_interface} — {loan.fixture_form_factor}
+      <br />
+      借用人：{loan.borrower_name}
+    </div>
+    <div style={{ display: "flex", gap: 8 }}>
+      {CONDITIONS.map(([v, l]) => (
+        <button
+          key={v}
+          onClick={() => { setCondition(v); setConfirmed(false); }}
+          aria-current={condition === v ? "true" : undefined}
+          style={{
+            flex: 1,
+            padding: "7px",
+            borderRadius: 6,
+            cursor: "pointer",
+            fontSize: 12,
+            fontWeight: condition === v ? 700 : 400,
+            background:
+              condition === v
+                ? v === "normal"
+                  ? C.successBgMid
+                  : C.errorSurface
+                : "transparent",
+            color:
+              condition === v
+                ? v === "normal"
+                  ? C.success
+                  : C.error
+                : C.textMuted,
+            border: `1px solid ${condition === v ? (v === "normal" ? C.successDark : C.error) : C.border}`,
+          }}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+    <div>
+      <div style={labelStyle}>實際歸還日期</div>
+      <DatePicker
+        value={returnDate}
+        onChange={setReturnDate}
+        style={inputStyle}
+      />
+    </div>
+    <textarea
+      placeholder="備註（選填）"
+      value={note}
+      onChange={(e) => setNote(e.target.value)}
+      style={{ ...inputStyle, resize: "none", height: 60 }}
+    />
     </ModalShell>
   );
 }

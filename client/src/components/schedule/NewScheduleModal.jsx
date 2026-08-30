@@ -128,8 +128,24 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
 
   return (
     <>
-    <ScheduleModalShell title="申請排程" width={680} maxHeight="88vh" onClose={handleClose}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 20px 20px", overflowY: "auto" }}>
+    <ScheduleModalShell
+      title="申請排程"
+      width={680}
+      maxHeight="88vh"
+      onClose={handleClose}
+      bodyStyle={{ display: "flex", flexDirection: "column", gap: 14 }}
+      footer={
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 20px 20px" }}>
+            {error && <div style={{ color: C.error, fontSize: 13 }}>{error}</div>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button onClick={handleClose} style={cancelBtn}>取消</button>
+            <button onClick={submit} disabled={saving} style={primaryBtn}>
+              {saving ? "送出中..." : "送出申請"}
+            </button>
+            </div>
+          </div>
+      }
+    >
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <LabelInput label="專案號碼 *" value={form.project_number}
               onChange={(v) => setForm((f) => ({ ...f, project_number: v }))} placeholder="e.g. P-2026-001" />
@@ -295,15 +311,6 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
           <LabelInput label="備註" value={form.note}
             onChange={(v) => setForm((f) => ({ ...f, note: v }))} placeholder="可選" />
 
-          {error && <div style={{ color: C.error, fontSize: 13 }}>{error}</div>}
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-            <button onClick={handleClose} style={cancelBtn}>取消</button>
-            <button onClick={submit} disabled={saving} style={primaryBtn}>
-              {saving ? "送出中..." : "送出申請"}
-            </button>
-          </div>
-      </div>
     </ScheduleModalShell>
     {showCloseConfirm && (
       <ConfirmModal
