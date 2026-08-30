@@ -28,7 +28,7 @@
 | **R-01** | 訪客進入僅限管理者的介面，或執行了管理者才能做的寫入 | High | Medium | P0 | `test_guest_authorization.py`、`test_blocked_period_audit.py`、`guest-readonly.spec.js` | 新頁面或路由可能漏掉前端或後端守衛；路由列舉與角色切換 E2E 是回歸防護網 |
 | **R-02** | 設備忙碌中或維護中卻啟動了測試 | High | Medium | P0 | `test_schedule_start_consistency.py`、`maintenance-block.spec.js` | 真實硬體的連鎖保護不在範圍內 |
 | **R-03** | 設備、排程、SOP 執行、治具、稽核或 cache 的狀態彼此分歧 | High | High | P0 | `test_device_state.py`、`test_schedule_start_consistency.py`、`test_blocked_period_audit.py`、`test_linkage.py`、`test_schedules_complete.py`、`schedule-flow.spec.js` | 在已測試的交易邊界之外，程序被中斷 |
-| **R-04** | UI 顯示過期或誤導狀態，或成功寫入後沒有保存操作人員送出的值 | Medium | High | P1 | `schedule-flow.spec.js`、`fixture-loan.spec.js`、`stocktake-scope.spec.js`、`schedule-start-readiness.spec.js`、`fixture-keeper.spec.js`、`test_maintenance.py` | 短暫的重新整理或網路失敗仍可能需要人工重試；新增可空欄位時仍要明確補上更新語意的回歸測試 |
+| **R-04** | UI 顯示過期或誤導狀態，或成功寫入後沒有保存操作人員送出的值 | Medium | High | P1 | `schedule-flow.spec.js`、`fixture-loan.spec.js`、`stocktake-scope.spec.js`、`schedule-start-readiness.spec.js`、`fixture-keeper.spec.js`、`modal-layout.spec.js`、`test_maintenance.py` | 短暫的重新整理或網路失敗仍可能需要人工重試；新增可空欄位時仍要明確補上更新語意的回歸測試 |
 | **R-05** | 重疊、延遲啟動、修改已確認時段、重啟或錯誤輸入，導致排程卡住或啟動了錯的工作 | High | Medium | P1 | `test_schedule_conflict.py`、`test_schedules_slot.py`、`test_simulator_schedule.py`、`test_schedule_start_consistency.py`（含精確日期 job 的取代）、`test_schedules_complete.py`（回常溫期間的設備可用性） | 長時間的時鐘漂移與生產環境的排程器負載未涵蓋 |
 | **R-06** | 治具庫存變成負數、被排程預約超額、重複歸還、到貨重複入庫、永久卡在預約，或連到錯誤的排程 | High | Medium | P1 | `test_fixture_lifecycle.py`、`test_fixtures_api.py`、`test_fixture_excel.py`、`test_purchase_orders.py`、`test_linkage.py`、`fixture-loan.spec.js` | 多人同時借用未做負載測試 |
 | **R-07** | 外部服務或報告讓核心操作失敗，或報告產出了但內容悄悄不完整、前後矛盾，或識別錯對象 | Medium | Medium | P2 | `test_line_resilience.py`、`test_reports_degradation.py`（降級、量測摘要所依賴的時間契約、數據統計與不確定度分析的一致性契約，以及受測樣品識別契約）、`test_uncertainty.py`、`test_ai_observability.py`、`client/src/__tests__/executionPayload.test.js` | 供應商的實際行為與額度變動不涵蓋；前端存檔路徑漏送欄位現在會讓測試變紅，但備援路徑何時觸發仍然只能靠審查抓（GAP-04） |
@@ -37,7 +37,7 @@
 | **R-10** | 核心背景工作停掉，服務對外卻仍宣稱自己正常 | Medium | Low | P2 | `test_health.py` | 涵蓋的是探測說不說實話；模擬器主迴圈本身仍然沒有外層防護，部署端要不要接監控也不在這裡 |
 | **R-11** | 刪掉一筆資料後，其他資料仍指向已經不存在的東西，因為宣告的關聯根本沒有生效 | Medium | Medium | P2 | `test_foreign_key_enforcement.py`、`test_schema_migrations.py` | 涵蓋的是 schema 宣告了什麼、資料庫又照做了什麼；已經含有孤兒的資料庫會被 migration 擋下而不是自動修補，那仍然是人要決定的事 |
 | **R-12** | 不可逆的操作單擊即生效，把正在進行中的工作直接毀掉 | Medium | Medium | P1 | `tests/e2e/specs/delete-confirm-identity.spec.js`、`tests/e2e/specs/device-stop-confirm.spec.js`、`tests/e2e/specs/fixture-loan.spec.js`、`tests/e2e/specs/maintenance-block.spec.js`、`tests/e2e/specs/purchase-arrival-confirm.spec.js`、`tests/e2e/specs/users-page-feedback.spec.js` | 不可逆的刪除都會先問過，而且確認視窗會寫出它要動的是哪一筆。治具列上直接送出的快速盤點欄位仍是按一下就生效，還在待補清單裡 |
-| **R-13** | 主要入口只有滑鼠進得去，用鍵盤或輔助技術的人根本走不完流程——而畫面上完全看不出來 | Medium | Medium | P2 | `keyboard-navigation.spec.js`；`client/eslint.config.js`（`no-restricted-syntax` 擋下非互動標籤上的新滑鼠事件） | lint 只看得到語法；「那一列裡真的有一顆能用的鍵盤入口」由 E2E 一個入口一條測試釘住。Modal 的焦點管理與 Esc 仍未處理（待補 TODO-41） |
+| **R-13** | 主要入口只有滑鼠進得去，用鍵盤或輔助技術的人根本走不完流程——而畫面上完全看不出來 | Medium | Medium | P2 | `keyboard-navigation.spec.js`；`client/eslint.config.js`（`no-restricted-syntax` 擋下非互動標籤上的新滑鼠事件） | lint 只看得到語法；「那一列裡真的有一顆能用的鍵盤入口」由 E2E 一個入口一條測試釘住。視窗的焦點與 Esc 現在由同一支 spec 涵蓋四種情況（一般開關、視窗換視窗、視窗疊視窗、有預設游標的欄位）。沒有做焦點鎖：Tab 仍然走得到開著的視窗後面的頁面，這是刻意的取捨，不是沒測到的缺口 |
 
 ## 4. 執行順序
 
