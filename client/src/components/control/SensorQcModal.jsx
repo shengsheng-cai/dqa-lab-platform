@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import ModalFrame from "../ModalFrame";
 import api from "../../api.js";
 import SensorQcChart from "./SensorQcChart";
 
@@ -22,30 +23,23 @@ const SensorQcModal = ({ deviceId, onClose, onViewDeviceStatus }) => {
     return () => controller.abort();
   }, [deviceId]);
 
+  const title = `${deviceId} — 感測器 QC 控制圖（近 24 小時）`;
+
   return (
-    <div
-      // eslint-disable-next-line no-restricted-syntax -- 點背景關掉是滑鼠的便利，鍵盤路徑是視窗裡的 ✕
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)" }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "min(820px, 92vw)",
-          maxHeight: "85vh",
-          background: "#0d1117",
-          border: "1px solid #30363d",
-          borderRadius: 10,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
-        {/* Header */}
+    <ModalFrame
+      title={title}
+      zIndex={300}
+      maxHeight="85vh"
+      onClose={onClose}
+      boxStyle={{
+        width: "min(820px, 92vw)",
+        background: "#0d1117",
+        border: "1px solid #30363d",
+        borderRadius: 10,
+        overflow: "hidden",
+      }}
+      bodyStyle={{ padding: "16px 20px" }}
+      header={
         <div
           style={{
             display: "flex",
@@ -56,7 +50,7 @@ const SensorQcModal = ({ deviceId, onClose, onViewDeviceStatus }) => {
           }}
         >
           <span style={{ flex: 1, fontWeight: 700, fontSize: 13, color: "#cdd9e5" }}>
-            📊 {deviceId} — 感測器 QC 控制圖（近 24 小時）
+            <span aria-hidden="true">📊 </span>{title}
           </span>
           {stats && stats.anomaly_count > 0 && (
             <span
@@ -95,29 +89,9 @@ const SensorQcModal = ({ deviceId, onClose, onViewDeviceStatus }) => {
             ✕
           </button>
         </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-          {loading && (
-            <div style={{ textAlign: "center", color: "#484f58", fontSize: 12, padding: 40 }}>
-              載入中...
-            </div>
-          )}
-          {error && (
-            <div style={{ textAlign: "center", color: "#f85149", fontSize: 12, padding: 40 }}>
-              {error}
-            </div>
-          )}
-          {!loading && !error && (
-            <SensorQcChart
-              stats={stats}
-              onViewDeviceStatus={onViewDeviceStatus}
-            />
-          )}
-        </div>
-
-        {/* Footer stats */}
-        {!loading && !error && stats && stats.temp_mean != null && (
+      }
+      footer={
+        !loading && !error && stats && stats.temp_mean != null && (
           <div
             style={{
               borderTop: "1px solid #30363d",
@@ -141,9 +115,26 @@ const SensorQcModal = ({ deviceId, onClose, onViewDeviceStatus }) => {
             )}
             <span style={{ marginLeft: "auto" }}>{stats.data.length} 筆資料（近 {stats.hours}h）</span>
           </div>
-        )}
-      </div>
-    </div>
+        )
+      }
+    >
+          {loading && (
+            <div style={{ textAlign: "center", color: "#484f58", fontSize: 12, padding: 40 }}>
+              載入中...
+            </div>
+          )}
+          {error && (
+            <div style={{ textAlign: "center", color: "#f85149", fontSize: 12, padding: 40 }}>
+              {error}
+            </div>
+          )}
+          {!loading && !error && (
+            <SensorQcChart
+              stats={stats}
+              onViewDeviceStatus={onViewDeviceStatus}
+            />
+          )}
+    </ModalFrame>
   );
 };
 

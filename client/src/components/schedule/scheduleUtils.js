@@ -46,11 +46,6 @@ export function fmtHours(h) {
   return `${hrs}h ${mins}m`;
 }
 
-export const overlayStyle = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
-  display: "flex", alignItems: "center", justifyContent: "center",
-  zIndex: 1000,
-};
 export const modalStyle = {
   background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10,
   boxShadow: "0 8px 32px rgba(0,0,0,0.5)", overflow: "hidden",

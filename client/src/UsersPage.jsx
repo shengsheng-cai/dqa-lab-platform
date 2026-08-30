@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import api from "./api";
 import { useToast } from "./components/useToast";
 import ConfirmModal from "./components/ConfirmModal";
+import ModalFrame from "./components/ModalFrame";
 import { C } from "./styles/theme";
 import { describeLoadError } from "./utils/loadError";
 import { ListStateRow, StaleBanner } from "./components/ListState";
@@ -82,64 +83,31 @@ function UserModal({ user, onClose, onSaved }) {
     boxSizing: "border-box",
   };
 
+  const title = isEdit ? "編輯人員" : "新增人員";
+
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 2000,
+    <ModalFrame
+      title={title}
+      zIndex={2000}
+      closeOnBackdrop={false}
+      onClose={onClose}
+      boxStyle={{
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: 12,
+        width: 380,
+        gap: 12,
       }}
-    >
-      <div
-        style={{
-          background: "#161b22",
-          border: "1px solid #30363d",
-          borderRadius: 12,
-          padding: 24,
-          width: 380,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
-          {isEdit ? "編輯人員" : "新增人員"}
+      bodyStyle={{ padding: "0 24px", display: "flex", flexDirection: "column", gap: 12 }}
+      header={
+        <div style={{ padding: "24px 24px 0", fontSize: 15, fontWeight: 700, color: C.textPrimary }}>
+          {title}
         </div>
-
-        <div>
-          <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 4 }}>
-            姓名 *
-          </div>
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="例：王小明"
-            style={inputStyle}
-            autoFocus
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 4 }}>
-            角色
-          </div>
-          <input
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            placeholder="例：管理者、工程師、保管人"
-            style={inputStyle}
-          />
-        </div>
-
-        {error && (
-          <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>
-        )}
-
-        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+      }
+      footer={
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 24px 24px" }}>
+          {error && <div style={{ color: C.error, fontSize: 12 }}>{error}</div>}
+          <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={onClose}
             style={{
@@ -173,9 +141,36 @@ function UserModal({ user, onClose, onSaved }) {
           >
             {loading ? "處理中..." : isEdit ? "儲存" : "新增"}
           </button>
+          </div>
         </div>
-      </div>
-    </div>
+      }
+    >
+        <div>
+          <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 4 }}>
+            姓名 *
+          </div>
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="例：王小明"
+            style={inputStyle}
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 4 }}>
+            角色
+          </div>
+          <input
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            placeholder="例：管理者、工程師、保管人"
+            style={inputStyle}
+          />
+        </div>
+
+    </ModalFrame>
   );
 }
 

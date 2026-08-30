@@ -117,8 +117,13 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
 
   return (
     <>
-    <ScheduleModalShell title="管理設備不可用時段" width={560} maxHeight="80vh" onClose={onClose}>
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px" }}>
+    <ScheduleModalShell
+      title="管理設備不可用時段"
+      width={560}
+      maxHeight="80vh"
+      onClose={onClose}
+      bodyStyle={{ padding: "12px 20px" }}
+    >
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
             <button onClick={openNew} style={primaryBtn}>+ 新增</button>
           </div>
@@ -159,54 +164,53 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
               </tbody>
             </table>
           )}
-      </div>
 
-      {showForm && (
-          <div style={{ borderTop: `1px solid ${C.border}`, padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary, marginBottom: 2 }}>
-              {editingId !== null ? "編輯時段" : "新增時段"}
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: "0 0 100px" }}>
-                <div style={labelStyle}>設備</div>
-                <select value={form.device_id} onChange={(e) => setForm((f) => ({ ...f, device_id: e.target.value }))}
-                  style={inputStyle}>
-                  {DEVICE_IDS.map((id) => <option key={id} value={id}>{id}</option>)}
-                </select>
+          {showForm && (
+            <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 14, paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary, marginBottom: 2 }}>
+                {editingId !== null ? "編輯時段" : "新增時段"}
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={labelStyle}>原因</div>
-                <input value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
-                  placeholder="e.g. 年度校正" style={inputStyle} />
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: "0 0 100px" }}>
+                  <div style={labelStyle}>設備</div>
+                  <select value={form.device_id} onChange={(e) => setForm((f) => ({ ...f, device_id: e.target.value }))}
+                    style={inputStyle}>
+                    {DEVICE_IDS.map((id) => <option key={id} value={id}>{id}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>原因</div>
+                  <input value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
+                    placeholder="e.g. 年度校正" style={inputStyle} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>開始時間</div>
+                  <DateTimePicker
+                    value={form.start_time}
+                    onChange={(v) => setForm((f) => ({ ...f, start_time: v }))}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>結束時間</div>
+                  <DateTimePicker
+                    value={form.end_time}
+                    onChange={(v) => setForm((f) => ({ ...f, end_time: v }))}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+              {error && <div style={{ color: C.error, fontSize: 12 }}>{error}</div>}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button onClick={cancelForm} style={cancelBtn}>取消</button>
+                <button onClick={submit} disabled={saving} style={primaryBtn}>
+                  {saving ? "儲存中..." : editingId !== null ? "儲存變更" : "新增"}
+                </button>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <div style={labelStyle}>開始時間</div>
-                <DateTimePicker
-                  value={form.start_time}
-                  onChange={(v) => setForm((f) => ({ ...f, start_time: v }))}
-                  style={inputStyle}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={labelStyle}>結束時間</div>
-                <DateTimePicker
-                  value={form.end_time}
-                  onChange={(v) => setForm((f) => ({ ...f, end_time: v }))}
-                  style={inputStyle}
-                />
-              </div>
-            </div>
-            {error && <div style={{ color: C.error, fontSize: 12 }}>{error}</div>}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={cancelForm} style={cancelBtn}>取消</button>
-              <button onClick={submit} disabled={saving} style={primaryBtn}>
-                {saving ? "儲存中..." : editingId !== null ? "儲存變更" : "新增"}
-              </button>
-            </div>
-          </div>
-        )}
+          )}
     </ScheduleModalShell>
     {confirmTarget && (
       <ConfirmModal

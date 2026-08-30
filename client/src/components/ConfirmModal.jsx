@@ -1,5 +1,6 @@
 import { C } from "../styles/theme";
 import React from "react";
+import ModalFrame from "./ModalFrame";
 
 /**
  * 統一的確認對話框元件
@@ -62,38 +63,29 @@ export default function ConfirmModal({
   const config = typeConfig[type] || typeConfig.info;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.75)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 3000,
+    <ModalFrame
+      title={title}
+      onClose={onCancel}
+      zIndex={3000}
+      backdrop="rgba(0,0,0,0.75)"
+      boxStyle={{
+        background: config.bgColor,
+        border: `1px solid ${config.borderColor}`,
+        borderRadius: 12,
+        padding: 24,
+        width: 420,
+        maxWidth: "90vw",
+        gap: 16,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
       }}
-      // eslint-disable-next-line no-restricted-syntax -- 點背景取消是滑鼠的便利，鍵盤路徑是視窗裡的取消鈕
-      onClick={onCancel}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        style={{
-          background: config.bgColor,
-          border: `1px solid ${config.borderColor}`,
-          borderRadius: 12,
-          padding: 24,
-          width: 420,
-          maxWidth: "90vw",
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-          boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 標題 */}
+      bodyStyle={{
+        fontSize: 13,
+        color: "#cdd9e5",
+        lineHeight: 1.6,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+      }}
+      header={
         <div
           style={{
             display: "flex",
@@ -112,21 +104,8 @@ export default function ConfirmModal({
             {title}
           </div>
         </div>
-
-        {/* 內容 */}
-        <div
-          style={{
-            fontSize: 13,
-            color: "#cdd9e5",
-            lineHeight: 1.6,
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        >
-          {children || message}
-        </div>
-
-        {/* 按鈕組 */}
+      }
+      footer={
         <div
           style={{
             display: "flex",
@@ -184,7 +163,9 @@ export default function ConfirmModal({
             {confirmText}
           </button>
         </div>
-      </div>
-    </div>
+      }
+    >
+      {children || message}
+    </ModalFrame>
   );
 }

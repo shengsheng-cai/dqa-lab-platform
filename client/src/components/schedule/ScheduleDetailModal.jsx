@@ -66,14 +66,19 @@ const SUCCESS_BANNER = { background: C.successBgDeep, border: `1px solid ${C.suc
 
 function ResultScreen({ title, message, fields, onClose }) {
   return (
-    <ScheduleModalShell title={title} width={540} onClose={onClose}>
-      <div style={{ padding: "20px 24px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={SUCCESS_BANNER}>{message}</div>
-        {fields.map(({ label, value }) => <InfoRow key={label} label={label} value={value} />)}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+    <ScheduleModalShell
+      title={title}
+      width={540}
+      onClose={onClose}
+      bodyStyle={{ padding: "20px 24px 0", display: "flex", flexDirection: "column", gap: 14 }}
+      footer={
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "14px 24px 24px" }}>
           <button onClick={onClose} style={primaryBtn}>關閉</button>
         </div>
-      </div>
+      }
+    >
+      <div style={SUCCESS_BANNER}>{message}</div>
+      {fields.map(({ label, value }) => <InfoRow key={label} label={label} value={value} />)}
     </ScheduleModalShell>
   );
 }
@@ -281,10 +286,77 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
     );
   }
 
+  const footer = canEdit ? (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 20px 20px" }}>
+      {error && <div style={{ color: C.error, fontSize: 13 }}>{error}</div>}
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+      {role === "admin" && (schedule.status === "已取消" || schedule.status === "已完成") && (
+        <button onClick={del} style={{ ...cancelBtn, color: C.error, borderColor: C.errorDark }}>
+          刪除
+        </button>
+      )}
+      {schedule.status !== "已取消" && schedule.status !== "已完成" && (
+        <button onClick={cancel} disabled={saving} style={cancelOpen ? { ...cancelBtn, color: C.error, borderColor: C.errorDark } : cancelBtn}>
+          {cancelOpen ? (saving ? "取消中..." : "確認取消排程") : "取消排程"}
+        </button>
+      )}
+      {cancelOpen && (
+        <button onClick={() => { setCancelOpen(false); setCancelReason(""); }} style={cancelBtn}>
+          返回
+        </button>
+      )}
+      {schedule.status === "待審核" && (
+        <button onClick={confirm} disabled={saving} style={primaryBtn}>
+          {saving ? "處理中..." : "確認排程"}
+        </button>
+      )}
+      {schedule.status === "已確認" && (
+        <button
+          onClick={startNow}
+          {...blockedAttrs}
+          style={{ ...primaryBtn, background: C.accentDark, ...blockedStyle }}
+        >
+          {saving ? "啟動中..." : "▶ 立即開始"}
+        </button>
+      )}
+      {showContinuation && (() => {
+        const conds = schedule.conditions || [];
+        const idx = schedule.current_condition_index ?? 0;
+        const isLast = idx >= conds.length;
+        const label = isLast ? "✅ 確認完成" : `▶ 開始第 ${idx + 1} 條件（共 ${conds.length}）`;
+        return (
+          <button
+            onClick={confirmCondition}
+            {...blockedAttrs}
+            style={{ ...primaryBtn, background: isLast ? C.successDark : C.accentDark, ...blockedStyle }}
+          >
+            {saving ? "處理中..." : label}
+          </button>
+        );
+      })()}
+      {schedule.status !== "待審核" && (
+        <button
+          onClick={saveNote}
+          disabled={saving || noteUnchanged}
+          style={{ ...primaryBtn, ...(noteUnchanged ? disabledStyle : null) }}
+        >
+          {saving ? "儲存中..." : "儲存備註"}
+        </button>
+      )}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
-    <ScheduleModalShell title="排程詳情" width={540} maxHeight="88vh" onClose={onClose}>
-      <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", flex: 1 }}>
+    <ScheduleModalShell
+      title="排程詳情"
+      width={540}
+      maxHeight="88vh"
+      onClose={onClose}
+      bodyStyle={{ display: "flex", flexDirection: "column", gap: 12 }}
+      footer={footer}
+    >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{
               padding: "3px 10px", borderRadius: 12, fontSize: 12, fontWeight: 700,
@@ -426,7 +498,6 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                 </div>
               )}
 
-              {error && <div style={{ color: C.error, fontSize: 13 }}>{error}</div>}
 
               {(schedule.status === "已確認" || showContinuation) && liveDevice.blocker && (
                 <div style={{
@@ -437,64 +508,8 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                {role === "admin" && (schedule.status === "已取消" || schedule.status === "已完成") && (
-                  <button onClick={del} style={{ ...cancelBtn, color: C.error, borderColor: C.errorDark }}>
-                    刪除
-                  </button>
-                )}
-                {schedule.status !== "已取消" && schedule.status !== "已完成" && (
-                  <button onClick={cancel} disabled={saving} style={cancelOpen ? { ...cancelBtn, color: C.error, borderColor: C.errorDark } : cancelBtn}>
-                    {cancelOpen ? (saving ? "取消中..." : "確認取消排程") : "取消排程"}
-                  </button>
-                )}
-                {cancelOpen && (
-                  <button onClick={() => { setCancelOpen(false); setCancelReason(""); }} style={cancelBtn}>
-                    返回
-                  </button>
-                )}
-                {schedule.status === "待審核" && (
-                  <button onClick={confirm} disabled={saving} style={primaryBtn}>
-                    {saving ? "處理中..." : "確認排程"}
-                  </button>
-                )}
-                {schedule.status === "已確認" && (
-                  <button
-                    onClick={startNow}
-                    {...blockedAttrs}
-                    style={{ ...primaryBtn, background: C.accentDark, ...blockedStyle }}
-                  >
-                    {saving ? "啟動中..." : "▶ 立即開始"}
-                  </button>
-                )}
-                {showContinuation && (() => {
-                  const conds = schedule.conditions || [];
-                  const idx = schedule.current_condition_index ?? 0;
-                  const isLast = idx >= conds.length;
-                  const label = isLast ? "✅ 確認完成" : `▶ 開始第 ${idx + 1} 條件（共 ${conds.length}）`;
-                  return (
-                    <button
-                      onClick={confirmCondition}
-                      {...blockedAttrs}
-                      style={{ ...primaryBtn, background: isLast ? C.successDark : C.accentDark, ...blockedStyle }}
-                    >
-                      {saving ? "處理中..." : label}
-                    </button>
-                  );
-                })()}
-                {schedule.status !== "待審核" && (
-                  <button
-                    onClick={saveNote}
-                    disabled={saving || noteUnchanged}
-                    style={{ ...primaryBtn, ...(noteUnchanged ? disabledStyle : null) }}
-                  >
-                    {saving ? "儲存中..." : "儲存備註"}
-                  </button>
-                )}
-              </div>
             </>
           )}
-      </div>
     </ScheduleModalShell>
     {showDeleteConfirm && (
       <ConfirmModal

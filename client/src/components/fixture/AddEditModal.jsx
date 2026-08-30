@@ -82,111 +82,118 @@ export default function AddEditModal({ fixture, onClose, onSuccess }) {
   );
 
   return (
-    <ModalShell width={520} maxHeight="85vh" gap={12} onClose={onClose}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#cdd9e5" }}>
-          {isEdit ? "編輯治具" : "新增治具"}
+    <ModalShell
+      title={isEdit ? "編輯治具" : "新增治具"}
+      width={520}
+      maxHeight="85vh"
+      gap={12}
+      onClose={onClose}
+      footer={
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {error && <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={onClose} style={{ flex: 1, padding: "8px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 13 }}>
+              取消
+            </button>
+            <button onClick={handleSubmit} disabled={loading} style={{ flex: 1, padding: "8px", borderRadius: 6, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+              {loading ? "儲存中..." : isEdit ? "儲存" : "新增"}
+            </button>
+          </div>
         </div>
+      }
+    >
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div>
+        {label("介面 *")}
+        <input value={form.interface_type} onChange={(e) => set("interface_type", e.target.value)} style={inputStyle} placeholder="e.g. USB-C" />
+      </div>
+      <div>
+        {label("型態 *")}
+        <input value={form.form_factor} onChange={(e) => set("form_factor", e.target.value)} style={inputStyle} placeholder="e.g. 轉接頭" />
+      </div>
+      <div style={{ gridColumn: "1 / -1" }}>
+        {label("現有數量")}
+        <input type="number" min={0} value={form.total_quantity} onChange={(e) => set("total_quantity", e.target.value)} style={{ ...inputStyle, width: "calc(50% - 5px)", boxSizing: "border-box" }} />
+      </div>
+    </div>
+    <button
+      onClick={() => setShowAdvanced((v) => !v)}
+      style={{ background: "transparent", border: "none", color: "#58a6ff", cursor: "pointer", fontSize: 12, padding: "2px 0", textAlign: "left", display: "flex", alignItems: "center", gap: 4 }}
+    >
+      {showAdvanced ? "▲ 隱藏進階選項" : "▼ 進階選項"}
+    </button>
+    {showAdvanced && (
+      <>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
-            {label("介面 *")}
-            <input value={form.interface_type} onChange={(e) => set("interface_type", e.target.value)} style={inputStyle} placeholder="e.g. USB-C" />
+            {label("優先度")}
+            <input type="number" value={form.priority} onChange={(e) => set("priority", e.target.value)} style={inputStyle} placeholder="數字越小越前" />
           </div>
           <div>
-            {label("型態 *")}
-            <input value={form.form_factor} onChange={(e) => set("form_factor", e.target.value)} style={inputStyle} placeholder="e.g. 轉接頭" />
+            {label("尺寸")}
+            <input value={form.size} onChange={(e) => set("size", e.target.value)} style={inputStyle} />
           </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            {label("現有數量")}
-            <input type="number" min={0} value={form.total_quantity} onChange={(e) => set("total_quantity", e.target.value)} style={{ ...inputStyle, width: "calc(50% - 5px)", boxSizing: "border-box" }} />
+          <div>
+            {label("缺貨數")}
+            <input type="number" min={0} value={form.shortage} onChange={(e) => set("shortage", e.target.value)} style={inputStyle} />
           </div>
-        </div>
-        <button
-          onClick={() => setShowAdvanced((v) => !v)}
-          style={{ background: "transparent", border: "none", color: "#58a6ff", cursor: "pointer", fontSize: 12, padding: "2px 0", textAlign: "left", display: "flex", alignItems: "center", gap: 4 }}
-        >
-          {showAdvanced ? "▲ 隱藏進階選項" : "▼ 進階選項"}
-        </button>
-        {showAdvanced && (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div>
-                {label("優先度")}
-                <input type="number" value={form.priority} onChange={(e) => set("priority", e.target.value)} style={inputStyle} placeholder="數字越小越前" />
-              </div>
-              <div>
-                {label("尺寸")}
-                <input value={form.size} onChange={(e) => set("size", e.target.value)} style={inputStyle} />
-              </div>
-              <div>
-                {label("缺貨數")}
-                <input type="number" min={0} value={form.shortage} onChange={(e) => set("shortage", e.target.value)} style={inputStyle} />
-              </div>
-              <div>
-                {label("使用頻率")}
-                <select value={form.usage_frequency} onChange={(e) => set("usage_frequency", e.target.value)} style={inputStyle}>
-                  <option value="">—</option>
-                  <option value="1">每天</option>
-                  <option value="2">週</option>
-                  <option value="3">月</option>
-                  <option value="4">季</option>
-                  <option value="5">年</option>
-                </select>
-              </div>
-              <div>
-                {label("汰換年限")}
-                <input value={form.replacement_years} onChange={(e) => set("replacement_years", e.target.value)} style={inputStyle} placeholder="e.g. 3年" />
-              </div>
-              <div>
-                {label("單價")}
-                <input type="number" min={0} value={form.unit_price} onChange={(e) => set("unit_price", e.target.value)} style={inputStyle} />
-              </div>
-              {/* 這裡不給改，新增時也不出現：保管人的唯一來源是列上的「保管人」按鈕，
-                  那裡選的是真的人員。以前這格是自由文字，兩個入口寫到不同地方，
-                  改了按儲存畫面卻不會變。新增中的治具還沒有那一列可以按，所以不顯示。 */}
-              {isEdit && (
-                <div>
-                  {label("保管人")}
-                  <input
-                    value={fixture?.keeper_name || "未設定"}
-                    readOnly
-                    disabled
-                    title="在治具列上的「保管人」修改"
-                    style={inputStyle}
-                  />
-                </div>
-              )}
-              <div>
-                {label("代理人")}
-                <input value={form.deputy_name} onChange={(e) => set("deputy_name", e.target.value)} style={inputStyle} />
-              </div>
-              <div>
-                {label("廠商")}
-                <input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} style={inputStyle} />
-              </div>
-              <div>
-                {label("型號")}
-                <input value={form.model_number} onChange={(e) => set("model_number", e.target.value)} style={inputStyle} />
-              </div>
-              <div>
-                {label("用途")}
-                <input value={form.purpose} onChange={(e) => set("purpose", e.target.value)} style={inputStyle} />
-              </div>
-            </div>
+          <div>
+            {label("使用頻率")}
+            <select value={form.usage_frequency} onChange={(e) => set("usage_frequency", e.target.value)} style={inputStyle}>
+              <option value="">—</option>
+              <option value="1">每天</option>
+              <option value="2">週</option>
+              <option value="3">月</option>
+              <option value="4">季</option>
+              <option value="5">年</option>
+            </select>
+          </div>
+          <div>
+            {label("汰換年限")}
+            <input value={form.replacement_years} onChange={(e) => set("replacement_years", e.target.value)} style={inputStyle} placeholder="e.g. 3年" />
+          </div>
+          <div>
+            {label("單價")}
+            <input type="number" min={0} value={form.unit_price} onChange={(e) => set("unit_price", e.target.value)} style={inputStyle} />
+          </div>
+          {/* 這裡不給改，新增時也不出現：保管人的唯一來源是列上的「保管人」按鈕，
+              那裡選的是真的人員。以前這格是自由文字，兩個入口寫到不同地方，
+              改了按儲存畫面卻不會變。新增中的治具還沒有那一列可以按，所以不顯示。 */}
+          {isEdit && (
             <div>
-              {label("備註")}
-              <input value={form.note} onChange={(e) => set("note", e.target.value)} style={inputStyle} />
+              {label("保管人")}
+              <input
+                value={fixture?.keeper_name || "未設定"}
+                readOnly
+                disabled
+                title="在治具列上的「保管人」修改"
+                style={inputStyle}
+              />
             </div>
-          </>
-        )}
-        {error && <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>}
-        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: "8px", borderRadius: 6, background: "transparent", color: "#8b949e", border: "1px solid #30363d", cursor: "pointer", fontSize: 13 }}>
-            取消
-          </button>
-          <button onClick={handleSubmit} disabled={loading} style={{ flex: 1, padding: "8px", borderRadius: 6, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-            {loading ? "儲存中..." : isEdit ? "儲存" : "新增"}
-          </button>
+          )}
+          <div>
+            {label("代理人")}
+            <input value={form.deputy_name} onChange={(e) => set("deputy_name", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("廠商")}
+            <input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("型號")}
+            <input value={form.model_number} onChange={(e) => set("model_number", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            {label("用途")}
+            <input value={form.purpose} onChange={(e) => set("purpose", e.target.value)} style={inputStyle} />
+          </div>
         </div>
+        <div>
+          {label("備註")}
+          <input value={form.note} onChange={(e) => set("note", e.target.value)} style={inputStyle} />
+        </div>
+      </>
+    )}
     </ModalShell>
   );
 }
