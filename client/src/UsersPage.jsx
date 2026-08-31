@@ -4,6 +4,7 @@ import { useToast } from "./components/useToast";
 import ConfirmModal from "./components/ConfirmModal";
 import ModalFrame from "./components/ModalFrame";
 import { C } from "./styles/theme";
+import { btnRowAction, btnRowDanger, rowActions } from "./styles/common";
 import { describeLoadError } from "./utils/loadError";
 import { ListStateRow, StaleBanner } from "./components/ListState";
 
@@ -433,11 +434,11 @@ function DemoTokenSection({ active }) {
                         {t.use_count} / {t.max_uses ?? "∞"}
                       </td>
                       <td style={{ padding: "8px 10px" }}>
-                        <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
-                          <button onClick={() => handleToggle(t.id)} style={{ ...iconActionBtn, color: t.is_active ? "#8b949e" : "#3fb950", borderColor: t.is_active ? "#30363d" : "#238636" }}>
+                        <div style={{ ...rowActions, justifyContent: "flex-end" }}>
+                          <button onClick={() => handleToggle(t.id)} style={{ ...btnRowAction, color: t.is_active ? C.textMuted : C.success, borderColor: t.is_active ? C.border : C.successDark }}>
                             {t.is_active ? "停用" : "啟用"}
                           </button>
-                          <button onClick={() => setDeleteToken(t)} style={{ ...iconActionBtn, color: "#f85149", borderColor: "#da363344" }}>刪除</button>
+                          <button onClick={() => setDeleteToken(t)} style={{ ...btnRowDanger, marginLeft: 8 }}>刪除</button>
                         </div>
                       </td>
                     </tr>
@@ -477,17 +478,6 @@ const inputS = {
   color: "#cdd9e5",
   fontSize: 13,
   width: 180,
-};
-
-const iconActionBtn = {
-  padding: "4px 8px",
-  borderRadius: 4,
-  border: "1px solid #30363d",
-  background: "transparent",
-  color: "#8b949e",
-  fontSize: 13,
-  cursor: "pointer",
-  lineHeight: 1,
 };
 
 export default function UsersPage({ active, role }) {
@@ -633,12 +623,12 @@ export default function UsersPage({ active, role }) {
                         </span>
                       </td>
                       <td style={tdStyle}>
-                        <div style={{ display: "flex", gap: 5 }}>
-                          <button onClick={() => setModalUser(u)} style={iconActionBtn}>編輯</button>
-                          <button onClick={() => handleToggleActive(u)} style={{ ...iconActionBtn, color: u.is_active ? "#8b949e" : "#3fb950", borderColor: u.is_active ? "#30363d" : "#238636" }}>
+                        <div style={rowActions}>
+                          <button onClick={() => setModalUser(u)} style={btnRowAction}>編輯</button>
+                          <button onClick={() => handleToggleActive(u)} style={{ ...btnRowAction, color: u.is_active ? C.textMuted : C.success, borderColor: u.is_active ? C.border : C.successDark }}>
                             {u.is_active ? "停用" : "啟用"}
                           </button>
-                          <button onClick={() => setDeleteTarget(u)} style={{ ...iconActionBtn, color: "#f85149", borderColor: "#da363344" }}>刪除</button>
+                          <button onClick={() => setDeleteTarget(u)} style={{ ...btnRowDanger, marginLeft: 8 }}>刪除</button>
                         </div>
                       </td>
                     </tr>

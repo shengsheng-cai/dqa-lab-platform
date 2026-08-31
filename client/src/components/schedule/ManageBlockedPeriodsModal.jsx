@@ -10,6 +10,7 @@ import {
   inputStyle, labelStyle, primaryBtn, cancelBtn,
 } from "./scheduleUtils";
 import { C } from "../../styles/theme";
+import { btnRowDanger, btnRowAction, rowActions } from "../../styles/common";
 
 const EMPTY_FORM = { device_id: DEVICE_IDS[0], start_time: "", end_time: "", reason: "" };
 
@@ -150,12 +151,12 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
                     <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{fmtDt(item.start_time)}</td>
                     <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{fmtDt(item.end_time)}</td>
                     <td style={{ padding: "6px 8px", color: C.textMuted }}>{item.reason || "—"}</td>
-                    <td style={{ padding: "6px 8px", display: "flex", gap: 6 }}>
+                    <td style={{ padding: "6px 8px", ...rowActions }}>
                       <button onClick={() => openEdit(item)}
-                        style={{ ...cancelBtn, padding: "2px 8px", fontSize: 12 }}>編輯</button>
+                        style={btnRowAction}>編輯</button>
                       <button onClick={() => setConfirmTarget(item)}
                         disabled={deletingId === item.id}
-                        style={{ ...cancelBtn, padding: "2px 8px", fontSize: 12, color: C.error, borderColor: C.errorDark }}>
+                        style={{ ...btnRowDanger, marginLeft: 8 }}>
                         {deletingId === item.id ? "..." : "刪除"}
                       </button>
                     </td>

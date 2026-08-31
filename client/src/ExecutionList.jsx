@@ -6,6 +6,7 @@ import { formatLocal } from "./utils/timezone";
 import { useToast } from "./components/useToast";
 import { describeLoadError } from "./utils/loadError";
 import { ListState, StaleBanner } from "./components/ListState";
+import { btnRowAction, rowActions } from "./styles/common";
 
 function fmtDatetime(str) {
   if (!str) return "—";
@@ -110,7 +111,7 @@ export default function ExecutionList({ active, role }) {
                         <button
                           onClick={() => setExpandedId(expandedId === ex.id ? null : ex.id)}
                           aria-expanded={expandedId === ex.id}
-                          style={{ fontSize: 10, padding: "1px 6px", borderRadius: 3, cursor: "pointer", background: "transparent", border: "1px solid #30363d", color: "#8b949e" }}
+                          style={btnRowAction}
                         >
                           補充
                         </button>
@@ -119,13 +120,13 @@ export default function ExecutionList({ active, role }) {
                   )}
                   {role !== "guest" && (
                     <td style={tdStyle}>
-                      <div style={{ display: "flex", gap: 6 }}>
+                      <div style={rowActions}>
                         {[{ format: "csv", label: "📥 CSV", color: "#58a6ff" }, { format: "pdf", label: "📄 PDF", color: "#3fb950" }].map(({ format, label, color }) => (
                           <button
                             key={format}
                             onClick={() => downloadReport(ex, format)}
                             disabled={downloading[format] === ex.id}
-                            style={{ padding: "3px 10px", fontSize: 11, borderRadius: 4, cursor: "pointer", background: "transparent", border: "1px solid #30363d", color, opacity: downloading[format] === ex.id ? 0.5 : 1 }}
+                            style={{ ...btnRowAction, color, opacity: downloading[format] === ex.id ? 0.5 : 1 }}
                           >
                             {downloading[format] === ex.id ? "⏳" : label}
                           </button>
