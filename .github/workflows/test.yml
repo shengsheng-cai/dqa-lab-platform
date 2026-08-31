@@ -47,6 +47,12 @@ jobs:
       - run: pip install -r backend/requirements.txt
       - run: cd client && npm ci
       - run: cd tests/e2e && npm ci
+      # 瀏覽器本體每次重抓要 20 幾秒。key 綁 lock file，Playwright 版本一升就自動換一份快取，
+      # 不會拿舊瀏覽器配新版函式庫。--with-deps 的 apt 那段快取不了，仍然每次跑。
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/e2e/package-lock.json') }}
       - run: cd tests/e2e && npx playwright install --with-deps chromium
       - run: make test-e2e
       - uses: actions/upload-artifact@v7
