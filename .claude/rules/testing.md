@@ -41,7 +41,9 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 
 ### 已經踩過的坑，不要再踩
 
-- **不平行跑、失敗不 retry**（`playwright.config.js` 已設定）。後端有共用狀態，平行會互相踩；用 retry 蓋過去只會養出爛測試
+- **不平行跑、失敗不 retry**（`playwright.config.js` 已設定）。後端有共用狀態，平行會互相踩；用 retry 蓋過去只會養出爛測試。
+  CI 把測試檔分成兩片、跑在兩個 runner 上不算違反這條：每一片是各自的後端與資料庫，看不到對方。
+  要重現某一片用 `make test-e2e ARGS="--shard=1/2"`
 - **測試環境和開發環境完全分開**：port 8100、資料庫 `/tmp/dqa-e2e.db`、假帳密。前端 build 到 `client/dist-e2e`，**不要改用 `client/dist`**——那個會被 `make dev` 蓋成 HF 預覽版，測試會安靜地連到別的後端
 - **殺程序一定要加 `lsof -sTCP:LISTEN`**。不加會連「連到這個 port 的客戶端」一起列出來，包括 Playwright 自己，結果測試把自己殺掉
 - **登入連錯 5 次會鎖 IP 10 分鐘**（記憶體計數）。寫負向測試時小心，每個測試檔重開後端剛好會清掉

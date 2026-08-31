@@ -30,6 +30,13 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    # 分兩片跑。這不違反「E2E 不平行跑」那條規則：那條擋的是同一個後端底下開多個 worker，
+    # 而每一片是各自的 runner、各自的後端與資料庫，彼此看不到對方。
+    # 再多切一片省不到多少——每片都要重付一次安裝與前端 build 的固定成本。
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -54,11 +61,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('tests/e2e/package-lock.json') }}
       - run: cd tests/e2e && npx playwright install --with-deps chromium
-      - run: make test-e2e
+      - run: make test-e2e ARGS="--shard=${{ matrix.shard }}/2"
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: e2e-failure-report
+          # 名稱要帶片號，兩片同時失敗會撞名
+          name: e2e-failure-report-shard${{ matrix.shard }}
           path: |
             tests/e2e/playwright-report/
             tests/e2e/test-results/
