@@ -36,7 +36,7 @@
 | **R-09** | 登入憑證跑到可以被撿去重放的地方——網址、access log，或任何在請求結束後還留著的紀錄 | High | Medium | P1 | `test_ws_auth.py`、`ws-auth.spec.js` | 涵蓋的是這個應用自己控制得到的憑證；部署平台的代理或日誌管線自己會記下什麼，不是測試套件觀察得到的範圍 |
 | **R-10** | 核心背景工作停掉，服務對外卻仍宣稱自己正常 | Medium | Low | P2 | `test_health.py` | 涵蓋的是探測說不說實話；模擬器主迴圈本身仍然沒有外層防護，部署端要不要接監控也不在這裡 |
 | **R-11** | 刪掉一筆資料後，其他資料仍指向已經不存在的東西，因為宣告的關聯根本沒有生效 | Medium | Medium | P2 | `test_foreign_key_enforcement.py`、`test_schema_migrations.py` | 涵蓋的是 schema 宣告了什麼、資料庫又照做了什麼；已經含有孤兒的資料庫會被 migration 擋下而不是自動修補，那仍然是人要決定的事 |
-| **R-12** | 不可逆的操作單擊即生效，把正在進行中的工作直接毀掉 | Medium | Medium | P1 | `tests/e2e/specs/delete-confirm-identity.spec.js`、`tests/e2e/specs/device-stop-confirm.spec.js`、`tests/e2e/specs/fixture-loan.spec.js`、`tests/e2e/specs/maintenance-block.spec.js`、`tests/e2e/specs/purchase-arrival-confirm.spec.js`、`tests/e2e/specs/users-page-feedback.spec.js` | 不可逆的刪除都會先問過，而且確認視窗會寫出它要動的是哪一筆。治具列上直接送出的快速盤點欄位仍是按一下就生效，還在待補清單裡 |
+| **R-12** | 不可逆的操作單擊即生效，把正在進行中的工作直接毀掉 | Medium | Medium | P1 | `tests/e2e/specs/delete-confirm-identity.spec.js`、`tests/e2e/specs/device-stop-confirm.spec.js`、`tests/e2e/specs/fixture-loan.spec.js`、`tests/e2e/specs/maintenance-block.spec.js`、`tests/e2e/specs/purchase-arrival-confirm.spec.js`、`tests/e2e/specs/users-page-feedback.spec.js`、`tests/e2e/specs/row-action-hit-area.spec.js` | 不可逆的刪除都會先問過，而且確認視窗會寫出它要動的是哪一筆；列上的刪除鈕也不再是又小又貼著一般操作的那一顆。治具列上的快速盤點仍是按一下就生效，這是刻意保留的快速入口，但它現在會寫出動到的數字（現有 X → 實際 Y），填錯也會被擋下並說明 |
 | **R-13** | 主要入口只有滑鼠進得去，用鍵盤或輔助技術的人根本走不完流程——而畫面上完全看不出來 | Medium | Medium | P2 | `keyboard-navigation.spec.js`；`client/eslint.config.js`（`no-restricted-syntax` 擋下非互動標籤上的新滑鼠事件） | lint 只看得到語法；「那一列裡真的有一顆能用的鍵盤入口」由 E2E 一個入口一條測試釘住。視窗的焦點與 Esc 現在由同一支 spec 涵蓋四種情況（一般開關、視窗換視窗、視窗疊視窗、有預設游標的欄位）。沒有做焦點鎖：Tab 仍然走得到開著的視窗後面的頁面，這是刻意的取捨，不是沒測到的缺口 |
 
 ## 4. 執行順序

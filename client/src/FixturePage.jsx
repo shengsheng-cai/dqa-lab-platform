@@ -88,6 +88,10 @@ const STATUS_COLORS = {
   reserved:     { bg: "#1a252d",      color: C.reserved, label: "預約中" },
 };
 
+// 治具在訊息與無障礙名稱裡的稱呼。同一支治具在不同地方要叫同一個名字，
+// 各處自己組會漂走。
+const fixtureLabel = (f) => `${f.interface_type} — ${f.form_factor}`;
+
 function getStatus(f) {
   if (f.available_quantity === 0 && f.total_quantity === 0)
     return "out_of_stock";
@@ -190,20 +194,27 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
     fetchAll();
   }, [fetchAll]);
 
-  const submitInventory = async (fixtureId) => {
-    const val = inventoryEdits[fixtureId];
+  // 這一格送出去就建立一筆盤點紀錄並改動庫存，跟月盤點留下的是同一種紀錄。
+  // 所以填錯不能靜靜吞掉，成功也要說出動到的數字——不然人分不出剛才到底存進去沒有。
+  const submitInventory = async (f) => {
+    const val = inventoryEdits[f.id];
     if (val === undefined || val === "") return;
-    const num = parseInt(val);
-    if (isNaN(num) || num < 0) return;
+    if (!isNonnegativeInteger(val)) {
+      showToast("快速盤點的實際數量請填 0 或正整數", "error");
+      return;
+    }
+    const num = Number(val);
+    // f 是送出前那一份，所以「現有」講的是盤點前的數字，不會被下面的重新整理蓋掉
+    const before = f.total_quantity;
     try {
-      await api.post(`/api/fixtures/${fixtureId}/inventory?actual_quantity=${num}`);
+      await api.post(`/api/fixtures/${f.id}/inventory?actual_quantity=${num}`);
       await refreshAfterMutation();
-      showToast("盤點記錄已保存", "success");
+      showToast(`${fixtureLabel(f)} 已盤點：現有 ${before} → 實際 ${num}`, "success");
     } catch (e) {
       const msg = e.response?.data?.detail || "盤點失敗";
       showToast(msg, "error");
     } finally {
-      setInventoryEdits((prev) => { const n = { ...prev }; delete n[fixtureId]; return n; });
+      setInventoryEdits((prev) => { const n = { ...prev }; delete n[f.id]; return n; });
     }
   };
 
@@ -420,7 +431,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                     { label: "汰換", key: "estimated_replacement_date" },
                     { label: "保管人", key: "keeper_name", width: 88 },
                     // 輸入框加「確認」鈕要並排放得下
-                    { label: "實際數量", key: null, width: 148 },
+                    { label: "快速盤點", key: null, width: 148 },
                   ].map(({ label, key, width }) => (
                     <ResizableTh
                       key={label}
@@ -586,7 +597,8 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                               onChange={(e) =>
                                 setInventoryEdits((prev) => ({ ...prev, [f.id]: e.target.value }))
                               }
-                              onKeyDown={(e) => e.key === "Enter" && submitInventory(f.id)}
+                              onKeyDown={(e) => e.key === "Enter" && submitInventory(f)}
+                              aria-label={`${fixtureLabel(f)} 的盤點實際數量`}
                               style={{
                                 width: 60,
                                 padding: "3px 6px",
@@ -599,7 +611,8 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                             />
                             {editVal !== undefined && editVal !== "" && (
                               <button
-                                onClick={() => submitInventory(f.id)}
+                                onClick={() => submitInventory(f)}
+                                aria-label={`送出 ${fixtureLabel(f)} 的盤點`}
                                 style={{
                                   ...btnRowAction,
                                   border: `1px solid ${C.successDark}`,
