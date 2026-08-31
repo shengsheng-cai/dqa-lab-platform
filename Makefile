@@ -73,6 +73,7 @@ test:
 # 用法：make test-e2e                                 跑全部
 #      make test-e2e ARGS="--headed"                 開視窗看它在點什麼
 #      make test-e2e ARGS="specs/smoke.spec.js"      只跑某一支
+#      make test-e2e ARGS="--shard=1/2"               只跑 CI 上的第一片
 test-e2e:
 	@bash tests/e2e/run-e2e.sh $(ARGS)
 
