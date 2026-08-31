@@ -18,6 +18,7 @@ import {
   toLocalDateTimeInput,
 } from "./utils/maintenance";
 import { C } from "./styles/theme";
+import { btnRowDanger, btnRowAction, rowActions } from "./styles/common";
 import { describeLoadError } from "./utils/loadError";
 import { ListStateRow, StaleBanner } from "./components/ListState";
 
@@ -294,8 +295,10 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                   </td>
                   {role === "admin" && (
                     <td style={tdS}>
-                      <button onClick={() => openEdit(c, "calibrations")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.surfaceHover, border: `1px solid ${C.border}`, color: C.textMuted, cursor: "pointer" }}>編輯</button>
-                      <button onClick={() => setDeleteTarget({ record: c, type: "calibrations" })} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.errorBg, border: "1px solid #5a2d2d", color: C.error, cursor: "pointer" }}>刪除</button>
+                      <div style={rowActions}>
+                        <button onClick={() => openEdit(c, "calibrations")} style={{ ...btnRowAction, background: C.surfaceHover }}>編輯</button>
+                        <button onClick={() => setDeleteTarget({ record: c, type: "calibrations" })} style={{ ...btnRowDanger, marginLeft: 8 }}>刪除</button>
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -337,8 +340,10 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
                   <td style={tdS}>{formatDateOnly(m.next_maintenance_date)}</td>
                   {role === "admin" && (
                     <td style={tdS}>
-                      <button onClick={() => openEdit(m, "maintenances")} style={{ marginRight: 6, fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.surfaceHover, border: `1px solid ${C.border}`, color: C.textMuted, cursor: "pointer" }}>編輯</button>
-                      <button onClick={() => setDeleteTarget({ record: m, type: "maintenances" })} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: C.errorBg, border: "1px solid #5a2d2d", color: C.error, cursor: "pointer" }}>刪除</button>
+                      <div style={rowActions}>
+                        <button onClick={() => openEdit(m, "maintenances")} style={{ ...btnRowAction, background: C.surfaceHover }}>編輯</button>
+                        <button onClick={() => setDeleteTarget({ record: m, type: "maintenances" })} style={{ ...btnRowDanger, marginLeft: 8 }}>刪除</button>
+                      </div>
                     </td>
                   )}
                 </tr>

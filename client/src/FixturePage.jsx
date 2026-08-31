@@ -15,7 +15,7 @@ import StocktakeModal from "./components/fixture/StocktakeModal";
 import CreatePurchaseModal from "./components/fixture/CreatePurchaseModal";
 import ConfirmModal from "./components/ConfirmModal";
 import { C } from "./styles/theme";
-import { thStyle, tdStyle, btnPrimary, btnDanger, btnBare } from "./styles/common";
+import { thStyle, tdStyle, btnPrimary, btnRowDanger, btnRowAction, rowActions, btnBare } from "./styles/common";
 import { isUnlinkedKeeper } from "./utils/keeper";
 
 function ResizableTh({ children, defaultWidth, style, onClick, ariaSort }) {
@@ -402,20 +402,25 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
               <thead>
                 <tr style={{ background: C.surfaceHover }}>
                   {[
-                    { label: "介面", key: "interface_type" },
-                    { label: "型態", key: "form_factor" },
-                    { label: "尺寸", key: "size" },
+                    // tableLayout 是 fixed，沒給 width 的欄一律均分剩下的空間。放得下實際內容的
+                    // 幾欄要自己講出需要多少，不然會被右邊那幾個寬欄擠到把字疊到隔壁格上
+                    // （「167×76mm」跟數量黏在一起就是這樣來的）。數字欄本來就窄，讓它們去均分。
+                    { label: "介面", key: "interface_type", width: 84 },
+                    { label: "型態", key: "form_factor", width: 96 },
+                    { label: "尺寸", key: "size", width: 100 },
                     { label: "現有", key: "total_quantity" },
                     // 借出那格是展開明細的入口，裡面要放得下「明細」兩個字，比別欄寬一點
                     { label: "借出", key: "loaned_quantity", width: 92 },
                     { label: "預約", key: "reserved_quantity" },
                     { label: "可借", key: "available_quantity" },
                     { label: "缺貨", key: "shortage" },
-                    { label: "狀態", key: null },
+                    // 放得下「庫存足夠」那顆標籤
+                    { label: "狀態", key: null, width: 84 },
                     { label: "使用率", key: "usage_frequency" },
                     { label: "汰換", key: "estimated_replacement_date" },
-                    { label: "保管人", key: "keeper_name" },
-                    { label: "實際數量", key: null },
+                    { label: "保管人", key: "keeper_name", width: 88 },
+                    // 輸入框加「確認」鈕要並排放得下
+                    { label: "實際數量", key: null, width: 148 },
                   ].map(({ label, key, width }) => (
                     <ResizableTh
                       key={label}
@@ -433,7 +438,9 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                       )}
                     </ResizableTh>
                   ))}
-                  {canOperate && <ResizableTh style={thStyle}>操作</ResizableTh>}
+                  {/* 缺貨時會多出「採購」，四顆要排得成一列。窄了的話 rowActions 不換行，
+                      按鈕會被切掉——加動作就要一起把這個數字加大 */}
+                  {canOperate && <ResizableTh defaultWidth={250} style={thStyle}>操作</ResizableTh>}
                 </tr>
               </thead>
               <tbody>
@@ -500,9 +507,8 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                             aria-label={loansLabel}
                             title={loansLabel}
                             style={{
+                              ...btnRowAction,
                               display: "inline-flex", alignItems: "center", gap: 4,
-                              minHeight: 28, padding: "2px 6px", borderRadius: 4,
-                              background: "transparent", border: `1px solid ${C.border}`,
                               color: "inherit", font: "inherit", cursor: "pointer",
                             }}
                           >
@@ -595,13 +601,10 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                               <button
                                 onClick={() => submitInventory(f.id)}
                                 style={{
-                                  padding: "2px 6px",
-                                  borderRadius: 4,
+                                  ...btnRowAction,
                                   border: `1px solid ${C.successDark}`,
                                   background: C.successDark,
                                   color: C.white,
-                                  fontSize: 11,
-                                  cursor: "pointer",
                                 }}
                               >
                                 確認
@@ -614,30 +617,30 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                       </td>
                       {canOperate && (
                         <td style={tdStyle}>
-                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          <div style={rowActions}>
                             <button
                               onClick={() => setEditTarget(f)}
-                              style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${C.accent}44`, background: "transparent", color: C.accent, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
+                              style={{ ...btnRowAction, border: `1px solid ${C.accent}44`, color: C.accent }}
                             >
                               編輯
                             </button>
                             <button
                               onClick={() => setKeeperTarget(f)}
-                              style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${C.border}`, background: "transparent", color: C.textMuted, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
+                              style={btnRowAction}
                             >
                               保管人
                             </button>
                             {f.available_quantity === 0 && (
                               <button
                                 onClick={() => { setPurchasePreFill(f); setShowPurchaseModal(true); }}
-                                style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${C.warning}`, background: "transparent", color: C.warning, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
+                                style={{ ...btnRowAction, border: `1px solid ${C.warning}`, color: C.warning }}
                               >
                                 採購
                               </button>
                             )}
                             <button
                               onClick={() => setDeleteFixtureTarget(f)}
-                              style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${C.error}44`, background: "transparent", color: C.error, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
+                              style={{ ...btnRowDanger, marginLeft: 8 }}
                             >
                               刪除
                             </button>
@@ -679,7 +682,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                                         <td style={{ ...tdStyle, fontSize: 12 }}>
                                           <button
                                             onClick={() => setReturnTarget(loan)}
-                                            style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${C.success}44`, background: "transparent", color: C.success, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}
+                                            style={{ ...btnRowAction, border: `1px solid ${C.success}44`, color: C.success }}
                                           >
                                             歸還
                                           </button>
@@ -1037,7 +1040,7 @@ function BatchTable({ rows, setLogs, allFixtures, onChanged }) {
                     {diff > 0 ? `+${diff}` : diff}
                   </td>
                   <td style={{ ...tdStyle, color: C.textMuted }}>{log.counted_by || "-"}</td>
-                  {editMode && <td style={tdStyle}><button style={btnDanger} onClick={() => setDeleted((p) => new Set([...p, log.id]))}>刪除</button></td>}
+                  {editMode && <td style={tdStyle}><button style={btnRowDanger} onClick={() => setDeleted((p) => new Set([...p, log.id]))}>刪除</button></td>}
                 </tr>
               );
             })}
@@ -1055,7 +1058,7 @@ function BatchTable({ rows, setLogs, allFixtures, onChanged }) {
                 </td>
                 <td style={tdStyle}>—</td>
                 <td style={tdStyle}>—</td>
-                <td style={tdStyle}><button style={btnDanger} onClick={() => setNewRows((p) => p.filter((_, idx) => idx !== i))}>刪除</button></td>
+                <td style={tdStyle}><button style={btnRowDanger} onClick={() => setNewRows((p) => p.filter((_, idx) => idx !== i))}>刪除</button></td>
               </tr>
             ))}
           </tbody>
@@ -1165,7 +1168,11 @@ function InventoryLogTab({ refreshKey, allFixtures, onChanged }) {
               <button
                 onClick={(e) => handleDeleteBatch(e, key, allBatchRows)}
                 disabled={isDeleting}
-                style={{ marginLeft: "auto", padding: "3px 10px", borderRadius: 4, border: `1px solid ${C.errorDark}`, background: "transparent", color: isDeleting ? C.textDim : C.error, fontSize: 11, cursor: isDeleting ? "not-allowed" : "pointer" }}
+                style={{
+                  ...btnRowDanger,
+                  marginLeft: "auto",
+                  ...(isDeleting && { color: C.textDim, cursor: "not-allowed" }),
+                }}
               >
                 {isDeleting ? "刪除中..." : "刪除此批次"}
               </button>
@@ -1364,20 +1371,16 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
                     </td>
                     {canOperate && (
                       <td style={tdStyle}>
-                        <div style={{ display: "flex", gap: 4 }}>
+                        <div style={rowActions}>
                           {o.status === "pending" && (
                             <button
                               onClick={() => setArriveTarget(o)}
                               disabled={loading}
                               style={{
-                                padding: "3px 8px",
-                                borderRadius: 4,
+                                ...btnRowAction,
                                 background: C.successBgMid,
                                 color: C.success,
                                 border: `1px solid ${C.successDark}`,
-                                cursor: "pointer",
-                                fontSize: 11,
-                                whiteSpace: "nowrap",
                               }}
                             >
                               確認到貨
@@ -1387,15 +1390,7 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
                             <button
                               onClick={() => handleDelete(o)}
                               disabled={loading}
-                              style={{
-                                padding: "3px 8px",
-                                borderRadius: 4,
-                                background: "transparent",
-                                color: C.error,
-                                border: `1px solid ${C.error}`,
-                                cursor: "pointer",
-                                fontSize: 11,
-                              }}
+                              style={{ ...btnRowDanger, marginLeft: 8 }}
                             >
                               刪除
                             </button>

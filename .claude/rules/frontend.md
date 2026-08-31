@@ -55,6 +55,23 @@
   否則螢幕閱讀器會把方向唸兩次
 - **`title` 不能當名稱用**：它只在滑鼠 hover 時出現，鍵盤聚焦不會觸發，輔助技術也常常整段跳過。
   要給名稱就用 `aria-label`，`title` 留給滑鼠（`GanttChart.jsx` 兩個都給）
+- **表格列裡的動作鈕吃 `common.js` 的 `btnRowAction`（刪除用 `btnRowDanger`），最小點擊高度 32px**，
+  呼叫點只覆蓋顏色，不要自己寫 `padding` 與 `fontSize`。以前每一頁各寫一種尺寸，最小的一種只有
+  10px 字、上下 1px 內距。`btnRowDanger` 的外框刻意是中性色、只有文字是紅的——紅框配紅字在一排
+  小按鈕裡會變成最顯眼的一顆，等於把視線引去點最不該點的。名字帶 `Row` 是因為這兩件事都只在
+  「一排小按鈕之中」才成立，頁面層級的危險按鈕不要拿它去用。
+- **那一組按鈕要包在 `rowActions` 容器裡，刪除排最後並多給 `marginLeft: 8`**：誤觸最常落在相鄰的
+  那一顆，而刪除不能是那一顆。間距是容器的 `gap` 加上這個 `marginLeft`，只釘按鈕那一半的話，
+  同一條規則在不同頁會算出不同距離（改成共用容器之前是 16／14／8px 三種）。整格只有刪除一顆時
+  沒有前一顆可以拉開，就不加 `marginLeft`，也不需要容器。
+- **列動作放不下要改的是欄寬，不是讓它換行**：`rowActions` 是 `flexWrap: "nowrap"`，因為換行會把
+  刪除甩到第二行的最前面、正好落在第一顆正下方，拉開的距離等於沒有。`tableLayout: "fixed"` 的表格
+  （治具總表）用 `ResizableTh` 的 `defaultWidth` 給足寬度，**加一個新動作就要一起把那個數字加大**；
+  auto layout 的表格（維護頁）靠內容自己撐開，不需要也不能用 `defaultWidth`。
+- 治具、維護、人員三頁由 `tests/e2e/specs/row-action-hit-area.spec.js` 量實際幾何守著：點擊高度、
+  有沒有被擠到第二列、刪除跟前一顆隔多遠。lint 看不出「按鈕被改小」，畫面上也只是小一點、擠一點，
+  沒有東西會紅。**新增用到列動作的頁面時，順手把它加進那支測試**，不然那一頁沒有任何東西擋著。
+
 - **div 改成 button 版面會變**：按鈕預設置中、寬度縮到內容大小。滿版的清單項要自己補
   `display: "block"`、`width: "100%"`、`textAlign: "left"`，不然文字會忽然跑到中間
 
@@ -114,7 +131,7 @@
 ## 色彩 Token 與共用 Style
 
 - 色彩 token 集中在 `client/src/styles/theme.js`，export `C` 物件
-- 共用 style 物件在 `client/src/styles/common.js`：`thStyle`、`tdStyle`、`btnPrimary`、`btnDanger`、`btnBare`（長得像純文字的按鈕用這支；以前各自 inline 寫，同一批改動裡四個呼叫點就出現三種寫法）
+- 共用 style 物件在 `client/src/styles/common.js`：`thStyle`、`tdStyle`、`btnPrimary`、`btnRowAction`（表格列裡的動作鈕）、`btnRowDanger`（列裡的刪除，由 `btnRowAction` 衍生）、`rowActions`（放那一組按鈕的容器）、`btnBare`（長得像純文字的按鈕用這支；以前各自 inline 寫，同一批改動裡四個呼叫點就出現三種寫法）
 - schedule/ 元件的 modal 共用 style（`inputStyle`、`labelStyle`、`primaryBtn`、`cancelBtn`、`STATUS_COLOR` 等）在 `scheduleUtils.js`，已引用 `C`
 - 停用外觀（`opacity: 0.5` + `cursor: not-allowed`）在 schedule/ 元件用 `scheduleUtils.js` 的 `disabledStyle`。站內其他地方目前各寫各的（`ConfirmModal` 用 0.6、`FixturePage` 用 0.7），沒有統一，不要以為有一份全站共用的
 - 新增元件：用 `C.token` 取代 hex literal；用 `common.js` export 取代重複的 button/input style 定義
