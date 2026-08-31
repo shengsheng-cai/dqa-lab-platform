@@ -44,7 +44,7 @@ test.describe("訪客唯讀", () => {
     await test.step("治具頁只有總表，沒有任何寫入按鈕", async () => {
       await page.getByRole("button", { name: "治具", exact: true }).click();
       await expect(page.getByText("治具總表")).toBeVisible();
-      for (const name of ["+ 新增治具", "+ 借出登記", "🔍 開始月盤點"]) {
+      for (const name of ["+ 新增治具", "+ 借出登記", "開始月盤點"]) {
         await expect(page.getByRole("button", { name })).toHaveCount(0);
       }
     });

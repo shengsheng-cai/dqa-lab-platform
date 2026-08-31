@@ -360,7 +360,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                   whiteSpace: "nowrap",
                 }}
               >
-                🔍 開始月盤點
+                📋 開始月盤點
               </button>
             )}
             <select
