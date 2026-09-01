@@ -49,6 +49,33 @@ async function askAi(page) {
   await expect(page.getByText(/建議做兩條低溫儲存測試/)).toBeVisible();
 }
 
+// 這顆鈕跟訪客 Token 那顆共用 utils/clipboard.js。改成非同步之後沒有任何東西
+// 盯著它，而 AI 面板的複製是唯一拿得到完整回覆的路。
+test("AI 回覆的複製鈕要回報已複製", async ({ page }) => {
+  await loginAsAdmin(page);
+  await stubAiStream(page);
+  await askAi(page);
+
+  await page.getByRole("button", { name: "複製", exact: true }).click();
+  await expect(page.getByRole("button", { name: "✓ 已複製" })).toBeVisible();
+});
+
+test("AI 回覆複製失敗時要說出來，不能按了沒反應", async ({ page }) => {
+  // 兩條路都堵掉：非安全來源沒有 clipboard API，再讓舊方式也回失敗
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    Object.defineProperty(document, "execCommand", { value: () => false, configurable: true });
+  });
+  await loginAsAdmin(page);
+  await stubAiStream(page);
+  await askAi(page);
+
+  await page.getByRole("button", { name: "複製", exact: true }).click();
+
+  await expect(page.getByText("複製失敗，請手動選取內容再複製")).toBeVisible();
+  await expect(page.getByRole("button", { name: "✓ 已複製" })).toBeHidden();
+});
+
 test("AI 推薦的條件，一鍵能帶進排程申請並送出", async ({ page }) => {
   await loginAsAdmin(page);
   await stubAiStream(page);
