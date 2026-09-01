@@ -161,7 +161,7 @@ function UserModal({ user, onClose, onSaved }) {
 
         <div>
           <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 4 }}>
-            角色
+            角色 *
           </div>
           <input
             value={role}
