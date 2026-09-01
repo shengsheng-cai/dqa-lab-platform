@@ -625,16 +625,12 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
       )}
 
       <MonitorSide
-        selectedDevice={selectedDevice}
-        allDevices={allDevices}
         data={data}
         ds={ds}
         doneCnt={doneCnt}
-        onSelectDevice={setSelectedDevice}
-        embedded={!!externalDevice}
       />
 
-      <main className={`control-side${externalDevice ? " embedded" : ""}`}>
+      <main className="control-side embedded">
         <div className="scroll-wrapper">
           {role === "guest" ? (
             <section

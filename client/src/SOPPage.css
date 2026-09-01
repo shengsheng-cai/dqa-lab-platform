@@ -44,25 +44,6 @@
     overflow-y: auto;
 }
 
-/* ── Brand ── */
-.brand-box { margin-bottom: 10px; }
-.main-title { color: #58a6ff; font-size: 22px; margin: 0; }
-.status-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
-.update-time { font-size: 11px; color: #484f58; margin-left: auto; }
-
-/* ── 狀態指示燈（補齊所有狀態顏色） ── */
-.status-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #484f58;    /* 預設 OFFLINE */
-}
-.status-dot.idle      { background: #8b949e; }
-.status-dot.running   { background: #3fb950; box-shadow: 0 0 10px #3fb950; }
-.status-dot.paused    { background: #f0a500; }
-.status-dot.finishing { background: #58a6ff; }
-.status-dot.emergency { background: #f85149; box-shadow: 0 0 10px #f85149; }
-
 /* ── 數據卡片 ── */
 .info-card {
     background: #161b22;
