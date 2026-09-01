@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import ControlCenter from "./ControlCenter";
 import { ToastProvider } from "./components/Toast";
@@ -31,6 +31,10 @@ function LoginPage({ onLogin }) {
   const [loading, setLoading] = useState(false);
   const [backendOffline, setBackendOffline] = useState(false);
   const [demoHint, setDemoHint] = useState(null);
+  // 缺欄位時要把焦點送回那一欄，不能只是靜靜地不做事
+  const usernameRef = useRef(null);
+  const passwordRef = useRef(null);
+  const tokenRef = useRef(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/auth/guest-hint`)
@@ -40,7 +44,16 @@ function LoginPage({ onLogin }) {
   }, []);
 
   const handleUserLogin = async () => {
-    if (!username.trim() || !password.trim()) return;
+    if (!username.trim()) {
+      setError("請輸入帳號");
+      usernameRef.current?.focus();
+      return;
+    }
+    if (!password.trim()) {
+      setError("請輸入密碼");
+      passwordRef.current?.focus();
+      return;
+    }
     setLoading(true);
     setError("");
     setBackendOffline(false);
@@ -68,7 +81,11 @@ function LoginPage({ onLogin }) {
 
   const handleDemoLogin = async (tokenOverride = null) => {
     const token = tokenOverride ?? pwdInput;
-    if (!token.trim()) return;
+    if (!token.trim()) {
+      setError("請輸入訪客 Token");
+      tokenRef.current?.focus();
+      return;
+    }
     setLoading(true);
     setError("");
     setBackendOffline(false);
@@ -237,6 +254,7 @@ function LoginPage({ onLogin }) {
                 }}
               >
                 <input
+                  ref={usernameRef}
                   type="text"
                   placeholder="帳號"
                   value={username}
@@ -255,6 +273,7 @@ function LoginPage({ onLogin }) {
                   }}
                 />
                 <input
+                  ref={passwordRef}
                   type="password"
                   placeholder="密碼"
                   value={password}
@@ -316,6 +335,7 @@ function LoginPage({ onLogin }) {
                   </button>
                 )}
                 <input
+                  ref={tokenRef}
                   type="text"
                   placeholder="請輸入訪客 Token（8 碼）"
                   value={pwdInput}
@@ -355,7 +375,9 @@ function LoginPage({ onLogin }) {
               </div>
             )}
             {error && (
-              <span style={{ color: "#f85149", fontSize: 13 }}>{error}</span>
+              <span role="alert" style={{ color: "#f85149", fontSize: 13 }}>
+                {error}
+              </span>
             )}
           </>
         )}

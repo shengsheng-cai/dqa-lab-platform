@@ -8,7 +8,8 @@ test.beforeAll(resetBackend);
 // 吞掉；複製按鈕不等結果也不報結果，而那串完整 Token 關掉提示就再也看不到；人員啟用
 // 切換成功沒回饋、失敗只講一句「激活狀態更新失敗」，既不是這個介面的用詞，也看不出是誰。
 //
-// 這三支盯的都是同一件事：按下去之後，畫面有沒有講清楚發生了什麼。
+// 這些測試盯的都是同一件事：畫面有沒有把現在怎麼了講清楚——按下去之後發生了什麼，
+// 以及按下去之前，哪幾個欄位是非填不可的。
 
 // 兩張表長得像，一律用表頭認，不然按鈕名稱會互相撞
 const tokenTableOf = (page) =>
@@ -104,6 +105,18 @@ test("沒有 clipboard API 時，複製失敗要說出來並把 Token 選起來"
   expect(selected).toBe(shown);
 });
 
+// 角色其實是必填——後端 auth.py 也擋空值——但標籤以前只寫「角色」，看起來像選填，
+// 使用者要先撞一次送出失敗才知道。必填與否要在填之前就看得出來。
+test("人員表單的必填欄位要在填之前就看得出來", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "人員管理" }).click();
+  await page.getByRole("button", { name: "+ 新增" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "新增人員" });
+  await expect(dialog.getByText("姓名 *")).toBeVisible();
+  await expect(dialog.getByText("角色 *")).toBeVisible();
+});
+
 test("人員啟用切換的成功與失敗都要說出是誰", async ({ page }) => {
   await loginAsAdmin(page);
   await page.getByRole("button", { name: "人員管理" }).click();
@@ -113,7 +126,7 @@ test("人員啟用切換的成功與失敗都要說出是誰", async ({ page }) 
   await test.step("先建一位測試人員", async () => {
     await page.getByRole("button", { name: "+ 新增" }).click();
     await page.getByPlaceholder("例：王小明").fill("回饋測試員");
-    // 角色的標籤沒有 *，但送出時會被擋，不填這裡會停在表單上
+    // 角色是必填（標籤上的 * 有寫出來），不填會停在表單上
     await page.getByPlaceholder("例：管理者、工程師、保管人").fill("工程師");
     await page.getByRole("button", { name: "新增", exact: true }).click();
     await expect(userTable.getByRole("row").filter({ hasText: "回饋測試員" })).toBeVisible();
