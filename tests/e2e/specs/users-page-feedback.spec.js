@@ -83,11 +83,41 @@ test("建立、複製與撤銷訪客 Token 都要有明確回饋", async ({ page
   });
 });
 
-test("沒有 clipboard API 時，複製失敗要說出來並把 Token 選起來", async ({ page }) => {
-  // navigator.clipboard 掛在 Navigator.prototype 上，delete 動不到，
-  // 要在實例上蓋一個同名屬性把它擋掉
-  await page.addInitScript(() => {
+// navigator.clipboard 掛在 Navigator.prototype 上，delete 動不到，
+// 要在實例上蓋一個同名屬性把它擋掉。拿區網 IP 開前端就是這個狀態。
+const blockClipboardApi = (page) =>
+  page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+  });
+
+test("沒有 clipboard API 時改走舊的複製方式，仍然複製得到", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await blockClipboardApi(page);
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "人員管理" }).click();
+  await createToken(page, "舊複製方式測試");
+
+  const hint = page.locator("div").filter({ has: page.getByText("新 Token：") }).last();
+  const shown = (await hint.locator("span").nth(1).innerText()).trim();
+
+  await page.getByRole("button", { name: "複製", exact: true }).click();
+
+  // 非安全來源沒有 clipboard API，但 execCommand 還在，不該讓人自己按 Ctrl/Cmd + C
+  await expect(page.getByText("Token 已複製")).toBeVisible();
+  await expect(page.getByRole("button", { name: "✓ 已複製" })).toBeVisible();
+
+  // 只看回饋不夠：execCommand 對任何非空選取都回 true，貼回來才知道進去的是那把 Token
+  await page.getByRole("button", { name: "+ 生成" }).click();
+  const label = page.getByPlaceholder("例：廠商 Demo、主管審閱");
+  await label.click();
+  await page.keyboard.press("ControlOrMeta+V");
+  await expect(label).toHaveValue(shown);
+});
+
+test("兩種複製方式都失敗時，要說出來並把 Token 選起來", async ({ page }) => {
+  await blockClipboardApi(page);
+  await page.addInitScript(() => {
+    Object.defineProperty(document, "execCommand", { value: () => false, configurable: true });
   });
   await loginAsAdmin(page);
   await page.getByRole("button", { name: "人員管理" }).click();
@@ -100,7 +130,7 @@ test("沒有 clipboard API 時，複製失敗要說出來並把 Token 選起來"
 
   await expect(page.getByText("複製失敗，Token 已選取，請直接按 Ctrl/Cmd + C")).toBeVisible();
   await expect(page.getByRole("button", { name: "✓ 已複製" })).toBeHidden();
-  // 這個提示一關就再也看不到完整 Token，所以失敗時至少要讓人選得起來自己複製
+  // 這個提示一關就再也看不到完整 Token，所以兩條路都不通時至少要讓人選得起來自己複製
   const selected = await page.evaluate(() => window.getSelection().toString().trim());
   expect(selected).toBe(shown);
 });

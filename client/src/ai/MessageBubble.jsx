@@ -3,6 +3,8 @@ import { C } from "../styles/theme";
 import { useState, useRef, useEffect } from "react";
 import MarkdownRenderer from "./MarkdownRenderer";
 import { cleanText } from "./markdownUtils";
+import { copyText } from "../utils/clipboard";
+import { useToast } from "../components/useToast";
 import { DISCLAIMER } from "./messageBubbleConstants";
 
 const COLLAPSE_HEIGHT = 300;
@@ -106,33 +108,18 @@ export default function MessageBubble({
   onApplySchedule,
   canApplySchedule = true,
 }) {
+  const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
   const simplified = m.role === "assistant" && hasSimplified(m.content);
 
-  const handleCopy = () => {
-    const text = cleanText(m.content);
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      });
-    } else {
-      const el = document.createElement("textarea");
-      el.value = text;
-      el.style.position = "fixed";
-      el.style.opacity = "0";
-      document.body.appendChild(el);
-      el.focus();
-      el.select();
-      try {
-        document.execCommand("copy");
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch {
-        /* 靜默處理 */
-      }
-      document.body.removeChild(el);
+  const handleCopy = async () => {
+    if (!(await copyText(cleanText(m.content)))) {
+      // 兩條路都不通時不能沉默：按了沒反應跟按到壞掉的鈕分不出來
+      showToast("複製失敗，請手動選取內容再複製", "error");
+      return;
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (

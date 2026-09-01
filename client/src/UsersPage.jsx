@@ -6,6 +6,7 @@ import ModalFrame from "./components/ModalFrame";
 import { C } from "./styles/theme";
 import { btnRowAction, btnRowDanger, rowActions } from "./styles/common";
 import { describeLoadError } from "./utils/loadError";
+import { copyText } from "./utils/clipboard";
 import { ListStateRow, StaleBanner } from "./components/ListState";
 
 const ROLE_LABELS = { admin: "管理者" };
@@ -217,31 +218,29 @@ function DemoTokenSection({ active }) {
     return () => clearTimeout(t);
   }, [copied]);
 
-  // 複製失敗時把 Token 選起來讓人自己按 Ctrl/Cmd + C：
+  // copyText 兩條路都失敗時，把 Token 選起來讓人自己按 Ctrl/Cmd + C：
   // 這個提示一關就再也看不到完整 Token，不能只丟一句失敗就算了。
-  // 沒有 clipboard API 的環境下，下面那行會直接丟例外，走的是同一條 fallback。
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(newToken);
+    if (await copyText(newToken)) {
       setCopied(true);
       showToast("Token 已複製", "success");
-    } catch {
-      const el = tokenRef.current;
-      const sel = window.getSelection();
-      const selected = Boolean(el && sel);
-      if (selected) {
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
-      showToast(
-        selected
-          ? "複製失敗，Token 已選取，請直接按 Ctrl/Cmd + C"
-          : "複製失敗，請手動選取上方 Token 再複製",
-        "error",
-      );
+      return;
     }
+    const el = tokenRef.current;
+    const sel = window.getSelection();
+    const selected = Boolean(el && sel);
+    if (selected) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    showToast(
+      selected
+        ? "複製失敗，Token 已選取，請直接按 Ctrl/Cmd + C"
+        : "複製失敗，請手動選取上方 Token 再複製",
+      "error",
+    );
   };
 
   const handleCreate = async () => {
