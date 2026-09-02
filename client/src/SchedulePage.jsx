@@ -12,6 +12,8 @@ import {
 } from "./components/schedule/scheduleUtils";
 import { C } from "./styles/theme";
 import { btnBare } from "./styles/common";
+import { ListState, StaleBanner } from "./components/ListState";
+import { describeLoadError } from "./utils/loadError";
 
 export default function SchedulePage({ active, role, initConditions, onInitCondsConsumed, onScheduleChanged, liveDeviceStatuses = {}, liveDeviceFreeAt = {}, liveDeviceMaintenance = {}, liveDeviceSnapshotReady = false }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -26,6 +28,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
   const [deviceStatuses, setDeviceStatuses] = useState({});
   const [standardsTree, setStandardsTree] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [showNewModal, setShowNewModal] = useState(false);
@@ -78,8 +81,9 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
       setBlockedPeriods(ganttRes.data.blocked_periods);
       if (ganttRes.data.device_statuses) setDeviceStatuses(ganttRes.data.device_statuses);
       if (treeRes) setStandardsTree(treeRes.data);
+      setLoadError("");
     } catch (e) {
-      console.error("排程資料載入失敗", e);
+      setLoadError(describeLoadError(e));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -131,14 +135,13 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
 
       {/* 甘特圖（固定區塊，永遠可見） */}
       <div style={{ flexShrink: 0, padding: "10px 16px", borderBottom: `1px solid ${C.border}`, ...(isMobile && { maxHeight: 200, overflow: "hidden" }) }}>
-        {loading ? (
+        {loading || (loadError && schedules.length === 0) ? (
           <div style={{
             height: HEADER_H + DEVICE_IDS.length * ROW_H,
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: C.textDim, fontSize: 13, border: `1px solid ${C.border}`,
-            borderRadius: 8,
+            border: `1px solid ${C.border}`, borderRadius: 8,
           }}>
-            載入中...
+            <ListState loading={loading} error={loadError} onRetry={handleRefresh} />
           </div>
         ) : (
           <GanttChart
@@ -213,10 +216,18 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
             )}
           </div>
 
+          {loadError && schedules.length > 0 && (
+            <StaleBanner error={loadError} onRetry={handleRefresh} />
+          )}
           {filteredSchedules.length === 0 ? (
-            <div style={{ textAlign: "center", color: C.textDim, padding: 32, fontSize: 13 }}>
-              {filterStatus === "all" ? "尚無排程紀錄" : `無「${filterStatus}」的排程`}
-            </div>
+            <ListState
+              loading={loading}
+              // 手上有排程、只是這次更新失敗時，錯誤已經由上面那條說了。
+              // 這裡再說一次的話，「篩選後沒有符合的」會被講成後端掛掉
+              error={schedules.length === 0 ? loadError : ""}
+              empty={filterStatus === "all" ? "尚無排程紀錄" : `無「${filterStatus}」的排程`}
+              onRetry={handleRefresh}
+            />
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>

@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import api from "./api";
 import { formatLocal } from "./utils/timezone";
 import { errorTypeLabel, EMERGENCY_ERROR_TYPE } from "./utils/errorTypes";
+import { ListState, StaleBanner, UnknownStat } from "./components/ListState";
+import { describeLoadError } from "./utils/loadError";
 
 function fmtDatetime(str) {
   if (!str) return "—";
@@ -18,20 +20,26 @@ const card = {
 const ErrorLog = ({ active = true }) => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const fetchLogs = useCallback(() => {
+    api
+      .get("/api/errors/")
+      .then((r) => { setLogs(r.data); setError(""); })
+      .catch((e) => setError(describeLoadError(e)))
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     if (!active) return;
-    const fetchLogs = () => {
-      api
-        .get("/api/errors/")
-        .then((r) => setLogs(r.data))
-        .catch((err) => console.error("[ErrorLog] fetch:", err))
-        .finally(() => setLoading(false));
-    };
     fetchLogs();
     const t = setInterval(fetchLogs, 60000);
     return () => clearInterval(t);
-  }, [active]);
+  }, [active, fetchLogs]);
+
+  // 讀不到資料時這幾個數字全是 0 或「—」，跟「真的沒有異常」長得一模一樣。
+  // 表格改成說實話之後，這裡就會是畫面上唯一還在給保證的地方。
+  const statsUnknown = error && logs.length === 0;
 
   return (
     <div
@@ -72,7 +80,9 @@ const ErrorLog = ({ active = true }) => {
             border: "1px solid #f8514944",
           }}
         >
-          {logs.length} 筆紀錄
+          {statsUnknown
+            ? <UnknownStat label="紀錄筆數" error={error} />
+            : `${logs.length} 筆紀錄`}
         </span>
       </div>
 
@@ -104,7 +114,9 @@ const ErrorLog = ({ active = true }) => {
               marginTop: 6,
             }}
           >
-            {logs.filter((l) => l.error_type === EMERGENCY_ERROR_TYPE).length}
+            {statsUnknown
+              ? <UnknownStat label="緊急停止次數" error={error} />
+              : logs.filter((l) => l.error_type === EMERGENCY_ERROR_TYPE).length}
           </div>
         </div>
         <div style={{ ...card, borderLeft: "3px solid #f0a500" }}>
@@ -126,7 +138,9 @@ const ErrorLog = ({ active = true }) => {
               marginTop: 8,
             }}
           >
-            {logs.length > 0 ? fmtDatetime(logs[0].created_at) : "—"}
+            {statsUnknown
+              ? <UnknownStat label="最近異常時間" error={error} />
+              : logs.length > 0 ? fmtDatetime(logs[0].created_at) : "—"}
           </div>
         </div>
         <div style={{ ...card, borderLeft: "3px solid #8b949e" }}>
@@ -148,9 +162,11 @@ const ErrorLog = ({ active = true }) => {
               marginTop: 8,
             }}
           >
-            {logs.length > 0
-              ? [...new Set(logs.map((l) => l.device_id))].join(", ")
-              : "—"}
+            {statsUnknown
+              ? <UnknownStat label="涉及設備" error={error} />
+              : logs.length > 0
+                ? [...new Set(logs.map((l) => l.device_id))].join(", ")
+                : "—"}
           </div>
         </div>
       </div>
@@ -167,28 +183,16 @@ const ErrorLog = ({ active = true }) => {
         >
           異常紀錄列表
         </div>
-        {loading ? (
-          <div
-            style={{
-              color: "#484f58",
-              fontSize: 13,
-              textAlign: "center",
-              padding: "20px 0",
-            }}
-          >
-            載入中...
-          </div>
-        ) : logs.length === 0 ? (
-          <div
-            style={{
-              color: "#484f58",
-              fontSize: 13,
-              textAlign: "center",
-              padding: "20px 0",
-            }}
-          >
-            ✅ 目前無異常紀錄
-          </div>
+        {error && logs.length > 0 && (
+          <StaleBanner error={error} onRetry={fetchLogs} />
+        )}
+        {loading || logs.length === 0 ? (
+          <ListState
+            loading={loading}
+            error={error}
+            empty="✅ 目前無異常紀錄"
+            onRetry={fetchLogs}
+          />
         ) : (
           <table
             style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}

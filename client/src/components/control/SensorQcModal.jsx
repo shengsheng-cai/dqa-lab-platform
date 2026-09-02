@@ -2,11 +2,14 @@ import React, { useState, useEffect } from "react";
 import ModalFrame from "../ModalFrame";
 import api from "../../api.js";
 import SensorQcChart from "./SensorQcChart";
+import { ListState } from "../ListState";
+import { describeLoadError } from "../../utils/loadError";
 
 const SensorQcModal = ({ deviceId, onClose, onViewDeviceStatus }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!deviceId) return;
@@ -14,14 +17,16 @@ const SensorQcModal = ({ deviceId, onClose, onViewDeviceStatus }) => {
     // 開啟/切換 deviceId 時初始化載入狀態；deviceId 變更時一次性同步 setState，AbortController 保護
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    setError(null);
+    setError("");
+    // 上一台的統計要清掉：讀新的失敗時留著的話，畫面會把舊設備的數字掛在新設備底下
+    setStats(null);
     api
       .get(`/api/devices/${deviceId}/sensor-stats`, { signal: controller.signal })
       .then((r) => setStats(r.data))
-      .catch(() => { if (!controller.signal.aborted) setError("載入失敗"); })
+      .catch((e) => { if (!controller.signal.aborted) setError(describeLoadError(e)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [deviceId]);
+  }, [deviceId, reloadKey]);
 
   const title = `${deviceId} — 感測器 QC 控制圖（近 24 小時）`;
 
@@ -118,17 +123,13 @@ const SensorQcModal = ({ deviceId, onClose, onViewDeviceStatus }) => {
         )
       }
     >
-          {loading && (
-            <div style={{ textAlign: "center", color: "#484f58", fontSize: 12, padding: 40 }}>
-              載入中...
-            </div>
-          )}
-          {error && (
-            <div style={{ textAlign: "center", color: "#f85149", fontSize: 12, padding: 40 }}>
-              {error}
-            </div>
-          )}
-          {!loading && !error && (
+          {loading || error ? (
+            <ListState
+              loading={loading}
+              error={error}
+              onRetry={() => setReloadKey((k) => k + 1)}
+            />
+          ) : (
             <SensorQcChart
               stats={stats}
               onViewDeviceStatus={onViewDeviceStatus}

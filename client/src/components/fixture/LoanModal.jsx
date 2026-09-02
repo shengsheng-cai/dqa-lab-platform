@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "../../api";
 import { useToast } from "../useToast";
 import DatePicker from "./DatePicker";
 import ModalShell from "./ModalShell";
 import { inputStyle, labelStyle } from "./modalStyles";
 import { localDateStamp, endOfLocalDay } from "../../utils/timezone";
+import { describeLoadError } from "../../utils/loadError";
+import { FieldLoadError } from "../ListState";
 import { DEVICE_IDS } from "../../constants";
 import { C } from "../../styles/theme";
 
@@ -25,16 +27,17 @@ export default function LoanModal({ onClose, onSubmit, fixtures }) {
   const [users, setUsers] = useState([]);
   const [usersError, setUsersError] = useState("");
 
-  useEffect(() => {
+  const loadUsers = useCallback(() => {
     api
       .get("/api/auth/users?active_only=true")
       .then((r) => { setUsers(r.data); setUsersError(""); })
       .catch((e) => {
-        const msg = e.response?.data?.detail || `載入失敗（${e.response?.status || "網路錯誤"}）`;
-        setUsersError(msg);
+        setUsersError(describeLoadError(e));
         setUsers([]);
       });
   }, []);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
 
   const handleSubmit = async () => {
     if (!fixtureId || !borrowerUserId) {
@@ -73,7 +76,7 @@ export default function LoanModal({ onClose, onSubmit, fixtures }) {
       onClose={onClose}
       footer={
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {error && <div style={{ color: "#f85149", fontSize: 12 }}>{error}</div>}
+          {error && <div style={{ color: C.error, fontSize: 12 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={onClose}
@@ -139,9 +142,7 @@ export default function LoanModal({ onClose, onSubmit, fixtures }) {
       ))}
     </select>
     {usersError && (
-      <div style={{ color: "#f85149", fontSize: 11, marginTop: -8 }}>
-        借用人載入失敗：{usersError}
-      </div>
+      <FieldLoadError label="借用人" error={usersError} onRetry={loadUsers} />
     )}
     <select
       value={deviceId}

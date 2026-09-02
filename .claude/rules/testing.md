@@ -62,6 +62,10 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
   （所有分頁都掛著），所以得再接 `.filter({ visible: true }).first()` 才對得起來；`getByRole`
   本來就不看隱藏的元素。而且這個專案要擋的正是「按鈕被改回普通方框」，用文字點的話那種退步照樣會綠。
   另外 `name` 預設是**子字串**比對，同一個視窗裡同時有「損壞」和「確定標記為損壞？」這種情形要加 `exact: true`
+- **帶徽章的入口不要用 `exact: true` 釘完整名稱**：排程分頁鈕上有待審核數量的徽章（`ControlCenter.jsx` 的 `TabBadge`），
+  而那個數字是後來才載進來的，所以按得早它的名稱是「排程」、按得晚會變成「排程 1」。寫死 `{ name: "排程", exact: true }`
+  會變成偶爾定位不到的鬼故事——實際踩過：單獨跑和整支跑都過，完整套件跑才紅一次。這種入口用前綴比對
+  `{ name: /^排程/ }`（`schedule-flow.spec.js` 一直是這樣寫的）
 - 定位優先用畫面上看得到的文字當名稱（`getByRole` 的 `name`），前端目前沒有 test id
 
 ## Backend 單元測試（pytest）

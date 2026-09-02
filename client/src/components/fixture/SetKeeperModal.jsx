@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "../../api";
 import { useToast } from "../useToast";
 import ConfirmModal from "../ConfirmModal";
 import ModalShell from "./ModalShell";
 import { inputStyle } from "./modalStyles";
 import { isUnlinkedKeeper } from "../../utils/keeper";
+import { describeLoadError } from "../../utils/loadError";
+import { FieldLoadError } from "../ListState";
 
 export default function SetKeeperModal({ fixture, onClose, onSubmit }) {
   const { showToast } = useToast();
@@ -13,15 +15,18 @@ export default function SetKeeperModal({ fixture, onClose, onSubmit }) {
     fixture.keeper_user_id ? String(fixture.keeper_user_id) : ""
   );
   const [loading, setLoading] = useState(false);
+  const [usersError, setUsersError] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const unlinked = isUnlinkedKeeper(fixture);
 
-  useEffect(() => {
+  const loadUsers = useCallback(() => {
     api
       .get("/api/auth/users?active_only=true")
-      .then((r) => setUsers(r.data))
-      .catch(() => setUsers([]));
+      .then((r) => { setUsers(r.data); setUsersError(""); })
+      .catch((e) => { setUsersError(describeLoadError(e)); setUsers([]); });
   }, []);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
 
   const save = async () => {
     setLoading(true);
@@ -122,6 +127,9 @@ export default function SetKeeperModal({ fixture, onClose, onSubmit }) {
         </option>
       ))}
     </select>
+    {usersError && (
+      <FieldLoadError label="人員" error={usersError} onRetry={loadUsers} />
+    )}
     </ModalShell>
     {confirmClear && (
       <ConfirmModal

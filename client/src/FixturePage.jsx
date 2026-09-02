@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import api from "./api";
 import { downloadOrFail } from "./utils/download";
+import { describeLoadError } from "./utils/loadError";
+import { ListState, ListStateRow, StaleBanner } from "./components/ListState";
 import { formatLocal, parseUTC, parseDateOnlyLocal } from "./utils/timezone";
 import { isNonnegativeInteger } from "./utils/validation";
 import { useToast } from "./components/useToast";
 import ImportModal from "./components/fixture/ImportModal";
 import LoanModal from "./components/fixture/LoanModal";
 
-const settle = (p) => p.then((r) => r.data).catch((e) => { console.warn("[FixturePage] API fail:", e?.response?.status, e?.config?.url); return null; });
+// 四份資料各自成敗：一份讀不到不該把另外三份一起清掉，但也不能安靜地留著舊資料，
+// 所以把失敗原因一起帶回去，由呼叫點決定要標在哪一張表上。
+const settle = (p) => p.then((r) => ({ data: r.data })).catch((e) => ({ error: describeLoadError(e) }));
 import SetKeeperModal from "./components/fixture/SetKeeperModal";
 import ReturnModal from "./components/fixture/ReturnModal";
 import AddEditModal from "./components/fixture/AddEditModal";
@@ -138,6 +142,8 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
   const [editTarget, setEditTarget] = useState(null); // null=關閉, false=新增, object=編輯
   const [inventoryEdits, setInventoryEdits] = useState({});
   const [loading, setLoading] = useState(false);
+  // 治具總表同時吃治具與借出兩份，其中一份失敗那張表的數字就不完整
+  const [loadErrors, setLoadErrors] = useState({ fixtures: "", orders: "" });
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [purchasePreFill, setPurchasePreFill] = useState(null);
@@ -166,10 +172,16 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
         settle(api.get("/api/fixtures/interface-types")),
         settle(api.get("/api/purchase-orders/")),
       ]);
-      if (fixtures) setFixtures(fixtures);
-      if (loans) setActiveLoans(loans);
-      if (types) setInterfaceTypes(types);
-      if (orders) setPurchaseOrders(orders);
+      if (fixtures.data) setFixtures(fixtures.data);
+      if (loans.data) setActiveLoans(loans.data);
+      if (types.data) setInterfaceTypes(types.data);
+      if (orders.data) setPurchaseOrders(orders.data);
+      setLoadErrors({
+        // 介面類型讀不到時，介面篩選會縮成只剩「全部介面」，跟「沒建過介面分類」
+        // 長得一樣，所以跟著治具總表一起標
+        fixtures: fixtures.error || loans.error || types.error || "",
+        orders: orders.error || "",
+      });
     } finally {
       setLoading(false);
     }
@@ -401,6 +413,9 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
               <option value="loaned">借出中</option>
             </select>
           </div>
+          {loadErrors.fixtures && fixtures.length > 0 && (
+            <StaleBanner error={loadErrors.fixtures} onRetry={fetchAll} />
+          )}
           <div
             style={{
               background: C.surface,
@@ -455,24 +470,14 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
-                  <tr>
-                    <td
-                      colSpan={canOperate ? 14 : 13}
-                      style={{ ...tdStyle, textAlign: "center", color: C.textMuted }}
-                    >
-                      載入中...
-                    </td>
-                  </tr>
-                ) : sorted.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={canOperate ? 14 : 13}
-                      style={{ ...tdStyle, textAlign: "center", color: C.textMuted }}
-                    >
-                      無符合資料
-                    </td>
-                  </tr>
+                {loading || sorted.length === 0 ? (
+                  <ListStateRow
+                    colSpan={canOperate ? 14 : 13}
+                    loading={loading}
+                    error={fixtures.length === 0 ? loadErrors.fixtures : ""}
+                    empty="無符合資料"
+                    onRetry={fetchAll}
+                  />
                 ) : (
                   sorted.map((f) => {
                     const editVal = inventoryEdits[f.id];
@@ -739,6 +744,9 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
               fixtures={fixtures}
               canOperate={canOperate}
               role={role}
+              listLoading={loading}
+              loadError={loadErrors.orders}
+              onRetry={fetchAll}
               onRefresh={refreshAfterMutation}
               onNew={() => { setPurchasePreFill(null); setShowPurchaseModal(true); }}
             />
@@ -834,17 +842,23 @@ const CONDITION_LABEL = {
 };
 
 function DamagedList() {
+  const [loadError, setLoadError] = useState("");
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  // 回傳取消函式讓 effect 當 cleanup 用：卸載後或下一次重抓開始後，
+  // 前一發的回應不該再寫回畫面
+  const fetchDamaged = useCallback(() => {
     let cancelled = false;
     api
       .get("/api/fixtures/loans/damaged")
-      .then((r) => { if (!cancelled) setLoans(r.data); })
+      .then((r) => { if (!cancelled) { setLoans(r.data); setLoadError(""); } })
+      .catch((e) => { if (!cancelled) setLoadError(describeLoadError(e)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => fetchDamaged(), [fetchDamaged]);
 
   return (
     <div
@@ -869,18 +883,17 @@ function DamagedList() {
           </tr>
         </thead>
         <tbody>
-          {loading ? (
-            <tr>
-              <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: C.textMuted }}>
-                載入中...
-              </td>
-            </tr>
-          ) : loans.length === 0 ? (
-            <tr>
-              <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: C.success }}>
-                目前無損壞或遺失紀錄
-              </td>
-            </tr>
+          {loading || loans.length === 0 ? (
+            <ListStateRow
+              colSpan={8}
+              loading={loading}
+              error={loadError}
+              empty="目前無損壞或遺失紀錄"
+              // 載入狀態在這裡開，不能放進 fetchDamaged：這支的 effect 沒有外部依賴，
+              // setLoading 進去會被 react-hooks/set-state-in-effect 擋下來
+              // （下面 InventoryLogTab 的 deps 有 refreshKey，才放得進去）
+              onRetry={() => { setLoading(true); fetchDamaged(); }}
+            />
           ) : (
             loans.map((loan) => {
               const cond = CONDITION_LABEL[loan.status] || { label: loan.status, color: C.textMuted };
@@ -1086,6 +1099,7 @@ function InventoryLogTab({ refreshKey, allFixtures, onChanged }) {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterFixture, setFilterFixture] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [expandedBatch, setExpandedBatch] = useState(null);
   const [deletingBatch, setDeletingBatch] = useState(null);
   const [pendingBatch, setPendingBatch] = useState(null);
@@ -1112,17 +1126,22 @@ function InventoryLogTab({ refreshKey, allFixtures, onChanged }) {
     }
   };
 
-  useEffect(() => {
+  // 同上：回傳取消函式，盤點後重抓與手動重試不會互相蓋
+  const fetchLogs = useCallback(() => {
     let cancelled = false;
     setLoading(true);
     api.get("/api/fixtures/inventory-logs").then((res) => {
       if (!cancelled) {
         setLogs(res.data);
+        setLoadError("");
         if (res.data.length > 0) setExpandedBatch(res.data[0].counted_at?.slice(0, 16));
       }
-    }).finally(() => { if (!cancelled) setLoading(false); });
+    }).catch((e) => { if (!cancelled) setLoadError(describeLoadError(e)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [refreshKey]);
+  }, []);
+
+  useEffect(() => fetchLogs(), [fetchLogs, refreshKey]);
 
   // 按分鐘分組
   const batches = logs.reduce((acc, log) => {
@@ -1144,10 +1163,13 @@ function InventoryLogTab({ refreshKey, allFixtures, onChanged }) {
         />
         <span style={{ fontSize: 12, color: C.textDim }}>{batchKeys.length} 次盤點 · 共 {logs.length} 筆</span>
       </div>
-      {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: C.textDim, fontSize: 13 }}>載入中...</div>
-      ) : batchKeys.length === 0 ? (
-        <div style={{ padding: 20, textAlign: "center", color: C.textDim, fontSize: 13 }}>目前無盤點紀錄</div>
+      {loading || batchKeys.length === 0 ? (
+        <ListState
+          loading={loading}
+          error={loadError}
+          empty="目前無盤點紀錄"
+          onRetry={fetchLogs}
+        />
       ) : batchKeys.map((key, i) => {
         const rows = batches[key].filter((l) =>
           !filterFixture ||
@@ -1218,7 +1240,7 @@ const PO_STATUS = {
   cancelled: { label: "已取消", color: C.textMuted, bg: C.surfaceHover },
 };
 
-function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
+function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew, listLoading, loadError, onRetry }) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [deletePOTarget, setDeletePOTarget] = useState(null);
@@ -1316,6 +1338,9 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
           </button>
         </div>
       )}
+      {loadError && orders.length > 0 && (
+        <StaleBanner error={loadError} onRetry={onRetry} />
+      )}
       <div
         style={{
           background: C.surface,
@@ -1340,14 +1365,13 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew }) {
           </thead>
           <tbody>
             {orders.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={canOperate ? 9 : 8}
-                  style={{ ...tdStyle, textAlign: "center", color: C.textMuted }}
-                >
-                  目前無採購紀錄
-                </td>
-              </tr>
+              <ListStateRow
+                colSpan={canOperate ? 9 : 8}
+                loading={listLoading}
+                error={loadError}
+                empty="目前無採購紀錄"
+                onRetry={onRetry}
+              />
             ) : (
               orders.map((o) => {
                 const st = PO_STATUS[o.status] || PO_STATUS.pending;
