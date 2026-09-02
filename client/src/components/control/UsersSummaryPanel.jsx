@@ -3,6 +3,7 @@ import api from "../../api";
 import { POLL_GENERAL_MS } from "../../constants";
 import { C } from "../../styles/theme";
 import { describeLoadError } from "../../utils/loadError";
+import { UnknownStat } from "../ListState";
 
 export default function UsersSummaryPanel() {
   const [summary, setSummary] = useState({ admin: 0, validTokens: 0 });
@@ -44,15 +45,7 @@ export default function UsersSummaryPanel() {
         <div key={label} style={{ padding: "5px 8px", borderRadius: 5, background: "#161b22", border: "1px solid #30363d", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: 10, color: "#484f58" }}>{label}</span>
           {loadError ? (
-            <span
-              // 沒有 role 的 span，aria-label 可以被輔助技術忽略，名稱要掛在有角色的元素上
-              role="img"
-              style={{ fontSize: 14, fontWeight: 700, color: C.warning }}
-              aria-label={`${label}：讀取失敗`}
-              title={loadError}
-            >
-              ⚠ —
-            </span>
+            <UnknownStat label={label} error={loadError} style={{ fontSize: 14, fontWeight: 700 }} />
           ) : (
             <span style={{ fontSize: 18, fontWeight: 700, color }}>{value}</span>
           )}

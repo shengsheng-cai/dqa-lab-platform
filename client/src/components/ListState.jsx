@@ -61,6 +61,53 @@ export function ListStateRow({ colSpan, ...props }) {
 }
 
 /**
+ * 選單的選項讀不到時，掛在選單下方的一行。
+ *
+ * 用在「選單只是表單裡的一格」的場合——整段換成 ListState 會把那一格的標籤與版位一起吃掉。
+ * 但它一定要有重試：借用人這種必填欄位一旦讀不到，沒有重試就等於整個視窗變成死路，
+ * 使用者只能關掉重開，而畫面上沒有任何東西告訴他這樣做有用。
+ *
+ * `role="alert"` 不能省：這一行是非同步冒出來的，又不在閱讀順序的必經之處，
+ * 沒有它的話，Tab 到那個空選單只會聽到一個選項，永遠不知道為什麼是空的。
+ *
+ * marginTop 是在抵銷 ModalShell 的 gap，讓這行貼著它說明的那個選單，不要浮在兩格中間。
+ */
+export function FieldLoadError({ label, error, onRetry }) {
+  return (
+    <div
+      role="alert"
+      style={{ display: "flex", alignItems: "center", gap: 8, color: C.error, fontSize: 11, marginTop: -8 }}
+    >
+      <span>{label}載入失敗：{error}</span>
+      {onRetry && <RetryButton onClick={onRetry} style={{ fontSize: 11, padding: "2px 8px" }} />}
+    </div>
+  );
+}
+
+/**
+ * 統計數字讀不到時的替身。
+ *
+ * 數字比清單更會騙人：它永遠顯示得出來，而「0」跟「真的是 0」長得一模一樣。
+ * 摘要卡上的數字通常就是人用來判斷「現在有沒有事」的那一眼，所以讀不到時
+ * 要換掉整個值，不能只是留著上一次的數字或退回 0。
+ *
+ * aria-label 的「X：讀取失敗」是 E2E 的定位依據，改文案要一起改測試。
+ */
+export function UnknownStat({ label, error, style }) {
+  return (
+    <span
+      // 沒有 role 的 span，aria-label 可以被輔助技術忽略，名稱要掛在有角色的元素上
+      role="img"
+      aria-label={`${label}：讀取失敗`}
+      title={error}
+      style={{ color: C.warning, ...style }}
+    >
+      ⚠ —
+    </span>
+  );
+}
+
+/**
  * 手上還有上一次的資料、但這次更新失敗時，壓在資料上方的一條。
  *
  * 失敗時不清空既有資料：那些資料仍然是使用者剛才看到的東西，清掉只會讓畫面看起來

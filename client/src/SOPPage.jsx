@@ -12,6 +12,8 @@ import "./SOPPage.css";
 import { DEVICE_IDS, ACTIVE_STATUSES, IDLE_STATUS, FINISHING_STATUS, EMERGENCY_STATUS } from "./constants";
 import ConfirmModal from "./components/ConfirmModal";
 import { buildExecutionPayload } from "./utils/executionPayload";
+import { ListState } from "./components/ListState";
+import { describeLoadError } from "./utils/loadError";
 
 const initDeviceState = () => ({
   activeSop: null,
@@ -64,6 +66,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
   const [emergencyFlash, setEmergencyFlash] = useState(false);
   const [standardTree, setStandardTree] = useState({});
   const [treeLoaded, setTreeLoaded] = useState(false);
+  const [treeError, setTreeError] = useState("");
   const [startError, setStartError] = useState("");
   const [starting, setStarting] = useState(false);
   const [pauseOptimistic, setPauseOptimistic] = useState(null);
@@ -140,15 +143,21 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
     }
   }, [data.status, pauseOptimistic, effectiveStatus]);
 
-  useEffect(() => {
+  const fetchStandardTree = useCallback(() => {
     api
       .get("/api/sop/standards/tree")
       .then((r) => {
         setStandardTree(r.data);
-        setTreeLoaded(true);
+        setTreeError("");
       })
-      .catch(() => setTreeLoaded(true));
+      .catch((e) => setTreeError(describeLoadError(e)))
+      // 失敗也要放行：還原上次選擇的 effect 等 treeLoaded 才起跑，卡在 false 那段就永遠不執行
+      .finally(() => setTreeLoaded(true));
   }, []);
+
+  useEffect(() => {
+    fetchStandardTree();
+  }, [fetchStandardTree]);
 
   const fetchHistory = useCallback((deviceId, startedAt) => {
     if (!startedAt) return;
@@ -829,12 +838,13 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
                   <span>🔬</span>
                   <h2>選擇測試標準</h2>
                 </div>
-                {!treeLoaded ? (
-                  <div
-                    style={{ color: "#484f58", fontSize: 12, padding: "8px 0" }}
-                  >
-                    ⏳ 載入標準資料中...
-                  </div>
+                {!treeLoaded || treeError || Object.keys(standardTree).length === 0 ? (
+                  <ListState
+                    loading={!treeLoaded}
+                    error={treeError}
+                    empty="尚無可用的測試標準"
+                    onRetry={fetchStandardTree}
+                  />
                 ) : (
                   <SelectGroup
                     step={1}

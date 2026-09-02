@@ -9,6 +9,8 @@ import {
   inputStyle, labelStyle, primaryBtn, cancelBtn,
 } from "./scheduleUtils";
 import { C } from "../../styles/theme";
+import { describeLoadError } from "../../utils/loadError";
+import { ListState } from "../ListState";
 
 function LabelInput({ label, value, onChange, placeholder }) {
   return (
@@ -60,7 +62,7 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
     setFixtures({ status: "loading", data: [] });
     api.get("/api/fixtures/")
       .then((r) => setFixtures({ status: "ok", data: Array.isArray(r.data) ? r.data : [] }))
-      .catch((e) => { console.error("[fixtures]", e?.response?.status, e?.message); setFixtures({ status: "error", data: [] }); });
+      .catch((e) => setFixtures({ status: "error", data: [], error: describeLoadError(e) }));
   };
 
   useEffect(() => { loadFixtures(); }, []);
@@ -242,15 +244,13 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
               background: C.surface, borderRadius: 6, border: `1px solid ${C.border}`,
               maxHeight: 180, overflowY: "auto",
             }}>
-              {fixtures.status === "error" ? (
-                <div style={{ padding: "10px 12px", fontSize: 12, color: C.error, display: "flex", alignItems: "center", gap: 8 }}>
-                  治具資料載入失敗
-                  <button onClick={loadFixtures} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: C.surfaceHover, border: `1px solid ${C.border}`, color: C.textPrimary, cursor: "pointer" }}>重試</button>
-                </div>
-              ) : fixtures.status === "loading" ? (
-                <div style={{ padding: "10px 12px", fontSize: 12, color: C.textMuted }}>載入中…</div>
-              ) : fixtures.data.length === 0 ? (
-                <div style={{ padding: "10px 12px", fontSize: 12, color: C.textMuted }}>無治具資料</div>
+              {fixtures.status !== "ok" || fixtures.data.length === 0 ? (
+                <ListState
+                  loading={fixtures.status === "loading"}
+                  error={fixtures.status === "error" ? fixtures.error : ""}
+                  empty="無治具資料"
+                  onRetry={loadFixtures}
+                />
               ) : fixtures.data.map((f) => {
                 const sel = form.fixtures.find((x) => x.fixture_id === f.id);
                 const checked = !!sel;
