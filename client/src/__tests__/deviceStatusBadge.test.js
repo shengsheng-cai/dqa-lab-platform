@@ -16,7 +16,7 @@ describe("device status badge", () => {
     expect(badge.code).toBe(status);
   });
 
-  // 「不可用」是 is_blocked 疊在待機上面的顯示，底下的狀態碼不能跟著消失。
+  // 「不可用」是維護（maintenance_blocked）疊在待機上面的顯示，底下的狀態碼不能跟著消失。
   it("shows a blocked device as 不可用 but keeps the underlying status", () => {
     const badge = deviceStatusBadge("IDLE", true);
     expect(badge.zh).toBe("不可用");

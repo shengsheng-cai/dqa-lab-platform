@@ -116,6 +116,61 @@ def test_device_list_uses_latest_end_for_overlapping_maintenance(patched_session
     assert datetime.datetime.fromisoformat(device["maintenance_end_at"]) == later_end
 
 
+# ── 「維護中」與「身上有排程」是兩件事，設備清單不得把它們合成同一個旗標 ──────────
+# 以前兩者共用一個 is_blocked，於是有排程掛著的機器在畫面上被說成不可用：頂部計數把它
+# 同時算進執行中與不可用、指派下拉選不到，而後端啟動時其實只認維護時段。
+
+
+def _seed_running_schedule(Session, device_id="CH-01", conditions='["sop_a", "sop_b"]') -> None:
+    with Session() as db:
+        db.add(Schedule(
+            project_number="P-RUNNING", sample_name="Sample",
+            standard="IEC", conditions=conditions,
+            status=ScheduleStatus.RUNNING, device_id=device_id,
+            start_time=_now_naive() - datetime.timedelta(hours=2),
+            end_time=_now_naive() + datetime.timedelta(hours=1),
+            current_condition_index=0,
+        ))
+        db.commit()
+
+
+def test_running_schedule_is_a_note_not_maintenance(patched_session):
+    """設備身上有進行中排程 → 只留說明文字，不得標成維護（維護才擋得住啟動）。"""
+    with patched_session("app.devices", "app.schedule_service") as Session:
+        _seed_running_schedule(Session)
+        device = build_device_list({"CH-01": {"status": "IDLE"}})[0]
+
+    assert device["maintenance_blocked"] is False
+    assert device["maintenance_reason"] is None
+    assert device["running_schedule_note"] == "排程進行中（第 1/2 條件）"
+
+
+def test_maintenance_and_running_schedule_are_reported_separately(patched_session):
+    """同時維護又有排程 → 兩個欄位各說各的，不是其中一個蓋掉另一個。"""
+    with patched_session("app.devices", "app.schedule_service") as Session:
+        now = _now_naive()
+        _seed_block(
+            Session, device_id="CH-01", reason="定期保養",
+            start_time=now - datetime.timedelta(hours=1),
+            end_time=now + datetime.timedelta(hours=1),
+        )
+        _seed_running_schedule(Session)
+        device = build_device_list({"CH-01": {"status": "IDLE"}})[0]
+
+    assert device["maintenance_blocked"] is True
+    assert device["maintenance_reason"] == "定期保養"
+    assert device["running_schedule_note"] == "排程進行中（第 1/2 條件）"
+
+
+def test_idle_device_without_schedule_has_no_note(patched_session):
+    """沒有排程掛著就不要留字串——空字串或殘留的說明會讓畫面誤標一台空機器。"""
+    with patched_session("app.devices", "app.schedule_service"):
+        device = build_device_list({"CH-01": {"status": "IDLE"}})[0]
+
+    assert device["maintenance_blocked"] is False
+    assert device["running_schedule_note"] is None
+
+
 # ── 排程推進：只挑 RUNNING，不誤動未來的已確認排程 ────────────────────────────
 
 

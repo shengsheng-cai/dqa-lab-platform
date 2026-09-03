@@ -16,13 +16,24 @@ const ControlPanel = ({
   effectiveIsActive,
   onAction,
   isBlocked,
+  scheduleNote,
 }) => {
   const sc = deviceStatusBadge(data.status, isBlocked);
   const isOffline = data.status === OFFLINE_STATUS;
   const isEmergency = data.status === EMERGENCY_STATUS;
   const isFinishing = data.status === FINISHING_STATUS;
   const canStop = ACTIVE_STATUSES.includes(data.status) || isEmergency;
-  const showIdleGuide = data.status === IDLE_STATUS && !isBlocked && !isOffline && !isEmergency && !isFinishing;
+  // 有排程掛著時後端會擋掉手動啟動，所以不再引導使用者去選測試（scheduleNote 由 SOPPage 推導）。
+  const showIdleGuide = data.status === IDLE_STATUS && !isBlocked && !scheduleNote && !isOffline && !isEmergency && !isFinishing;
+
+  // 「現在是什麼情況」這句話有五種分支，串成巢狀三元運算子讀不出優先順序。
+  const taskDesc = () => {
+    if (isBlocked) return `🔒 設備在維護時段（${data.maintenance_reason || "未說明原因"}），無法啟動測試。`;
+    if (isOffline) return "⚠️ 後端未連線，請確認伺服器是否正常啟動。";
+    if (isEmergency) return "🚨 緊急停止已觸發，請確認設備安全後，點下方按鈕觸發自動降溫。";
+    if (scheduleNote) return `這台${scheduleNote}，請到排程頁面操作。`;
+    return data.description;
+  };
 
   return (
     <section
@@ -57,15 +68,7 @@ const ControlPanel = ({
         </span>
       </div>
 
-      <p className="task-desc">
-        {isBlocked
-          ? `🔒 設備已鎖定：${data.blocked_reason || "排定不可用時段"}，無法啟動測試。`
-          : isOffline
-            ? "⚠️ 後端未連線，請確認伺服器是否正常啟動。"
-            : isEmergency
-              ? "🚨 緊急停止已觸發，請確認設備安全後，點下方按鈕觸發自動降溫。"
-              : data.description}
-      </p>
+      <p className="task-desc">{taskDesc()}</p>
       {showIdleGuide && (
         <div
           style={{

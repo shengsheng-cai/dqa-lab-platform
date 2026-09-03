@@ -9,7 +9,7 @@ import StepList from "./components/sop/StepList";
 import ExecutionPanel from "./components/sop/ExecutionPanel";
 import SafetyChecklist from "./components/sop/SafetyChecklist";
 import "./SOPPage.css";
-import { DEVICE_IDS, ACTIVE_STATUSES, IDLE_STATUS, FINISHING_STATUS, EMERGENCY_STATUS } from "./constants";
+import { DEVICE_IDS, ACTIVE_STATUSES, IDLE_STATUS, FINISHING_STATUS, EMERGENCY_STATUS, deviceScheduleNote } from "./constants";
 import ConfirmModal from "./components/ConfirmModal";
 import { buildExecutionPayload } from "./utils/executionPayload";
 import { ListState } from "./components/ListState";
@@ -111,7 +111,10 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
   const isActive = ACTIVE_STATUSES.includes(data.status);
   const isFinishing = data.status === FINISHING_STATUS;
   const isEmergency = data.status === EMERGENCY_STATUS;
-  const isBlocked = data.is_blocked && data.status === IDLE_STATUS;
+  const isBlocked = data.maintenance_blocked && data.status === IDLE_STATUS;
+  // 有排程掛著時後端會拒絕手動啟動（sop.py 回 409，叫人去排程頁面），所以下面連測試選擇
+  // 整段一起收起來——留著等於邀請使用者走一條一定被擋回來的路。
+  const scheduleNote = deviceScheduleNote(data);
   const effectiveStatus = pauseOptimistic ?? data.status;
   const effectiveIsActive = ACTIVE_STATUSES.includes(effectiveStatus);
   const doneCnt = Object.values(ds.completedSteps).filter(Boolean).length;
@@ -667,6 +670,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
               effectiveIsActive={effectiveIsActive}
               onAction={handleAction}
               isBlocked={isBlocked}
+              scheduleNote={scheduleNote}
             />
           )}
 
@@ -828,7 +832,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
           {/* 緊急停止中不給選下一次的測試：這時畫面要講的是現場安全與怎麼降溫，
               夾一整段「選法規 → 確認條件 → 安全確認 → 確認啟動」只會讓人以為還能開新測試。
               上方控制面板已經寫了發生什麼事、下一步按哪一顆。 */}
-          {!isActive && !isFinishing && !isBlocked && !isEmergency && (
+          {!isActive && !isFinishing && !isBlocked && !scheduleNote && !isEmergency && (
             <>
               <section
                 className="operation-box"

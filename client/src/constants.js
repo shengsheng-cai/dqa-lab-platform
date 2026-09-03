@@ -45,8 +45,15 @@ export const STATUS_CONFIG = {
 export const deviceStatusZh = (status) => STATUS_CONFIG[status]?.zh || status;
 
 /**
- * 狀態徽章要用的顏色與文字。「不可用」不是設備狀態機裡的狀態，是後端的 is_blocked（維護時段，
- * 或這台還有沒結案的排程掛著）疊在待機上面的顯示。所以另外給 code 寫出底下真正的狀態碼：
+ * 這台身上還沒結案的排程，只在待機時說出來——正在跑的時候畫面本來就寫著執行中，再講一次是多的。
+ * 這是顯示用的說明，不是封鎖：會擋操作的只有維護（`maintenance_blocked`）。
+ */
+export const deviceScheduleNote = (device) =>
+  (device?.status === IDLE_STATUS ? device.running_schedule_note : null) || null;
+
+/**
+ * 狀態徽章要用的顏色與文字。「不可用」不是設備狀態機裡的狀態，是後端的 maintenance_blocked
+ * （維護時段）疊在待機上面的顯示。所以另外給 code 寫出底下真正的狀態碼：
  * 畫面只寫「不可用」的話，除錯時查不到它其實停在哪一格。
  */
 export const deviceStatusBadge = (status, isBlocked = false) =>
