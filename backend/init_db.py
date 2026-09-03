@@ -45,6 +45,12 @@ def _dt(**kw) -> datetime.datetime:
     return _now_utc_naive() - datetime.timedelta(**kw)
 
 
+def _day(**kw) -> datetime.datetime:
+    """同 _dt，但正規化到當天午夜。校驗日期是以天為單位的期限，存進去帶著
+    跑種子那一刻的時分秒，跟畫面上新增的紀錄（一律午夜）對不起來。"""
+    return _dt(**kw).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 print("正在重建資料表...")
 Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
@@ -345,10 +351,14 @@ with SessionLocal() as db:
     # ── 7. Device Calibrations ─────────────────────────────────────
     db.add_all(
         [
+            # 日期一律相對於現在。以前寫死成絕對日期，時間一走過去，本來標著「符合規範」
+            # 的機台就自己變成紅色的校驗逾期——那不是設計出來的狀態，是放到過期的。
+            # 現在這五台講的是一間有在管的實驗室：三台正常、一台快到期、一台逾期，而且
+            # 逾期那台（CH-03）同時就在維修時段裡，逾期有原因、不是沒人理。
             DeviceCalibration(
                 device_id="CH-01",
-                calibration_date=datetime.datetime(2025, 11, 1),
-                next_calibration_date=datetime.datetime(2026, 11, 1),
+                calibration_date=_day(days=240),
+                next_calibration_date=_day(days=-125),
                 interval_days=365,
                 result="pass",
                 created_by="陳工",
@@ -356,8 +366,8 @@ with SessionLocal() as db:
             ),
             DeviceCalibration(
                 device_id="CH-02",
-                calibration_date=datetime.datetime(2025, 6, 1),
-                next_calibration_date=datetime.datetime(2026, 6, 1),
+                calibration_date=_day(days=95),
+                next_calibration_date=_day(days=-270),
                 interval_days=365,
                 result="pass",
                 created_by="林工",
@@ -365,21 +375,30 @@ with SessionLocal() as db:
             ),
             DeviceCalibration(
                 device_id="CH-03",
-                calibration_date=datetime.datetime(2025, 4, 1),
-                next_calibration_date=datetime.datetime(2026, 4, 1),
+                calibration_date=_day(days=400),
+                next_calibration_date=_day(days=35),
                 interval_days=365,
                 result="pass",
                 created_by="陳工",
-                notes="校驗合格，下次校驗日期已逾期，待安排複校",
+                notes="校驗合格；本次維修完成後一併安排複校，尚未執行",
             ),
             DeviceCalibration(
                 device_id="CH-04",
-                calibration_date=datetime.datetime(2026, 1, 1),
-                next_calibration_date=datetime.datetime(2027, 1, 1),
+                calibration_date=_day(days=345),
+                next_calibration_date=_day(days=-20),
                 interval_days=365,
                 result="pass",
                 created_by="王工",
-                notes="溫濕度全範圍校驗通過",
+                notes="溫濕度全範圍校驗通過；下次校驗已排入本月保養計畫",
+            ),
+            DeviceCalibration(
+                device_id="CH-05",
+                calibration_date=_day(days=150),
+                next_calibration_date=_day(days=-215),
+                interval_days=365,
+                result="pass",
+                created_by="林工",
+                notes="濕度感測器更換後重新校驗，溫濕度均符合規範",
             ),
         ]
     )
@@ -416,7 +435,9 @@ with SessionLocal() as db:
     # ── 9. Fixture Loans ───────────────────────────────────────────
     # 設計重點：展示新版 FixturePage 功能
     #   • f1、f3 各有 2 筆 active loans → 點擊借出數展開子列可見多筆
-    #   • f3（黃工）、f4（張工）、f6（林工）逾期 → 子列紅字高亮
+    #   • 只留 f3（黃工）一筆逾期 → 子列紅字高亮。它借在 CH-03，而 CH-03 正好在維修
+    #     時段，逾期有說得出口的原因。以前刻意留三筆，紅色的「逾期未還 3」擺在畫面
+    #     最上面，看起來不像系統抓得到，像沒人在追。
     #   • status=damaged/lost → 記錄 tab「損壞／遺失」sub-tab
     db.add_all(
         [
@@ -474,14 +495,14 @@ with SessionLocal() as db:
                 due_date=_dt(days=5),
                 status="loaned",
             ),
-            # ── f4 (USB-C)：1 筆逾期 ────────────────────────────────────
-            FixtureLoan(  # ← 逾期 12 天
+            # ── f4 (USB-C)：1 筆借出中，還沒到期 ────────────────────────
+            FixtureLoan(
                 fixture_id=f4.id,
                 borrower_name="張工",
                 project_name="維修備料",
                 quantity=1,
                 loan_date=_dt(days=30),
-                due_date=_dt(days=12),
+                due_date=_dt(days=-6),
                 status="loaned",
             ),
             # ── f5 (RJ45)：1 筆 reserved（sch3 已確認預約）────────────
@@ -509,13 +530,13 @@ with SessionLocal() as db:
                 return_condition="normal",
                 schedule_id=sch5.id,
             ),
-            # ── f6 (MXM)：1 筆逾期 ──────────────────────────────────────
-            FixtureLoan(  # ← 逾期 3 天
+            # ── f6 (MXM)：1 筆借出中，還沒到期 ──────────────────────────
+            FixtureLoan(
                 fixture_id=f6.id,
                 borrower_name="林工",
                 quantity=1,
                 loan_date=_dt(days=30),
-                due_date=_dt(days=3),
+                due_date=_dt(days=-11),
                 status="loaned",
             ),
             # ── 損壞紀錄（記錄 tab → 損壞／遺失 sub-tab）────────────────
