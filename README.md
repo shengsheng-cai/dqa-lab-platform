@@ -22,7 +22,7 @@ short_description: Environmental lab workflow and QA automation portfolio
 
 <img
   src="https://raw.githubusercontent.com/shengsheng-cai/dqa-lab-platform/main/docs/control-center.png"
-  alt="DQA Lab 控制中心：設備狀態、溫度趨勢與低溫冷測 SOP 執行畫面"
+  alt="DQA Lab 控制中心：設備狀態、校驗期限、溫度趨勢與漸進溫度循環 SOP 執行畫面"
   width="100%"
 />
 
