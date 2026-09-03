@@ -86,6 +86,7 @@
 - SchedulePage 的甘特圖是 `flexShrink:0` 固定區塊（308px），永遠可見，**不可改為可捲動**
 - 「紀錄」與「感測器 QC 控制圖」是 Modal，不是 tab；state 放在 ControlCenter 主元件
 - SchedulePage **不另設狀態圖例列，也不另設待審核隊列區塊**：狀態顏色由篩選鈕在選中時呈現（與甘特圖共用 `STATUS_COLOR`），待審核那筆在下方表格本來就有，上面再列一次是同一份資料出現兩次
+- 設備卡的**校驗徽章自己占一行，不得放回頭部那一列**（`DeviceCard.jsx` 的 `CalibBadge`）：它的字數會變（「校驗即將到期」比「校驗逾期」多兩個字）又不能斷字，擠在編號那一列時會把右邊的 QC 圖與狀態推出卡片外框，或反過來壓在按鈕底下。那一行連同間距由 `CalibBadge` 自己出，**呼叫點不要再包一層**——狀態是 `ok` 時它回 null，外面包的話會留下一個看不見卻占 3px 的空行。`tests/e2e/specs/device-card-layout.spec.js` 量實際幾何守著
 
 ### 彈出視窗
 
