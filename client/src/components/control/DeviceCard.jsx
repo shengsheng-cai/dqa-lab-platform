@@ -32,13 +32,23 @@ const CALIB_BADGE_CFG = {
   unknown:  { bg: C.surfaceHover,  color: C.textMuted,  borderColor: `${C.border}44`,     label: "未校驗"      },
 };
 
+/**
+ * 校驗徽章，自己占一行。不跟設備編號擠在頭部那一列：它的字數會變（「校驗即將到期」
+ * 比「校驗逾期」多兩個字）而且不能斷字，擠在同一列時會把右邊的 QC 圖與狀態推出卡片
+ * 外框，或反過來壓在按鈕底下。
+ *
+ * 那一行連同間距由這裡出，呼叫點不要自己包一層：`status` 是 "ok" 時沒有徽章可畫，
+ * 呼叫點包的話會留下一個看不見卻占 3px 的空行。
+ */
 function CalibBadge({ status }) {
   const cfg = CALIB_BADGE_CFG[status];
   if (!cfg) return null;
   return (
-    <span style={{ fontSize: 10, padding: "1px 4px", borderRadius: 4, whiteSpace: "nowrap", background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.borderColor}` }}>
-      {cfg.label}
-    </span>
+    <div style={{ marginTop: 3 }}>
+      <span style={{ fontSize: 10, padding: "1px 4px", borderRadius: 4, whiteSpace: "nowrap", background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.borderColor}` }}>
+        {cfg.label}
+      </span>
+    </div>
   );
 }
 
@@ -122,7 +132,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#cdd9e5", display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#cdd9e5", display: "flex", alignItems: "center", gap: 4 }}>
           {/* 整張卡不能直接當按鈕——裡面已經有 📊 與「確認」，按鈕不能包按鈕。
               所以把編號做成這張卡唯一的鍵盤入口，滑鼠點整張卡的行為維持不變。
               排程頁那欄是唯讀的（沒有 onClick），那裡就不要造出按了沒反應的焦點停留點。 */}
@@ -135,9 +145,8 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
               {device.device_id}
             </button>
           ) : device.device_id}
-          <CalibBadge status={calibrationStatus} />
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
           {onShowQc && (
             /* 只有一個 📊 的話，沒人知道那顆按下去會發生什麼。title 只有滑鼠 hover 看得到，
                鍵盤與讀螢幕都碰不到，所以名稱用 aria-label 給，圖示本身當裝飾。 */
@@ -155,6 +164,8 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
           </span>
         </span>
       </div>
+
+      <CalibBadge status={calibrationStatus} />
 
       {(isActive || isFinishing) && (
         <div style={{ marginTop: 3 }}>
