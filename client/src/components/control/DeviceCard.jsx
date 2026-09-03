@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import {
   parseUtcDate,
   deviceStatusBadge,
+  deviceScheduleNote,
   ACTIVE_STATUSES,
   IDLE_STATUS,
   FINISHING_STATUS,
@@ -73,9 +74,10 @@ function fmtRemaining(secs) {
 }
 
 export default function DeviceCard({ device, isSelected, onClick, pendingSchedule, onConfirmCondition, onShowQc, calibrationStatus }) {
-  // is_blocked 可能與執行狀態同時存在；設備仍在運轉時要顯示真實狀態，
+  // 維護可能與執行狀態同時存在；設備仍在運轉時要顯示真實狀態，
   // 只有底層狀態為 IDLE 才改用不可用樣式。
-  const isBlocked = device.is_blocked && device.status === IDLE_STATUS;
+  const isBlocked = device.maintenance_blocked && device.status === IDLE_STATUS;
+  const scheduleNote = deviceScheduleNote(device);
   const cfg = deviceStatusBadge(device.status, isBlocked);
   const remaining = useCountdown(device.estimated_end_at);
   const isActive = ACTIVE_STATUSES.includes(device.status);
@@ -189,7 +191,13 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
 
       {isBlocked && (
         <div style={{ fontSize: 10, color: "#f85149", marginTop: 2 }}>
-          🔒 {device.blocked_reason || "排定不可用時段"}
+          🔒 {device.maintenance_reason || "排定不可用時段"}
+        </div>
+      )}
+
+      {!isBlocked && scheduleNote && (
+        <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>
+          {scheduleNote}
         </div>
       )}
 

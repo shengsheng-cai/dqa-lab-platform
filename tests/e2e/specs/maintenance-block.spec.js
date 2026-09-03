@@ -24,6 +24,7 @@ test.beforeAll(resetBackend);
 
 const MAINT_DEVICE = "CH-05"; // demo 重灌後穩定為 IDLE、沒有排程掛著，封鎖後會顯示成「不可用」
 const HEALTHY_DEVICE = "CH-04"; // demo 重灌後為 IDLE 且未封鎖 → 下拉裡照樣選得到
+const SCHEDULED_DEVICE = "CH-01"; // demo 重灌後身上掛著一筆進行中排程，但那不是維護 → 不得被擋
 const PROJECT_NO = "E2E-MAINT-001";
 const SAMPLE_NAME = "E2E 維護測試樣品";
 
@@ -64,6 +65,12 @@ test("設備標成維護後，確認排程時就選不到它", async ({ page }) 
     // 正向對照：健康那台照樣選得到，證明不是整排 disable、下拉本身是好的
     const healthyOption = deviceSelect.locator("option", { hasText: HEALTHY_DEVICE });
     await expect(healthyOption).toBeEnabled();
+
+    // 「身上有排程」不是維護，不得被擋掉：指派的是未來的時段，後端啟動時也不看這件事。
+    // 以前這兩件事合成同一個旗標，機器空著卻選不到，理由看起來還像它壞了。
+    const scheduledOption = deviceSelect.locator("option", { hasText: SCHEDULED_DEVICE });
+    await expect(scheduledOption).toBeEnabled();
+    await expect(scheduledOption).not.toHaveText(`${SCHEDULED_DEVICE}（不可用）`);
   });
 });
 

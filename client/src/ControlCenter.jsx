@@ -87,11 +87,13 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
   );
 
   // 排程頁要判斷「這台現在能不能開始」：狀態決定能不能，估算的占用結束時間決定什麼時候可以。
+  // 這裡只送設備真正的狀態。以前會把「這台身上有排程」合成一個假的 BLOCKED 混進來，下游
+  // 分不出那是維護還是有人在用，同一個視窗才會上半寫「待機」、下半寫「不可用」。維護走
+  // 下面的 liveDeviceMaintenance。
   const liveDeviceStatuses = useMemo(
-    () => devicesReady ? Object.fromEntries(devices.map(d => [
-      d.device_id,
-      (d.is_blocked && d.status === IDLE_STATUS) ? "BLOCKED" : d.status,
-    ])) : {},
+    () => devicesReady
+      ? Object.fromEntries(devices.map(d => [d.device_id, d.status]))
+      : {},
     [devices, devicesReady],
   );
   const liveDeviceFreeAt = useMemo(

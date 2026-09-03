@@ -92,8 +92,9 @@ class DeviceOut(BaseModel):
     sim_cycle: int
     sim_phase: SimPhase
     dwell_half_fired: bool
-    is_blocked: bool
-    blocked_reason: Optional[str] = None
+    # 有值代表這台身上有還沒結案的排程。純粹是顯示用的說明，不得拿來擋操作——
+    # 會擋啟動的只有 maintenance_blocked。
+    running_schedule_note: Optional[str] = None
     maintenance_blocked: bool
     maintenance_reason: Optional[str] = None
     maintenance_end_at: Optional[str] = None
@@ -149,15 +150,15 @@ def build_device_list(cache: dict) -> list:
         if current is None or block.end_time > current.end_time:
             maintenance_by_device[block.device_id] = block
 
-    blocked_devices: dict[str, Optional[str]] = {
-        device_id: block.reason
-        for device_id, block in maintenance_by_device.items()
-    }
+    # 維護時段與「身上有排程」是兩件事，分開送：維護會擋啟動，排程掛著不會（後端只認
+    # 維護時段，見 utils.device_blocked_reason_now）。以前兩者合成同一個旗標，畫面就只能
+    # 猜這台到底是壞了還是有人在用。
+    schedule_notes: dict[str, str] = {}
     for s in running_schedules:
-        if s.device_id and s.device_id not in blocked_devices:
+        if s.device_id:
             total = len(_parse_conditions(s.conditions))
             idx = (s.current_condition_index or 0) + 1
-            blocked_devices[s.device_id] = f"排程進行中（第 {idx}/{total} 條件）"
+            schedule_notes[s.device_id] = f"排程進行中（第 {idx}/{total} 條件）"
 
     result = []
     for device_id, item in cache.items():
@@ -182,8 +183,7 @@ def build_device_list(cache: dict) -> list:
             "sim_cycle": item.get("sim_cycle", 0),
             "sim_phase": item.get("sim_phase", "idle"),
             "dwell_half_fired": item.get("dwell_half_fired", False),
-            "is_blocked": device_id in blocked_devices,
-            "blocked_reason": blocked_devices.get(device_id),
+            "running_schedule_note": schedule_notes.get(device_id),
             "maintenance_blocked": maintenance is not None,
             "maintenance_reason": maintenance.reason if maintenance else None,
             "maintenance_end_at": maintenance.end_time.isoformat() if maintenance else None,

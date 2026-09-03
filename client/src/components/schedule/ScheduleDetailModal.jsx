@@ -33,11 +33,8 @@ function findActiveMaintenance(blockedPeriods, deviceId) {
   }, null);
 }
 
-/**
- * 這台現在可以接新測試嗎。BLOCKED 是前端自己合出來的：底下其實是待機，只是有維護時段
- * 或別的排程掛著。維護另外判，而「有排程掛著」後端不擋，所以這裡也算它可以開始。
- */
-const canDeviceStart = (status) => status === "IDLE" || status === "BLOCKED";
+/** 這台現在可以接新測試嗎。維護是另外判的（設備狀態裡沒有維護資訊）。 */
+const canDeviceStart = (status) => status === "IDLE";
 
 const NO_READINESS = { label: null, blocker: null };
 
@@ -55,7 +52,6 @@ function describeDeviceReadiness({ deviceId, status, freeAt, maintenance }) {
   // 設備清單還沒載完時狀態是空的。空的意思是「還不知道」，不是「不能用」——這時維持
   // 可按、讓後端決定，否則按鈕會在剛打開頁面那幾秒假性壞掉，那比白按一次更難處理。
   if (!status) return NO_READINESS;
-  // BLOCKED 底下其實是待機，所以這兩種都寫「待機」，不寫成「不可用」。
   if (canDeviceStart(status)) return { label: deviceStatusZh("IDLE"), blocker: null };
   const zh = deviceStatusZh(status);
   const until = freeAt ? `預計 ${fmtDt(freeAt)} 回到待機後` : "回到待機後";
@@ -101,13 +97,16 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
   const liveDeviceId = (schedule.status === "已確認" || schedule.status === "進行中")
     ? schedule.device_id
     : null;
+  // 「這台在不在維護」只有這一份答案：設備狀態裡沒有維護資訊，上半部的可否開始與下面的
+  // 指派下拉都從這裡問，兩邊才不會一個說待機、一個說不可用。
+  const maintenanceFor = (id) => (liveMaintenanceReady
+    ? liveMaintenance[id]
+    : findActiveMaintenance(blockedPeriods, id));
   const liveDevice = describeDeviceReadiness({
     deviceId: liveDeviceId,
     status: deviceStatuses[schedule.device_id],
     freeAt: deviceFreeAt[schedule.device_id],
-    maintenance: liveMaintenanceReady
-      ? liveMaintenance[liveDeviceId]
-      : findActiveMaintenance(blockedPeriods, liveDeviceId),
+    maintenance: maintenanceFor(liveDeviceId),
   });
   // 條件正在執行時不需要顯示銜接鈕；一旦不是 RUNNING，就讓操作留在原位並說明為何
   // 現在不能按。直接藏掉會讓暫停、收尾、緊急停止看起來像功能憑空消失。
@@ -452,10 +451,13 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                     <option value="">自動選擇最早可用設備</option>
                     {DEVICE_IDS.map((id) => {
                       const st = deviceStatuses[id];
-                      const blocked = st === "EMERGENCY" || st === "BLOCKED";
+                      // 只有維護與緊急停止擋得住指派。身上有排程沒結案不算——指派的是
+                      // 未來的時段，後端啟動時也不看這件事。
+                      const maint = maintenanceFor(id);
+                      const blocked = st === "EMERGENCY" || !!maint;
                       return (
                         <option key={id} value={id} disabled={blocked}>
-                          {id}{st ? `（${deviceStatusZh(st)}）` : ""}
+                          {id}{maint ? "（不可用）" : st ? `（${deviceStatusZh(st)}）` : ""}
                         </option>
                       );
                     })}

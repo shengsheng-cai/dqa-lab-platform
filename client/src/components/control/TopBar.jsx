@@ -13,8 +13,11 @@ function Stat({ label, value, color }) {
 export default function TopBar({ devices, fixtureSummary, displayName, role, onLogout }) {
   const running = devices.filter((d) => d.status === "RUNNING").length;
   const emergency = devices.filter((d) => d.status === EMERGENCY_STATUS).length;
-  const idle = devices.filter((d) => d.status === IDLE_STATUS && !d.is_blocked).length;
-  const blocked = devices.filter((d) => d.is_blocked).length;
+  // 「不可用」只算「待機中而且排了維護」的機器，跟設備卡的紅色徽章同一條判準。
+  // 兩個條件都要：只看旗標的話，一台正在跑又被排了維護的機器會同時進「執行中」和「不可用」，
+  // 數字加起來比設備總數還多，而畫面上只看得到幾個各自合理的數字。
+  const idle = devices.filter((d) => d.status === IDLE_STATUS && !d.maintenance_blocked).length;
+  const blocked = devices.filter((d) => d.status === IDLE_STATUS && d.maintenance_blocked).length;
 
   const roleName = role === "admin" ? "管理者" : "🔒 訪客模式";
   const roleColor = role === "admin" ? "#3fb950" : "#ff9f5c";
