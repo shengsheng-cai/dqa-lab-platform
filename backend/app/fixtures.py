@@ -37,34 +37,6 @@ router = APIRouter(prefix="/api/fixtures", tags=["fixtures"])
 # ---------- Pydantic Schemas ----------
 
 
-class FixtureOut(BaseModel):
-    id: int
-    priority: Optional[int]
-    interface_type: str
-    form_factor: str
-    size: Optional[str]
-    purpose: Optional[str]
-    total_quantity: int
-    shortage: int
-    available_quantity: int
-    loaned_quantity: int
-    reserved_quantity: int
-    damaged_quantity: int
-    usage_frequency: Optional[int]
-    replacement_years: Optional[str]
-    note: Optional[str]
-    keeper_name: Optional[str]
-    keeper_user_id: Optional[int]
-    deputy_name: Optional[str]
-    vendor: Optional[str]
-    model_number: Optional[str]
-    unit_price: Optional[float]
-    loan_count: int
-    is_active: bool
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class LoanCreate(BaseModel):
     fixture_id: int
     borrower_name: str
@@ -101,25 +73,6 @@ class FixtureUpsert(BaseModel):
     vendor: Optional[str] = None
     model_number: Optional[str] = None
     unit_price: Optional[float] = None
-
-
-class LoanOut(BaseModel):
-    id: int
-    fixture_id: int
-    fixture_interface: str
-    fixture_form_factor: str
-    borrower_name: str
-    device_id: Optional[str]
-    project_name: Optional[str]
-    quantity: int
-    loan_date: Optional[datetime.datetime] = None
-    due_date: Optional[datetime.datetime]
-    return_date: Optional[datetime.datetime]
-    status: str
-    return_condition: Optional[ReturnCondition]
-    extension_note: Optional[str]
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 class ReturnUpdate(BaseModel):
