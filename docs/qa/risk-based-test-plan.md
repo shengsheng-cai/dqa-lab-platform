@@ -42,6 +42,7 @@ execution, and fixture states.
 | **R-11** | Deleting a row leaves other rows pointing at data that no longer exists, because the declared relationships are not enforced | Medium | Medium | P2 | `test_foreign_key_enforcement.py`, `test_schema_migrations.py` | Covers what the schema declares and what the database does with it; a database that already contains orphans is refused by the migration rather than repaired, which stays a human decision |
 | **R-12** | An irreversible operator action fires on a single click, destroying work that is already in flight | Medium | Medium | P1 | `tests/e2e/specs/delete-confirm-identity.spec.js`, `tests/e2e/specs/device-stop-confirm.spec.js`, `tests/e2e/specs/fixture-loan.spec.js`, `tests/e2e/specs/maintenance-block.spec.js`, `tests/e2e/specs/purchase-arrival-confirm.spec.js`, `tests/e2e/specs/users-page-feedback.spec.js`, `tests/e2e/specs/row-action-hit-area.spec.js` | Every irreversible delete asks first, and the dialog names the record it is about to act on; the delete button on a row is also no longer the small one crowded against the ordinary actions. The inline quick-stocktake field still acts on one click — a deliberate shortcut — but it now names the numbers it changed (on hand X → counted Y) and rejects invalid input with a reason |
 | **R-13** | A main entry point is reachable only with a mouse, so a keyboard or assistive-technology user cannot complete the flow at all — and nothing about the screen reveals it | Medium | Medium | P2 | `keyboard-navigation.spec.js`; `client/eslint.config.js` (`no-restricted-syntax` rejects new mouse handlers on non-interactive tags) | Lint sees syntax only; that a row really contains a working keyboard entry point is held by the E2E spec, one entry point per test. Dialog focus and Esc are now held by the same spec across four cases (plain open/close, one dialog replacing another, a dialog stacked on a dialog, an autofocused field). There is no focus trap: Tab still reaches the page behind an open dialog, which is a deliberate trade-off rather than an untested gap |
+| **R-14** | Brute-force protection is defeated by the deployment rather than by the code: the lockout counts per source address, and a platform proxy the server does not trust collapses every visitor onto one counter, so five failures from any source refuse everyone for ten minutes — including sessions already holding a valid credential | Medium | Medium | P1 | `test_deploy_config.py`, `test_login_rate_limit.py` | The tests pin the counting behaviour and check what the start command's trust value would actually do, not how it is spelled; whether the platform's proxy stays inside that network is outside what they can observe, and a move would silently return every visitor to one shared counter |
 
 ## 4. Execution order
 
@@ -60,6 +61,9 @@ execution, and fixture states.
    repeated actions.
 3. Browser schedule confirmation, visible status and device-readiness reconciliation,
    fixture-keeper consistency, and maintenance partial-update semantics.
+4. Login failure lockout: the block itself, its refusal of a correct password
+   while it lasts, the reset on success, and the deployment setting the
+   counter's key depends on.
 
 ### P2 — resilience and supporting flows
 
