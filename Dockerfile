@@ -52,4 +52,8 @@ WORKDIR /app/backend
 # 啟動流程：
 #   1. 重新建立 /tmp/demo.db（每次啟動都以當下時間 seed）
 #   2. uvicorn 啟動 FastAPI
-CMD ["sh", "-c", "rm -f /tmp/demo.db && python init_db.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7860}"]
+#
+# --forwarded-allow-ips 不可省略：HF 在容器前面有一層轉送，不設的話所有請求會被算成
+# 同一個來源，登入失敗鎖定於是變成全站共用一個計數器。也不可以放寬成 * 或 0.0.0.0/0，
+# 那等於信任呼叫端自己填的來源。理由與歷史寫在 backend/tests/test_deploy_config.py。
+CMD ["sh", "-c", "rm -f /tmp/demo.db && python init_db.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7860} --forwarded-allow-ips=10.0.0.0/8"]
