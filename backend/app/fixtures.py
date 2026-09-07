@@ -356,15 +356,7 @@ def list_inventory_logs(fixture_id: Optional[int] = None):
         if fixture_id is not None:
             q = q.filter(FixtureInventoryLog.fixture_id == fixture_id)
         logs = q.limit(200).all()
-        fixture_ids = {log.fixture_id for log in logs}
-        fixtures = (
-            {
-                f.id: f
-                for f in db.query(Fixture).filter(Fixture.id.in_(fixture_ids)).all()
-            }
-            if fixture_ids
-            else {}
-        )
+        fixtures = _fetch_fixtures_map(db, {log.fixture_id for log in logs})
         return [
             {
                 "id": log.id,
