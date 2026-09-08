@@ -5,7 +5,9 @@
 - 不要貼一串 curl 指令讓使用者自己複製貼上——要重複跑的東西就寫成測試。
 - **預設寫成 `backend/tests/` 的 pytest**，跟著既有套件一起跑、CI 自動涵蓋，不必再維護
   allow 清單與另一條 CI 指令。驗的不是後端邏輯也沒關係：`test_schema_migrations.py`
-  驗的是 migration 檔、`test_doc_translations.py` 驗的是文件翻譯有沒有漂，都放這裡。
+  驗的是 migration 檔、`test_doc_translations.py` 驗的是文件翻譯有沒有漂、
+  `test_deploy_config.py` 驗的是 Dockerfile 的啟動參數（那個設定已經無聲消失過一次，
+  而 CI 不 build image，所以它是唯一會看它一眼的東西），都放這裡。
 - 只有**真的無法用 pytest 表達**時才寫 `.sh`（例如要編排多個服務進程）。`tests/e2e/`
   是這種例外——它要自己開後端、開瀏覽器。新增這類腳本要同步加入
   `.claude/settings.json` 的 allow 清單：`"Bash(bash tests/腳本名.sh)"`。
