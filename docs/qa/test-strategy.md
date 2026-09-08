@@ -60,7 +60,7 @@ maintenance constraints, reporting, and cross-module consistency.
 | Backend unit/integration | Exercise API, database, service, failure, and state-machine behavior | `backend/tests/` | Uses real in-memory SQLite; cross-module flows patch all participating `SessionLocal` references |
 | Frontend unit | Verify deterministic client utilities | `client/src/__tests__/` | Vitest; no jsdom component suite, while selected critical flows are exercised through browser tests |
 | Browser E2E | Prove critical workflows from the user's point of view | `tests/e2e/specs/` | Playwright, isolated backend/database, sequential execution, no retries |
-| Exploratory/manual | Investigate new risks and collect evidence before automation | Local Demo | A confirmed finding leaves traceable evidence; selected core defects receive a standalone report, and regressions are automated where practical |
+| Exploratory/manual | Investigate new risks and collect evidence before automation | Local Demo; the deployed Space when a defect exists only behind the platform's proxy | A confirmed finding leaves traceable evidence; selected core defects receive a standalone report, and regressions are automated where practical |
 
 Tests use the real database model and service code where practical. Mocks are
 reserved for external services, controlled failure injection, time-dependent

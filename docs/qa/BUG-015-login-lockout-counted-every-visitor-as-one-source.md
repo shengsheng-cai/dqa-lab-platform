@@ -107,6 +107,14 @@ cannot be used to recover.
   `BLOCK_SECONDS = 600` in [`auth.py`](../../backend/app/auth.py); the block is
   checked at the top of `auth_middleware`, before either credential branch, and
   at the top of `login` before the password is verified.
+- **The same defect, observed in production traffic after the fix.** The
+  container log for 2026-09-08 shows two unrelated scanners, `20.168.95.140` and
+  `172.190.109.35`, each sending two credential-less requests to `/api/*` and
+  each receiving `401`. Every one of those four counts toward the lockout.
+  Before the fix all four would have landed on the single proxy-derived key that
+  ordinary visitors also shared — four of the five needed to refuse everybody,
+  from two machines that were never trying to log in. In the log they now carry
+  their own addresses, so they count against themselves.
 - **Not captured:** a screenshot of a locked-out visitor. This is not a
   rendering defect — the screen correctly displays the message the server sent.
   The evidence that matters is which address the counter was keyed on.
@@ -213,9 +221,21 @@ Both assertions were mutation-checked: with the failure counter's increment
 removed the first two fail, and with the trust value widened to `0.0.0.0/0` the
 deployment test fails.
 
-Not covered, and confirmed by probing the deployed Space instead: that the
-platform's proxy really does sit inside `10.0.0.0/8` — if it moved, these tests
-stay green while production returns to one shared counter — and that the proxy
-appends to `X-Forwarded-For` rather than passing a caller's header through
-untouched, which is what makes the forged-header row in the evidence table hold
-in practice.
+Two things the suite cannot see were confirmed by probing the deployed Space on
+2026-09-08, with three requests to `/health` — a path on the skip list, so the
+probe could not lock anybody out. All three were logged against the same real
+public address:
+
+| Probe | `X-Forwarded-For` sent | Address logged |
+|---|---|---|
+| `?probe=bug015-plain` | none | the caller's real address |
+| `?probe=bug015-forged-public` | `192.0.2.111` | the caller's real address |
+| `?probe=bug015-forged-trusted` | `10.9.9.9` | the caller's real address |
+
+The first row confirms the platform's proxy really does sit inside `10.0.0.0/8`;
+if it ever moves, these tests stay green while production returns to one shared
+counter, so this probe is worth repeating after any platform change. The third
+row is the sharper one: forging an address *inside* the trusted network is the
+case that would succeed if the proxy passed a caller's header through untouched
+rather than appending to it. It did not, which is what makes the forged-header
+row in the evidence table hold in practice rather than only in principle.
