@@ -52,7 +52,7 @@ test("別的瀏覽器新增維護時段後，「立即開始」會即時停用�
   });
 
   await test.step("進行中的排程也要看得到那台在幹嘛，而且是中文不是代碼", async () => {
-    // 同一份對照表也負責把 RUNNING 之類的內部代碼翻成人話，這裡順便釘住
+    // 同一份對照表也負責把 RUNNING 之類的內部代碼翻成人話，這裡一併釘住
     await page.getByRole("row").filter({ hasText: RUNNING_PROJECT }).click();
     await expect(page.getByText(`${RUNNING_DEVICE}（執行中）`)).toBeVisible();
     await closeScheduleModal(page);

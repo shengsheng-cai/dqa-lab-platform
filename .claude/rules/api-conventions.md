@@ -83,7 +83,7 @@ LINE 有兩條方向相反的路，不要混用：主動推播用 `push_message`
 
 ### Webhook（使用者查詢設備）
 
-`POST /webhook`（`line.py`）是**全專案唯一不經 `require_admin`、由外部直接呼叫**的端點，
+`POST /api/line/webhook`（`line.py`）是**全專案唯一不經 `require_admin`、由外部直接呼叫**的端點，
 不出現在 `/docs`（`include_in_schema=False`）。改這段要注意四件事：
 
 - **簽章驗證不能拿掉**：`_verify_signature` 用 `LINE_CHANNEL_SECRET` 做 HMAC-SHA256，
