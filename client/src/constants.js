@@ -46,7 +46,8 @@ export const deviceStatusZh = (status) => STATUS_CONFIG[status]?.zh || status;
 
 /**
  * 這台身上還沒結案的排程，只在待機時說出來——正在跑的時候畫面本來就寫著執行中，再講一次是多的。
- * 這是顯示用的說明，不是封鎖：會擋操作的只有維護（`maintenance_blocked`）。
+ * 這是顯示用的說明，不讓設備變成不可用（那只看 `maintenance_blocked`）；同台還有排程沒結案時
+ * 能不能開始別筆，由排程詳情用排程清單另外判斷。
  */
 export const deviceScheduleNote = (device) =>
   (device?.status === IDLE_STATUS ? device.running_schedule_note : null) || null;

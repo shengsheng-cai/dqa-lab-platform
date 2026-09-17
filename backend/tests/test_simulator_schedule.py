@@ -5,7 +5,8 @@ T-05: 模擬器與排程連動邏輯測試
 本檔對「真的那兩支函式」作證，不再自己重抄一份 DB 操作來測自己：
 - advance_running_condition：RUNNING 設備自然完成一個條件 → 只推進索引，等人員確認
 - running_schedule_info：RUNNING 設備手動中止收尾 → 排程與治具都不動，只回報還掛著哪一筆
-- 兩者都不得用 device_id 誤動同機台「未來的已確認排程」
+- 兩者都認這次執行紀錄所屬的排程，不用 device_id 去猜：同機台未來的已確認排程、
+  或另一筆還掛著的進行中排程，都不得被誤動
 
 另含 DeviceBlockedPeriod 查詢時段過濾（與排程啟動時的可用性判斷相關）。
 """
@@ -13,7 +14,7 @@ import datetime
 
 import pytest
 
-from app.models import DeviceBlockedPeriod, Schedule, ScheduleStatus, Fixture, FixtureLoan
+from app.models import DeviceBlockedPeriod, Schedule, ScheduleStatus, Fixture, FixtureLoan, SopExecution
 from app.devices import build_device_list
 from app.schedule_service import advance_running_condition, running_schedule_info
 from app.utils import device_blocked_reason_now
@@ -118,24 +119,30 @@ def test_device_list_uses_latest_end_for_overlapping_maintenance(patched_session
 
 # ── 「維護中」與「身上有排程」是兩件事，設備清單不得把它們合成同一個旗標 ──────────
 # 以前兩者共用一個 is_blocked，於是有排程掛著的機器在畫面上被說成不可用：頂部計數把它
-# 同時算進執行中與不可用、指派下拉選不到，而後端啟動時其實只認維護時段。
+# 同時算進執行中與不可用、指派下拉選不到。其實維護才讓設備不可用；排程掛著只代表
+# 別的測試要等那筆結案。
 
 
-def _seed_running_schedule(Session, device_id="CH-01", conditions='["sop_a", "sop_b"]') -> None:
+def _seed_running_schedule(
+    Session, device_id="CH-01", conditions='["sop_a", "sop_b"]',
+    project_number="P-RUNNING", started_hours_ago=2,
+) -> int:
     with Session() as db:
-        db.add(Schedule(
-            project_number="P-RUNNING", sample_name="Sample",
+        schedule = Schedule(
+            project_number=project_number, sample_name="Sample",
             standard="IEC", conditions=conditions,
             status=ScheduleStatus.RUNNING, device_id=device_id,
-            start_time=_now_naive() - datetime.timedelta(hours=2),
+            start_time=_now_naive() - datetime.timedelta(hours=started_hours_ago),
             end_time=_now_naive() + datetime.timedelta(hours=1),
             current_condition_index=0,
-        ))
+        )
+        db.add(schedule)
         db.commit()
+        return schedule.id
 
 
 def test_running_schedule_is_a_note_not_maintenance(patched_session):
-    """設備身上有進行中排程 → 只留說明文字，不得標成維護（維護才擋得住啟動）。"""
+    """設備身上有進行中排程 → 只留說明文字，不得標成維護（維護才代表設備不可用）。"""
     with patched_session("app.devices", "app.schedule_service") as Session:
         _seed_running_schedule(Session)
         device = build_device_list({"CH-01": {"status": "IDLE"}})[0]
@@ -192,6 +199,15 @@ def _seed_future_confirmed_schedule(Session, device_id="CH-01") -> int:
         return schedule.id
 
 
+def _seed_execution(Session, schedule_id=None) -> int:
+    """設備啟動時建的那一列執行紀錄；臨時測試沒有排程，schedule_id 留 None。"""
+    with Session() as db:
+        execution = SopExecution(sop_id="sop_a", device_id="CH-01", schedule_id=schedule_id)
+        db.add(execution)
+        db.commit()
+        return execution.id
+
+
 def _seed_running_schedule_with_loan(Session, loan_status="loaned") -> tuple[int, int]:
     """建立進行中排程 + 一筆治具借用列，回傳 (schedule_id, loan_id)。
     loan_status="loaned" 為已借出（帶借出時間）；"reserved" 為尚未借出的預約。"""
@@ -225,7 +241,7 @@ def test_ad_hoc_natural_completion_does_not_advance_future_schedule(patched_sess
     with patched_session("app.schedule_service") as Session:
         schedule_id = _seed_future_confirmed_schedule(Session)
 
-        result = advance_running_condition("CH-01")
+        result = advance_running_condition(_seed_execution(Session))
 
         assert result is None
         with Session() as db:
@@ -239,7 +255,7 @@ def test_ad_hoc_manual_stop_ignores_future_schedule(patched_session):
     with patched_session("app.schedule_service") as Session:
         schedule_id = _seed_future_confirmed_schedule(Session)
 
-        result = running_schedule_info("CH-01")
+        result = running_schedule_info(_seed_execution(Session))
 
         assert result is None
         with Session() as db:
@@ -256,7 +272,7 @@ def test_advance_running_condition_bumps_index_without_completing(patched_sessio
     with patched_session("app.schedule_service") as Session:
         schedule_id, loan_id = _seed_running_schedule_with_loan(Session)
 
-        result = advance_running_condition("CH-01")
+        result = advance_running_condition(_seed_execution(Session, schedule_id=schedule_id))
 
         assert result is not None
         assert result.schedule_id == schedule_id
@@ -270,6 +286,29 @@ def test_advance_running_condition_bumps_index_without_completing(patched_sessio
             assert db.get(FixtureLoan, loan_id).status == "loaned"  # 治具還沒歸還
 
 
+def test_condition_end_follows_execution_not_earliest_schedule_on_device(patched_session):
+    """同台先開始的那筆還掛著時，條件跑完要算在這次執行所屬的排程上。
+
+    以前是用設備找「開始時間最早的進行中排程」，於是後開始那筆跑完，推進的是先開始那筆：
+    先開始的會提早出現「確認完成」，後開始的第 1 條件得重跑，LINE 推播也寫成別的專案。
+    """
+    with patched_session("app.schedule_service") as Session:
+        earlier_id, _ = _seed_running_schedule_with_loan(Session)
+        later_id = _seed_running_schedule(
+            Session, conditions='["sop_a"]', project_number="P002", started_hours_ago=0.5,
+        )
+        execution_id = _seed_execution(Session, schedule_id=later_id)
+
+        assert running_schedule_info(execution_id).schedule_id == later_id
+        result = advance_running_condition(execution_id)
+
+        assert result.schedule_id == later_id
+        assert result.project_number == "P002"
+        with Session() as db:
+            assert db.get(Schedule, earlier_id).current_condition_index == 0
+            assert db.get(Schedule, later_id).current_condition_index == 1
+
+
 # ── 手動中止收尾：排程續為進行中、治具不動 ────────────────────────────────────
 
 
@@ -281,7 +320,7 @@ def test_manual_stop_keeps_schedule_running_and_fixture_untouched(patched_sessio
             Session, loan_status=loan_status
         )
 
-        result = running_schedule_info("CH-01")
+        result = running_schedule_info(_seed_execution(Session, schedule_id=schedule_id))
 
         assert result is not None
         assert result.schedule_id == schedule_id

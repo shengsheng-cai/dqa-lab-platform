@@ -85,6 +85,32 @@ test("別的瀏覽器新增維護時段後，「立即開始」會即時停用�
   });
 });
 
+test("同台還有排程沒結案時，「立即開始」停用並寫出是哪一筆", async ({ page }) => {
+  // 那筆在條件之間或等人確認時設備是待機的，只看設備狀態會以為可以開始；
+  // 後端會擋：那筆的樣品還在腔體裡，開始別筆等於拿它的腔體去跑別的測試。
+  const PENDING_PROJECT = "PRJ-2025-099"; // seed 的待審核排程，還沒指派設備
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: /^排程/ }).click();
+
+  await test.step(`把待審核排程指派到 ${RUNNING_DEVICE}（身上有進行中排程）並確認`, async () => {
+    await page.getByRole("row").filter({ hasText: PENDING_PROJECT }).click();
+    const detail = page.getByRole("dialog", { name: "排程詳情" });
+    await detail.locator("select")
+      .filter({ has: page.locator("option", { hasText: "自動選擇最早可用設備" }) })
+      .selectOption(RUNNING_DEVICE);
+    await detail.getByRole("button", { name: "確認排程" }).click();
+    await closeModal(page, "排程已確認");
+  });
+
+  await test.step("按鈕停用，並寫出卡住它的是哪一筆排程", async () => {
+    await page.getByRole("row").filter({ hasText: PENDING_PROJECT }).click();
+    await expect(startBtn(page)).toBeDisabled();
+    await expect(
+      page.getByText(new RegExp(`${RUNNING_DEVICE} 還有排程「${RUNNING_PROJECT} / .+」尚未結案`))
+    ).toBeVisible();
+  });
+});
+
 test("設備收尾時，條件銜接按鈕保留在原位、停用並說明原因", async ({ page }) => {
   await loginAsAdmin(page);
 

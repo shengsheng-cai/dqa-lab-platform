@@ -13,7 +13,7 @@ from typing import Optional, List
 
 from .models import (
     SessionLocal, Schedule, ScheduleStatus, DeviceBlockedPeriod,
-    ScheduleFixture, Fixture,
+    ScheduleFixture, Fixture, SopExecution,
 )
 from .standards import get_standard
 from .constants import DEVICE_IDS, AMBIENT_TEMP, STABILIZATION_MINUTES
@@ -127,24 +127,27 @@ class ConditionAdvance:
 
 @dataclass(frozen=True)
 class RunningScheduleInfo:
-    """設備上還掛著的那筆進行中排程的身分；只供通知與 log 使用，不代表排程有任何變化。"""
+    """被中止的這次執行所屬的進行中排程身分；只供通知與 log 使用，不代表排程有任何變化。"""
     schedule_id: int
     project_number: str
     sample_name: str
 
 
-def running_schedule_for_device(db, device_id: str) -> Optional[Schedule]:
-    """該設備目前進行中的排程。同機台理論上只有一筆 RUNNING，order_by 讓選取具決定性；
-    因為只挑 RUNNING，同機台未來的已確認排程（CONFIRMED）永遠不會被誤選。"""
-    return (
-        db.query(Schedule)
-        .filter(
-            Schedule.device_id == device_id,
-            Schedule.status == ScheduleStatus.RUNNING,
-        )
-        .order_by(Schedule.start_time.asc(), Schedule.id.asc())
-        .first()
+def running_schedule_for_device(
+    db, device_id: str, exclude_id: Optional[int] = None,
+) -> Optional[Schedule]:
+    """該設備目前進行中的排程；exclude_id 用來排除正在啟動的那一筆自己。
+
+    手動啟動與排程啟動都用這支擋「同台還有排程沒結案」，所以同機台只會有一筆 RUNNING；
+    order_by 讓選取具決定性。因為只挑 RUNNING，同機台未來的已確認排程永遠不會被誤選。
+    """
+    query = db.query(Schedule).filter(
+        Schedule.device_id == device_id,
+        Schedule.status == ScheduleStatus.RUNNING,
     )
+    if exclude_id is not None:
+        query = query.filter(Schedule.id != exclude_id)
+    return query.order_by(Schedule.start_time.asc(), Schedule.id.asc()).first()
 
 
 def list_running_schedules(db) -> list[Schedule]:
@@ -153,14 +156,33 @@ def list_running_schedules(db) -> list[Schedule]:
     return db.query(Schedule).filter(Schedule.status == ScheduleStatus.RUNNING).all()
 
 
-def advance_running_condition(device_id: str) -> Optional[ConditionAdvance]:
+def _running_schedule_for_execution(db, execution_id: Optional[int]) -> Optional[Schedule]:
+    """這次執行所屬、而且還在進行中的排程。
+
+    認的是執行紀錄上記的排程，不用設備去找：同台若還掛著另一筆，用設備找會找到開始
+    時間最早的那一筆，進度就記到別人身上。臨時測試沒有排程，回 None。
+    """
+    if execution_id is None:
+        return None
+    return (
+        db.query(Schedule)
+        .join(SopExecution, SopExecution.schedule_id == Schedule.id)
+        .filter(
+            SopExecution.id == execution_id,
+            Schedule.status == ScheduleStatus.RUNNING,
+        )
+        .first()
+    )
+
+
+def advance_running_condition(execution_id: Optional[int]) -> Optional[ConditionAdvance]:
     """設備自然完成目前條件：current_condition_index +1，等待人員確認下一步。
 
     只推進索引，不完成排程、不歸還治具——最後一條也一樣，要由人員在排程頁面確認後
-    才走完成。無進行中排程時回 None（例如臨時 SOP，不得誤動同機台未來排程）。
+    才走完成。這次執行不屬於進行中排程時回 None（例如臨時 SOP，不得誤動同機台未來排程）。
     """
     with SessionLocal() as db:
-        schedule = running_schedule_for_device(db, device_id)
+        schedule = _running_schedule_for_execution(db, execution_id)
         if schedule is None:
             return None
         new_index = schedule.current_condition_index + 1
@@ -176,15 +198,15 @@ def advance_running_condition(device_id: str) -> Optional[ConditionAdvance]:
         return result
 
 
-def running_schedule_info(device_id: str) -> Optional[RunningScheduleInfo]:
-    """設備手動中止收尾後：只查這台設備還掛著哪一筆進行中排程，不改任何資料。
+def running_schedule_info(execution_id: Optional[int]) -> Optional[RunningScheduleInfo]:
+    """設備手動中止收尾後：只查被中止的這次執行屬於哪一筆進行中排程，不改任何資料。
 
     中止不是完成——排程要走到「已完成」一律由人員在排程頁面按確認。這裡若順手標完成，
     會留下「只跑到一半卻記成完成」的排程，也會把還在人手上的治具提前記成已歸還。
-    無進行中排程時回 None（臨時 SOP）。
+    這次執行不屬於進行中排程時回 None（臨時 SOP）。
     """
     with SessionLocal() as db:
-        schedule = running_schedule_for_device(db, device_id)
+        schedule = _running_schedule_for_execution(db, execution_id)
         if schedule is None:
             return None
         return RunningScheduleInfo(
@@ -670,6 +692,16 @@ def _apply_schedule_start(
         raise _ScheduleStartRejected(
             ScheduleStartCode.UNDER_MAINTENANCE,
             f"{plan.device_id} 在維護時段（{reason}）",
+        )
+
+    # 同台另一筆排程在條件之間或等人確認時，設備是待機的，但那筆的樣品還在腔體裡、治具也還借著，
+    # 開始別筆等於拿它的腔體去跑別的測試。屬暫時性阻擋：那筆結案後由 fallback 重試。
+    other = running_schedule_for_device(db, plan.device_id, exclude_id=plan.schedule_id)
+    if other is not None:
+        raise _ScheduleStartRejected(
+            ScheduleStartCode.DEVICE_BUSY,
+            f"{plan.device_id} 還有排程「{other.project_number} / {other.sample_name}」"
+            "尚未結案，結案後才能開始",
         )
 
     if plan.expected_status == ScheduleStatus.CONFIRMED:

@@ -66,7 +66,8 @@ test("設備標成維護後，確認排程時就選不到它", async ({ page }) 
     const healthyOption = deviceSelect.locator("option", { hasText: HEALTHY_DEVICE });
     await expect(healthyOption).toBeEnabled();
 
-    // 「身上有排程」不是維護，不得被擋掉：指派的是未來的時段，後端啟動時也不看這件事。
+    // 「身上有排程」不是維護，不得被擋掉：指派的是未來的時段，到點時那筆若還沒結案，
+    // 後端會等它結案再開始。
     // 以前這兩件事合成同一個旗標，機器空著卻選不到，理由看起來還像它壞了。
     const scheduledOption = deviceSelect.locator("option", { hasText: SCHEDULED_DEVICE });
     await expect(scheduledOption).toBeEnabled();

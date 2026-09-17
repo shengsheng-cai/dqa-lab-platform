@@ -160,6 +160,7 @@ PATCH 端點一律用 `if body.欄位 is not None:` 判斷這次要不要改那�
 - 啟動結果使用 `ScheduleStartResult`，由 `STARTED`、`DEVICE_BUSY`、`UNDER_MAINTENANCE`、`BROKEN` 等 code 表達原因；route 不得重新查 DB/cache 猜原因
 - 原子啟動：DeviceState、SopExecution、Schedule、FixtureLoan、AuditLog 在同一 transaction 寫入，commit 成功後才發布 cache
 - 壞排程收斂：排程若缺設備、條件或法規資料，`start_schedule` 轉「異常」、釋放治具並寫 audit、停止重試；設備忙碌與維護屬暫時性，維持原狀
+- 同台另一筆排程還沒結案（條件之間、等人確認）時不啟動，回 `DEVICE_BUSY` 並寫出是哪一筆：那時設備是待機的，但那筆的樣品還在腔體裡、治具還借著，開始別筆等於拿它的腔體去跑別的測試。屬暫時性，那筆結案後由 fallback 重試；手動啟動用同一支 `running_schedule_for_device` 擋
 - 手動 ad-hoc SOP 只可認領「已到開始時間且目前條件相同」的已確認排程；未來或條件不同的排程不得異動
 - 條件銜接由人員在排程頁面確認後，再由同一個 `start_schedule(..., continuation=True)` 啟動下一條件
 

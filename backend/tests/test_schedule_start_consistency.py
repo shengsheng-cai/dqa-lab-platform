@@ -190,6 +190,44 @@ def test_maintenance_keeps_confirmed_then_resumes(session_factory):
     assert states["CH-01"]["status"] == "RUNNING"
 
 
+def test_start_waits_until_other_open_schedule_on_device_is_closed(session_factory):
+    """同台另一筆排程跑完條件、在等人確認時，設備是待機的，但那筆還沒結案。
+
+    那筆的樣品還在腔體裡，這時啟動別筆等於拿它的腔體去跑別的測試。所以要等那筆結案
+    才能開始，而且是暫時性阻擋，結案後補抓要接得上。
+    """
+    Session = session_factory
+    waiting_id = _seed_confirmed(
+        Session,
+        start=_now_utc_naive() - datetime.timedelta(hours=20),
+        conditions='["iec60068_ab_-40_16h", "iec60068_ab_-40_16h"]',
+    )
+    with Session() as db:
+        waiting = db.get(Schedule, waiting_id)
+        waiting.project_number = "P-WAIT"
+        waiting.status = ScheduleStatus.RUNNING
+        waiting.current_condition_index = 1
+        db.commit()
+    due_id = _seed_confirmed(Session)
+    states = _states({"CH-01": {"status": "IDLE"}})
+
+    result = asyncio.run(start_schedule(due_id, SYSTEM_ACTOR, states))
+
+    assert result.code == ScheduleStartCode.DEVICE_BUSY
+    assert "P-WAIT" in result.detail, "要寫出是哪一筆還沒結案，人才知道去哪裡處理"
+    assert _status(Session, due_id) == ScheduleStatus.CONFIRMED
+    assert states["CH-01"]["status"] == "IDLE"
+    with Session() as db:
+        assert db.query(SopExecution).count() == 0
+
+    with Session() as db:
+        db.get(Schedule, waiting_id).status = ScheduleStatus.DONE
+        db.commit()
+    asyncio.run(auto_advance_schedules(states))
+    assert _status(Session, due_id) == ScheduleStatus.RUNNING
+    assert states["CH-01"]["status"] == "RUNNING"
+
+
 def test_fallback_retries_after_device_frees_up(session_factory):
     """設備忙 → 排程留 CONFIRMED；設備空出來後，fallback 應能成功啟動。"""
     Session = session_factory
