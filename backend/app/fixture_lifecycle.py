@@ -157,7 +157,21 @@ def record_inventory_count(
     counted_by,
     role,
 ) -> tuple[FixtureInventoryLog, int, int]:
-    """套用盤點數量、建立盤點紀錄與 audit；不 commit。"""
+    """套用盤點數量、建立盤點紀錄與 audit；不 commit。
+
+    盤點填的是現場數到的數量。有借出或預約在外時，現場數不到那幾件，照數到的覆寫總數會把
+    還在外面的從庫存裡扣掉，歸還後也回不來，所以直接拒絕；確定要改總數的走編輯治具。
+    """
+    counts = stock_counts(fixture, build_loan_qty_map(db, [fixture.id]))
+    if counts.loaned or counts.reserved:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{fixture.interface_type} — {fixture.form_factor} 還有 "
+                f"{counts.loaned + counts.reserved} 件借出或預約在外，現場數不到完整數量；"
+                "歸還後再盤，確定要改總數請用「編輯」"
+            ),
+        )
     previous = fixture.total_quantity
     set_fixture_quantity(fixture, actual_quantity)
     difference = actual_quantity - previous

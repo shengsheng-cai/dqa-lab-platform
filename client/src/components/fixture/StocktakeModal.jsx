@@ -2,15 +2,7 @@ import { useState } from "react";
 import api from "../../api";
 import { useToast } from "../useToast";
 import ModalShell from "./ModalShell";
-
-function getStatus(f) {
-  if (f.available_quantity === 0 && f.total_quantity === 0)
-    return "out_of_stock";
-  if (f.shortage > 0) return "shortage";
-  if (f.loaned_quantity > 0) return "loaned";
-  if (f.reserved_quantity > 0) return "reserved";
-  return "ok";
-}
+import { isStocktakeCountable } from "../../utils/fixtureStatus";
 
 export default function StocktakeModal({ fixtures, onClose, onComplete }) {
   const { showToast } = useToast();
@@ -19,12 +11,8 @@ export default function StocktakeModal({ fixtures, onClose, onComplete }) {
 
   // 有東西借出或預約在外時，現場數不到那幾件，所以整個品項不進盤點。
   // 但不能靜默丟掉——使用者會以為清單就是全部，盤完得到「差異 0」而誤判庫存都對。
-  const isCountable = (f) => {
-    const s = getStatus(f);
-    return s === "ok" || s === "shortage" || s === "out_of_stock";
-  };
-  const active = fixtures.filter(isCountable);
-  const excluded = fixtures.filter((f) => !isCountable(f));
+  const active = fixtures.filter(isStocktakeCountable);
+  const excluded = fixtures.filter((f) => !isStocktakeCountable(f));
 
   const handleSubmit = async () => {
     setLoading(true);

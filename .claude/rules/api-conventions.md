@@ -167,6 +167,7 @@ PATCH 端點一律用 `if body.欄位 is not None:` 判斷這次要不要改那�
 ## 治具生命週期
 
 - 治具庫存唯一 owner 是 `fixture_lifecycle.py`：可借量公式與借還狀態轉換只有這一份
+- **盤點填的是架上數到的數量**，所以有借出或預約在外時 `record_inventory_count` 回 409（兩個盤點 API 共用）：照架上數量覆寫總數，在外那幾件歸還後就回不來。要刻意改總數走編輯治具。修改既有盤點紀錄（`update_inventory_log_count`）刻意不擋，它是把被改小的總數修回來的管道
 - 排程與治具靠 `schedule_fixtures` 中間表 + `fixture_loans.schedule_id` 外鍵串起來
 - 狀態流：排程確認 → 預約（reserved）→ 測試開始 → 借出（loaned）→ 測試完成 → 歸還
 - 排程走到終止狀態（取消／異常／刪除）一律走 `_release_schedule_fixtures`：預約的丟掉、借出中的歸還並記時間；測試完成時同樣自動歸還

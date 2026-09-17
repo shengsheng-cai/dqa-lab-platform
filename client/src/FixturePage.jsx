@@ -21,6 +21,7 @@ import ConfirmModal from "./components/ConfirmModal";
 import { C } from "./styles/theme";
 import { thStyle, tdStyle, btnPrimary, btnRowDanger, btnRowAction, rowActions, btnBare } from "./styles/common";
 import { isUnlinkedKeeper } from "./utils/keeper";
+import { fixtureBadgeStatus, isStocktakeCountable, matchesStatusFilter } from "./utils/fixtureStatus";
 
 function ResizableTh({ children, defaultWidth, style, onClick, ariaSort }) {
   const [width, setWidth] = useState(defaultWidth || null);
@@ -95,15 +96,6 @@ const STATUS_COLORS = {
 // 治具在訊息與無障礙名稱裡的稱呼。同一支治具在不同地方要叫同一個名字，
 // 各處自己組會漂走。
 const fixtureLabel = (f) => `${f.interface_type} — ${f.form_factor}`;
-
-function getStatus(f) {
-  if (f.available_quantity === 0 && f.total_quantity === 0)
-    return "out_of_stock";
-  if (f.shortage > 0) return "shortage";
-  if (f.loaned_quantity > 0) return "loaned";
-  if (f.reserved_quantity > 0) return "reserved";
-  return "ok";
-}
 
 function Badge({ status }) {
   const s = STATUS_COLORS[status] || STATUS_COLORS.ok;
@@ -232,10 +224,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
 
   const filtered = fixtures.filter((f) => {
     if (filterInterface && f.interface_type !== filterInterface) return false;
-    if (filterStatus) {
-      const s = getStatus(f);
-      if (s !== filterStatus) return false;
-    }
+    if (filterStatus && !matchesStatusFilter(f, filterStatus)) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -562,7 +551,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                         {f.shortage || "—"}
                       </td>
                       <td style={tdStyle}>
-                        <Badge status={getStatus(f)} />
+                        <Badge status={fixtureBadgeStatus(f)} />
                       </td>
                       <td style={{ ...tdStyle, color: C.textMuted }}>
                         {["", "每天", "週", "月", "季", "年"][
@@ -592,7 +581,15 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                         )}
                       </td>
                       <td style={tdStyle}>
-                        {canOperate ? (
+                        {!canOperate ? (
+                          <span style={{ color: C.textMuted }}>{f.total_quantity}</span>
+                        ) : !isStocktakeCountable(f) ? (
+                          // 跟月盤點同一條規則：有東西在外，現場數不到完整數量。後端也會擋，
+                          // 這裡先把原因寫出來，不讓人填完送出才被拒絕。
+                          <span style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.4 }}>
+                            有借出或預約，<br />歸還後再盤
+                          </span>
+                        ) : (
                           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                             <input
                               type="number"
@@ -629,8 +626,6 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                               </button>
                             )}
                           </div>
-                        ) : (
-                          <span style={{ color: C.textMuted }}>{f.total_quantity}</span>
                         )}
                       </td>
                       {canOperate && (
@@ -1014,8 +1009,8 @@ function BatchTable({ rows, setLogs, allFixtures, onChanged }) {
       setNewRows([]);
       await onChanged();
       showToast(`已更新`, "success");
-    } catch {
-      showToast("更新失敗", "error");
+    } catch (e) {
+      showToast(e.response?.data?.detail || "更新失敗", "error");
     } finally {
       setSaving(false);
     }
@@ -1075,7 +1070,15 @@ function BatchTable({ rows, setLogs, allFixtures, onChanged }) {
                 <td style={{ ...tdStyle, padding: "6px 12px" }}>
                   <select value={nr.fixture_id} onChange={(e) => setNewRows((p) => p.map((r, idx) => idx === i ? { ...r, fixture_id: e.target.value } : r))} style={batchSelectStyle}>
                     <option value="">選擇治具...</option>
-                    {allFixtures.map((f) => <option key={f.id} value={f.id}>{f.interface_type} / {f.form_factor}</option>)}
+                    {allFixtures.map((f) => {
+                      // 有借出或預約在外的治具後端不收盤點，留著可選只會在儲存時被擋回來
+                      const countable = isStocktakeCountable(f);
+                      return (
+                        <option key={f.id} value={f.id} disabled={!countable}>
+                          {f.interface_type} / {f.form_factor}{countable ? "" : "（有借出或預約，不能盤）"}
+                        </option>
+                      );
+                    })}
                   </select>
                 </td>
                 <td style={tdStyle}>—</td>
