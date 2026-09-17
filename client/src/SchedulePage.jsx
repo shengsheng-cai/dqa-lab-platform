@@ -315,6 +315,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
       {selectedSchedule && (
         <ScheduleDetailModal
           schedule={selectedSchedule}
+          schedules={schedules}
           role={role}
           deviceStatuses={{ ...deviceStatuses, ...liveDeviceStatuses }}
           deviceFreeAt={liveDeviceFreeAt}

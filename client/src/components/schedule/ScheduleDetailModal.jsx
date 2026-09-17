@@ -42,12 +42,20 @@ const NO_READINESS = { label: null, blocker: null };
  * 指定設備現在的樣子：label 給「指定設備」那列，blocker 有值就代表現在按「立即開始」
  * 一定會被後端擋回來。兩個都從這裡出來，畫面才不會出現「寫著維護中卻按得下去」。
  */
-function describeDeviceReadiness({ deviceId, status, freeAt, maintenance }) {
+function describeDeviceReadiness({ deviceId, status, freeAt, maintenance, openSchedule }) {
   if (!deviceId) return NO_READINESS;
   if (maintenance) {
     const reason = maintenance.reason ? `（${maintenance.reason}）` : "";
     const until = maintenance.end_time ? `${fmtDt(maintenance.end_time)} 結束前` : "維護期間";
     return { label: "維護時段", blocker: `${deviceId} 在維護時段${reason}，${until}不能開始` };
+  }
+  // 放在設備狀態之前：那筆在跑條件時設備不是待機，但等它回到待機也還不能開始，
+  // 要講的是真正卡住的那件事。
+  if (openSchedule) {
+    return {
+      label: status ? deviceStatusZh(status) : null,
+      blocker: `${deviceId} 還有排程「${openSchedule.project_number} / ${openSchedule.sample_name}」尚未結案，結案後才能開始`,
+    };
   }
   // 設備清單還沒載完時狀態是空的。空的意思是「還不知道」，不是「不能用」——這時維持
   // 可按、讓後端決定，否則按鈕會在剛打開頁面那幾秒假性壞掉，那比白按一次更難處理。
@@ -79,7 +87,7 @@ function ResultScreen({ title, message, fields, onClose }) {
   );
 }
 
-export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {}, deviceFreeAt = {}, blockedPeriods = [], liveMaintenance = {}, liveMaintenanceReady = false, onClose, onUpdated, onDeleted, onMutation }) {
+export default function ScheduleDetailModal({ schedule, schedules = [], role, deviceStatuses = {}, deviceFreeAt = {}, blockedPeriods = [], liveMaintenance = {}, liveMaintenanceReady = false, onClose, onUpdated, onDeleted, onMutation }) {
   const { showToast } = useToast();
   const [deviceId, setDeviceId] = useState(schedule.device_id || "");
   const [note, setNote] = useState(schedule.note || "");
@@ -107,6 +115,10 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
     status: deviceStatuses[schedule.device_id],
     freeAt: deviceFreeAt[schedule.device_id],
     maintenance: maintenanceFor(liveDeviceId),
+    // 同台另一筆進行中的排程（含條件之間與等人確認）：後端排程啟動會等它結案
+    openSchedule: schedules.find((s) => (
+      s.id !== schedule.id && s.device_id === liveDeviceId && s.status === "進行中"
+    )),
   });
   // 條件正在執行時不需要顯示銜接鈕；一旦不是 RUNNING，就讓操作留在原位並說明為何
   // 現在不能按。直接藏掉會讓暫停、收尾、緊急停止看起來像功能憑空消失。
@@ -452,7 +464,7 @@ export default function ScheduleDetailModal({ schedule, role, deviceStatuses = {
                     {DEVICE_IDS.map((id) => {
                       const st = deviceStatuses[id];
                       // 只有維護與緊急停止擋得住指派。身上有排程沒結案不算——指派的是
-                      // 未來的時段，後端啟動時也不看這件事。
+                      // 未來的時段，到點時那筆若還沒結案，後端會等它結案再開始。
                       const maint = maintenanceFor(id);
                       const blocked = st === "EMERGENCY" || !!maint;
                       return (

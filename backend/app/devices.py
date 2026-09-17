@@ -150,9 +150,9 @@ def build_device_list(cache: dict) -> list:
         if current is None or block.end_time > current.end_time:
             maintenance_by_device[block.device_id] = block
 
-    # 維護時段與「身上有排程」是兩件事，分開送：維護會擋啟動，排程掛著不會（後端只認
-    # 維護時段，見 utils.device_blocked_reason_now）。以前兩者合成同一個旗標，畫面就只能
-    # 猜這台到底是壞了還是有人在用。
+    # 維護時段與「身上有排程」是兩件事，分開送：維護代表設備不可用；排程掛著只代表別的測試
+    # 要等那筆結案才能開始，設備本身沒有問題。以前兩者合成同一個旗標，畫面就只能猜這台
+    # 到底是壞了還是有人在用。
     schedule_notes: dict[str, str] = {}
     for s in running_schedules:
         if s.device_id:

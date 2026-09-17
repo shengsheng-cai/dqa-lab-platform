@@ -401,7 +401,7 @@ async def data_simulator(states: device_state.DeviceStateManager) -> None:
                                     logger.error(f"[{device_id}] 寫入 test_ended_at 三次失敗，放棄")
                     logger.info(f"[{device_id}] 測試自然完成，回待機。")
                     try:
-                        progress = await asyncio.to_thread(advance_running_condition, device_id)
+                        progress = await asyncio.to_thread(advance_running_condition, execution_id)
                         if progress:
                             asyncio.create_task(push_message(
                                 f"✅ 條件 {progress.new_index}/{progress.total} 完成\n"
@@ -436,8 +436,9 @@ async def data_simulator(states: device_state.DeviceStateManager) -> None:
                     if not completion.before.get("skip_push", False):
                         # 中止不是完成：排程與治具都不動，只查名字給通知用
                         push_text = f"⏹ 測試已中止\n設備：{device_id}\n已降回常溫、回到待機"
+                        stopped_execution_id = completion.before.get("active_execution_id")
                         try:
-                            pending = await asyncio.to_thread(running_schedule_info, device_id)
+                            pending = await asyncio.to_thread(running_schedule_info, stopped_execution_id)
                             if pending is not None:
                                 logger.info(
                                     f"[{device_id}] 排程 {pending.schedule_id} 維持進行中，待人員結案"
