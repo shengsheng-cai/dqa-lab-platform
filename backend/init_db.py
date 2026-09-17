@@ -152,7 +152,19 @@ with SessionLocal() as db:
         unit_price=15000.0,
         loan_count=2,
     )
-    db.add_all([f1, f2, f3, f4, f5, f6])
+    # 刻意留一支沒有任何借出或預約的治具：月盤點只盤得了現場數得到完整數量的品項，
+    # 其他治具都有東西在外，沒有這支的話 demo 打開月盤點會一個都盤不了。
+    f7 = Fixture(
+        interface_type="HDMI",
+        form_factor="2.1",
+        total_quantity=4,
+        shortage=0,
+        **keeper("王工"),
+        vendor="Bizlink",
+        unit_price=600.0,
+        loan_count=4,
+    )
+    db.add_all([f1, f2, f3, f4, f5, f6, f7])
     db.flush()
 
     # ── 2. Schedules ───────────────────────────────────────────────

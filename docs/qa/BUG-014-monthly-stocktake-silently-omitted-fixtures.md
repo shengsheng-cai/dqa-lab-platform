@@ -50,7 +50,7 @@ and select “Complete stocktake”.
 
 ## Actual result
 
-- Of six fixture types, the dialog listed only the countable `USB-C / Gen2`; the other five disappeared silently.
+- Of six fixture types, the dialog listed only `USB-C / Gen2`; the other five disappeared silently. (This originally called it the only countable type; that was wrong — see the follow-up correction at the end.)
 - The introductory copy implied that the visible row was the complete stocktake scope.
 - The completion button was disabled only while a request was in flight, not when the list was empty.
 - The success message counted only the surviving rows and disclosed no excluded total.
@@ -121,3 +121,57 @@ It also requires at least one excluded type in the demo seed, avoiding a vacuous
 The E2E does not separately seed the “every type is off site” case to click-check the disabled button. That branch
 is protected by `disabled={loading || active.length === 0}` in the component; it remains a residual test gap if
 stocktake rules change again.
+
+## Follow-up correction (2026-09-17)
+
+**Timing**: the issue was found in the whole-repository architecture review on 2026-09-17; this section was written
+together with the fix. The pre-fix screens were captured before the change, against an isolated demo database.
+
+The original report called `USB-C / Gen2` the only type that could be counted fully on site. That was wrong: in the
+pre-fix seed it had one overdue loan. It made the list because the check read the single word on the fixture's
+status badge. The badge can show only one state, in the order out of stock > low stock > on loan > reserved;
+USB-C was manually marked one unit short, so the badge said “low stock” and hid the loan. The resolution above kept
+the same check, so the misclassification survived, and the E2E only asserted `covered + excluded = total`, which
+still passes when an item lands on the wrong side.
+
+Unlike the original defect, this one **writes wrong stock**: submitting the shelf count shrinks the total, and the
+loaned unit does not come back when it is returned. The same outcome had three entry points:
+
+| Entry point | Before the fix |
+|---|---|
+| Monthly stocktake dialog | A low-stock type with a loaned or reserved unit was listed as countable |
+| Quick count on the fixture row | Accepted a count for any fixture, whether or not units were out |
+| “Add a row” in inventory-log batch editing | Same as above |
+
+The “on loan” status filter read the same badge word, so it did not show USB-C either.
+
+For the reproduction the seed gained an `HDMI / 2.1` fixture with nothing loaned or reserved, as a genuinely
+countable control; it also keeps something countable in the demo stocktake after the fix.
+
+![Before the fix: USB-C has a unit on loan yet is listed as countable next to HDMI](assets/BUG-014-followup-stocktake-counted-loaned-fixture-before.png)
+
+![Before the fix: M.2 has two units on loan; a quick count of 2 changed its stock from 4 to 2](assets/BUG-014-followup-quick-count-overwrote-loaned-fixture-before.png)
+
+**Resolution** (in the same commit as this correction):
+
+- [`fixtureStatus.js`](../../client/src/utils/fixtureStatus.js) splits “which word the badge shows”, “can it be
+  counted on site”, and “the on-loan filter” into three explicit checks shared by the stocktake dialog, quick
+  count, batch add, and the filter.
+- The backend `record_inventory_count`, shared by both counting APIs, returns 409 while units are loaned or reserved
+  and says to use “Edit” to change the total deliberately. Editing an existing inventory log is intentionally left
+  unguarded: it is the way to repair totals this defect already shrank.
+
+**Verification**:
+
+```bash
+cd backend && ../venv/bin/python -m pytest tests/test_fixtures_api.py
+cd client && npm test
+make test-e2e ARGS="specs/stocktake-scope.spec.js"
+```
+
+- `test_fixtures_api.py` asserts a 409 with the total unchanged for both counting APIs and for both loaned and
+  reserved units; a fixture whose loans are all returned can still be counted.
+- `fixtureStatus.test.js` pins that a low-stock fixture with a loan is not countable and does appear under the
+  on-loan filter.
+- `stocktake-scope.spec.js` adds three tests: the stocktake partition, the quick-count cell stating its reason, and
+  the disabled choices in batch add.

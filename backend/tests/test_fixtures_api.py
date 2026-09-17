@@ -1,7 +1,7 @@
 """
 T-15: fixtures API 補充測試
 - delete_fixture：有 reserved/loaned 借用時不可刪除
-- update_inventory：負數盤點擋下、歸零合法
+- update_inventory：負數盤點擋下、歸零合法；有借出或預約在外時不收盤點
 - create_loan：借用人指到不存在的帳號要被擋
 - 保管人只能從 PATCH /{id}/keeper 設定，編輯治具碰不到它
 """
@@ -160,6 +160,38 @@ def test_inventory_allows_zero(admin_client):
     with Session() as db:
         f = db.query(Fixture).filter(Fixture.id == fixture_id).first()
         assert f.total_quantity == 0
+
+
+@pytest.mark.parametrize("loan_status", ["loaned", "reserved"])
+@pytest.mark.parametrize("url", [
+    "/api/fixtures/{fixture_id}/inventory?actual_quantity=4",
+    "/api/fixtures/inventory-logs?fixture_id={fixture_id}&actual_quantity=4",
+])
+def test_inventory_rejects_fixture_with_units_out(admin_client, loan_status, url):
+    """盤點填的是現場數到的數量。有一件借出或預約在外時，架上只數得到 4，
+    照 4 覆寫總數，那一件歸還後庫存也回不來，所以兩個盤點入口都要擋。"""
+    client, Session = admin_client
+    fixture_id = _seed_fixture_with_loan(Session, loan_status)
+
+    resp = client.post(url.format(fixture_id=fixture_id))
+
+    assert resp.status_code == 409, resp.text
+    assert "在外" in resp.json()["detail"]
+    with Session() as db:
+        assert db.get(Fixture, fixture_id).total_quantity == 5
+        assert db.query(FixtureInventoryLog).count() == 0
+
+
+def test_inventory_allows_fixture_whose_loans_are_returned(admin_client):
+    """借用紀錄都已歸還就沒有東西在外，照常可以盤。"""
+    client, Session = admin_client
+    fixture_id = _seed_fixture_with_loan(Session, "returned")
+
+    resp = client.post(f"/api/fixtures/{fixture_id}/inventory?actual_quantity=4")
+
+    assert resp.status_code == 200, resp.text
+    with Session() as db:
+        assert db.get(Fixture, fixture_id).total_quantity == 4
 
 
 def test_inventory_log_rejects_negative(admin_client):
