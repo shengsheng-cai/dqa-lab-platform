@@ -12,6 +12,7 @@ import "./SOPPage.css";
 import { DEVICE_IDS, ACTIVE_STATUSES, IDLE_STATUS, FINISHING_STATUS, EMERGENCY_STATUS, deviceScheduleNote } from "./constants";
 import ConfirmModal from "./components/ConfirmModal";
 import { buildExecutionPayload } from "./utils/executionPayload";
+import { conditionProgress, isWaitingForConfirm } from "./utils/scheduleProgress";
 import { ListState } from "./components/ListState";
 import { describeLoadError } from "./utils/loadError";
 
@@ -47,10 +48,12 @@ function restoreSelectionFromSopId(sopId, standardTree) {
 }
 
 
-const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleChanged, liveDevices = [] }) => {
+// 等待確認的排程（pendingSchedule）與確認動作都由 ControlCenter 給：那邊本來就每 3 秒
+// 輪詢一次進行中排程，設備卡與頂部橫幅都吃同一份。這裡以前自己再抓一次、自己送一次確認，
+// 於是在橫幅按過確認之後，這張卡片還留在畫面上，再按一次就回 400。
+const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleChanged, liveDevices = [], pendingSchedule = null, onConfirmCondition }) => {
   const { showToast } = useToast();
   const [selectedDevice, setSelectedDevice] = useState(externalDevice || DEVICE_IDS[0]);
-  const [pendingSchedule, setPendingSchedule] = useState(null);
   const [confirmingSched, setConfirmingSched] = useState(false);
 
   // 同步外部設備選擇（ControlCenter LeftPanel 點選時）
@@ -237,43 +240,36 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
     syncDeviceSnapshot(liveDeviceMap);
   }, [active, liveDevices, liveDeviceMap, syncDeviceSnapshot]);
 
-  // 設備為 IDLE 時主動查詢是否有等待確認的排程，並補齊 savedExecutionId
+  // 設備回到 IDLE 時補齊 savedExecutionId
   useEffect(() => {
-    if (data.status === IDLE_STATUS) {
-      api.get("/api/schedules?status=進行中").then((r) => {
-        const match = r.data.find((s) => s.device_id === selectedDevice);
-        setPendingSchedule(match || null);
-      }).catch(() => {});
-      // 快速跳轉 poll 漏掉 ramp_to_ambient 時，IDLE 後補存報告
-      // autoSave=true 代表 ExecutionPanel 正在處理；savingExecutionRef 防止並發重複存
-      const curDs = deviceStatesRef.current[selectedDevice];
-      if (
-        curDs?.activeSop && !curDs.savedExecutionId && !curDs.autoSave &&
-        Object.keys(curDs.completedSteps || {}).length > 0 &&
-        !savingExecutionRef.current.has(selectedDevice)
-      ) {
-        savingExecutionRef.current.add(selectedDevice);
-        const steps = curDs.activeSop.steps || [];
-        const allCompleted = Object.fromEntries(steps.map((s) => [s.step_id, true]));
-        // 走到這裡代表設備已經回到待機，測試確實跑完了，所以所有步驟都算完成。
-        api.post("/api/sop-executions/", buildExecutionPayload({
-          sop: curDs.activeSop,
-          deviceId: selectedDevice,
-          operator,
-          startedAt: lastStartedAtRef.current[selectedDevice],
-          manualMode,
-          completedSteps: allCompleted,
-        })).then((res) => {
-          setDeviceStates((p) => ({
-            ...p,
-            [selectedDevice]: { ...p[selectedDevice], savedExecutionId: res.data.id, completedSteps: allCompleted },
-          }));
-        }).catch(() => {}).finally(() => {
-          savingExecutionRef.current.delete(selectedDevice);
-        });
-      }
-    } else {
-      setPendingSchedule(null);
+    if (data.status !== IDLE_STATUS) return;
+    // 快速跳轉 poll 漏掉 ramp_to_ambient 時，IDLE 後補存報告
+    // autoSave=true 代表 ExecutionPanel 正在處理；savingExecutionRef 防止並發重複存
+    const curDs = deviceStatesRef.current[selectedDevice];
+    if (
+      curDs?.activeSop && !curDs.savedExecutionId && !curDs.autoSave &&
+      Object.keys(curDs.completedSteps || {}).length > 0 &&
+      !savingExecutionRef.current.has(selectedDevice)
+    ) {
+      savingExecutionRef.current.add(selectedDevice);
+      const steps = curDs.activeSop.steps || [];
+      const allCompleted = Object.fromEntries(steps.map((s) => [s.step_id, true]));
+      // 走到這裡代表設備已經回到待機，測試確實跑完了，所以所有步驟都算完成。
+      api.post("/api/sop-executions/", buildExecutionPayload({
+        sop: curDs.activeSop,
+        deviceId: selectedDevice,
+        operator,
+        startedAt: lastStartedAtRef.current[selectedDevice],
+        manualMode,
+        completedSteps: allCompleted,
+      })).then((res) => {
+        setDeviceStates((p) => ({
+          ...p,
+          [selectedDevice]: { ...p[selectedDevice], savedExecutionId: res.data.id, completedSteps: allCompleted },
+        }));
+      }).catch(() => {}).finally(() => {
+        savingExecutionRef.current.delete(selectedDevice);
+      });
     }
   }, [data.status, selectedDevice]); // eslint-disable-line
 
@@ -755,16 +751,14 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
             </section>
           )}
 
-          {!isActive && !isFinishing && pendingSchedule && (() => {
-            const conds = pendingSchedule.conditions || [];
-            const idx = pendingSchedule.current_condition_index ?? 0;
-            const shownIdx =
-              conds.length === 0 ? 0 : Math.min(Math.max(idx, 1), conds.length);
-            const isLast = idx >= conds.length;
-            const label = isLast
-              ? "✅ 確認全部完成"
-              : `▶ 開始第 ${idx + 1} 條件（共 ${conds.length}）`;
-            const condName = isLast ? null : (pendingSchedule.condition_names?.[idx] || conds[idx]);
+          {/* 整張卡片是操作入口，訪客按不動（後端 confirm-condition 要管理者），所以不顯示。
+              留著只是告訴訪客「這裡有事要處理，但不干你的事」，還會讓人按下去才吃 403。
+
+              訪客目前連 pendingSchedule 都拿不到——ControlCenter 的輪詢對訪客直接 return。
+              但那行的用意是別為唯讀身分多打一支 API，是省請求不是管權限；這裡自己判一次，
+              免得哪天那邊為了讓訪客看到狀態而開始輪詢，這張操作卡就跟著漏出去。 */}
+          {isAdmin && isWaitingForConfirm(data, pendingSchedule) && (() => {
+            const { isLast, actionLabel, nextConditionName } = conditionProgress(pendingSchedule);
             return (
               <section
                 className="operation-box"
@@ -772,17 +766,17 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
               >
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div>
+                    {/* 不寫「條件 N 已完成」：被人按停時一條都沒完成，那句是假的。
+                        設備已經回到待機，這裡只說在等人決定接下來做什麼。 */}
                     <div style={{ color: "#f0a500", fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
-                      ⚠️ 條件 {shownIdx}/{conds.length} 已完成，等待確認
+                      ⚠️ 等待確認
                     </div>
                     <div style={{ color: "#8b949e", fontSize: 12, marginBottom: 4 }}>
                       {pendingSchedule.project_number} / {pendingSchedule.sample_name}
                     </div>
-                    {condName && (
-                      <div style={{ color: "#cdd9e5", fontSize: 12 }}>
-                        下一條件：{condName}
-                      </div>
-                    )}
+                    <div style={{ color: "#cdd9e5", fontSize: 12 }}>
+                      {isLast ? "所有條件都跑完了，確認後結案" : `下一條件：${nextConditionName}`}
+                    </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                     {onOpenExecutions && (
@@ -799,20 +793,9 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
                     <button
                       onClick={async () => {
                         setConfirmingSched(true);
-                        try {
-                          const res = await api.post(`/api/schedules/${pendingSchedule.id}/confirm-condition`);
-                          if (res.data.status === "completed") {
-                            showToast("排程全部條件完成！", "success");
-                          } else {
-                            showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
-                          }
-                          await onScheduleChanged();
-                          setPendingSchedule(null);
-                        } catch (e) {
-                          showToast(e.response?.data?.detail || "操作失敗", "error");
-                        } finally {
-                          setConfirmingSched(false);
-                        }
+                        // 成功訊息、失敗訊息與確認後的重抓都在 ControlCenter 那支裡，
+                        // 這裡只負責在送出期間擋住重複點擊
+                        try { await onConfirmCondition(pendingSchedule.id); } finally { setConfirmingSched(false); }
                       }}
                       disabled={confirmingSched}
                       style={{
@@ -821,7 +804,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
                         color: "#fff", border: "none", fontWeight: 600,
                       }}
                     >
-                      {confirmingSched ? "處理中..." : label}
+                      {confirmingSched ? "處理中..." : actionLabel}
                     </button>
                   </div>
                 </div>

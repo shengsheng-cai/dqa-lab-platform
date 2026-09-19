@@ -2,6 +2,7 @@ import { C } from "../../styles/theme";
 import { btnBare } from "../../styles/common";
 import { useRef, useEffect } from "react";
 import { DEVICE_IDS, parseUtcDate } from "../../constants";
+import { conditionProgress } from "../../utils/scheduleProgress";
 import { HOUR_PX, DAY_PX, ROW_H, HEADER_H, LABEL_W, STATUS_COLOR, fmtDt } from "./scheduleUtils";
 
 export default function GanttChart({ schedules, blockedPeriods, rangeStart, rangeEnd, onClickSchedule }) {
@@ -161,7 +162,7 @@ export default function GanttChart({ schedules, blockedPeriods, rangeStart, rang
                     const blockW = clampRight - clampLeft;
                     // 區塊夠寬時畫面會多顯示條件進度，名稱要含得住看得到的字
                     const progress = s.status === "進行中" && (s.conditions?.length ?? 0) > 1
-                      ? ` (${(s.current_condition_index ?? 0) + 1}/${s.conditions.length})`
+                      ? ` (${conditionProgress(s).progressLabel})`
                       : "";
                     // title 只在滑鼠 hover 時出現，鍵盤聚焦不會觸發，所以同一份內容用 aria-label 再給一次
                     return (

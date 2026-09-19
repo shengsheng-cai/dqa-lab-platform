@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from .models import SessionLocal, DeviceData, ErrorLog, SopExecution, DeviceBlockedPeriod
 from .line import push_message
 from .utils import (
-    _now_utc, _now_utc_naive, _parse_conditions, parse_iso_utc, device_free_at,
+    _now_utc, _now_utc_naive, parse_iso_utc, device_free_at,
 )
 from .auth import require_admin, current_user
 from .audit_log import log_audit
@@ -153,12 +153,13 @@ def build_device_list(cache: dict) -> list:
     # 維護時段與「身上有排程」是兩件事，分開送：維護代表設備不可用；排程掛著只代表別的測試
     # 要等那筆結案才能開始，設備本身沒有問題。以前兩者合成同一個旗標，畫面就只能猜這台
     # 到底是壞了還是有人在用。
-    schedule_notes: dict[str, str] = {}
-    for s in running_schedules:
-        if s.device_id:
-            total = len(_parse_conditions(s.conditions))
-            idx = (s.current_condition_index or 0) + 1
-            schedule_notes[s.device_id] = f"排程進行中（第 {idx}/{total} 條件）"
+    # 不寫「第幾條件」：這句只在設備待機時顯示（前端的 deviceScheduleNote 過濾），也就是
+    # 條件之間或等人確認的時候，那時沒有哪一條正在跑。以前照索引算，單條件的測試跑完會
+    # 寫成「第 2/1 條件」，還跟旁邊的「等待確認」各說各話。跑到哪、下一步做什麼由排程
+    # 那份資料講（前端 utils/scheduleProgress.js）。
+    schedule_notes: dict[str, str] = {
+        s.device_id: "排程尚未結案" for s in running_schedules if s.device_id
+    }
 
     result = []
     for device_id, item in cache.items():

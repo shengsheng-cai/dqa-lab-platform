@@ -15,7 +15,7 @@ import SensorQcModal from "./components/control/SensorQcModal";
 import ModalFrame from "./components/ModalFrame";
 import AuditLog from "./components/control/AuditLog";
 import TopBar from "./components/control/TopBar";
-import { conditionLabel } from "./components/control/deviceCardUtils";
+import { conditionProgress, isWaitingForConfirm } from "./utils/scheduleProgress";
 import TabBadge from "./components/control/TabBadge";
 import LeftPanel from "./components/control/LeftPanel";
 import { DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, IDLE_STATUS } from "./constants";
@@ -44,7 +44,7 @@ function toDeviceMap(schedules) {
 function BannerConfirmBtn({ device, schedule, onConfirmCondition }) {
   const [busy, setBusy] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const { label } = conditionLabel(schedule, `${device.device_id} `);
+  const label = `${device.device_id} ${conditionProgress(schedule).shortActionLabel}`;
   const bg = busy ? C.warningBg : hovered ? `${C.warning}44` : `${C.warning}22`;
   return (
     <button
@@ -81,7 +81,7 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
 
   const waitingDevices = useMemo(
     () => role === "admin" && pendingByDevice
-      ? devices.filter(d => d.status === IDLE_STATUS && pendingByDevice[d.device_id])
+      ? devices.filter(d => isWaitingForConfirm(d, pendingByDevice[d.device_id]))
       : [],
     [role, devices, pendingByDevice]
   );
@@ -152,6 +152,8 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
             onOpenExecutions={onOpenExecutions}
             onScheduleChanged={onScheduleChanged}
             liveDevices={devices}
+            pendingSchedule={pendingByDevice[selectedDevice]}
+            onConfirmCondition={onConfirmCondition}
           />
         </div>
         <div style={{ display: activeTab === "fixture" ? "block" : "none", height: "100%" }}>

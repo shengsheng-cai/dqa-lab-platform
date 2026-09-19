@@ -21,7 +21,9 @@ from .schedule_service import (
     start_schedule as start_schedule_service,
 )
 from .schedule_api import schedule_start_http_error
-from .utils import _now_utc, _now_utc_naive, _to_naive_utc, _parse_conditions
+from .utils import (
+    _now_utc, _now_utc_naive, _to_naive_utc, _parse_conditions, running_condition_note,
+)
 from . import device_state
 from .auth import require_admin, current_user
 from .line import push_message
@@ -271,11 +273,12 @@ async def start_sop(request: Request, payload: Dict[str, Any] = Body(...), _: No
 
     # 檢查設備是否有排程進行中（IDLE 條件間隙仍不允許手動啟動）
     if ctx["running"]:
-        total = len(_parse_conditions(ctx["running"]["conditions"]))
-        idx = (ctx["running"]["current_condition_index"] or 0) + 1
+        note = running_condition_note(
+            ctx["running"]["conditions"], ctx["running"]["current_condition_index"]
+        )
         raise HTTPException(
             status_code=409,
-            detail=f"{device_id} 正在執行排程（第 {idx}/{total} 條件），請透過排程頁面操作"
+            detail=f"{device_id} 正在執行排程（{note}），請透過排程頁面操作"
         )
 
     # 若前端未填 operator，從登入帳號自動帶入顯示名稱

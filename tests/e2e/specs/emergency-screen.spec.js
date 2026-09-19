@@ -31,5 +31,8 @@ test.describe("緊急停止的畫面", () => {
     await expect(page.getByText("選擇法規")).toBeHidden();
     await expect(page.getByRole("button", { name: /確認選擇，進入安全確認/ })).toBeHidden();
     await expect(page.getByRole("button", { name: /確認啟動/ })).toBeHidden();
+    // 這台身上還掛著一筆沒結案的排程，而「開始第 N 條件」同樣是開始測試的入口。
+    // 那張等待確認卡的顯示條件只要漏掉「設備要在待機」，它就會出現在緊急畫面上。
+    await expect(page.getByRole("button", { name: /開始第 \d+ 條件/ })).toHaveCount(0);
   });
 });

@@ -15,6 +15,20 @@ def _parse_conditions(conditions_str: Optional[str]) -> list:
         return []
 
 
+def running_condition_note(conditions_str: Optional[str], current_index: Optional[int]) -> str:
+    """一筆進行中排程跑到哪了，講給人看的那一句。
+
+    索引在測試跑的時候代表「正在跑第幾條」，那一條自然跑完會加 1、停下來等人確認，
+    這時它已經超出總條數：單條件的測試跑完就會算出「第 2/1 條件」。所以超出時不再
+    報進度，改說在等確認——設備這時本來就已經回到待機，沒有哪一條正在跑。
+    """
+    total = len(_parse_conditions(conditions_str))
+    idx = (current_index or 0) + 1
+    if total == 0 or idx > total:
+        return "等待確認"
+    return f"第 {idx}/{total} 條件"
+
+
 def parse_iso_utc(s: str) -> datetime.datetime:
     """將 ISO 8601 字串解析為 UTC-aware datetime。
     接受帶 Z 結尾（替換為 +00:00）或已含 +HH:MM offset 的字串。"""

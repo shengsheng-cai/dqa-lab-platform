@@ -6,6 +6,7 @@ import pytest
 
 from app.utils import (
     _parse_conditions, finishing_end, parse_iso_utc, ramp_rate_from_sop,
+    running_condition_note,
 )
 
 
@@ -27,6 +28,31 @@ def test_parse_conditions_valid_json():
 
 def test_parse_conditions_bad_json():
     assert _parse_conditions("not-json") == []
+
+
+# ──────────────────────────────────────────
+# running_condition_note
+# ──────────────────────────────────────────
+
+def test_running_condition_note_during_test():
+    """測試跑的時候，索引就是正在跑的那一條。"""
+    assert running_condition_note('["a","b","c"]', 0) == "第 1/3 條件"
+    assert running_condition_note('["a","b","c"]', 2) == "第 3/3 條件"
+
+
+def test_running_condition_note_waiting_after_last_condition():
+    """最後一條跑完索引會加 1、超出總數，這時不能再報進度。
+
+    以前直接加 1 就輸出，單條件的測試跑完會寫成「第 2/1 條件」。
+    """
+    assert running_condition_note('["a"]', 1) == "等待確認"
+    assert running_condition_note('["a","b","c"]', 3) == "等待確認"
+
+
+def test_running_condition_note_without_conditions():
+    """條件資料壞掉或空的，同樣不能算出「第 1/0 條件」。"""
+    assert running_condition_note(None, 0) == "等待確認"
+    assert running_condition_note("not-json", 0) == "等待確認"
 
 
 # ──────────────────────────────────────────

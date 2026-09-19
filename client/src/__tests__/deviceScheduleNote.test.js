@@ -5,12 +5,12 @@ import { deviceScheduleNote } from "../constants";
 // 就寫著執行中，再講一次是多的；而且沒有排程時一定要是 null，空字串會讓呼叫點多渲染一個空行。
 describe("deviceScheduleNote", () => {
   it("待機且有排程掛著 → 回傳那句說明", () => {
-    expect(deviceScheduleNote({ status: "IDLE", running_schedule_note: "排程進行中（第 1/2 條件）" }))
-      .toBe("排程進行中（第 1/2 條件）");
+    expect(deviceScheduleNote({ status: "IDLE", running_schedule_note: "排程尚未結案" }))
+      .toBe("排程尚未結案");
   });
 
   it("正在執行時不重複講一次", () => {
-    expect(deviceScheduleNote({ status: "RUNNING", running_schedule_note: "排程進行中（第 1/2 條件）" }))
+    expect(deviceScheduleNote({ status: "RUNNING", running_schedule_note: "排程尚未結案" }))
       .toBeNull();
   });
 

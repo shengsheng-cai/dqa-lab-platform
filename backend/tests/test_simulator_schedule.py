@@ -149,7 +149,7 @@ def test_running_schedule_is_a_note_not_maintenance(patched_session):
 
     assert device["maintenance_blocked"] is False
     assert device["maintenance_reason"] is None
-    assert device["running_schedule_note"] == "排程進行中（第 1/2 條件）"
+    assert device["running_schedule_note"] == "排程尚未結案"
 
 
 def test_maintenance_and_running_schedule_are_reported_separately(patched_session):
@@ -166,7 +166,7 @@ def test_maintenance_and_running_schedule_are_reported_separately(patched_sessio
 
     assert device["maintenance_blocked"] is True
     assert device["maintenance_reason"] == "定期保養"
-    assert device["running_schedule_note"] == "排程進行中（第 1/2 條件）"
+    assert device["running_schedule_note"] == "排程尚未結案"
 
 
 def test_idle_device_without_schedule_has_no_note(patched_session):
