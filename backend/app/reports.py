@@ -48,9 +48,63 @@ def _row(output: io.BytesIO, label: str, value):
     _write(output, f"  {label:<30}{value}")
 
 
-def _resolve_target_high(sop_data: dict):
+def _primary_setpoint(sop_data: dict):
+    """這支 SOP 的主設定點：雙溫是高溫那端，單溫就是它唯一的那個點。
+
+    單溫冷測（如 Test Ab −40°C）只填 low_temperature 與 target_temperature，
+    所以這裡會回傳負值——名字不叫 high 就是為了不讓人以為冷測會回 None。
+    """
     v = sop_data.get("high_temperature")
     return v if v is not None else sop_data.get("target_temperature")
+
+
+# 雙溫的兩端只有這一份名字與順序（高溫在前），段名與目標溫度列都吃它
+TEMP_SEGMENT_NAMES = (("高溫", "High"), ("低溫", "Low"))
+
+
+def _temperature_segments(sop_data: dict) -> list[tuple[str, str, float]]:
+    """這次測試要分別交代的溫度段，回傳 [(中文段名, 英文段名, 目標溫度)]。
+
+    雙溫循環在高溫與低溫各停留數小時，兩段是分別要驗證的對象，各有各的容差。
+    只算高溫那段的話，報告的「最低溫度」會印成高溫段裡最低的那一筆——例如
+    −25↔+70 的測試印出 69.8°C，而實際跑到 −25.3°C，低溫段等於沒發生過。
+    單溫測試只有一段，但段名照樣寫出是冷測還是熱測——不分段和不標形狀是兩件事，
+    同一份報告的條件節已經寫「目標低溫 −40°C」，統計節不該又回到中性的說法。
+    """
+    high = _primary_setpoint(sop_data)
+    low = sop_data.get("low_temperature")
+    # 算不算雙溫跟模擬器同一條判準（`simulator.py` 的 is_two_temp、`utils.py` 的
+    # curve_total_minutes 都是差距超過 0.1 才算兩段），不然模擬器只跑一段的測試，
+    # 報告會多長出一段從來沒發生過的低溫統計。
+    # 另外單溫的低溫測試（如 Test Ab −40°C）只填 low_temperature 與 target_temperature，
+    # 而 _primary_setpoint 會退回 target_temperature，兩邊本來就拿到同一個值。
+    if high is not None and low is not None and abs(float(high) - float(low)) > 0.1:
+        return [
+            (zh, en, float(value))
+            for (zh, en), value in zip(TEMP_SEGMENT_NAMES, (high, low))
+        ]
+    only = high if high is not None else low
+    if only is None:
+        return []
+    # 冷熱只有「有沒有填 high_temperature」講得準：熱測有 +5°C 這種正值不高的，
+    # 冷測也不保證是負值，拿溫度正負去猜會猜錯
+    zh, en = TEMP_SEGMENT_NAMES[1] if sop_data.get("high_temperature") is None \
+        else TEMP_SEGMENT_NAMES[0]
+    return [(zh, en, float(only))]
+
+
+def _setpoint_rows(sop_data: dict) -> list[tuple[str, str]]:
+    """「測試條件」那節的目標溫度列，依這支 SOP 真正有幾個設定點決定標籤。
+
+    以前固定印「目標高溫」與「目標低溫」兩列，而單溫冷測只填 low_temperature 與
+    target_temperature，`_primary_setpoint` 會退回那個負值——於是 24 支冷測的報告都
+    印成「目標高溫 −40°C」，一個叫高溫的欄位寫著零下四十度。熱測則兩列印同一個值。
+    """
+    segments = _temperature_segments(sop_data)
+    if not segments:
+        return [("目標溫度 Target Temp", "N/A")]
+    # 形狀在 _temperature_segments 判過了，這裡只把段名換成欄位標籤，不再自己讀 sop_data
+    return [(f"目標{zh} Target {en}", f"{target} °C") for zh, en, target in segments]
 
 
 def _fmt_dt(dt) -> str:
@@ -66,18 +120,31 @@ def _report_no(execution) -> str:
     return f"RPT-{execution.created_at.strftime('%Y%m%d')}-{execution.id:03d}"
 
 
-def _compute_uncertainties(temps, humis, target_high, humi_target, temp_tolerance, humi_tolerance):
-    """CSV 與 PDF 共用：算出溫度／濕度的不確定度分析（沒有 target 或沒有數據時為 None）。
-    兩種格式都呼叫這個函式取得 u_temp/u_humi，結構上保證同一筆執行紀錄下載兩種格式時，
-    摘要統計（見 `_summary_avg`/`_summary_stats`）用的是同一段資料，不會各算各的。
+def _compute_uncertainties(temps, humis, segments, humi_target, temp_tolerance, humi_tolerance):
+    """CSV 與 PDF 共用：算出各溫度段與濕度的不確定度分析。
+
+    回傳 (溫度段清單, u_humi)，溫度段是 [(段名, 目標, UncertaintyResult)]；沒有數據或
+    沒有目標時回傳空清單。兩種格式都呼叫這個函式，結構上保證同一筆執行紀錄下載兩種
+    格式時，摘要統計（見 `_summary_avg`/`_summary_stats`）用的是同一段資料。
     """
-    u_temp = None
+    temp_results = []
+    if temps:
+        multi_segment = len(segments) > 1
+        for zh, en, target in segments:
+            u = unc.calc_temp(temps, target, float(temp_tolerance))
+            if u is None:
+                continue
+            # 分段時不接受「穩定段不足就改用全段」那個退回：全段裡有另一段的資料，
+            # 低溫段會拿高溫段的數字算出平均，報告等於捏造一段從沒跑到的低溫。
+            # 中止在高溫階段的雙溫測試就會走到這裡，那時低溫段一筆資料都沒有。
+            if multi_segment and not u.using_stable_only:
+                temp_results.append((zh, en, target, None))
+                continue
+            temp_results.append((zh, en, target, u))
     u_humi = None
-    if temps and target_high is not None:
-        u_temp = unc.calc_temp(temps, float(target_high), float(temp_tolerance))
     if humis and humi_target is not None:
         u_humi = unc.calc_humi(humis, float(humi_target), float(humi_tolerance))
-    return u_temp, u_humi
+    return temp_results, u_humi
 
 
 def _case_info(db, execution) -> dict:
@@ -122,6 +189,157 @@ def _summary_stats(u: Optional[unc.UncertaintyResult], raw_values: list, ndigits
     return round(max(data), ndigits), round(min(data), ndigits), _summary_avg(u, raw_values, ndigits)
 
 
+# ── 報告內容 ────────────────────────────────────────────────────────────────
+# 欄位清單與空值寫法只有這一份，CSV 與 PDF 都拿它去排版。以前兩種格式各寫一次，
+# 於是 PDF 少了報告版本、測試類型、濕度容差與紀錄建立四列，執行人員空白時一個寫
+# 「(待填寫)」一個寫「(未填寫)」，連「有沒有數據」的判斷條件都不一樣。
+
+NOT_FILLED = "(待填寫)"
+NO_DATA_TEXT = "測試時間未記錄"
+# 雙溫循環的某一段完全沒有落在容差內的資料時（例如測試中止在另一段）要寫出來，
+# 不能留白、也不能拿全段資料湊一組數字頂替
+NO_SEGMENT_DATA = "無有效數據"
+
+
+def _data_points_text(device_records, truncated, execution) -> str:
+    """數據筆數。沒有開始時間就是這次測試根本沒記到資料，不能寫成「0 筆」——
+    那看起來像測了但一筆都沒收到，跟沒測是兩件事。"""
+    if not execution.test_started_at:
+        return NO_DATA_TEXT
+    suffix = f"（已截斷，上限 {MAX_DATA_POINTS} 筆）" if truncated else ""
+    return f"{len(device_records)} 筆{suffix}"
+
+
+def uncertainty_section_titles(content: dict) -> list[str]:
+    """PDF 第 5 節每個小節的標題。雙溫循環有兩段溫度，編號要接得上（5.1、5.2、5.3），
+    寫死的話兩段都會叫 5.1。抽出來是為了讓測試驗的就是 PDF 實際印的那一份。"""
+    titles = []
+    # 沒有自己資料的段落不出不確定度表，編號也不佔位：留一個空的 5.2 會讓人以為漏印了
+    measured = [s for s in content["temp_segments"] if s["uncertainty"] is not None]
+    for idx, seg in enumerate(measured, start=1):
+        title = f"5.{idx} 溫度不確定度 Temperature Uncertainty"
+        if seg["label"]:
+            title += f"（{seg['label']} {seg['target']} °C）"
+        titles.append(title)
+    if content["humidity"]["uncertainty"]:
+        titles.append(f"5.{len(measured) + 1} 濕度不確定度 Humidity Uncertainty")
+    return titles
+
+
+def _summary_rows(segments, humidity_avg) -> list[tuple[str, object, str]]:
+    """第 5 節的統計列，回傳 (標籤, 值, 單位)。
+
+    單位分開給，是因為兩種格式放的位置不同：CSV 寫在標籤裡（「最高溫度 Max Temp (C)」），
+    PDF 寫在值後面（「70.3 °C」）。欄位本身只有這一份，PDF 以前少了溫度容差範圍那列。
+    """
+    rows = []
+    if not segments:
+        rows += [("最高溫度 Max Temp", "N/A", "°C"),
+                 ("最低溫度 Min Temp", "N/A", "°C"),
+                 ("平均溫度 Avg Temp", "N/A", "°C")]
+    for seg in segments:
+        prefix = f"{seg['label']} " if seg["label"] else ""
+        rows += [
+            (f"{prefix}最高溫度 Max Temp", seg["max"], "°C"),
+            (f"{prefix}最低溫度 Min Temp", seg["min"], "°C"),
+            (f"{prefix}平均溫度 Avg Temp", seg["avg"], "°C"),
+            (f"{prefix}溫度容差範圍 Temp Limit", seg["limit"], "°C"),
+        ]
+    rows.append(("平均濕度 Avg Humi", humidity_avg, "%RH"))
+    return rows
+
+
+def _build_report_content(execution, steps, device_records, sop_data, truncated, case) -> dict:
+    """把報告要寫的東西算成一份結構，CSV 與 PDF 只負責畫出來。
+
+    回傳的每一節都是 [(標籤, 值)]，值已經是排好的字串；`temp_segments` 另外給
+    每個溫度段的統計與不確定度，雙溫循環會有兩段。
+    """
+    device_id = execution.device_id or DEVICE_IDS[0]
+    temp_tolerance = sop_data.get("temp_tolerance", 2.0)
+    humi_tolerance = sop_data.get("humi_tolerance", 3.0)
+    humi_target = sop_data.get("humidity_rh_percent")
+
+    data_points = _data_points_text(device_records, truncated, execution)
+    temps = [r.temperature for r in device_records if r.temperature is not None]
+    humis = [r.humidity for r in device_records if r.humidity is not None]
+    temp_results, u_humi = _compute_uncertainties(
+        temps, humis, _temperature_segments(sop_data), humi_target,
+        temp_tolerance, humi_tolerance,
+    )
+
+    segments = []
+    for zh, en, target, u in temp_results:
+        # u 是 None 代表這段沒有自己的資料（例如測試中止在另一段）。不能退回全段去算，
+        # 那會拿另一段的溫度湊出一組數字，讓報告宣稱跑過一段其實沒發生的溫度。
+        if u is None:
+            t_max = t_min = t_avg = NO_SEGMENT_DATA
+        else:
+            t_max, t_min, t_avg = _summary_stats(u, temps, 2)
+        segments.append({
+            # 統計列與 PDF 小節標題用的名字，帶「段」字是因為它講的是一段測試
+            "label": f"{zh}段 {en}",
+            "target": target,
+            "max": t_max,
+            "min": t_min,
+            "avg": t_avg,
+            # 容差範圍跟「溫度容差」那列讀同一個值，不讓排版端自己再取一次 sop_data：
+            # 分成兩個來源的話，容差改了只改一邊，同一份報告上兩個數字會互相矛盾
+            "limit": (f"{round(target - temp_tolerance, 1)} ~ "
+                      f"{round(target + temp_tolerance, 1)}"),
+            "uncertainty": u,
+        })
+
+    humidity_avg = _summary_avg(u_humi, humis, 1)
+    report_no = _report_no(execution)
+    return {
+        "report_no": report_no,
+        "data_points": data_points,
+        "identification": [
+            ("實驗室 Laboratory", LAB_NAME),
+            ("實驗室地址 Address", LAB_ADDRESS),
+            ("報告編號 Report No.", report_no),
+            ("報告版本 Version", REPORT_VERSION),
+            ("產生日期 Issue Date", _now_utc().strftime("%Y-%m-%d %H:%M:%S UTC")),
+            ("執行記錄 ID", str(execution.id)),
+        ],
+        "test_item": [
+            ("樣品名稱 Sample Name", case["sample_name"]),
+            ("案號 Project No.", case["project_number"]),
+            ("客戶／申請人 Customer", case["customer"]),
+            ("SOP ID", execution.sop_id),
+            ("測試名稱 Test Name", sop_data.get("name", "N/A")),
+            ("測試類型 Test Type", sop_data.get("test_type", "N/A")),
+            ("SOP 版本 SOP Version", sop_data.get("version", "N/A")),
+            ("參考法規 Reference", sop_data.get("reference", "N/A")),
+        ],
+        "conditions": [
+            ("試驗設備 Chamber", device_id),
+            *_setpoint_rows(sop_data),
+            ("升降溫速率 Ramp Rate", f"{sop_data.get('ramp_rate', 'N/A')} °C/min"),
+            ("停留時間 Dwell Time", f"{sop_data.get('dwell_time_hours', 'N/A')} h"),
+            ("循環次數 Cycles", str(sop_data.get("cycles", "N/A"))),
+            # 不控濕的 SOP 這個欄位存在但值是 None，直接印會在報告上留下英文的 None
+            ("濕度設定 Humidity", f"{humi_target} %RH" if humi_target is not None else "N/A"),
+            ("溫度容差 Temp Tolerance", f"± {temp_tolerance} °C"),
+            ("濕度容差 Humi Tolerance", f"± {humi_tolerance} %RH"),
+            ("測試開始 Start Time", _fmt_dt(execution.test_started_at)),
+            ("測試結束 End Time", _fmt_dt(execution.test_ended_at)),
+            ("紀錄建立 Record Created", _fmt_dt(execution.created_at)),
+            ("數據筆數 Data Points", data_points),
+        ],
+        "operator": execution.operator or NOT_FILLED,
+        "steps": [(f"Step {s.step_id}", "完成" if s.completed else "未完成") for s in steps],
+        "summary": _summary_rows(segments, humidity_avg),
+        "temp_segments": segments,
+        "humidity": {
+            "avg": humidity_avg,
+            "uncertainty": u_humi,
+        },
+        "reference": sop_data.get("reference", "IEC 60068"),
+    }
+
+
 @router.get("/csv/{execution_id}")
 def download_csv_report(execution_id: int):
     """
@@ -133,28 +351,13 @@ def download_csv_report(execution_id: int):
     """
     with SessionLocal() as db:
         execution, steps, device_records, truncated = _fetch_execution_data(execution_id, db)
-        device_id_filter = execution.device_id or DEVICE_IDS[0]
         sop_data = STANDARDS_AND_SOPS.get(execution.sop_id, {})
-        temp_tolerance = sop_data.get("temp_tolerance", 2.0)
-        humi_tolerance = sop_data.get("humi_tolerance", 3.0)
-
-        case = _case_info(db, execution)
-
-        temps = [r.temperature for r in device_records if r.temperature is not None]
-        humis = [r.humidity for r in device_records if r.humidity is not None]
-
-        target_high = _resolve_target_high(sop_data)
-        target_low = sop_data.get("low_temperature")
-        humi_target = sop_data.get("humidity_rh_percent")
-
-        u_temp, u_humi = _compute_uncertainties(
-            temps, humis, target_high, humi_target, temp_tolerance, humi_tolerance
+        content = _build_report_content(
+            execution, steps, device_records, sop_data, truncated, _case_info(db, execution)
         )
-        temp_max, temp_min, temp_avg = _summary_stats(u_temp, temps, 2)
-        humi_avg = _summary_avg(u_humi, humis, 1)
 
         output = io.BytesIO()
-        report_no = _report_no(execution)
+        report_no = content["report_no"]
 
         _write(output, "")
         _write(output, "  " + "=" * 56)
@@ -164,85 +367,38 @@ def download_csv_report(execution_id: int):
 
         # 1. 報告識別（ISO/IEC 17025:2017 §7.8.2）
         _section(output, "1. 報告識別  Report Identification")
-        _row(output, "實驗室 Laboratory:", LAB_NAME)
-        _row(output, "實驗室地址 Address:", LAB_ADDRESS)
-        _row(output, "報告編號 Report No.:", report_no)
-        _row(output, "報告版本 Version:", REPORT_VERSION)
-        _row(
-            output,
-            "產生日期 Issue Date:",
-            _now_utc().strftime("%Y-%m-%d %H:%M:%S UTC"),
-        )
-        _row(output, "執行記錄 ID:", execution_id)
+        for label, value in content["identification"]:
+            _row(output, f"{label}:", value)
 
         # 2. 受測樣品與測試方法（§7.8.2.1 e 客戶、g 樣品識別、f 方法）
         # 樣品欄位排在方法之前：這節先回答「測了什麼」，才回答「怎麼測」。
         _section(output, "2. 受測樣品與測試方法  Test Item and Method")
-        _row(output, "樣品名稱 Sample Name:", case["sample_name"])
-        _row(output, "案號 Project No.:", case["project_number"])
-        _row(output, "客戶／申請人 Customer:", case["customer"])
-        _row(output, "SOP ID:", execution.sop_id)
-        _row(output, "測試名稱 Test Name:", sop_data.get("name", "N/A"))
-        _row(output, "測試類型 Test Type:", sop_data.get("test_type", "N/A"))
-        _row(output, "SOP 版本 SOP Version:", sop_data.get("version", "N/A"))
-        _row(output, "參考法規 Reference:", sop_data.get("reference", "N/A"))
+        for label, value in content["test_item"]:
+            _row(output, f"{label}:", value)
 
         # 3. 測試條件（§7.8.3.1 a）
         # 試驗設備屬於「怎麼測」，放這裡；放在受測樣品那節會被誤讀成樣品識別。
         _section(output, "3. 測試條件  Test Conditions")
-        _row(output, "試驗設備 Chamber:", device_id_filter)
-        _row(output, "目標高溫 Target High (C):", target_high if target_high is not None else "N/A")
-        _row(output, "目標低溫 Target Low (C):", target_low if target_low is not None else "N/A")
-        _row(output, "升降溫速率 Ramp Rate (C/min):", sop_data.get("ramp_rate", "N/A"))
-        _row(
-            output, "停留時間 Dwell Time (h):", sop_data.get("dwell_time_hours", "N/A")
-        )
-        _row(output, "循環次數 Cycles:", sop_data.get("cycles", "N/A"))
-        # 不控濕的 SOP（如純低溫測試）這個欄位存在但值是 None，預設值救不到，
-        # 直接印會在報告上留下英文的 None。改成跟上面幾列同樣的判法。
-        _row(
-            output,
-            "濕度設定 Humidity (%RH):",
-            humi_target if humi_target is not None else "N/A",
-        )
-        _row(output, "溫度容差 Temp Tolerance (C):", f"± {temp_tolerance}")
-        _row(output, "濕度容差 Humi Tolerance (%RH):", f"± {humi_tolerance}")
-        _row(output, "測試開始 Start Time:", _fmt_dt(execution.test_started_at))
-        _row(output, "測試結束 End Time:", _fmt_dt(execution.test_ended_at))
-        _row(output, "紀錄建立 Record Created:", _fmt_dt(execution.created_at))
-        _row(
-            output,
-            "數據筆數 Data Points:",
-            f"{len(device_records)}{' (已截斷，上限 ' + str(MAX_DATA_POINTS) + ' 筆)' if truncated else ''}"
-            if execution.test_started_at
-            else "測試時間未記錄",
-        )
+        for label, value in content["conditions"]:
+            _row(output, f"{label}:", value)
 
         # 4. 步驟執行記錄（§7.5.1 責任人與日期）
         _section(output, "4. 步驟執行記錄  Step Execution Records")
-        _row(output, "執行人員 Operator:", execution.operator or "(待填寫)")
+        _row(output, "執行人員 Operator:", content["operator"])
         _write(output, "")
         _write(output, f"  {'步驟':>6}  {'狀態':<12}")
         _write(output, "  " + "-" * 30)
-        for step in steps:
-            status = "完成" if step.completed else "未完成"
-            _write(output, f"  Step {step.step_id:<4}  {status}")
-        if not steps:
+        for step_label, status in content["steps"]:
+            _write(output, f"  {step_label:<11}{status}")
+        if not content["steps"]:
             _write(output, "  (無步驟記錄)")
 
         # 5. 測試數據統計（§7.8.3.1 c 量測不確定度）
+        # 雙溫循環的高低溫各出一組：兩段是分別要驗證的對象，混在一起算會讓「最低溫度」
+        # 落在高溫段裡，低溫那幾小時等於沒進報告。
         _section(output, "5. 測試數據統計  Measurement Summary")
-        _row(output, "最高溫度 Max Temp (C):", temp_max)
-        _row(output, "最低溫度 Min Temp (C):", temp_min)
-        _row(output, "平均溫度 Avg Temp (C):", temp_avg)
-        _row(output, "平均濕度 Avg Humi (%RH):", humi_avg)
-        _row(
-            output,
-            "溫度容差範圍 Temp Limit (C):",
-            f"{round(target_high - temp_tolerance, 1)} ~ {round(target_high + temp_tolerance, 1)}"
-            if target_high is not None
-            else "N/A",
-        )
+        for label, value, unit in content["summary"]:
+            _row(output, f"{label} ({unit}):", value)
         _row(output, "量測不確定度 Uncertainty:", "本 Demo 僅估算感測器解析度")
 
         # 6. 測試結論（§7.8.6 & §7.8.7）
@@ -251,7 +407,7 @@ def download_csv_report(execution_id: int):
         _write(output, "     符合性宣告及測試意見須由授權工程師人工判定。")
         _write(output, "")
         _row(output, "判定結果 Result:", "[          ]  (工程師人工填寫)")
-        _row(output, "判定依據 Based on:", sop_data.get("reference", "IEC 60068"))
+        _row(output, "判定依據 Based on:", content["reference"])
         _row(output, "判定人員 Judged by:", "(工程師簽名)")
         _row(output, "判定日期 Judge Date:", "(填寫日期)")
         _write(output, "")
@@ -450,7 +606,7 @@ def _get_cjk_font():
     return None
 
 
-def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated, case) -> bytes:
+def _build_pdf(content) -> bytes:
     font_name = _get_cjk_font()
     if not font_name:
         # 極端情況才 fallback 英文字型
@@ -492,15 +648,6 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated,
         t.setStyle(_kv_style)
         return t
 
-    device_id = execution.device_id or DEVICE_IDS[0]
-    temps = [r.temperature for r in device_records if r.temperature is not None]
-    humis = [r.humidity for r in device_records if r.humidity is not None]
-    temp_tolerance = sop_data.get("temp_tolerance", 2.0)
-    humi_tolerance = sop_data.get("humi_tolerance", 3.0)
-    target_high = _resolve_target_high(sop_data)
-    target_low = sop_data.get("low_temperature")
-    humi_target = sop_data.get("humidity_rh_percent")
-
     # ── 封面 ──────────────────────────────────────────────────────────────────
     story.append(Paragraph(LAB_NAME, h1))
     story.append(Paragraph(
@@ -513,58 +660,32 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated,
 
     # ── 1. 報告識別 ───────────────────────────────────────────────────────────
     story.append(Paragraph("1. 報告識別  Report Identification", h2))
-    story.append(kv_table([
-        ["實驗室 Laboratory", LAB_NAME],
-        ["實驗室地址 Address", LAB_ADDRESS],
-        ["報告編號 Report No.", report_no],
-        ["產生日期 Issue Date", _now_utc().strftime("%Y-%m-%d %H:%M UTC")],
-        ["執行記錄 Execution ID", str(execution.id)],
-    ]))
+    story.append(kv_table([list(row) for row in content["identification"]]))
 
     # ── 2. 受測樣品與測試方法 ─────────────────────────────────────────────────
     # 樣品欄位排在方法之前：這節先回答「測了什麼」，才回答「怎麼測」。
     story.append(Paragraph("2. 受測樣品與測試方法  Test Item and Method", h2))
-    story.append(kv_table([
-        ["樣品名稱 Sample Name", case["sample_name"]],
-        ["案號 Project No.", case["project_number"]],
-        ["客戶／申請人 Customer", case["customer"]],
-        ["SOP ID", execution.sop_id],
-        ["測試名稱 Test Name", sop_data.get("name", "N/A")],
-        ["參考法規 Reference", sop_data.get("reference", "N/A")],
-        ["SOP 版本 SOP Version", sop_data.get("version", "N/A")],
-    ]))
+    story.append(kv_table([list(row) for row in content["test_item"]]))
 
     # ── 3. 測試條件 ───────────────────────────────────────────────────────────
     # 試驗設備屬於「怎麼測」，放這裡；放在受測樣品那節會被誤讀成樣品識別。
     story.append(Paragraph("3. 測試條件  Test Conditions", h2))
-    story.append(kv_table([
-        ["試驗設備 Chamber", device_id],
-        ["目標高溫 Target High", f"{target_high} °C" if target_high is not None else "N/A"],
-        ["目標低溫 Target Low", f"{target_low} °C" if target_low is not None else "N/A"],
-        ["升降溫速率 Ramp Rate", f"{sop_data.get('ramp_rate', 'N/A')} °C/min"],
-        ["停留時間 Dwell Time", f"{sop_data.get('dwell_time_hours', 'N/A')} h"],
-        ["循環次數 Cycles", str(sop_data.get("cycles", "N/A"))],
-        ["濕度設定 Humidity", f"{humi_target} %RH" if humi_target is not None else "N/A"],
-        ["溫度容差 Temp Tolerance", f"± {temp_tolerance} °C"],
-        ["測試開始 Start Time", _fmt_dt(execution.test_started_at)],
-        ["測試結束 End Time", _fmt_dt(execution.test_ended_at)],
-    ]))
+    story.append(kv_table([list(row) for row in content["conditions"]]))
 
     # ── 4. 步驟記錄 ───────────────────────────────────────────────────────────
     story.append(Paragraph("4. 步驟執行記錄  Step Records", h2))
-    story.append(Paragraph(
-        f"執行人員 Operator: {execution.operator or '(未填寫)'}",
-        base))
-    if steps:
+    story.append(Paragraph(f"執行人員 Operator: {content['operator']}", base))
+    if content["steps"]:
         step_data = [[
             Paragraph("步驟 Step", small),
             Paragraph("狀態 Status", small),
         ]]
-        for s in steps:
-            status = "✔ 完成" if s.completed else "✘ 未完成"
+        # 狀態字串走 content，兩種格式不得各判一次 completed；勾叉是 PDF 自己的排版
+        for step_label, status in content["steps"]:
+            mark = "✔" if status == "完成" else "✘"
             step_data.append([
-                Paragraph(f"Step {s.step_id}", base),
-                Paragraph(status, base),
+                Paragraph(step_label, base),
+                Paragraph(f"{mark} {status}", base),
             ])
         ts = Table(step_data, colWidths=[3*cm, None])
         ts.setStyle(TableStyle([
@@ -580,10 +701,6 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated,
 
     # ── 5. 量測不確定度（核心新功能）────────────────────────────────────────
     story.append(Paragraph("5. 量測不確定度分析  Measurement Uncertainty (GUM)", h2))
-
-    u_temp, u_humi = _compute_uncertainties(
-        temps, humis, target_high, humi_target, temp_tolerance, humi_tolerance
-    )
 
     def _unc_table(u: unc.UncertaintyResult, qty_label: str):
         header = [
@@ -641,17 +758,31 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated,
                                          leading=13,
                                          textColor=colors.HexColor("#1a5276")))]
 
-    if u_temp:
-        story.append(Paragraph("5.1 溫度不確定度 Temperature Uncertainty", h2))
-        if u_temp.note:
-            story.append(Paragraph(f"⚠ {u_temp.note}", warn))
-        story.extend(_unc_table(u_temp, "T"))
+    # 雙溫循環的高低溫各出一份：兩段有各自的目標與容差，共用一份會讓低溫段沒有結果
+    segments = content["temp_segments"]
+    section_titles = uncertainty_section_titles(content)
+    measured_segments = [s for s in segments if s["uncertainty"] is not None]
+    if measured_segments:
+        for idx, seg in enumerate(measured_segments, start=1):
+            if idx > 1:
+                story.append(Spacer(1, 8))
+            story.append(Paragraph(section_titles[idx - 1], h2))
+            u = seg["uncertainty"]
+            if u.note:
+                story.append(Paragraph(f"⚠ {u.note}", warn))
+            story.extend(_unc_table(u, "T"))
+        for seg in segments:
+            if seg["uncertainty"] is None:
+                story.append(Paragraph(
+                    f"（{seg['label']} {seg['target']} °C：{NO_SEGMENT_DATA}，"
+                    "這次測試沒有落在該段容差內的資料）", warn))
     else:
         story.append(Paragraph("(溫度數據不足，無法計算不確定度)", small))
 
+    u_humi = content["humidity"]["uncertainty"]
     if u_humi:
         story.append(Spacer(1, 8))
-        story.append(Paragraph("5.2 濕度不確定度 Humidity Uncertainty", h2))
+        story.append(Paragraph(section_titles[-1], h2))
         if u_humi.note:
             story.append(Paragraph(f"⚠ {u_humi.note}", warn))
         story.extend(_unc_table(u_humi, "RH"))
@@ -662,17 +793,9 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated,
 
     # ── 6. 數據統計 ───────────────────────────────────────────────────────────
     story.append(Paragraph("6. 數據統計  Measurement Summary", h2))
-    temp_max, temp_min, temp_avg = _summary_stats(u_temp, temps, 2)
-    humi_avg = _summary_avg(u_humi, humis, 1)
-    data_note = (f"{len(device_records)} 筆"
-                 + (f" (已截斷，上限 {MAX_DATA_POINTS} 筆)" if truncated else ""))
-    story.append(kv_table([
-        ["最高溫度 Max Temp", f"{temp_max} °C"],
-        ["最低溫度 Min Temp", f"{temp_min} °C"],
-        ["平均溫度 Avg Temp", f"{temp_avg} °C"],
-        ["平均濕度 Avg Humi", f"{humi_avg} %RH"],
-        ["數據筆數 Data Points", data_note if device_records else "測試時間未記錄"],
-    ]))
+    summary_rows = [[label, f"{value} {unit}"] for label, value, unit in content["summary"]]
+    summary_rows.append(["數據筆數 Data Points", content["data_points"]])
+    story.append(kv_table(summary_rows))
 
     # ── 7. 測試結論 ───────────────────────────────────────────────────────────
     story.append(Paragraph("7. 測試結論  Test Conclusion", h2))
@@ -682,7 +805,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated,
         base))
     story.append(kv_table([
         ["判定結果 Result", "[ __________ ]  (工程師人工填寫)"],
-        ["判定依據 Based on", sop_data.get("reference", "IEC 60068")],
+        ["判定依據 Based on", content["reference"]],
         ["判定人員 Judged by", "(工程師簽名)"],
         ["判定日期 Judge Date", "(填寫日期)"],
     ]))
@@ -694,7 +817,7 @@ def _build_pdf(execution, steps, device_records, sop_data, report_no, truncated,
     story.append(HRFlowable(width="100%", thickness=0.5,
                             color=colors.HexColor("#30363d")))
     story.append(Paragraph(
-        f"報告結束  End of Report  [{report_no}]",
+        f"報告結束  End of Report  [{content['report_no']}]",
         ParagraphStyle("footer", fontName=font_name, fontSize=8, leading=12,
                        textColor=colors.HexColor("#888888"), alignment=1)))
 
@@ -711,12 +834,12 @@ def download_pdf_report(execution_id: int):
     with SessionLocal() as db:
         execution, steps, device_records, truncated = _fetch_execution_data(execution_id, db)
         sop_data = STANDARDS_AND_SOPS.get(execution.sop_id, {})
-        report_no = _report_no(execution)
         sop_id = execution.sop_id
-        pdf_bytes = _build_pdf(
-            execution, steps, device_records, sop_data, report_no, truncated,
-            _case_info(db, execution),
+        content = _build_report_content(
+            execution, steps, device_records, sop_data, truncated, _case_info(db, execution)
         )
+        report_no = content["report_no"]
+        pdf_bytes = _build_pdf(content)
 
     filename = f"{report_no}_{sop_id}.pdf"
     encoded_filename = urllib.parse.quote(filename)
