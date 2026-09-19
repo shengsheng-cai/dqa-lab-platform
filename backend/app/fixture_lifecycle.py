@@ -317,8 +317,20 @@ def finish_manual_loan(
     return_condition: ReturnCondition,
     return_date: datetime.datetime,
 ) -> None:
-    """結束手動借出並處理正常、損壞、遺失三種結果。"""
-    if loan.status not in ACTIVE_LOAN_STATUSES:
+    """結束手動借出並處理正常、損壞、遺失三種結果。
+
+    只收手動借出的紀錄。排程擁有的預約與借出由排程取消或結案時的
+    release_schedule_loans 釋放：在這裡歸還一筆預約，排程詳情仍會顯示有預約，
+    但測試開始時已經沒有預約可以轉成借出（activate_schedule_loans 靜靜更新 0 列），
+    那份庫存已經回到可借池；選「遺失」還會扣掉一件根本沒被拿走的治具。
+    """
+    # 先判斷屬不屬於排程：排程的預約還沒結束，用「此紀錄已結束」回它會把人導向錯的方向。
+    if loan.schedule_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="這筆借用屬於排程，請到排程頁面取消或結案來歸還",
+        )
+    if loan.status != LOAN_LOANED:
         raise HTTPException(status_code=400, detail="此紀錄已結束")
 
     loan.return_date = return_date
