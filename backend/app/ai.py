@@ -6,11 +6,12 @@ import logging
 import datetime
 import time
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from .utils import _now_utc
+from .devices import build_device_list
 from .rag import (
     retrieve,
     match_std_keys,
@@ -269,31 +270,55 @@ def _query_schedule_context() -> str:
         return ""
 
 
-def _query_device_context() -> str:
-    """查詢所有設備即時狀態，注入 AI context。結果快取 1 分鐘。"""
-    from .models import SessionLocal, DeviceState
+def _describe_device(device: dict) -> str:
+    """把一台設備的狀態寫成給模型看的一行。
 
+    待機不等於可以用：排了維護時段的機器擋著不能啟動，還有排程沒結案的機器雖然此刻
+    沒在跑，樣品與治具都還在裡面。這兩件事只寫「空閒可用」的話，模型會把它們推薦出去。
+    """
+    device_id = device["device_id"]
+    status = device["status"]
+
+    # 「不可用」要待機中而且排了維護，跟設備卡的紅色徽章與頂部計數同一條判準：正在跑
+    # 又被排了維護的機器，現在的事實是它在跑，寫成不可用會跟畫面各說各話。
+    if status == "IDLE" and device["maintenance_blocked"]:
+        reason = device["maintenance_reason"] or "已設定封鎖"
+        return f"- {device_id}：維護中，不可用（{reason}）"
+
+    if status == "IDLE" and device["running_schedule_note"]:
+        return f"- {device_id}：待機中，但有排程尚未結案，不可另外啟動測試"
+
+    if status == "IDLE":
+        return f"- {device_id}：空閒可用（IDLE）"
+
+    if status in ("RUNNING", "PAUSED", "FINISHING"):
+        # 設備清單把沒有 SOP 名的機器填成 STANDBY，那是內部代碼不是測試名稱，
+        # 當成沒有名字處理，否則小抄會寫出「執行中：STANDBY」。
+        sop_name = device["running_sop_name"]
+        sop = f"，執行中：{sop_name}" if sop_name and sop_name != "STANDBY" else ""
+        return f"- {device_id}：{status}{sop}"
+
+    return f"- {device_id}：{status}"
+
+
+def _query_device_context(cache) -> str:
+    """把設備即時狀態注入 AI context。結果快取 1 分鐘。
+
+    資料來自 build_device_list，跟網頁與 WebSocket 同一份：設備能不能用的判斷只有那裡
+    一份，AI 不自己查狀態表下標籤，否則維護或排程的判準改了，這裡會安靜地留在舊說法。
+    """
     now = _now_utc()
     if _device_context_cache["data"] and _device_context_cache["expires_at"] > now:
         return _device_context_cache["data"]
     try:
-        with SessionLocal() as db:
-            devices = db.query(DeviceState).order_by(DeviceState.device_id).all()
-            if not devices:
-                return ""
-            lines = ["【設備狀態】："]
-            for d in devices:
-                if d.status == "IDLE":
-                    lines.append(f"- {d.device_id}：空閒可用（IDLE）")
-                elif d.status in ("RUNNING", "PAUSED", "FINISHING"):
-                    sop = f"，執行中：{d.running_sop_name}" if d.running_sop_name else ""
-                    lines.append(f"- {d.device_id}：{d.status}{sop}")
-                else:
-                    lines.append(f"- {d.device_id}：{d.status}")
-            result = "\n".join(lines)
-            _device_context_cache["data"] = result
-            _device_context_cache["expires_at"] = now + datetime.timedelta(minutes=1)
-            return result
+        devices = build_device_list(cache)
+        if not devices:
+            return ""
+        lines = ["【設備狀態】："] + [_describe_device(d) for d in devices]
+        result = "\n".join(lines)
+        _device_context_cache["data"] = result
+        _device_context_cache["expires_at"] = now + datetime.timedelta(minutes=1)
+        return result
     except Exception:
         return ""
 
@@ -347,7 +372,7 @@ def _extract_std_from_history(history: list) -> list[str]:
     return match_std_keys(all_text)
 
 
-async def _build_context(msg: str, history: list = None) -> tuple[str, list[str]]:
+async def _build_context(msg: str, cache, history: list = None) -> tuple[str, list[str]]:
     """依問題意圖組合標準、治具、設備與排程內容，並回傳可推薦的 SOP ID。
 
     標準檢索依序優先處理跨標準比較、明確標準、測試類型、溫度與一般查詢；
@@ -418,7 +443,7 @@ async def _build_context(msg: str, history: list = None) -> tuple[str, list[str]
             parts.append(fixture_ctx)
 
     if any(kw in msg for kw in _DEVICE_KEYWORDS):
-        device_ctx = await asyncio.to_thread(_query_device_context)
+        device_ctx = await asyncio.to_thread(_query_device_context, cache)
         if device_ctx:
             parts.append(device_ctx)
 
@@ -454,7 +479,7 @@ def _message_stream_response(message: str) -> StreamingResponse:
 
 
 @router.post("/standards-query-stream")
-async def standards_query_stream(req: QueryRequest):
+async def standards_query_stream(req: QueryRequest, request: Request):
     """串流法規回答，並把可套用的 SOP ID 以隱藏 metadata 附在文末。
 
     檢索逾時與串流中的供應商錯誤會轉成對話內文字，讓前端沿用同一套串流 UI；
@@ -463,7 +488,7 @@ async def standards_query_stream(req: QueryRequest):
     request_start = time.perf_counter()
     try:
         ref_block, sop_ids = await asyncio.wait_for(
-            _build_context(req.message, req.history),
+            _build_context(req.message, request.app.state.AICM_CACHE, req.history),
             timeout=RAG_CONTEXT_TIMEOUT_SECONDS,
         )
     except TimeoutError:

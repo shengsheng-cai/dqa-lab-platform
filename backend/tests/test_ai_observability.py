@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -24,7 +25,14 @@ def _query_request():
     return QueryRequest(message="高溫", history=[])
 
 
-async def _fake_context(_message, _history=None):
+class _FakeRequest:
+    """路由只從 request 取設備快取，這裡給一份空的就夠：這些測試都把 _build_context 換掉了。"""
+
+    def __init__(self):
+        self.app = SimpleNamespace(state=SimpleNamespace(AICM_CACHE={}))
+
+
+async def _fake_context(_message, _cache, _history=None):
     return "- [S:SOP-A] 測試條件", ["SOP-A"]
 
 
@@ -79,7 +87,7 @@ async def _collect_stream(response):
 
 
 async def _call_and_collect_stream(request):
-    response = await ai_module.standards_query_stream(request)
+    response = await ai_module.standards_query_stream(request, _FakeRequest())
     return await _collect_stream(response)
 
 
@@ -96,7 +104,7 @@ def test_stream_api_key_failure_logs_without_exception_detail(monkeypatch, caplo
 
     with caplog.at_level("ERROR", logger="ai"):
         with pytest.raises(RuntimeError):
-            _run_async(ai_module.standards_query_stream(_query_request()))
+            _run_async(ai_module.standards_query_stream(_query_request(), _FakeRequest()))
 
     text = _messages(caplog)
     assert "ai_call endpoint=standards-query-stream outcome=unavailable" in text
@@ -157,7 +165,7 @@ def test_stream_logs_stream_error_without_exception_detail_or_meta(monkeypatch, 
 
 
 def test_context_timeout_returns_stream_message(monkeypatch, caplog):
-    async def _slow_context(_message, _history=None):
+    async def _slow_context(_message, _cache, _history=None):
         await asyncio.sleep(0.02)
         return "", []
 
@@ -172,7 +180,7 @@ def test_context_timeout_returns_stream_message(monkeypatch, caplog):
 
 
 def test_context_failure_returns_stream_message_without_exception_detail(monkeypatch, caplog):
-    async def _failed_context(_message, _history=None):
+    async def _failed_context(_message, _cache, _history=None):
         raise RuntimeError("https://generativelanguage.googleapis.com/fake?key=SECRET_KEY")
 
     monkeypatch.setattr(ai_module, "_build_context", _failed_context)
