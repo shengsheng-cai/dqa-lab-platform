@@ -16,8 +16,13 @@ from fastapi import HTTPException
 
 from app import uncertainty as unc
 from app.models import DeviceData, Schedule, ScheduleStatus, SopExecution
+from app.standards import STANDARDS_AND_SOPS
 from app.reports import (
     NO_CASE_TEXT,
+    NO_SEGMENT_DATA,
+    NOT_FILLED,
+    uncertainty_section_titles,
+    _build_report_content,
     _fetch_execution_data,
     _summary_avg,
     _summary_stats,
@@ -506,3 +511,225 @@ def test_saved_execution_has_no_case_when_no_matching_start_row(api_client, no_l
 
         with Session() as db:
             assert db.get(SopExecution, eid).schedule_id is None
+
+
+# ── 雙溫循環的高低溫各要有一組統計 ──────────────────────────────────────────
+
+DUAL_SOP = "iec60068_nb_-25_+70_3cycle"
+# 高溫段、低溫段各 6 筆（都落在目標 ±2 內，足以篩出穩定段），再加轉換途中的 3 筆
+DUAL_HIGH = [70.0, 70.5, 69.8, 70.2, 71.0, 70.1]
+DUAL_LOW = [-25.0, -24.5, -25.3, -24.8, -25.1, -25.0]
+DUAL_TEMPS = DUAL_HIGH + DUAL_LOW + [20.0, 0.0, 45.0]
+
+
+
+def _seed_dual_temp_execution(Session) -> int:
+    """建一筆跑完的雙溫循環測試，感測資料含高溫段與低溫段。"""
+    now = datetime.datetime(2026, 1, 1, 0, 0, 0)
+    with Session() as db:
+        e = SopExecution(
+            sop_id=DUAL_SOP, device_id="CH-02", operator="測試員",
+            test_started_at=now,
+            test_ended_at=now + datetime.timedelta(minutes=len(DUAL_TEMPS)),
+        )
+        db.add(e)
+        db.commit()
+        eid = e.id
+        for i, t in enumerate(DUAL_TEMPS):
+            db.add(DeviceData(
+                device_id="CH-02", temperature=t, humidity=50.0,
+                timestamp=now + datetime.timedelta(minutes=i),
+            ))
+        db.commit()
+    return eid
+
+
+_FAKE_CASE = {"sample_name": "s", "project_number": "p", "customer": "c"}
+
+
+def _dual_content(Session, eid):
+    """對一筆跑完的雙溫測試算報告內容。"""
+    with Session() as db:
+        return _build_report_content(
+            db.get(SopExecution, eid), [],
+            db.query(DeviceData).order_by(DeviceData.timestamp).all(),
+            STANDARDS_AND_SOPS[DUAL_SOP], False, _FAKE_CASE,
+        )
+
+
+def _content_without_data(Session):
+    """沒有感測資料、也沒有填執行人員的那種紀錄，用來驗空值寫法。"""
+    with Session() as db:
+        execution = SopExecution(sop_id=DUAL_SOP, device_id="CH-02", operator=None)
+        db.add(execution)
+        db.commit()
+        return _build_report_content(
+            execution, [], [], STANDARDS_AND_SOPS[DUAL_SOP], False, _FAKE_CASE,
+        )
+
+
+def test_dual_temperature_report_covers_the_low_segment(session_patched):
+    """雙溫循環的報告要交代低溫段。
+
+    以前統計只拿高溫目標算穩定段，低溫那幾小時一筆都進不了報告：−25↔+70 的測試
+    會把「最低溫度」印成 69.8°C（高溫段裡最低的那筆），而實際跑到 −25.3°C。
+    """
+    eid = _seed_dual_temp_execution(session_patched)
+
+    body = _csv_text(eid)
+
+    assert "高溫段" in body and "低溫段" in body, "雙溫循環要分兩段陳述"
+    assert str(min(DUAL_LOW)) in body, (
+        f"報告要寫出實際的最低溫 {min(DUAL_LOW)}°C，不是高溫段裡最低的那筆"
+    )
+
+
+def test_single_temperature_report_keeps_one_summary(session_patched):
+    """單溫測試維持一組統計，不要因為支援雙溫就多出空的段落。
+
+    段名照樣寫出是冷測還是熱測：不分段和不標形狀是兩件事，同一份報告的條件節
+    已經寫「目標低溫 −40°C」，統計節回到中性的「最高溫度」會前後不一致。
+    """
+    # 單溫冷測，有感測資料才會有段落統計
+    now = datetime.datetime(2026, 1, 1, 0, 0, 0)
+    cold = [-40.0, -39.8, -40.2, -40.1, -39.9, -40.3]
+    with session_patched() as db:
+        execution = SopExecution(
+            sop_id="iec60068_ab_-40_16h", device_id="CH-01", operator="測試員",
+            test_started_at=now, test_ended_at=now + datetime.timedelta(minutes=len(cold)),
+        )
+        db.add(execution)
+        db.commit()
+        eid = execution.id
+        for i, t in enumerate(cold):
+            db.add(DeviceData(
+                device_id="CH-01", temperature=t, humidity=50.0,
+                timestamp=now + datetime.timedelta(minutes=i),
+            ))
+        db.commit()
+
+    body = _csv_text(eid)
+
+    assert "高溫段" not in body, "冷測不得出現高溫段"
+    assert "低溫段 Low 最高溫度" in body, "單溫也要標出這段是冷是熱"
+
+
+def test_dual_temperature_pdf_has_one_uncertainty_table_per_segment(session_patched):
+    """PDF 的不確定度要兩段各一份，段落編號接得上。
+
+    兩段目標不同，共用一份等於低溫段沒有結果；編號寫死的話兩段都會叫 5.1。
+    """
+    eid = _seed_dual_temp_execution(session_patched)
+
+    pdf = _drain_streaming_response(download_pdf_report(eid))
+    assert pdf.startswith(b"%PDF"), "輸出要是合法 PDF"
+
+    # 直接數 PDF 產出的段落：5.1 高溫、5.2 低溫、5.3 濕度
+    content = _dual_content(session_patched, eid)
+    assert [s["label"] for s in content["temp_segments"]] == ["高溫段 High", "低溫段 Low"]
+    # 這支 SOP 不控濕，所以只有兩段溫度、沒有濕度那段
+    story_titles = uncertainty_section_titles(content)
+    assert story_titles == [
+        "5.1 溫度不確定度 Temperature Uncertainty（高溫段 High 70.0 °C）",
+        "5.2 溫度不確定度 Temperature Uncertainty（低溫段 Low -25.0 °C）",
+    ], f"不確定度的段落編號要接得上，實際是 {story_titles}"
+
+
+def test_csv_and_pdf_report_the_same_fields(session_patched):
+    """CSV 與 PDF 的欄位清單同源。
+
+    以前兩種格式各寫一份欄位，PDF 就少了報告版本、測試類型、濕度容差與紀錄建立四列，
+    執行人員空白時一邊寫「(待填寫)」一邊寫「(未填寫)」。欄位收成一份之後，這裡直接
+    斷言那份內容，任何一種格式要加欄位都得從同一個地方加。
+    """
+    content = _dual_content(session_patched, _seed_dual_temp_execution(session_patched))
+
+    labels = {label for section in ("identification", "test_item", "conditions")
+              for label, _ in content[section]}
+    for required in ("報告版本 Version", "測試類型 Test Type",
+                     "濕度容差 Humi Tolerance", "紀錄建立 Record Created"):
+        assert required in labels, f"{required} 少了，CSV 與 PDF 就會再度各講一套"
+
+    # 摘要統計也走同一份：容差範圍那列以前只有 CSV 有，PDF 少了一列而沒有東西會紅
+    summary_labels = [label for label, _, _ in content["summary"]]
+    assert "高溫段 High 溫度容差範圍 Temp Limit" in summary_labels
+    assert "低溫段 Low 溫度容差範圍 Temp Limit" in summary_labels
+
+
+def test_operator_placeholder_is_one_wording(session_patched):
+    """執行人員空白只有一種寫法，兩種格式不得各寫各的。"""
+    content = _content_without_data(session_patched)
+
+    assert content["operator"] == NOT_FILLED
+
+
+def test_aborted_dual_temperature_does_not_invent_the_missing_segment(session_patched):
+    """測試中止在高溫階段時，低溫段要寫「無有效數據」，不得拿全段資料湊一組數字。
+
+    不確定度本來有「穩定段不足就改用全段」的退回。單段報告時那是合理的，但分段之後
+    全段裡有另一段的資料：低溫段會拿高溫段的溫度算出平均，報告就會宣稱跑過一段
+    其實從沒發生的低溫，旁邊還附一份看起來很正式的不確定度表。
+    """
+    now = datetime.datetime(2026, 1, 1, 0, 0, 0)
+    # 升到高溫就停：低溫段一筆資料都沒有
+    aborted = [25.0, 40.0, 55.0] + [70.0, 70.1, 70.3, 69.9, 70.0, 70.2, 70.1, 70.0, 69.9]
+    with session_patched() as db:
+        execution = SopExecution(
+            sop_id=DUAL_SOP, device_id="CH-02", operator="測試員",
+            test_started_at=now,
+            test_ended_at=now + datetime.timedelta(minutes=len(aborted)),
+        )
+        db.add(execution)
+        db.commit()
+        eid = execution.id
+        for i, t in enumerate(aborted):
+            db.add(DeviceData(
+                device_id="CH-02", temperature=t, humidity=50.0,
+                timestamp=now + datetime.timedelta(minutes=i),
+            ))
+        db.commit()
+
+    content = _dual_content(session_patched, eid)
+
+    low = next(s for s in content["temp_segments"] if s["label"] == "低溫段 Low")
+    assert low["min"] == NO_SEGMENT_DATA, (
+        f"低溫段沒有資料就要說出來，實際印的是 {low['min']}"
+    )
+    assert low["uncertainty"] is None, "沒有資料的段落不得產出不確定度表"
+
+    high = next(s for s in content["temp_segments"] if s["label"] == "高溫段 High")
+    assert high["min"] == 69.9, "有資料的那段照常統計"
+
+    # 沒有資料的段落不佔編號，否則畫面上會出現一個空的 5.2
+    assert uncertainty_section_titles(content) == [
+        "5.1 溫度不確定度 Temperature Uncertainty（高溫段 High 70.0 °C）",
+    ]
+
+    pdf = _drain_streaming_response(download_pdf_report(eid))
+    assert pdf.startswith(b"%PDF"), "缺一段資料時仍要產得出 PDF"
+
+
+@pytest.mark.parametrize("sop_id,expected", [
+    # 冷測只填 low_temperature 與 target_temperature，以前會印成「目標高溫 -40°C」
+    ("iec60068_ab_-40_16h", [("目標低溫 Target Low", "-40.0 °C")]),
+    ("iec60068_ba_+85_16h", [("目標高溫 Target High", "85.0 °C")]),
+    (DUAL_SOP, [("目標高溫 Target High", "70.0 °C"),
+                ("目標低溫 Target Low", "-25.0 °C")]),
+])
+def test_setpoint_rows_match_the_actual_test_shape(session_patched, sop_id, expected):
+    """目標溫度那幾列要跟這支 SOP 真正有幾個設定點一致。
+
+    以前固定印「目標高溫」與「目標低溫」兩列，冷測沒有高溫可言，就變成一個叫高溫的
+    欄位寫著零下四十度；熱測則兩列印同一個值。
+    """
+    with session_patched() as db:
+        execution = SopExecution(sop_id=sop_id, device_id="CH-01", operator="測試員")
+        db.add(execution)
+        db.commit()
+        content = _build_report_content(
+            execution, [], [], STANDARDS_AND_SOPS[sop_id], False, _FAKE_CASE,
+        )
+
+    setpoints = [(label, value) for label, value in content["conditions"]
+                 if "Target" in label]
+    assert setpoints == expected
