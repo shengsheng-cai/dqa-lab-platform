@@ -1,16 +1,12 @@
 import React from "react";
+import { setpointsOf } from "../../utils/setpoints";
 
 const ConditionCard = ({ test }) => {
   if (!test) return null;
   const rows = [
-    [
-      "高溫上限",
-      test.high_temperature != null ? `${test.high_temperature} °C` : "—",
-    ],
-    [
-      "低溫下限",
-      test.low_temperature != null ? `${test.low_temperature} °C` : "—",
-    ],
+    // 有幾個設定點就列幾列：冷測沒有高溫可言，硬留一列空的「高溫上限 —」會讓人
+    // 以為資料沒串進來；熱測同理不該多一列空的低溫
+    ...setpointsOf(test).map(({ label, value }) => [label, `${value} °C`]),
     ["升降溫速率", test.ramp_rate != null ? `${test.ramp_rate} °C/min` : "—"],
     [
       "停留時間",

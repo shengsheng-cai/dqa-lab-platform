@@ -1,5 +1,6 @@
 import { C } from "../../styles/theme";
 import { btnBare } from "../../styles/common";
+import { setpointSummary } from "../../utils/setpoints";
 import { useState, useEffect } from "react";
 
 export default function ConditionPicker({ standardsTree, selected, onChange, initialStd, initialVer }) {
@@ -87,8 +88,8 @@ export default function ConditionPicker({ standardsTree, selected, onChange, ini
               <div>
                 <div style={{ fontSize: 12, color: "#cdd9e5", fontWeight: 600 }}>{t.name}</div>
                 <div style={{ fontSize: 10, color: "#484f58" }}>
-                  {t.high_temperature != null && `高溫 ${t.high_temperature}°C`}
-                  {t.low_temperature != null && ` / 低溫 ${t.low_temperature}°C`}
+                  {/* 有幾個設定點就寫幾個：冷測只寫低溫，而且不會留下開頭那個多餘的斜線 */}
+                  {setpointSummary(t)}
                   {t.dwell_time_hours != null && ` / ${t.dwell_time_hours}h`}
                   {t.cycles > 1 && ` × ${t.cycles}`}
                   {` ≈ ${t.estimated_hours}h`}
