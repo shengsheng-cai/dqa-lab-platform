@@ -313,3 +313,67 @@ def test_double_return_is_rejected(admin_client):
 
     assert resp.status_code == 400
     assert _available(client, fid) == 5, "重複歸還不得再次影響庫存"
+
+
+# ── 排程擁有的紀錄不從治具明細歸還 ──────────────────────────────────────────
+
+
+def _seed_schedule_loan(Session, fixture_id: int, status: str) -> int:
+    """直接建一筆排程擁有的借用紀錄，回傳 loan id。
+
+    不走排程 router：那支掛在另一個 client 上、各自有各自的記憶體資料庫，
+    這裡要驗的是治具歸還這條路收到排程紀錄時怎麼反應。
+    """
+    with Session() as db:
+        sched = Schedule(
+            project_number="P-1", sample_name="s", standard="IEC 60068",
+            conditions='["iec60068_ab_-40_16h"]', status=ScheduleStatus.CONFIRMED,
+        )
+        db.add(sched)
+        db.flush()
+        loan = FixtureLoan(
+            fixture_id=fixture_id, borrower_name="排程", quantity=2,
+            status=status, schedule_id=sched.id,
+        )
+        db.add(loan)
+        db.commit()
+        return loan.id
+
+
+@pytest.mark.parametrize("status", ["reserved", "loaned"])
+def test_return_rejects_schedule_owned_loan(admin_client, status):
+    """排程擁有的預約與借出都不得從治具明細歸還。
+
+    歸還掉之後排程詳情仍顯示著那筆，但測試開始時已經沒有預約可以轉成借出
+    （activate_schedule_loans 靜靜更新 0 列），那份庫存已經回到可借池；
+    選「遺失」還會扣掉一件根本沒被拿走的治具。
+    """
+    client, Session = admin_client
+    fid = _seed_fixture(Session, total=5)
+    loan_id = _seed_schedule_loan(Session, fid, status)
+
+    resp = client.post(f"/api/fixtures/loans/{loan_id}/return", json={
+        "return_condition": "normal", "keeper_note": "誤按",
+    })
+
+    assert resp.status_code == 400
+    assert "排程" in resp.json()["detail"], "訊息要說得出歸還入口在排程頁面"
+    with Session() as db:
+        loan = db.get(FixtureLoan, loan_id)
+        assert loan.status == status, "排程擁有的紀錄不得被明細的歸還改掉"
+        assert loan.return_date is None
+        # 備註在守衛之前就寫進 ORM 物件，被擋下來時整筆交易要一起回滾
+        assert loan.keeper_note is None, "被擋下的歸還不得留下備註"
+
+
+def test_return_rejects_schedule_loan_marked_lost(admin_client):
+    """選「遺失」尤其不能放行：那會扣掉一件其實還在排程手上的治具。"""
+    client, Session = admin_client
+    fid = _seed_fixture(Session, total=5)
+    loan_id = _seed_schedule_loan(Session, fid, "loaned")
+
+    resp = client.post(f"/api/fixtures/loans/{loan_id}/return", json={"return_condition": "lost"})
+
+    assert resp.status_code == 400
+    with Session() as db:
+        assert db.get(Fixture, fid).total_quantity == 5, "總數不得因為誤按遺失而被扣掉"

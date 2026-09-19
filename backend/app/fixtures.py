@@ -417,6 +417,8 @@ def list_active_loans():
                 "loan_date": loan.loan_date.isoformat() if loan.loan_date else None,
                 "due_date": loan.due_date.isoformat() if loan.due_date else None,
                 "status": loan.status,
+                # 治具明細靠這個欄位濾掉排程擁有的紀錄：那些的歸還入口在排程頁面
+                "schedule_id": loan.schedule_id,
             }
             for loan in loans
         ]

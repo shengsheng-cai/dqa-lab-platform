@@ -474,13 +474,23 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                     const isDiff = editVal !== undefined && editVal !== "" &&
                       !isNaN(parsedVal) && parsedVal !== f.total_quantity;
                     const isExpanded = expandedFixtureId === f.id;
-                    const fixtureLoans = isExpanded ? activeLoans.filter((l) => l.fixture_id === f.id) : [];
+                    // 只列手動借出：排程的預約與借出由排程取消或結案時釋放，在這裡按「歸還」
+                    // 會讓排程詳情還顯示著預約、測試開始時卻已經沒有預約可以轉成借出。
+                    const fixtureLoans = isExpanded
+                      ? activeLoans.filter((l) => l.fixture_id === f.id && l.schedule_id == null)
+                      : [];
+                    // 表頭與空狀態的 colSpan 共用這份，欄位增減時不會有一邊忘了改
+                    const loanDetailCols = canOperate
+                      ? ["借用人", "專案", "數量", "借出日", "到期日", "操作"]
+                      : ["借用人", "專案", "數量", "借出日", "到期日"];
                     const keeperUnlinked = isUnlinkedKeeper(f);
                     // 一個字串同時給 aria-label 和 title：滑鼠提示和螢幕閱讀器唸出來的
                     // 應該是同一句，兩份會各自漂走。測試也是靠這個名稱定位那顆按鈕。
+                    // 不把「歸還」寫進名稱：這個數字含排程借出，而明細只列手動借出，
+                    // 全是排程時打開會沒有半筆可還，名稱先承諾了就變成騙人。
                     const loansLabel = isExpanded
                       ? "收合借用明細"
-                      : `借出 ${f.loaned_quantity} 個，查看借用明細與歸還`;
+                      : `借出 ${f.loaned_quantity} 個，查看借用明細`;
                     return (
                     <Fragment key={f.id}>
                     <tr
@@ -661,21 +671,27 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                         </td>
                       )}
                     </tr>
-                    {isExpanded && fixtureLoans.length > 0 && (
+                    {isExpanded && (
                       <tr key={`${f.id}-loans`} id={`fixture-loans-${f.id}`}>
                         <td colSpan={canOperate ? 14 : 13} style={{ padding: 0, background: C.surfaceAlt, borderBottom: `1px solid ${C.border}` }}>
                           <div style={{ padding: "8px 16px 12px 32px" }}>
                             <table style={{ width: "100%", borderCollapse: "collapse" }}>
                               <thead>
                                 <tr>
-                                  {["借用人","專案","數量","借出日","到期日"].map((h) => (
+                                  {loanDetailCols.map((h) => (
                                     <th key={h} style={{ ...thStyle, fontSize: 11 }}>{h}</th>
                                   ))}
-                                  {canOperate && <th style={{ ...thStyle, fontSize: 11 }}>操作</th>}
                                 </tr>
                               </thead>
                               <tbody>
-                                {(() => {
+                                {fixtureLoans.length === 0 ? (
+                                  // 借出數量含排程已開始的那些，所以這個入口可能開得起來卻沒有
+                                  // 手動借出可列。空白一片會讓人以為明細壞了，要寫出東西在哪。
+                                  <ListStateRow
+                                    colSpan={loanDetailCols.length}
+                                    empty="這支治具目前只有排程借用中，請到排程頁面處理"
+                                  />
+                                ) : (() => {
                                   const now = new Date();
                                   return fixtureLoans.map((loan) => {
                                   const dueDate = loan.due_date ? parseUTC(loan.due_date) : null;
