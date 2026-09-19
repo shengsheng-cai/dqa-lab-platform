@@ -9,6 +9,7 @@ import {
   inputStyle, labelStyle, primaryBtn, cancelBtn, disabledStyle,
 } from "./scheduleUtils";
 import { C } from "../../styles/theme";
+import { conditionProgress } from "../../utils/scheduleProgress";
 
 function InfoRow({ label, value, muted }) {
   return (
@@ -331,17 +332,14 @@ export default function ScheduleDetailModal({ schedule, schedules = [], role, de
         </button>
       )}
       {showContinuation && (() => {
-        const conds = schedule.conditions || [];
-        const idx = schedule.current_condition_index ?? 0;
-        const isLast = idx >= conds.length;
-        const label = isLast ? "✅ 確認完成" : `▶ 開始第 ${idx + 1} 條件（共 ${conds.length}）`;
+        const { isLast, actionLabel } = conditionProgress(schedule);
         return (
           <button
             onClick={confirmCondition}
             {...blockedAttrs}
             style={{ ...primaryBtn, background: isLast ? C.successDark : C.accentDark, ...blockedStyle }}
           >
-            {saving ? "處理中..." : label}
+            {saving ? "處理中..." : actionLabel}
           </button>
         );
       })()}

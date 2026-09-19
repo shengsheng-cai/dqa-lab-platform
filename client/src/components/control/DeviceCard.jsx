@@ -9,7 +9,7 @@ import {
   EMERGENCY_STATUS,
   SIM_PHASE_LABEL,
 } from "../../constants";
-import { conditionLabel } from "./deviceCardUtils";
+import { conditionProgress, isWaitingForConfirm } from "../../utils/scheduleProgress";
 import { C } from "../../styles/theme";
 import { btnBare } from "../../styles/common";
 
@@ -95,10 +95,8 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
   const isFinishing = device.status === FINISHING_STATUS;
   const [confirming, setConfirming] = useState(false);
 
-  const isWaiting = device.status === IDLE_STATUS && !!pendingSchedule && !!onConfirmCondition;
-  const { idx: waitingIdx, total: waitingTotal, label: waitingLabel } = isWaiting
-    ? conditionLabel(pendingSchedule)
-    : { idx: 0, total: 0, label: "" };
+  const isWaiting = isWaitingForConfirm(device, pendingSchedule) && !!onConfirmCondition;
+  const waitingLabel = isWaiting ? conditionProgress(pendingSchedule).shortActionLabel : "";
   const handleConfirm = async (e) => {
     e.stopPropagation();
     setConfirming(true);
@@ -228,7 +226,9 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
       {isWaiting && (
         <div style={{ marginTop: 5 }}>
           <div style={{ fontSize: 10, color: "#f0a500", marginBottom: 3 }}>
-            ⚠ 等待確認 ({waitingIdx}/{waitingTotal})
+            {/* 不在這裡報進度：下面那顆按鈕已經說了接下來要做什麼，
+                而這個位置以前放的數字（跑完是 1/1、被按停是 0/1）沒人看得懂 */}
+            ⚠ 等待確認
           </div>
           <button
             disabled={confirming}
