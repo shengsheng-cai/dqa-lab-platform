@@ -37,7 +37,7 @@ idle → ramp_to_low → ramp_to_high → dwell_high → ramp_to_low2 → dwell_
 
 - RUNNING 內自然完成：`ramp_to_ambient` 回到常溫後，再經 `stabilize`（常溫穩定 30 分鐘，`STABILIZATION_MINUTES`，期間設備仍占用）才回 IDLE，不在回常溫瞬間就 IDLE
 - 常溫穩定時間三處共用：設備卡 estimated_end、排程器占用表、模擬器 `stabilize` 相位一律以「曲線 + 30 分鐘」為真正可再用時間
-- 「設備何時空出來」只有 `device_free_at`（`utils.py`）這一份對應表：RUNNING/PAUSED 走 `occupied_end`（曲線 + 常溫穩定 + 暫停），FINISHING 走 `finishing_end`（從當前溫度降回常溫，不是整條曲線重跑）。設備卡與排程器共用它，不得各自再依 status 分支
+- 「設備何時空出來」只有 `device_free_at`（`utils.py`）這一份對應表：RUNNING/PAUSED 走 `occupied_end`（曲線 + 常溫穩定 + 暫停），FINISHING 走 `finishing_end`（從當前溫度降回常溫，不是整條曲線重跑）。設備卡、排程器與 SOP 左側資訊面板共用它，不得各自再依 status 分支。前端一律讀設備清單送的 `estimated_end_at`，不要拿測試條件自己重算——自己算會少掉常溫穩定與暫停那兩段（見 `frontend.md`）
 - 降溫速率只有 `ramp_rate_from_sop`（`utils.py`）一份：模擬器實際降溫與「還要降多久」的估算讀同一個來源
 - FINISHING 內手動停止（取消／緊急收尾）的 `ramp_to_ambient` 結束後直接回 IDLE，不走 `stabilize`（中止非完成，不需穩定）
 - 同理，**中止不動排程**：手動停止或緊急收尾降完溫後，排程維持「進行中」、治具不歸還，由人員在排程頁面接續條件或取消排程來結案（中止後 `current_condition_index` 沒動，所以那條還要重跑，按鈕是「開始第 N 條件」而不是「確認完成」；

@@ -42,6 +42,7 @@ const MonitorSide = ({
         <ExecutionInfoPanel
           sop={ds.activeSop}
           startedAt={data.started_at}
+          estimatedEndAt={data.estimated_end_at}
           simCycle={data.sim_cycle}
           doneCnt={doneCnt}
         />
