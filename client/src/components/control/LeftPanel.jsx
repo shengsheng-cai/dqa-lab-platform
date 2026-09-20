@@ -4,7 +4,7 @@ import ScheduleSummaryPanel from "./ScheduleSummaryPanel";
 import UsersSummaryPanel from "./UsersSummaryPanel";
 import CalibrationSummaryPanel from "./CalibrationSummaryPanel";
 
-export default function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary, onOpenRecords, pendingByDevice, onConfirmCondition, scheduleCounts, onShowQc, calibrationStatusMap }) {
+export default function LeftPanel({ devices, selectedDevice, onSelectDevice, activeTab, fixtureSummary, onOpenRecords, pendingByDevice, onConfirmCondition, scheduleCounts, onShowQc, calibrationStatusMap, usersSummary, usersSummaryError }) {
   const title = activeTab === "schedule" ? "本欄：排程概況"
     : activeTab === "fixture" ? "本欄：治具概況"
     : activeTab === "users" ? "本欄：人員概況"
@@ -30,7 +30,7 @@ export default function LeftPanel({ devices, selectedDevice, onSelectDevice, act
         ) : activeTab === "schedule" ? (
           <ScheduleSummaryPanel devices={devices} pendingByDevice={pendingByDevice} onConfirmCondition={onConfirmCondition} counts={scheduleCounts} onShowQc={onShowQc} calibrationStatusMap={calibrationStatusMap} />
         ) : activeTab === "users" ? (
-          <UsersSummaryPanel />
+          <UsersSummaryPanel summary={usersSummary} loadError={usersSummaryError} />
         ) : activeTab === "maintenance" ? (
           <CalibrationSummaryPanel calibrationStatusMap={calibrationStatusMap} />
         ) : (

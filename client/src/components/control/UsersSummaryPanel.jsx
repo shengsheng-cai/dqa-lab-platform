@@ -1,39 +1,12 @@
-import { useState, useEffect } from "react";
-import api from "../../api";
-import { POLL_GENERAL_MS } from "../../constants";
-import { C } from "../../styles/theme";
-import { describeLoadError } from "../../utils/loadError";
 import { UnknownStat } from "../ListState";
 
-export default function UsersSummaryPanel() {
-  const [summary, setSummary] = useState({ admin: 0, validTokens: 0 });
-  // 讀不到就不要顯示數字。以前失敗被吞掉，兩個數字停在初值 0，
-  // 看起來就像「一個管理者也沒有、一把有效 Token 也沒有」。
-  const [loadError, setLoadError] = useState("");
-
-  useEffect(() => {
-    const fetch = async () => {
-      try {
-        const [usersRes, tokensRes] = await Promise.all([
-          api.get("/api/auth/users"),
-          api.get("/api/auth/demo-tokens"),
-        ]);
-        const users = usersRes.data;
-        const tokens = tokensRes.data;
-        setSummary({
-          admin: users.filter(u => u.role === "admin" && u.is_active).length,
-          validTokens: tokens.filter(t => t.is_active && !t.expired && !t.used_up).length,
-        });
-        setLoadError("");
-      } catch (e) {
-        setLoadError(describeLoadError(e));
-      }
-    };
-    fetch();
-    const t = setInterval(fetch, POLL_GENERAL_MS);
-    return () => clearInterval(t);
-  }, []);
-
+/**
+ * 左欄的人員摘要。資料由 ControlCenter 抓、寫入後也由它刷新——這裡只負責顯示。
+ *
+ * 以前是這個面板自己抓、自己輪詢，所以在人員管理頁生成或撤銷 Token、停用或刪除人員後，
+ * 表格已經更新、toast 也說成功了，左欄的數字卻要等最多 60 秒才跟上。
+ */
+export default function UsersSummaryPanel({ summary, loadError }) {
   const items = [
     { label: "管理者", value: summary.admin, color: "#f85149" },
     { label: "有效 Token", value: summary.validTokens, color: summary.validTokens > 0 ? "#3fb950" : "#8b949e" },

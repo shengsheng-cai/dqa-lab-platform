@@ -20,6 +20,7 @@ import TabBadge from "./components/control/TabBadge";
 import LeftPanel from "./components/control/LeftPanel";
 import { DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, IDLE_STATUS } from "./constants";
 import { localDayWindow } from "./utils/timezone";
+import { describeLoadError } from "./utils/loadError";
 import { C } from "./styles/theme";
 
 const TAB_TO_PATH = {
@@ -72,7 +73,7 @@ const TABS = [
   { key: "users", label: "人員管理", adminOnly: true },
 ];
 
-function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, devicesReady, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange, onFixtureChanged, onScheduleChanged }) {
+function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, devicesReady, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange, onFixtureChanged, onScheduleChanged, onUsersChanged }) {
   const visibleTabs = TABS.filter((t) =>
     (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
   );
@@ -178,7 +179,7 @@ function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleIn
               <MaintenancePage active={activeTab === "maintenance"} role={role} onCalibrationChange={onCalibrationChange} />
             </div>
             <div style={{ display: activeTab === "users" ? "block" : "none", height: "100%" }}>
-              <UsersPage active={activeTab === "users"} role={role} />
+              <UsersPage active={activeTab === "users"} role={role} onUsersChanged={onUsersChanged} />
             </div>
           </>
         )}
@@ -214,6 +215,8 @@ export default function ControlCenter({ role, displayName, onLogout }) {
   const [recordsSubTab, setRecordsSubTab] = useState("errors");
   const [sensorModalDevice, setSensorModalDevice] = useState(null);
   const [calibrationStatusMap, setCalibrationStatusMap] = useState({});
+  const [usersSummary, setUsersSummary] = useState({ admin: 0, validTokens: 0 });
+  const [usersSummaryError, setUsersSummaryError] = useState("");
   const [runtimeWarnings, setRuntimeWarnings] = useState([]);
   // 預設當成可用：讀不到 runtime-info 時寧可讓人送出後看後端的實話，
   // 也不要因為一次讀取失敗就把面板鎖起來。
@@ -336,6 +339,34 @@ export default function ControlCenter({ role, displayName, onLogout }) {
     return () => clearInterval(t);
   }, [fetchCalStatus]);
 
+  // 人員摘要（管理者人數、有效 Token 數）。放這裡而不是讓面板自己抓，是為了讓
+  // 人員管理頁寫入後能立刻刷新——輪詢只當背景備援，不能拿它當主要更新手段。
+  const fetchUsersSummary = useCallback(async () => {
+    if (role === "guest") return;
+    try {
+      const [usersRes, tokensRes] = await Promise.all([
+        api.get("/api/auth/users"),
+        api.get("/api/auth/demo-tokens"),
+      ]);
+      setUsersSummary({
+        admin: usersRes.data.filter(u => u.role === "admin" && u.is_active).length,
+        validTokens: tokensRes.data.filter(t => t.is_active && !t.expired && !t.used_up).length,
+      });
+      setUsersSummaryError("");
+    } catch (e) {
+      // 讀不到就不要顯示數字：停在初值 0 看起來像「一個管理者也沒有」
+      setUsersSummaryError(describeLoadError(e));
+    }
+  }, [role]);
+
+  useEffect(() => {
+    // fetchUsersSummary 為 async（await 後才 setState），非串接 render，誤報
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchUsersSummary();
+    const t = setInterval(fetchUsersSummary, POLL_GENERAL_MS);
+    return () => clearInterval(t);
+  }, [fetchUsersSummary]);
+
   // 訪客也要打這支：AI 面板要靠 ai_enabled 才知道該不該停用輸入。
   // 後端只發給訪客這一項，warnings 那幾句會寫出缺哪個環境變數，維持只給管理者。
   useEffect(() => {
@@ -375,6 +406,8 @@ export default function ControlCenter({ role, displayName, onLogout }) {
           scheduleCounts={scheduleCounts}
           onShowQc={setSensorModalDevice}
           calibrationStatusMap={calibrationStatusMap}
+          usersSummary={usersSummary}
+          usersSummaryError={usersSummaryError}
         />
         <CenterPanel
           role={role}
@@ -390,6 +423,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
           scheduleCounts={scheduleCounts}
           onOpenExecutions={() => { setRecordsOpen(true); setRecordsSubTab("executions"); }}
           onCalibrationChange={fetchCalStatus}
+          onUsersChanged={fetchUsersSummary}
           onFixtureChanged={fetchFixtureSummary}
           onScheduleChanged={refreshScheduleOverview}
         />

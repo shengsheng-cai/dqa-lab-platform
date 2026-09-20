@@ -113,7 +113,7 @@
 
 ### 畫面要說出實話
 
-- 寫入成功後**必須呼叫對應的資源 callback 立即失效**（`fixtureSummary`、`scheduleCounts`、`calibrationStatusMap` 都由 ControlCenter 持有）。30／60 秒 polling 只是背景與跨瀏覽器變更的 fallback，不能拿它當主要更新手段
+- 寫入成功後**必須呼叫對應的資源 callback 立即失效**（`fixtureSummary`、`scheduleCounts`、`calibrationStatusMap`、`usersSummary` 都由 ControlCenter 持有）。30／60 秒 polling 只是背景與跨瀏覽器變更的 fallback，不能拿它當主要更新手段。**左欄的摘要面板一律只負責顯示，不自己抓資料**：面板自己抓的話，寫入的那一頁沒有管道通知它，畫面上就會變成「表格更新了、toast 也說成功了，左欄的數字要等下一次輪詢才跟上」
 - **列表讀不到資料時不得顯示成「尚無○○」**：載入中、讀取失敗、真的沒有資料是三種情況，共用同一句話會讓後端斷線看起來像資料本來就是空的。訪客 Token 那張最嚴重——讀取失敗會顯示「點擊「+ 生成」建立第一個」，等於在系統故障時請管理者再發一把憑證。三態一律用 `components/ListState.jsx`：`ListState` 放一般容器、`ListStateRow` 放表格（欄數要跟表頭一致）、`StaleBanner` 用在「手上有舊資料但這次更新失敗」。**失敗不要清空既有資料**，留著並在上方標明那是上一次讀到的，清掉會像資料被刪光了。錯誤區塊的按鈕叫「重試」不叫「重新整理」：稽核面板工具列本來就有一顆「重新整理」，讀取失敗時兩顆會同時出現在畫面上
 - **摘要數字讀不到時要換掉整個值，用 `ListState.jsx` 的 `UnknownStat`**：數字比清單更會騙人——它永遠顯示得出來，而「0」跟「真的是 0」長得一樣。異常看板的「緊急停止次數 0」在後端掛掉時就是這樣，等於在故障當下說系統沒有異常。`aria-label` 的「X：讀取失敗」是 E2E 的定位依據，改文案要一起改測試。目前的呼叫點是 `ErrorLog.jsx` 的三張統計卡加標題旁的筆數徽章，與 `UsersSummaryPanel.jsx` 的兩個數字
 - **選單的選項來源讀不到，也算「說出實話」的範圍**：一個零筆的下拉看起來像系統沒建過那種資料，所以**選單絕不可以安靜地變空**。選單就是該區塊主體時整段換成 `ListState`（`SOPPage.jsx` 的法規、`NewScheduleModal.jsx` 的治具）；選單只是表單裡的一格時用 `ListState.jsx` 的 `FieldLoadError` 掛在它下面（`LoanModal.jsx` 的借用人、`SetKeeperModal.jsx` 的保管人），不要自己寫那一行——它要負責的三件事手寫很容易漏：訊息走 `describeLoadError`、`role="alert"`（這行是非同步冒出來的，沒有它，Tab 到空選單只會聽到一個選項卻不知道為什麼），以及**一定要有重試**。借用人是必填欄位，讀不到又沒有重試，整個視窗就變成只能關掉重開的死路
