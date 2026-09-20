@@ -178,7 +178,7 @@ function UserModal({ user, onClose, onSaved }) {
 
 // ── 訪客 Token 管理 ────────────────────────────────────────────
 
-function DemoTokenSection({ active }) {
+function DemoTokenSection({ active, onUsersChanged }) {
   const { showToast } = useToast();
   const [tokens, setTokens] = useState([]);
   const [hideInactive, setHideInactive] = useState(true);
@@ -256,6 +256,7 @@ function DemoTokenSection({ active }) {
       setShowForm(false);
       showToast("訪客 Token 已生成", "success");
       fetchTokens();
+      onUsersChanged?.();
     } catch (e) {
       const msg = e.response?.data?.detail || "建立失敗";
       showToast(msg, "error");
@@ -269,6 +270,7 @@ function DemoTokenSection({ active }) {
       await api.patch(`/api/auth/demo-tokens/${id}/toggle`);
       showToast("Token 狀態已更新", "success");
       fetchTokens();
+      onUsersChanged?.();
     } catch (e) {
       const msg = e.response?.data?.detail || "更新失敗";
       showToast(msg, "error");
@@ -284,6 +286,7 @@ function DemoTokenSection({ active }) {
       showToast(`Token「${deleteToken.token}」已撤銷`, "success");
       setDeleteToken(null);
       fetchTokens();
+      onUsersChanged?.();
     } catch (e) {
       showToast(e.response?.data?.detail || "撤銷失敗，此 Token 可能仍然有效", "error");
     } finally {
@@ -479,7 +482,7 @@ const inputS = {
   width: 180,
 };
 
-export default function UsersPage({ active, role }) {
+export default function UsersPage({ active, role, onUsersChanged }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -516,6 +519,7 @@ export default function UsersPage({ active, role }) {
       });
       showToast(`已${action}「${user.display_name}」`, "success");
       fetchUsers();
+      onUsersChanged?.();
     } catch (e) {
       console.error(e);
       showToast(e.response?.data?.detail || `「${user.display_name}」${action}失敗`, "error");
@@ -533,6 +537,7 @@ export default function UsersPage({ active, role }) {
       showToast(`已刪除「${name}」`, "success");
       setDeleteTarget(null);
       fetchUsers();
+      onUsersChanged?.();
     } catch (e) {
       console.error(e);
       showToast(e.response?.data?.detail || `「${name}」刪除失敗`, "error", 4000, e.response?.data?.hint);
@@ -640,7 +645,7 @@ export default function UsersPage({ active, role }) {
 
         {/* ── 右側：訪客 Token ── */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <DemoTokenSection active={active} />
+          <DemoTokenSection active={active} onUsersChanged={onUsersChanged} />
         </div>
       </div>
 
@@ -652,6 +657,7 @@ export default function UsersPage({ active, role }) {
           onSaved={() => {
             setModalUser(undefined);
             fetchUsers();
+            onUsersChanged?.();
           }}
         />
       )}

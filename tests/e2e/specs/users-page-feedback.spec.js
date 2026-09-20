@@ -225,3 +225,34 @@ test("刪除人員的成功與失敗都要說出是誰，失敗還要留在原�
     await expect(row).toHaveCount(0);
   });
 });
+
+// 左欄摘要以前是那個面板自己抓、自己每 60 秒輪詢一次，所以生成或撤銷 Token 之後，
+// 表格更新了、toast 也說成功了，左欄的數字卻還停在舊的——看起來像沒存進去。
+// 輪詢只能當背景備援，寫入後要立刻反映。
+//
+// 這條刻意不等、也不重新整理頁面：要驗的就是「不靠輪詢也會變」。60 秒遠大於
+// Playwright 的預設等待，所以真的退回輪詢版本的話這條會逾時紅掉。
+test("生成與撤銷訪客 Token 之後，左欄的有效 Token 數要立刻跟上", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "人員管理" }).click();
+  await expect(page.getByRole("button", { name: "+ 生成" })).toBeVisible();
+
+  // 那一格是「標籤 + 數字」兩個 span。用標籤文字框出那一格，再把數字抓出來——
+  // 不寫死 DOM 層數，前端多包一層 div 也不會定到別的節點。
+  const tokenStat = page.locator("div").filter({ hasText: /^有效 Token\d+$/ }).last();
+  const readStat = async () =>
+    Number((await tokenStat.textContent()).replace("有效 Token", "").trim());
+
+  const before = await readStat();
+
+  await createToken(page, "E2E 左欄摘要");
+  await expect.poll(readStat, { timeout: 5000 }).toBe(before + 1);
+
+  // 撤銷同一把，數字要退回去
+  const hint = page.locator("div").filter({ has: page.getByText("新 Token：") }).last();
+  await hint.getByRole("button", { name: "關閉", exact: true }).click();
+  const row = tokenTableOf(page).getByRole("row").filter({ hasText: "E2E 左欄摘要" });
+  await row.getByRole("button", { name: "刪除", exact: true }).click();
+  await page.getByRole("button", { name: "確認撤銷" }).click();
+  await expect.poll(readStat, { timeout: 5000 }).toBe(before);
+});
