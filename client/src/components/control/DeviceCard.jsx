@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   parseUtcDate,
   deviceStatusBadge,
@@ -10,6 +10,8 @@ import {
   SIM_PHASE_LABEL,
 } from "../../constants";
 import { conditionProgress, isWaitingForConfirm } from "../../utils/scheduleProgress";
+import useCountdown from "../../useCountdown";
+import { calibrationBadgeLabel } from "../../utils/calibration";
 import { C } from "../../styles/theme";
 import { btnBare } from "../../styles/common";
 
@@ -26,10 +28,12 @@ const qcBtnStyle = {
   whiteSpace: "nowrap",
 };
 
+// 只有這三個狀態要掛徽章（ok 不掛）。文字走 utils/calibration.js 的共用對照表，
+// 這裡只管顏色。
 const CALIB_BADGE_CFG = {
-  due_soon: { bg: C.warningBg,    color: C.warningAlt, borderColor: `${C.warningAlt}44`, label: "校驗即將到期" },
-  overdue:  { bg: C.errorBg,      color: C.error,      borderColor: `${C.error}44`,      label: "校驗逾期"    },
-  unknown:  { bg: C.surfaceHover,  color: C.textMuted,  borderColor: `${C.border}44`,     label: "未校驗"      },
+  due_soon: { bg: C.warningBg,    color: C.warningAlt, borderColor: `${C.warningAlt}44` },
+  overdue:  { bg: C.errorBg,      color: C.error,      borderColor: `${C.error}44`      },
+  unknown:  { bg: C.surfaceHover,  color: C.textMuted,  borderColor: `${C.border}44`     },
 };
 
 /**
@@ -46,34 +50,10 @@ function CalibBadge({ status }) {
   return (
     <div style={{ marginTop: 3 }}>
       <span style={{ fontSize: 10, padding: "1px 4px", borderRadius: 4, whiteSpace: "nowrap", background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.borderColor}` }}>
-        {cfg.label}
+        {calibrationBadgeLabel(status)}
       </span>
     </div>
   );
-}
-
-function useCountdown(estimatedEndAt) {
-  const [remaining, setRemaining] = useState(null);
-  useEffect(() => {
-    if (!estimatedEndAt) {
-      // estimatedEndAt 清空時重置倒數；受 if 守衛、一次性同步 setState
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setRemaining(null);
-      return;
-    }
-    let timerId;
-    const calc = () => {
-      const endMs = parseUtcDate(estimatedEndAt);
-      const diff = endMs - new Date();
-      const next = Math.max(0, Math.floor(diff / 1000));
-      setRemaining(prev => (prev === next ? prev : next));
-      if (next === 0) clearInterval(timerId);
-    };
-    calc();
-    timerId = setInterval(calc, 1000);
-    return () => clearInterval(timerId);
-  }, [estimatedEndAt]);
-  return remaining;
 }
 
 function fmtRemaining(secs) {

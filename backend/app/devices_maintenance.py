@@ -6,7 +6,9 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
-from .models import SessionLocal, DeviceCalibration, DeviceMaintenance, MaintenanceType
+from .models import (
+    SessionLocal, DeviceCalibration, DeviceMaintenance, MaintenanceType, CalibrationStatus,
+)
 from .auth import require_admin, current_user
 from .utils import _now_utc_naive, _to_naive_utc
 from .constants import DEVICE_IDS
@@ -284,15 +286,19 @@ def calibration_status():
     for device_id in DEVICE_IDS:
         latest = latest_map.get(device_id)
         if not latest:
-            result[device_id] = {"status": "unknown", "next_calibration_date": None, "days_remaining": None}
+            result[device_id] = {
+                "status": CalibrationStatus.UNKNOWN,
+                "next_calibration_date": None,
+                "days_remaining": None,
+            }
             continue
         days_remaining = (latest.next_calibration_date - today).days
         if days_remaining < 0:
-            status = "overdue"
+            status = CalibrationStatus.OVERDUE
         elif days_remaining <= 30:
-            status = "due_soon"
+            status = CalibrationStatus.DUE_SOON
         else:
-            status = "ok"
+            status = CalibrationStatus.OK
         result[device_id] = {
             "status": status,
             "next_calibration_date": latest.next_calibration_date.isoformat(),
