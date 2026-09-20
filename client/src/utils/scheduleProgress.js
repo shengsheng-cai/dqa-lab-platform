@@ -1,4 +1,5 @@
 import { IDLE_STATUS } from "../constants";
+import { conditionDisplayName } from "./conditionName";
 
 /**
  * 這台現在是不是停著等人確認：設備已經回到待機，而它身上那筆排程還沒結案。
@@ -31,8 +32,10 @@ export function conditionProgress(schedule) {
 
   return {
     isLast,
-    // 下一條要跑什麼。沒有名稱對照時退回 sop_id，不要留空白
-    nextConditionName: isLast ? null : (schedule?.condition_names?.[index] || conditions[index]),
+    // 下一條要跑什麼。查不到名稱時寫成「未知條件（原碼）」，不裸露代碼也不留空白
+    nextConditionName: isLast
+      ? null
+      : conditionDisplayName(schedule?.condition_names?.[index], conditions[index]),
     // 動作鈕的名稱，說得出按下去會發生什麼
     actionLabel: isLast ? "✅ 確認完成" : `▶ 開始第 ${nextNumber} 條件（共 ${total}）`,
     // 空間小的地方（設備卡、頂部橫幅）用的短版

@@ -21,6 +21,7 @@ import LeftPanel from "./components/control/LeftPanel";
 import { DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, IDLE_STATUS } from "./constants";
 import { localDayWindow } from "./utils/timezone";
 import { describeLoadError } from "./utils/loadError";
+import { conditionNameFromSchedule } from "./utils/conditionName";
 import { C } from "./styles/theme";
 
 const TAB_TO_PATH = {
@@ -292,7 +293,12 @@ export default function ControlCenter({ role, displayName, onLogout }) {
       if (res.data.status === "completed") {
         showToast("排程全部條件完成！", "success");
       } else {
-        showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
+        // API 只回 sop_id，名稱要從手上這筆排程對出來，不能把代碼丟給使用者看
+        const confirmed = Object.values(pendingByDevice).find(s => s.id === scheduleId);
+        showToast(
+          `已啟動下一條件：${conditionNameFromSchedule(confirmed, res.data.sop_id)}`,
+          "success",
+        );
       }
       const [r] = await Promise.all([
         api.get("/api/schedules?status=進行中"),
@@ -304,7 +310,7 @@ export default function ControlCenter({ role, displayName, onLogout }) {
     } catch (e) {
       showToast(e.response?.data?.detail || "操作失敗", "error", 3000, e.response?.data?.hint);
     }
-  }, [refreshScheduleOverview, showToast]);
+  }, [pendingByDevice, refreshScheduleOverview, showToast]);
 
   useEffect(() => {
     // fetchScheduleCounts 先 await API 才 setState，不是 effect 內同步串接 render。

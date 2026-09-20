@@ -69,9 +69,9 @@ describe("conditionProgress", () => {
     expect(p.actionLabel).toBe("▶ 開始第 1 條件（共 1）");
   });
 
-  it("沒有名稱對照就退回 sop_id，不留空白", () => {
+  it("查不到名稱時寫成「未知條件（原碼）」，不裸露代碼也不留空白", () => {
     const p = conditionProgress(schedule(["iec60068_ab_-25_16h"], 0));
-    expect(p.nextConditionName).toBe("iec60068_ab_-25_16h");
+    expect(p.nextConditionName).toBe("未知條件（iec60068_ab_-25_16h）");
   });
 
   it("條件資料缺漏時當成沒有下一條，不算出「第 1/0 條件」", () => {
