@@ -446,6 +446,19 @@ class ReturnCondition(StrEnum):
     LOST = "lost"
 
 
+class CalibrationStatus(StrEnum):
+    """設備校驗狀態。由校驗到期日算出來，不存在 DB，值的權威是這一份。
+
+    前端拿它翻成中文顯示（`client/src/utils/calibration.js`）。這裡多一個值、前端沒跟上
+    的話，設備卡的徽章會整個消失、左欄摘要會把它算進「未校驗」，兩邊都不會報錯——
+    `backend/tests/test_calibration_status_labels.py` 就是擋這個漏法的。
+    """
+    OK = "ok"
+    DUE_SOON = "due_soon"
+    OVERDUE = "overdue"
+    UNKNOWN = "unknown"
+
+
 class MaintenanceType(StrEnum):
     """設備維護的類型。
 

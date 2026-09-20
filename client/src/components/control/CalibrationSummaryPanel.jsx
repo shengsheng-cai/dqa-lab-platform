@@ -1,14 +1,18 @@
+import { calibrationStatusLabel } from "../../utils/calibration";
+
 export default function CalibrationSummaryPanel({ calibrationStatusMap }) {
   const counts = { ok: 0, due_soon: 0, overdue: 0, unknown: 0 };
   Object.values(calibrationStatusMap || {}).forEach(v => {
     if (counts[v.status] !== undefined) counts[v.status]++;
     else counts.unknown++;
   });
+  // 文字走共用對照表，這裡只管數字與顏色：以前這份跟設備卡各翻一次，
+  // 同一台沒有校驗紀錄的設備在卡片上寫「未校驗」、在這裡寫「未知」。
   const items = [
-    { label: "正常", value: counts.ok, color: "#3fb950" },
-    { label: "即將到期", value: counts.due_soon, color: counts.due_soon > 0 ? "#e3b341" : "#8b949e" },
-    { label: "逾期", value: counts.overdue, color: counts.overdue > 0 ? "#f85149" : "#8b949e" },
-    { label: "未知", value: counts.unknown, color: counts.unknown > 0 ? "#484f58" : "#8b949e" },
+    { label: calibrationStatusLabel("ok"), value: counts.ok, color: "#3fb950" },
+    { label: calibrationStatusLabel("due_soon"), value: counts.due_soon, color: counts.due_soon > 0 ? "#e3b341" : "#8b949e" },
+    { label: calibrationStatusLabel("overdue"), value: counts.overdue, color: counts.overdue > 0 ? "#f85149" : "#8b949e" },
+    { label: calibrationStatusLabel("unknown"), value: counts.unknown, color: counts.unknown > 0 ? "#484f58" : "#8b949e" },
   ];
   return (
     <div style={{ padding: "0 8px", display: "flex", flexDirection: "column", gap: 4 }}>

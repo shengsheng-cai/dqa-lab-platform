@@ -30,7 +30,11 @@
 - **判斷仍然用代碼**，不要拿中文字串當條件。顯示走對照表、邏輯走 enum，兩件事分開
 - **排程狀態是例外**：後端 `ScheduleStatus` 的值本來就是中文（待審核／已確認／進行中……），直接渲染即可
 - 漏收一個不會有任何錯誤訊息，只會安靜地少一塊。相位那份由
-  `backend/tests/test_sim_phase_labels.py` 擋著；新增對照表時想一下同樣的漏法要怎麼擋
+  `backend/tests/test_sim_phase_labels.py` 擋著，校驗狀態那份由
+  `backend/tests/test_calibration_status_labels.py` 擋著；新增對照表時想一下同樣的漏法要怎麼擋。
+  **擋法是後端先有一份可以列舉的權威**（`SimPhase` 那種 `Literal`、`CalibrationStatus` 那種
+  `StrEnum`），測試再拿它比對前端的表。值散在 `if/elif` 裡的字串就沒有東西可以比，
+  只釘死字串的前端測試擋不住後端新增一個值
 
 ## 可點的東西一律用 `<button>`
 
