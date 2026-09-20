@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { generateSP } from "./generateSP";
-import { parseUtcDate } from "../../constants";
 import { formatLocal } from "../../utils/timezone";
+import { formatFreeTime, formatCycle, formatStep } from "../../utils/executionInfo";
+import useCountdown from "../../useCountdown";
 
-// 執行中資訊面板（左側欄，顯示 Pgm / Step / Free Time / Cycle / Now Time / End Time）
-const ExecutionInfoPanel = ({ sop, startedAt, simCycle, doneCnt }) => {
+/**
+ * 執行中資訊面板（左側欄，顯示 Pgm / Step / Free Time / Cycle / Now Time / End Time）。
+ *
+ * 結束與剩餘時間一律顯示後端算好的那一份（estimatedEndAt），和設備卡的倒數同一個來源。
+ * 這裡以前拿測試條件自己重算一條曲線，少算了常溫穩定與暫停的時間，於是同一台設備在
+ * 兩個畫面講出不同的結束時間。曲線算法留給溫度圖，不再拿來算時間。
+ */
+const ExecutionInfoPanel = ({ sop, startedAt, estimatedEndAt, simCycle, doneCnt }) => {
   const [now, setNow] = useState(new Date());
+  const remainingSec = useCountdown(estimatedEndAt);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -14,36 +21,15 @@ const ExecutionInfoPanel = ({ sop, startedAt, simCycle, doneCnt }) => {
 
   if (!sop || !startedAt) return null;
 
-  const startedAtDate = parseUtcDate(startedAt);
-
-  const elapsedMin = Math.floor((now - startedAtDate) / 60000);
-  const spData = generateSP(sop);
-  const totalMin = spData.length > 0 ? spData[spData.length - 1].min : 0;
-  const endTime = new Date(startedAtDate.getTime() + totalMin * 60000);
-  const freeTimeMin = Math.max(0, totalMin - elapsedMin);
-  const freeH = Math.floor(freeTimeMin / 60);
-  const freeM = freeTimeMin % 60;
-  const totalStepCount = sop.steps?.length ?? 0;
-  const cycles = sop.cycles ?? 1;
-
   const fmt = (d) => formatLocal(d, "datetime");
 
   const rows = [
     ["Pgm", sop.sop_id || "—"],
-    [
-      "Step",
-      `${doneCnt.toString().padStart(3, "0")}/${totalStepCount.toString().padStart(3, "0")}`,
-    ],
-    [
-      "Free Time",
-      `${String(freeH).padStart(4, "0")}:${String(freeM).padStart(2, "0")}`,
-    ],
-    [
-      "Cycle",
-      `${String((simCycle ?? 0) + 1).padStart(4, "0")}/${String(cycles).padStart(4, "0")}`,
-    ],
+    ["Step", formatStep(doneCnt, sop.steps?.length)],
+    ["Free Time", formatFreeTime(remainingSec)],
+    ["Cycle", formatCycle(simCycle, sop.cycles)],
     ["Now Time", fmt(now)],
-    ["End Time", fmt(endTime)],
+    ["End Time", fmt(estimatedEndAt)],
   ];
 
   return (
