@@ -49,8 +49,15 @@ def device_blocked_reason_now(device_id: str) -> Optional[str]:
 
     「有沒有封鎖」只看時段是否存在——reason 可為空（欄位 nullable、建立時可不填），
     不能拿它當有無封鎖的判準，否則沒填原因的維護時段會被當成沒封鎖而放行。
-    手動 start_sop 與排程 start_schedule 共用同一份判斷，維持
-    「手動、自動一致尊重維護時段」。
+
+    呼叫這支的只有排程啟動的事前檢查（`schedule_service.start_schedule`）。同樣的條件
+    另外還寫在三個地方：排程啟動的交易內（`schedule_service.py`，那次是為了擋競態，
+    要跟寫入在同一個交易裡）、手動啟動（`sop.py`，跟旁邊的查詢併在同一次讀取）、
+    設備清單（`devices.py`，一次查全部設備）。三處都用不上這支自己開連線的函式。
+
+    四份判準一致（開始 ≤ 現在 < 結束，只看時段存不存在），刻意不收成一份：各自的查詢
+    要跟旁邊的讀寫綁在同一個交易或同一次讀取裡，改成共用反而要多開連線。
+    **改這裡的判準要同時改那三處。**
     """
     now = _now_utc_naive()
     with SessionLocal() as db:
