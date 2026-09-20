@@ -8,6 +8,7 @@ import {
   fmtDt, fmtHours, STATUS_COLOR,
   inputStyle, labelStyle, primaryBtn, cancelBtn, disabledStyle,
 } from "./scheduleUtils";
+import { conditionDisplayName, conditionNameFromSchedule } from "../../utils/conditionName";
 import { C } from "../../styles/theme";
 import { conditionProgress } from "../../utils/scheduleProgress";
 
@@ -218,7 +219,10 @@ export default function ScheduleDetailModal({ schedule, schedules = [], role, de
         onUpdated({ ...schedule, status: "已完成" });
         setResultScreen({ type: "completed" });
       } else {
-        showToast(`已啟動下一條件：${res.data.sop_id}`, "success");
+        showToast(
+          `已啟動下一條件：${conditionNameFromSchedule(schedule, res.data.sop_id)}`,
+          "success",
+        );
         onUpdated({ ...schedule });
       }
       await onMutation();
@@ -381,10 +385,10 @@ export default function ScheduleDetailModal({ schedule, schedules = [], role, de
           <div style={{ display: "flex", gap: 8, fontSize: 13 }}>
             <span style={{ color: C.textMuted, minWidth: 80, flexShrink: 0 }}>測試條件</span>
             <div style={{ flex: 1, maxHeight: 200, overflowY: "auto" }}>
-              {(schedule.condition_names || schedule.conditions || []).length > 0
-                ? (schedule.condition_names || schedule.conditions).map((c, i) => (
+              {(schedule.conditions || schedule.condition_names || []).length > 0
+                ? (schedule.conditions || schedule.condition_names).map((sopId, i) => (
                     <div key={i} style={{ color: C.textPrimary, lineHeight: 1.6, paddingBottom: 2 }}>
-                      {i + 1}. {c}
+                      {i + 1}. {conditionDisplayName(schedule.condition_names?.[i], sopId)}
                     </div>
                   ))
                 : <span style={{ color: C.textPrimary }}>—</span>}

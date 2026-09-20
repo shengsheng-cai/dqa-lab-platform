@@ -8,6 +8,7 @@ import {
   fmtDt, fmtHours, BUFFER_TIME_HOURS,
   inputStyle, labelStyle, primaryBtn, cancelBtn,
 } from "./scheduleUtils";
+import { conditionDisplayName } from "../../utils/conditionName";
 import { C } from "../../styles/theme";
 import { describeLoadError } from "../../utils/loadError";
 import { ListState } from "../ListState";
@@ -202,7 +203,7 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
                   >
                     <span style={{ fontSize: 14, color: C.textDim, cursor: "grab", userSelect: "none" }}>⠿</span>
                     <span style={{ fontSize: 11, color: C.textDim, width: 18 }}>{i + 1}.</span>
-                    <span style={{ fontSize: 12, color: C.textPrimary, flex: 1 }}>{t?.name || sop_id}</span>
+                    <span style={{ fontSize: 12, color: C.textPrimary, flex: 1 }}>{conditionDisplayName(t?.name, sop_id)}</span>
                     <span style={{ fontSize: 11, color: C.success }}>≈ {t?.estimated_hours}h</span>
                     <button
                       onClick={() => setForm((f) => ({ ...f, conditions: f.conditions.filter((s) => s !== sop_id) }))}
