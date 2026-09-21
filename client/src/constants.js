@@ -31,7 +31,9 @@ export const SIM_PHASE_LABEL = {
 
 // 每個狀態一列：zh 是畫面上顯示的名稱，徽章與解釋句子（「為什麼現在不能操作」）共用同一份，
 // 兩邊才不會一邊寫「收尾降溫中」一邊寫 FINISHING。原始狀態碼只留在 title 給除錯用。
-export const STATUS_CONFIG = {
+// 只給同檔案的 deviceStatusZh 與 deviceStatusBadge 用，不對外：畫面一律走那兩支，
+// 不要自己查這張表（那會變成同一份代碼在兩個地方各翻一次）。
+const STATUS_CONFIG = {
   OFFLINE:   { color: "#484f58", bg: "#21262d", zh: "離線" },
   IDLE:      { color: "#8b949e", bg: "#21262d", zh: "待機" },
   RUNNING:   { color: "#3fb950", bg: "#0f2318", zh: "執行中" },

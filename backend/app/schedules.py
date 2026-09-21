@@ -4,7 +4,6 @@
 import asyncio
 import datetime
 import json
-import logging
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
@@ -36,8 +35,6 @@ from .schedule_service import (
     ScheduleStartActor,
     find_overlapping_schedule, start_schedule as start_schedule_service,
 )
-
-logger = logging.getLogger("schedules")
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 blocked_router = APIRouter(prefix="/api/device-blocked-periods", tags=["schedules"])

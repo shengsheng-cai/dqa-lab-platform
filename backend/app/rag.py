@@ -45,8 +45,6 @@ _STD_ALIAS_MAP: dict[str, str] = {
     "dnv": "DNV",
 }
 
-_COMPARE_KEYWORDS = ["和", "與", "vs", "比較", "差異", "不同"]
-
 # query embedding LRU cache（最多快取 64 筆，節省 Gemini Embedding 配額）
 _query_embed_cache: dict[str, np.ndarray] = {}
 _QUERY_CACHE_MAX = 64

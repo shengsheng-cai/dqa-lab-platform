@@ -18,7 +18,7 @@ import TopBar from "./components/control/TopBar";
 import { conditionProgress, isWaitingForConfirm } from "./utils/scheduleProgress";
 import TabBadge from "./components/control/TabBadge";
 import LeftPanel from "./components/control/LeftPanel";
-import { DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS, IDLE_STATUS } from "./constants";
+import { DEVICE_IDS, POLL_DEVICES_MS, POLL_FIXTURE_MS, POLL_GENERAL_MS } from "./constants";
 import { localDayWindow } from "./utils/timezone";
 import { describeLoadError } from "./utils/loadError";
 import { conditionNameFromSchedule } from "./utils/conditionName";
@@ -75,9 +75,7 @@ const TABS = [
 ];
 
 function CenterPanel({ role, activeTab, setActiveTab, selectedDevice, scheduleInitConds, handleInitCondsConsumed, onOpenExecutions, devices, devicesReady, pendingByDevice, onConfirmCondition, scheduleCounts, onCalibrationChange, onFixtureChanged, onScheduleChanged, onUsersChanged }) {
-  const visibleTabs = TABS.filter((t) =>
-    (!t.adminOnly || role === "admin") && (!t.guestHidden || role !== "guest")
-  );
+  const visibleTabs = TABS.filter((t) => !t.adminOnly || role === "admin");
 
   useEffect(() => { window.scrollTo(0, 0); }, [activeTab]);
 
