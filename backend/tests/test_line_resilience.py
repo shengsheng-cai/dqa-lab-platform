@@ -27,6 +27,7 @@ class _FakeClient:
         self._status_code = status_code
         self._exc = exc
         self.called = False
+        self.calls = []
 
     async def __aenter__(self):
         return self
@@ -34,8 +35,10 @@ class _FakeClient:
     async def __aexit__(self, *_a):
         return False
 
-    async def post(self, *_a, **_kw):
+    async def post(self, *args, **kwargs):
         self.called = True
+        # 參數要留著：只記「有沒有被呼叫」的話，訊息內容與收件人改掉都不會有人發現
+        self.calls.append((args, kwargs))
         if self._exc:
             raise self._exc
         return httpx.Response(self._status_code, request=httpx.Request("POST", "https://api.line.me"))
@@ -85,3 +88,25 @@ def test_push_timeout_is_swallowed(monkeypatch):
     monkeypatch.setattr(line_module.httpx, "AsyncClient", lambda *a, **k: fake)
 
     _run(push_message("測試"))
+
+
+def test_push_sends_the_text_to_the_configured_recipient(monkeypatch):
+    """推播要把「哪一句話」送給「哪一個人」都帶對。
+
+    以前替身只記 called = True 就把參數丟了，所以訊息內容被換成固定字串、或收件人
+    被改成別人，整套測試照樣全綠（BUG-016）。推播是 fire-and-forget，LINE 對格式
+    正確的訊息一律回 200，所以沒有別的訊號會發現這件事。
+    """
+    fake = _FakeClient()
+    _configure(monkeypatch, token="tok-abc", target="U-operator")
+    monkeypatch.setattr(line_module.httpx, "AsyncClient", lambda *a, **k: fake)
+
+    _run(push_message("⚠️ CH-01 緊急停止"))
+
+    assert len(fake.calls) == 1
+    args, kwargs = fake.calls[0]
+
+    assert args[0] == line_module.PUSH_URL
+    assert kwargs["json"]["to"] == "U-operator"
+    assert kwargs["json"]["messages"] == [{"type": "text", "text": "⚠️ CH-01 緊急停止"}]
+    assert kwargs["headers"]["Authorization"] == "Bearer tok-abc"

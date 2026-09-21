@@ -252,6 +252,66 @@ def test_calibration_status_api(admin_client):
         assert data[device_id]["status"] == "unknown"
 
 
+def _add_calibration(client, device_id, days_until_due):
+    """在指定設備上建一筆校驗紀錄，下次到期日距今 days_until_due 天（可為負）。"""
+    today = datetime.date.today()
+    resp = client.post(
+        f"/api/devices/{device_id}/calibrations",
+        json={
+            "calibration_date": f"{today - datetime.timedelta(days=365)}T00:00:00",
+            "next_calibration_date": f"{today + datetime.timedelta(days=days_until_due)}T00:00:00",
+            "interval_days": 365,
+            "result": "pass",
+            "created_by": "admin",
+        },
+    )
+    assert resp.status_code == 201
+
+
+@pytest.mark.parametrize(
+    ("days_until_due", "expected_status"),
+    [
+        (-1, "overdue"),      # 昨天到期，overdue 的內側邊界
+        (2, "due_soon"),      # 快到了
+        (30, "due_soon"),     # due_soon 的內側邊界
+        (32, "ok"),           # 門檻外
+    ],
+)
+def test_calibration_status_classifies_by_days_remaining(
+    admin_client, days_until_due, expected_status
+):
+    """三種分類都要算得出來。
+
+    以前這支端點只有一條跑在空資料庫上的測試，那時答案恆為 unknown，所以
+    整個 overdue / due_soon / ok 的判斷沒有任何東西守著：把三個分支全部改成
+    回傳 ok，測試照樣全綠，逾期的設備在畫面上顯示正常（BUG-016）。
+
+    不取 0 與 31 這兩個貼著門檻的值：後端拿「現在這一刻」跟到期日的午夜相減，
+    所以剩餘天數會少算不到一天，貼著門檻的輸入會隨執行時間落到哪一邊而變。
+    這裡驗的是分類邏輯，不是那個取整方式。
+    """
+    _add_calibration(admin_client, "CH-01", days_until_due)
+
+    resp = admin_client.get("/api/maintenance/calibration-status")
+    assert resp.status_code == 200
+    entry = resp.json()["CH-01"]
+
+    assert entry["status"] == expected_status
+    assert entry["next_calibration_date"] is not None
+
+
+def test_calibration_status_reads_the_latest_record_per_device(admin_client):
+    """同一台有多筆校驗時，狀態要看最新那筆，不能被舊紀錄蓋過去。"""
+    _add_calibration(admin_client, "CH-02", -100)   # 舊的、早就逾期
+    _add_calibration(admin_client, "CH-02", 200)    # 新的、還很久
+
+    resp = admin_client.get("/api/maintenance/calibration-status")
+    assert resp.json()["CH-02"]["status"] == "ok"
+
+    # 沒建紀錄的設備維持 unknown，不會被別台的資料污染
+    assert resp.json()["CH-03"]["status"] == "unknown"
+
+
 # ── 維護類型的允許值 ──────────────────────────────────────────────────────────
 
 

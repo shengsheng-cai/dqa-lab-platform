@@ -3,6 +3,7 @@ T-01: _find_earliest_slot / _auto_assign 整合測試
 使用 in-memory SQLite，直接傳入 db session。
 """
 import datetime
+import json
 from unittest.mock import patch
 
 from app.models import Schedule, ScheduleStatus, DeviceBlockedPeriod
@@ -126,6 +127,47 @@ def test_auto_assign_returns_valid_device(db):
         device_id, start, end = _auto_assign(["sop1"], db)
     assert device_id in DEVICE_IDS
     assert end > start
+
+
+def test_auto_assign_skips_emergency_and_stuck_devices(db):
+    """自動選機要跳過緊急停止與卡機的設備。
+
+    這段排除以前沒有任何測試接到 `_auto_assign` 上：兩條既有測試都沒傳 cache，
+    所以那個分支從來沒被執行過，整段拿掉也全綠（BUG-016）。排到壞掉的設備上，
+    排程會停在「已確認」、每五分鐘重試一次，永遠不會開始。
+    """
+    from app.sop import DEVICE_IDS
+
+    # 前四台都不能用：兩台緊急停止，兩台跑超時一小時以上（卡機）
+    long_ago = _future(-5)
+    stuck = {
+        "status": "RUNNING",
+        "started_at": long_ago,
+        "active_sop_json": json.dumps(_MOCK_STD),
+    }
+    cache = {
+        "CH-01": {"status": "EMERGENCY"},
+        "CH-02": {"status": "EMERGENCY"},
+        "CH-03": dict(stuck),
+        "CH-04": dict(stuck),
+        "CH-05": {"status": "IDLE"},
+    }
+
+    with patch("app.schedule_service.get_standard", return_value=_MOCK_STD):
+        device_id, _start, _end = _auto_assign(["sop1"], db, cache=cache)
+
+    assert device_id == "CH-05", "只剩 CH-05 可用，不應該選到緊急停止或卡機的設備"
+    assert device_id in DEVICE_IDS
+
+
+def test_auto_assign_falls_back_when_every_device_is_excluded(db):
+    """全部設備都被排除時要退回全選，不能回 None 讓申請整個做不了。"""
+    cache = {did: {"status": "EMERGENCY"} for did in ["CH-01", "CH-02", "CH-03", "CH-04", "CH-05"]}
+
+    with patch("app.schedule_service.get_standard", return_value=_MOCK_STD):
+        device_id, _start, _end = _auto_assign(["sop1"], db, cache=cache)
+
+    assert device_id is not None
 
 
 def test_auto_assign_avoids_busy_device(db):

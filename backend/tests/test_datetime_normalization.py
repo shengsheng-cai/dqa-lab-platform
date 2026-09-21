@@ -171,6 +171,58 @@ def test_maintenance_create_converts_non_utc(api_client):
             assert (row.maintenance_date, row.next_maintenance_date) == (UTC_START, UTC_END)
 
 
+def test_calibration_update_converts_non_utc(api_client):
+    """校驗紀錄的「更新」路徑。
+
+    新增有轉、更新沒轉的話，同一張表會同時存著換算正確與寫錯的資料列，而且
+    不會有任何錯誤——那兩條路徑的正規化是靠一份寫死欄位名的字串清單挑出來的，
+    欄位改名而清單沒跟著改就會這樣（BUG-016）。
+    """
+    with api_client(maintenance_module, maintenance_router, role="admin", user_id=7) as (client, Session):
+        created = client.post("/api/devices/CH-01/calibrations", json={
+            "calibration_date": OTHER_START.isoformat() + "Z",
+            "next_calibration_date": OTHER_END.isoformat() + "Z",
+            "result": "pass",
+            "created_by": "測試員",
+        })
+        assert created.status_code == 201, created.text
+        cal_id = created.json()["id"]
+
+        resp = client.put(f"/api/devices/CH-01/calibrations/{cal_id}", json={
+            "calibration_date": LOCAL_START.isoformat(),
+            "next_calibration_date": LOCAL_END.isoformat(),
+        })
+        assert resp.status_code == 200, resp.text
+
+        with Session() as db:
+            row = db.get(DeviceCalibration, cal_id)
+            assert (row.calibration_date, row.next_calibration_date) == (UTC_START, UTC_END)
+
+
+def test_maintenance_update_converts_non_utc(api_client):
+    """維護紀錄的「更新」路徑，同上。"""
+    with api_client(maintenance_module, maintenance_router, role="admin", user_id=7) as (client, Session):
+        created = client.post("/api/devices/CH-01/maintenances", json={
+            "maintenance_date": OTHER_START.isoformat() + "Z",
+            "maintenance_type": "preventive",
+            "description": "更換濾網",
+            "performed_by": "測試員",
+            "next_maintenance_date": OTHER_END.isoformat() + "Z",
+        })
+        assert created.status_code == 201, created.text
+        maint_id = created.json()["id"]
+
+        resp = client.put(f"/api/devices/CH-01/maintenances/{maint_id}", json={
+            "maintenance_date": LOCAL_START.isoformat(),
+            "next_maintenance_date": LOCAL_END.isoformat(),
+        })
+        assert resp.status_code == 200, resp.text
+
+        with Session() as db:
+            row = db.get(DeviceMaintenance, maint_id)
+            assert (row.maintenance_date, row.next_maintenance_date) == (UTC_START, UTC_END)
+
+
 def test_loan_create_converts_non_utc_due_date(api_client):
     with api_client(fixtures_module, fixtures_router, role="admin", user_id=7) as (client, Session):
         fid = _seed_fixture(Session)
