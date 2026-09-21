@@ -54,8 +54,11 @@ test.beforeAll(resetBackend);   // 少了這行，這個檔案會跑在上一個
 - **彈出視窗一律用 `getByRole('dialog', { name: '標題' })` 定位**：視窗都經過 `components/ModalFrame.jsx`，標題就是它的 accessible name。唯一的例外是 SOP 的「🚀 確認啟動」（`SafetyChecklist.jsx`）——它的遮罩長在面板裡不是蓋滿整頁，沒有 dialog 角色，只接了共用的 Esc。**不要再用「把定位 scope 在含某個獨有文字的容器裡」那種綁 DOM 巢狀的寫法**——前端多包一層 div 就會定到別的節點
 - **`focus()` 只證明「這是按鈕、Enter 有反應」，不證明「Tab 走得到」**。用程式指定焦點會跳過
   tab 順序，所以被設成跳過（`tabIndex={-1}`）、被別的東西蓋住、或藏在沒顯示的分支裡，測試照樣
-  會綠。要驗 Tab 順序就得真的連按 Tab、記錄焦點依序停在哪（`keyboard-navigation.spec.js` 最後
-  一條是這樣寫的）。兩種都需要，但不要拿前者當後者用
+  會綠。這不是假設：實際給治具匯入那顆按鈕加上 `tabIndex={-1}`，原本用 `focus()` 寫的那條測試
+  照樣通過（BUG-016）。
+  **標題宣稱「鍵盤進得去」的測試，一律要真的連按 Tab**，記錄焦點停在哪
+  （`keyboard-navigation.spec.js` 的設備卡與治具匯入兩條都是這樣寫的）。`focus()` 只適合用來驗
+  「這顆是按鈕、Enter 有反應」，而且測試名稱不能講成鍵盤可達性
 - **切分頁之後，要先等新頁面出現再動手**。所有頁面一直掛在 DOM 上，只靠 `display:none` 切換，
   所以點完分頁鈕的那一瞬間舊頁面還在：斷言會先打在舊頁面的同名按鈕上，等畫面真的換過去，
   `focus()` 拿到的那顆已經被藏起來，後面的 Enter 打在空處。先 `await expect(新頁面獨有的文字).toBeVisible()`

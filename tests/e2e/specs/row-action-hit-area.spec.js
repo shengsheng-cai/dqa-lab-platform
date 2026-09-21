@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { resetBackend } from "../helpers/backend.js";
 import { loginAsAdmin } from "../helpers/login.js";
+import { BLOCKED_PERIODS_MODAL } from "../helpers/blocked-periods.js";
 
 test.beforeAll(resetBackend);
 
@@ -95,4 +96,52 @@ test("人員管理的列動作點得到", async ({ page }) => {
   const userTable = page.locator("table").filter({ has: page.locator("th", { hasText: "角色" }) });
   const row = userTable.getByRole("row").filter({ has: page.getByRole("button", { name: "刪除" }) }).first();
   await expectRowActions(row, ["編輯", "停用", "刪除"], "人員列");
+});
+
+// 上面三條是這支測試原本守的三頁。規則寫明「新增用到列動作的頁面時，一併把它加進
+// 那支測試，不然那一頁沒有任何東西擋著」——下面三組是後來長出來、一直沒補進來的，
+// 而且每一組的最後一顆都是刪除（BUG-016）。
+
+test("訪客 Token 的列動作點得到，刪除跟前一顆隔得開", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "人員管理" }).click();
+
+  // 自己建一把來量。種子資料沒有訪客 Token——登入頁打 guest-hint 時會自動生一把
+  // （label 是 auto-hint），靠那把也量得到，但那是別條流程的副作用，不該拿來當前提。
+  await page.getByRole("button", { name: "+ 生成" }).click();
+  await page.getByPlaceholder("例：廠商 Demo、主管審閱").fill("E2E 列動作");
+  await page.getByRole("button", { name: "建立", exact: true }).click();
+  await expect(page.getByText("新 Token：")).toBeVisible();
+
+  // 同一頁兩張表，用只有 Token 表才有的表頭夾住（人員表沒有「到期日」）
+  const tokenTable = page.locator("table").filter({ has: page.locator("th", { hasText: "到期日" }) });
+  const row = tokenTable.getByRole("row").filter({ hasText: "E2E 列動作" }).first();
+  await expectRowActions(row, ["停用", "刪除"], "訪客 Token 列");
+});
+
+test("採購單的列動作點得到，刪除跟「確認到貨」隔得開", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: "治具", exact: true }).click();
+  await page.getByRole("button", { name: "記錄", exact: true }).click();
+
+  // 採購清單是「記錄」頁底下常駐的區塊，不是分頁，不用再點什麼。
+  // 注意不要寫成 getByRole("button", { name: "採購單" })：name 預設是子字串比對，
+  // 那會比到「+ 新增採購單」，點下去開的是新增視窗（testing.md 記著這個坑）。
+  await expect(page.getByText("採購清單", { exact: true })).toBeVisible();
+
+  // 只有待採購的那幾列才有「確認到貨」，終態的沒有
+  const row = page.getByRole("row")
+    .filter({ has: page.getByRole("button", { name: "確認到貨", exact: true }) })
+    .first();
+  await expectRowActions(row, ["確認到貨", "刪除"], "採購單列");
+});
+
+test("維護時段的列動作點得到，刪除跟前一顆隔得開", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole("button", { name: /^排程/ }).click();
+  await page.getByRole("button", { name: "+ 不可用時段" }).click();
+
+  const modal = page.getByRole("dialog", { name: BLOCKED_PERIODS_MODAL });
+  const row = modal.getByRole("row").filter({ has: page.getByRole("button", { name: "刪除" }) }).first();
+  await expectRowActions(row, ["編輯", "刪除"], "維護時段列");
 });
