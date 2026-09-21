@@ -21,9 +21,10 @@
 畫面上不得出現後端的內部代碼（設備狀態、`sim_phase`、異常類型這一類），一律經對照表翻成中文。
 這條擋的是「使用者得先看懂英文 enum 才知道現在怎麼了」。
 
-- **對照表放哪**：設備狀態與相位在 `constants.js`（它已經有 `STATUS_CONFIG`、`SIM_PHASE_LABEL`、
-  `deviceStatusZh`、`deviceStatusBadge`）；其他領域的放 `utils/`，`utils/maintenance.js` 與
-  `utils/errorTypes.js` 是範本。同一份代碼不要在兩個地方各翻一次
+- **對照表放哪**：設備狀態與相位在 `constants.js`（它已經有 `SIM_PHASE_LABEL`、`deviceStatusZh`、
+  `deviceStatusBadge`；狀態那張 `STATUS_CONFIG` 只給同檔案那兩支包裝函式用，不對外）；其他領域
+  的放 `utils/`，`utils/maintenance.js` 與 `utils/errorTypes.js` 是範本。同一份代碼不要在兩個
+  地方各翻一次——畫面一律走包裝函式，不要自己查表
 - **沒收錄的值要看得出來**，不能變空白、也不能只把原碼丟出去：寫成「其他異常（原碼）」「未知類型（原碼）」
   這種形式。空白比顯示英文更糟——使用者看到的是「這裡本來就沒東西」，不是「有東西我看不懂」
 - **名稱要去查資料、不是查對照表的，同樣不准把代碼丟出去**：測試條件的名稱來自法規資料
@@ -80,9 +81,11 @@
   刪除甩到第二行的最前面、正好落在第一顆正下方，拉開的距離等於沒有。`tableLayout: "fixed"` 的表格
   （治具總表）用 `ResizableTh` 的 `defaultWidth` 給足寬度，**加一個新動作就要一起把那個數字加大**；
   auto layout 的表格（維護頁）靠內容自己撐開，不需要也不能用 `defaultWidth`。
-- 治具、維護、人員三頁由 `tests/e2e/specs/row-action-hit-area.spec.js` 量實際幾何守著：點擊高度、
-  有沒有被擠到第二列、刪除跟前一顆隔多遠。lint 看不出「按鈕被改小」，畫面上也只是小一點、擠一點，
-  沒有東西會紅。**新增用到列動作的頁面時，一併把它加進那支測試**，不然那一頁沒有任何東西擋著。
+- 治具總表、維護頁的兩張表、人員、訪客 Token、採購單、維護時段，由
+  `tests/e2e/specs/row-action-hit-area.spec.js` 量實際幾何守著：點擊高度、有沒有被擠到第二列、
+  刪除跟前一顆隔多遠。lint 看不出「按鈕被改小」，畫面上也只是小一點、擠一點，沒有東西會紅。
+  **新增用到列動作的頁面時，一併把它加進那支測試**，不然那一頁沒有任何東西擋著——後面三處
+  就是這樣漏掉的，補進去之前它們的間距沒有任何東西在看（BUG-016）。
 
 - **div 改成 button 版面會變**：按鈕預設置中、寬度縮到內容大小。滿版的清單項要自己補
   `display: "block"`、`width: "100%"`、`textAlign: "left"`，不然文字會忽然跑到中間

@@ -150,10 +150,25 @@ test("治具匯入用鍵盤進得去", async ({ page }) => {
     .selectOption("import");
 
   // 以前唯一的入口是一塊 div，點下去才去戳一個 display:none 的檔案欄位——
-  // display:none 的東西 Tab 停不上去，用鍵盤的人完全匯不了檔
+  // display:none 的東西 Tab 停不上去，用鍵盤的人完全匯不了檔。
+  //
+  // 這裡要真的按 Tab：原本寫成 focus() + toBeFocused()，那是用程式指定焦點，
+  // 繞過 tab 順序，等於把 getByRole("button") 已經證明過的事再講一次。實測給那顆
+  // 按鈕加上 tabIndex={-1}（鍵盤完全走不到）之後，舊寫法照樣綠（BUG-016）。
   const choose = page.getByRole("button", { name: "選擇檔案" });
-  await choose.focus();
-  await expect(choose).toBeFocused();
+  await expect(choose).toBeVisible();
+
+  let reached = false;
+  for (let i = 0; i < 40 && !reached; i++) {
+    await page.keyboard.press("Tab");
+    reached = await choose.evaluate((el) => el === document.activeElement);
+  }
+  expect(reached, "連按 Tab 應該要停在「選擇檔案」上").toBe(true);
+
+  // 停得上去還要按得動：Enter 會去戳那個藏起來的檔案欄位
+  const chooser = page.waitForEvent("filechooser");
+  await page.keyboard.press("Enter");
+  await chooser;
 });
 
 test("盤點批次用鍵盤展得開", async ({ page }) => {

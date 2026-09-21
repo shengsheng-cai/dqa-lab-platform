@@ -18,6 +18,7 @@ test.beforeAll(resetBackend);
 
 const DEVICE_COUNT = 5;        // CH-01~CH-05，與 constants.js 的 DEVICE_IDS 一致
 const SEEDED_MAINT_COUNT = 1;  // demo 資料只有 CH-03 排了維護（壓縮機例行保養）
+const SEEDED_RUNNING_COUNT = 2; // demo 資料有兩台在跑排程（init_db.py 種的）
 const EXTRA_MAINT_DEVICE = "CH-05"; // 重灌後為 IDLE 且未封鎖，拿它來加第二筆維護
 
 test("頂部計數：「不可用」只算維護中的機器，各狀態加起來不超過設備總數", async ({ page }) => {
@@ -38,6 +39,11 @@ test("頂部計數：「不可用」只算維護中的機器，各狀態加起�
     // demo 資料有兩台正在跑排程，以前它們會被算進「不可用」，這裡就會是 3。
     await expect.poll(() => statValue("不可用")).toBe(SEEDED_MAINT_COUNT);
     expect(await total()).toBeLessThanOrEqual(DEVICE_COUNT);
+
+    // 加總那條只擋「同一台被數兩次」，擋不了少算：把「執行中」改成永遠 0，加總
+    // 從 5 變 3，`3 <= 5` 照樣成立，兩台正在跑的機器就這樣從畫面上消失（BUG-016）。
+    // 所以另外釘住種子資料本來就該有的執行中台數。
+    expect(await statValue("執行中")).toBe(SEEDED_RUNNING_COUNT);
   });
 
   await test.step("多標一台維護 → 不可用 +1，加總仍不超過設備總數", async () => {
