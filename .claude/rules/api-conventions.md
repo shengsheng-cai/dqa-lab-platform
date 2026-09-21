@@ -87,9 +87,12 @@ LINE 有兩條方向相反的路，不要混用：主動推播用 `push_message`
 不出現在 `/docs`（`include_in_schema=False`）。改這段要注意四件事：
 
 - **簽章驗證不能拿掉**：`_verify_signature` 用 `LINE_CHANNEL_SECRET` 做 HMAC-SHA256，
-  比對 `X-Line-Signature` header，不符就 400。
+  比對 `X-Line-Signature` header，不符就 400。由
+  `backend/tests/test_line_webhook_signature.py` 守著（正確、錯誤、缺少、內容被竄改四種）。
 - **沒設 `LINE_CHANNEL_SECRET` 時會直接放行**（`return True`）。本機與 Demo 環境多半沒設，
-  所以「本機測起來過」不代表驗證有效；要驗這段一定要先設 secret，否則測到的是放行分支。
+  E2E（`tests/e2e/run-e2e.sh`）也是清空的，所以「本機測起來過」不代表驗證有效；要驗這段一定要
+  先設 secret，否則測到的是放行分支。上面那支測試每一條都自己設 secret，就是為了不要測到那條
+  死路——它曾經是全專案唯一沒有任何測試的對外端點（BUG-016）。
 - **回覆一律丟 `background_tasks`**，webhook 本身立刻回 200——LINE 要求快速回應，
   在 handler 裡等 API 回來會逾時。
 - **只讀 `app.state.AICM_CACHE`，不查 DB**。指令由 `_dispatch_command` 解析：
