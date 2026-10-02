@@ -11,6 +11,7 @@
 #   - 自己的資料庫（/tmp/dqa-e2e.db，見 helpers/backend.js）
 #   - 固定假帳密，不讀 backend/.env 裡的真密碼
 #   - LINE 關掉、Gemini 給假 key，不燒額度也不發通知
+#   - 同時只能跑一份（/tmp/dqa-e2e.lock），第二份會直接停下
 #
 set -euo pipefail
 
@@ -41,11 +42,36 @@ export LINE_USER_ID=""
 export ALLOWED_ORIGINS="http://127.0.0.1:${PORT}"
 export E2E_PORT="$PORT"
 
+# ── 同時只能跑一份 ──────────────────────────────────────────────
+# 所有 E2E 共用同一個測試資料庫（/tmp/dqa-e2e.db，不分 port），每個測試檔開跑前又會
+# 關掉 port 上的後端、洗掉資料庫。兩份同時跑就會互相把對方的後端殺掉、資料庫洗掉，
+# 紅出一堆跟程式無關的錯（重灌資料庫撞 users.username、點擊逾時）。實際撞過。
+#
+# 鎖要在任何動作之前拿：被擋下來的那份不能去重 build 前端、清空 log，
+# 更不能掛上下面的收尾——那個收尾會把 port 上的後端殺掉，殺到的是正在跑的那份。
+#
+# 鎖是一個指向自己 PID 的符號連結：建立連結是一次完成的動作，鎖拿到的同時 PID 也記好了。
+LOCK_FILE="/tmp/dqa-e2e.lock"
+take_lock() { ln -s "$$" "$LOCK_FILE" 2>/dev/null; }
+if ! take_lock; then
+    other=$(readlink "$LOCK_FILE" || true)
+    if kill -0 "$other" 2>/dev/null; then
+        echo "❌ 已經有一份 E2E 在跑（PID ${other}），等它跑完再開。"
+        echo "   同時跑兩份會互相關掉對方的後端、洗掉對方的資料庫。"
+        echo "   確定沒有在跑卻一直看到這句，刪掉 $LOCK_FILE 再重跑。"
+        exit 1
+    fi
+    # 留下鎖的那一份已經不在了（被強制中止，來不及收尾），清掉重拿
+    rm -f "$LOCK_FILE"
+    take_lock || { echo "❌ 另一份 E2E 剛好同時開跑，等它跑完再開。"; exit 1; }
+fi
+
 # ── 收尾保險：Playwright 正常結束會自己關後端，這裡防它中途被砍 ──
 cleanup() {
     # -sTCP:LISTEN：只殺監聽的那個，不要連客戶端連線一起殺
     pids=$(lsof -ti:"$PORT" -sTCP:LISTEN 2>/dev/null || true)
     [ -n "$pids" ] && echo "$pids" | xargs kill -9 2>/dev/null || true
+    rm -f "$LOCK_FILE"
 }
 trap cleanup EXIT INT TERM
 
