@@ -1,5 +1,5 @@
 import { C } from "../../styles/theme";
-import { btnBare } from "../../styles/common";
+import { btnBare, fontMono } from "../../styles/common";
 import { useRef, useEffect } from "react";
 import { DEVICE_IDS, parseUtcDate } from "../../constants";
 import { conditionProgress } from "../../utils/scheduleProgress";
@@ -48,7 +48,7 @@ export default function GanttChart({ schedules, blockedPeriods, rangeStart, rang
                 display: "flex", alignItems: "center", justifyContent: "center",
                 borderBottom: "1px solid #21262d",
                 fontSize: 12, fontWeight: 700, color: "#8b949e",
-                fontFamily: "monospace",
+                fontFamily: fontMono,
               }}
             >
               {id}

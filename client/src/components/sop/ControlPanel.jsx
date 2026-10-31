@@ -49,7 +49,6 @@ const ControlPanel = ({
       }
     >
       <div className="box-header">
-        <span className="pulse-icon" />
         <h2>系統控制面板</h2>
         <span
           title={sc.code}

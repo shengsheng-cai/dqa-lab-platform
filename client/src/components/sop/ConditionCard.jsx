@@ -30,7 +30,6 @@ const ConditionCard = ({ test }) => {
       style={{
         background: "#0d1117",
         border: "1px solid #30363d",
-        borderLeft: "3px solid #a371f7",
         borderRadius: 8,
         padding: "14px 16px",
         marginTop: 12,

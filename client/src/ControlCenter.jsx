@@ -486,7 +486,6 @@ export default function ControlCenter({ role, displayName, onLogout }) {
         <button
           onClick={() => setAiOpen((v) => !v)}
           title="AI 諮詢"
-          className="ai-fab-pulse"
           style={{ position: "fixed", bottom: 24, right: 24, zIndex: 200, width: 46, height: 46, borderRadius: "50%", background: C.accentDark, border: "none", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", transition: "background .15s" }}
         >
           🤖

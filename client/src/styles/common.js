@@ -41,6 +41,9 @@ export const btnPrimary = {
   transition: "background .15s, opacity .15s",
 };
 
+// 等寬字。只寫 "monospace" 的話，Mac 上的瀏覽器會挑 Courier，看起來像打字機
+export const fontMono = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+
 // 頁面上其餘的「新增」（分兩級的理由見 frontend.md）。內距比 btnPrimary 少 1px 是讓給外框，
 // 兩顆並排時才一樣高
 export const btnSecondary = {

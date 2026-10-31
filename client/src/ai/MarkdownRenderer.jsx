@@ -1,4 +1,5 @@
 import { cleanText } from "./markdownUtils";
+import { fontMono } from "../styles/common";
 
 function inlineMarkdown(text) {
   const parts = [];
@@ -96,7 +97,7 @@ const S = {
     borderRadius: 4,
     padding: "1px 5px",
     fontSize: 12,
-    fontFamily: "monospace",
+    fontFamily: fontMono,
     color: "#ff7b72",
   },
 };

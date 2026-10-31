@@ -4,6 +4,7 @@ import { formatLocal } from "./utils/timezone";
 import { errorTypeLabel, EMERGENCY_ERROR_TYPE } from "./utils/errorTypes";
 import { ListState, StaleBanner, UnknownStat } from "./components/ListState";
 import { describeLoadError } from "./utils/loadError";
+import { fontMono } from "./styles/common";
 
 function fmtDatetime(str) {
   if (!str) return "—";
@@ -94,7 +95,7 @@ const ErrorLog = ({ active = true }) => {
           marginBottom: 24,
         }}
       >
-        <div style={{ ...card, borderLeft: "3px solid #f85149" }}>
+        <div style={card}>
           <div
             style={{
               color: "#8b949e",
@@ -119,7 +120,7 @@ const ErrorLog = ({ active = true }) => {
               : logs.filter((l) => l.error_type === EMERGENCY_ERROR_TYPE).length}
           </div>
         </div>
-        <div style={{ ...card, borderLeft: "3px solid #f0a500" }}>
+        <div style={card}>
           <div
             style={{
               color: "#8b949e",
@@ -143,7 +144,7 @@ const ErrorLog = ({ active = true }) => {
               : logs.length > 0 ? fmtDatetime(logs[0].created_at) : "—"}
           </div>
         </div>
-        <div style={{ ...card, borderLeft: "3px solid #8b949e" }}>
+        <div style={card}>
           <div
             style={{
               color: "#8b949e",
@@ -233,7 +234,7 @@ const ErrorLog = ({ active = true }) => {
                     style={{
                       padding: "10px 12px",
                       color: "#cdd9e5",
-                      fontFamily: "monospace",
+                      fontFamily: fontMono,
                     }}
                   >
                     {log.device_id}
@@ -259,7 +260,7 @@ const ErrorLog = ({ active = true }) => {
                     style={{
                       padding: "10px 12px",
                       color: "#8b949e",
-                      fontFamily: "monospace",
+                      fontFamily: fontMono,
                       fontSize: 11,
                     }}
                   >

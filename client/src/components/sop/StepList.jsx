@@ -8,10 +8,16 @@ const PHASE_LABELS = {
   ramp_to_high: "升溫段開始時",
 };
 
+// 步驟名稱後面的補充說明（自動、選填）：純文字，不做成徽章
+const noteStyle = { marginLeft: 6, fontSize: 11, fontWeight: 400, color: "#8b949e" };
+
 const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin = false, savedExecutionId = null, uploadPhoto, photoUploading }) => {
   const totalSteps = steps.length;
   const doneCnt = Object.values(completedSteps).filter(Boolean).length;
   const allStepsDone = totalSteps > 0 && doneCnt === totalSteps;
+  // 全部都是自動確認時，標題講一次就夠；每一步都掛同一個徽章只是在重複同一句話。
+  // 有自動也有人工時，才需要逐步標出哪些是自動的
+  const allAuto = totalSteps > 0 && steps.every((s) => s.auto_trigger);
 
   const unlockedMap = useMemo(() => {
     // 選填步驟不阻擋後續流程；只有前面尚未完成的必填步驟會鎖住目前步驟。
@@ -32,7 +38,7 @@ const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin
   return (
     <div>
       <p style={{ color: "#8b949e", fontSize: 12, marginBottom: 14 }}>
-        測試進度（⚡ 步驟由系統自動確認）：
+        {allAuto ? "測試進度（各步驟由系統自動確認）：" : "測試進度（標「⚡ 自動」的步驟由系統自動確認）："}
       </p>
 
       {steps.map((step, idx) => {
@@ -66,35 +72,17 @@ const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin
             <div style={{ opacity: unlocked || checked ? 1 : 0.55 }}>
               <div style={{ fontWeight: 700, fontSize: 12 }}>
                 Step {step.step_id}. {step.name}
-                {isAuto && (
+                {isAuto && !allAuto && (
                   <span
                     title={PHASE_LABELS[step.auto_trigger] || "系統自動確認"}
-                    style={{
-                      marginLeft: 6,
-                      fontSize: 10,
-                      padding: "1px 6px",
-                      background: checked ? "#0f2318" : "#1c2128",
-                      color: checked ? "#57ab5a" : "#58a6ff",
-                      borderRadius: 4,
-                      border: `1px solid ${checked ? "#2d5a3a" : "#1f6feb"}`,
-                      cursor: "help",
-                    }}
+                    style={{ ...noteStyle, cursor: "help" }}
                   >
-                    ⚡ Auto 自動確認
+                    ⚡ 自動
                   </span>
                 )}
                 {step.optional && (
-                  <span
-                    style={{
-                      marginLeft: 6,
-                      fontSize: 10,
-                      padding: "1px 6px",
-                      background: "#21262d",
-                      color: "#8b949e",
-                      borderRadius: 4,
-                    }}
-                  >
-                    Optional 選填
+                  <span style={noteStyle}>
+                    （選填）
                   </span>
                 )}
                 {!unlocked && !isAuto && (

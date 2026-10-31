@@ -225,7 +225,7 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
             ) : preview ? (
               <div style={{
                 background: C.successBgMid, borderRadius: 6, padding: "10px 12px",
-                border: `1px solid ${C.success}`, borderLeft: `3px solid ${C.success}`,
+                border: `1px solid ${C.success}`,
               }}>
                 <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 6 }}>📋 預估時間（待管理員分配設備）</div>
                 <div style={{ fontSize: 12, color: C.textPrimary, marginBottom: 4 }}>

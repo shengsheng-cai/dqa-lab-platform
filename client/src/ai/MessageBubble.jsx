@@ -270,15 +270,6 @@ const S = {
   },
   bullet: { color: "#58a6ff", flexShrink: 0, marginTop: 1 },
   numBullet: { color: "#58a6ff", flexShrink: 0, minWidth: 20 },
-  inlineCode: {
-    background: "#21262d",
-    border: "1px solid #30363d",
-    borderRadius: 4,
-    padding: "1px 5px",
-    fontSize: 12,
-    fontFamily: "monospace",
-    color: "#ff7b72",
-  },
   applyBtn: {
     display: "flex",
     alignItems: "center",

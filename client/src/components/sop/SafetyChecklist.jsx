@@ -62,8 +62,8 @@ const SafetyChecklist = ({
 
   return (
     <section
-      className="operation-box"
-      style={{ borderLeft: "3px solid #f0a500", position: "relative" }}
+      className="operation-box warn"
+      style={{ position: "relative" }}
     >
       {/* Inline Modal Overlay */}
       {showModal && (

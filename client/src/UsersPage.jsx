@@ -4,7 +4,7 @@ import { useToast } from "./components/useToast";
 import ConfirmModal from "./components/ConfirmModal";
 import ModalFrame from "./components/ModalFrame";
 import { C } from "./styles/theme";
-import { btnRowAction, btnRowDanger, btnSecondary, rowActions } from "./styles/common";
+import { btnRowAction, btnRowDanger, btnSecondary, fontMono, rowActions } from "./styles/common";
 import { describeLoadError } from "./utils/loadError";
 import { copyText } from "./utils/clipboard";
 import { ListStateRow, StaleBanner } from "./components/ListState";
@@ -356,7 +356,7 @@ function DemoTokenSection({ active, onUsersChanged }) {
       {newToken && (
         <div style={{ background: "#1f3a1f", border: "1px solid #238636", borderRadius: 8, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 12, color: "#8b949e" }}>新 Token：</span>
-          <span ref={tokenRef} style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: "#3fb950", letterSpacing: 2 }}>{newToken}</span>
+          <span ref={tokenRef} style={{ fontFamily: fontMono, fontSize: 16, fontWeight: 700, color: "#3fb950", letterSpacing: 2 }}>{newToken}</span>
           <span style={{ fontSize: 11, color: "#8b949e" }}>請立即複製，此提示關閉後不再顯示</span>
           <button
             onClick={handleCopy}
@@ -426,7 +426,7 @@ function DemoTokenSection({ active, onUsersChanged }) {
                   return (
                     <tr key={t.id} style={{ borderBottom: "1px solid #21262d", opacity: invalid ? 0.5 : 1 }}>
                       <td style={{ padding: "8px 10px" }}>
-                        <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: invalid ? "#8b949e" : "#58a6ff", letterSpacing: 1 }}>{t.token}</span>
+                        <span style={{ fontFamily: fontMono, fontSize: 13, fontWeight: 700, color: invalid ? "#8b949e" : "#58a6ff", letterSpacing: 1 }}>{t.token}</span>
                       </td>
                       <td style={{ padding: "8px 10px", fontSize: 12, color: "#cdd9e5" }}>{t.label || <span style={{ color: C.textMuted }}>—</span>}</td>
                       <td style={{ padding: "8px 10px", fontSize: 12, color: t.expired ? "#f85149" : "#8b949e", whiteSpace: "nowrap" }}>

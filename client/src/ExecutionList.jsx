@@ -6,7 +6,7 @@ import { formatLocal } from "./utils/timezone";
 import { useToast } from "./components/useToast";
 import { describeLoadError } from "./utils/loadError";
 import { ListState, StaleBanner } from "./components/ListState";
-import { btnRowAction, rowActions } from "./styles/common";
+import { btnRowAction, fontMono, rowActions } from "./styles/common";
 
 function fmtDatetime(str) {
   if (!str) return "—";
@@ -100,7 +100,7 @@ export default function ExecutionList({ active, role }) {
                 <tr style={{ borderBottom: expandedId === ex.id ? "none" : "1px solid #21262d" }}>
                   <td style={{ ...tdStyle, color: "#8b949e" }}>#{ex.id}</td>
                   <td style={{ ...tdStyle, color: "#cdd9e5" }}><span title={ex.sop_id}>{ex.sop_name || ex.sop_id}</span></td>
-                  <td style={{ ...tdStyle, color: "#8b949e", fontFamily: "monospace" }}>{ex.device_id || "—"}</td>
+                  <td style={{ ...tdStyle, color: "#8b949e", fontFamily: fontMono }}>{ex.device_id || "—"}</td>
                   <td style={{ ...tdStyle, color: "#8b949e" }}>{role === "guest" ? "—" : (ex.operator || "—")}</td>
                   <td style={{ ...tdStyle, color: "#8b949e" }}>{fmtDatetime(ex.test_ended_at || ex.test_started_at || ex.created_at)}</td>
                   {role !== "guest" && (

@@ -11,7 +11,7 @@ import {
   fmtDt, fmtHours, scheduleIconBtn,
 } from "./components/schedule/scheduleUtils";
 import { C } from "./styles/theme";
-import { btnBare, btnPrimary, btnSecondary } from "./styles/common";
+import { btnBare, btnPrimary, btnSecondary, fontMono } from "./styles/common";
 import { ListState, StaleBanner } from "./components/ListState";
 import { describeLoadError } from "./utils/loadError";
 
@@ -259,7 +259,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
                           border: `1px solid ${color.border}`, whiteSpace: "nowrap",
                         }}>{s.status}</span>
                       </td>
-                      <td style={{ padding: "6px 8px", color: C.textPrimary, fontFamily: "monospace" }}>
+                      <td style={{ padding: "6px 8px", color: C.textPrimary, fontFamily: fontMono }}>
                         {/* aria-label 不能只有號碼，聽的人得知道按下去會開什麼 */}
                         <button
                           onClick={(e) => { e.stopPropagation(); setSelectedSchedule(s); }}
@@ -271,7 +271,7 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
                       </td>
                       <td style={{ padding: "6px 8px", color: C.textPrimary }}>{s.sample_name}</td>
                       <td style={{ padding: "6px 8px", color: C.textMuted }}>{s.applicant_name || "—"}</td>
-                      <td style={{ padding: "6px 8px", color: C.textMuted, fontFamily: "monospace" }}>{s.device_id || "—"}</td>
+                      <td style={{ padding: "6px 8px", color: C.textMuted, fontFamily: fontMono }}>{s.device_id || "—"}</td>
                       <td style={{ padding: "6px 8px", color: C.textMuted, whiteSpace: "nowrap" }}>{fmtDt(s.start_time)}</td>
                       <td style={{ padding: "6px 8px", color: C.textMuted, whiteSpace: "nowrap" }}>{fmtDt(s.end_time)}</td>
                       <td style={{ padding: "6px 8px", color: C.warningAlt, whiteSpace: "nowrap" }}>{fmtHours(s.total_hours)}</td>

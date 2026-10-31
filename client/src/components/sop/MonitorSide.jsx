@@ -21,9 +21,8 @@ const MonitorSide = ({
         <span style={{ fontSize: 10, color: "#8b949e" }}>updated {formatLocal(data.timestamp, "time")}</span>
       </div>
 
-      {/* Current mission */}
-      <div className="info-card highlight">
-        <label>CURRENT MISSION</label>
+      <div className="info-card">
+        <label>目前測試</label>
         <div className="value-large" style={{ fontSize: 13 }}>
           {isActive
             ? data.running_sop_name || "執行中"
@@ -58,8 +57,8 @@ const MonitorSide = ({
             marginBottom: 8,
           }}
         >
-          <label style={{ fontSize: 11, color: "#8b949e", letterSpacing: 1 }}>
-            {ds.activeSop?.humidity_control ? "TEMP / HUMI TREND" : "TEMP TREND"}
+          <label style={{ fontSize: 11, color: "#8b949e" }}>
+            {ds.activeSop?.humidity_control ? "溫濕度趨勢" : "溫度趨勢"}
           </label>
           <div style={{ display: "flex", gap: 10, fontSize: 10 }}>
             <span style={{ color: "#8b949e" }}>── SP 設定值</span>

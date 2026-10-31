@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { formatLocal } from "../../utils/timezone";
 import { formatFreeTime, formatCycle, formatStep } from "../../utils/executionInfo";
 import useCountdown from "../../useCountdown";
+import { fontMono } from "../../styles/common";
 
 /**
  * 執行中資訊面板（左側欄，顯示 Pgm / Step / Free Time / Cycle / Now Time / End Time）。
@@ -37,11 +38,10 @@ const ExecutionInfoPanel = ({ sop, startedAt, estimatedEndAt, simCycle, doneCnt 
       style={{
         background: "#0d1117",
         border: "1px solid #30363d",
-        borderLeft: "3px solid #58a6ff",
         borderRadius: 8,
         padding: "10px 14px",
         marginBottom: 10,
-        fontFamily: "monospace",
+        fontFamily: fontMono,
       }}
     >
       {rows.map(([label, value]) => (

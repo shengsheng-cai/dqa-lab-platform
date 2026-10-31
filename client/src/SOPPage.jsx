@@ -641,14 +641,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
       <main className="control-side embedded">
         <div className="scroll-wrapper">
           {role === "guest" ? (
-            <section
-              className="operation-box"
-              style={{
-                borderLeft: "3px solid #f0a500",
-                background: "#1a1500",
-                textAlign: "center",
-              }}
-            >
+            <section className="operation-box warn" style={{ textAlign: "center" }}>
               <div style={{ color: "#f0a500", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
                 🔒 訪客模式
               </div>
@@ -671,10 +664,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
           )}
 
           {ds.activeSop && (
-            <section
-              className="operation-box"
-              style={{ borderLeft: "3px solid #58a6ff" }}
-            >
+            <section className="operation-box">
               <div className="box-header" style={{ justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span>📋</span>
@@ -760,10 +750,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
           {isAdmin && isWaitingForConfirm(data, pendingSchedule) && (() => {
             const { isLast, actionLabel, nextConditionName } = conditionProgress(pendingSchedule);
             return (
-              <section
-                className="operation-box"
-                style={{ borderLeft: "3px solid #f0a500", background: "#1a1500" }}
-              >
+              <section className="operation-box warn">
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div>
                     {/* 不寫「條件 N 已完成」：被人按停時一條都沒完成，那句是假的。
@@ -817,10 +804,7 @@ const SOPPage = ({ active = true, externalDevice, onOpenExecutions, onScheduleCh
               上方控制面板已經寫了發生什麼事、下一步按哪一顆。 */}
           {!isActive && !isFinishing && !isBlocked && !scheduleNote && !isEmergency && (
             <>
-              <section
-                className="operation-box"
-                style={{ borderLeft: "3px solid #58a6ff" }}
-              >
+              <section className="operation-box">
                 <div className="box-header">
                   <span>🔬</span>
                   <h2>選擇測試標準</h2>

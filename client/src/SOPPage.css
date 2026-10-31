@@ -55,7 +55,6 @@
     color: #8b949e;
     font-size: 12px;
     font-weight: 600;
-    letter-spacing: 1px;
 }
 .value-large { font-size: 26px; font-weight: 700; margin-top: 8px; color: #fff; }
 
@@ -67,16 +66,14 @@
     padding: 25px;
     margin-bottom: 20px;
 }
+/* 要人注意的那幾張（訪客提示、等待確認、啟動前檢查）：整圈淡黃框加底色，不用左側粗色條 */
+.operation-box.warn {
+    background: #1a1500;
+    border-color: #f0a50044;
+}
 
 .box-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
 .box-header h2 { margin: 0; font-size: 14px; color: #cdd9e5; }
-.pulse-icon {
-    width: 10px;
-    height: 10px;
-    background: #58a6ff;
-    border-radius: 50%;
-    animation: blink 2s infinite;
-}
 .task-desc { color: #8b949e; font-size: 14px; margin: 0 0 4px; }
 
 /* ── 控制按鈕 ── */
@@ -94,9 +91,3 @@
 .amber { background: #d29922; }
 .grey  { background: #30363d; }
 .red   { background: #da3633; }
-
-/* ── 動畫 ── */
-@keyframes blink {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.3; }
-}
