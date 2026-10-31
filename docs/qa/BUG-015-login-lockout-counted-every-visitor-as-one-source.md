@@ -12,7 +12,7 @@ English · [繁體中文](BUG-015-login-lockout-counted-every-visitor-as-one-sou
 | **Environment** | The deployed Hugging Face Space, where a platform proxy sits in front of the container. Local development and the E2E harness connect to Uvicorn directly and were never affected |
 | **Found by** | Whole-project scan, 2026-09-07 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `63ecb1c3b31d0f661926c008959fe3b85d3b7947` (start command and the test that pins it); the lockout endpoint tests landed alongside it in `062d2a223f2aa349f0b02079083761065df5e408` |
+| **Fix commit** | `87d02b143f50100c11532bc19d4a054c9ff42fb6` (start command and the test that pins it); the lockout endpoint tests landed alongside it in `fee737f8f7e8857f1f6ef37c3c9c266f63e25fe8` |
 | **Recording order** | The evidence below was gathered on 2026-09-07, before the fix. The report itself was written alongside the fix, not ahead of it — Git history cannot prove the order of an uncommitted draft, so this is recorded as concurrent rather than claimed as a pre-fix record |
 
 ## Summary
@@ -126,8 +126,8 @@ could notice.
 
 `backend/railway.toml` carried
 `--proxy-headers --forwarded-allow-ips='*'` in its start command. Commit
-`13b4b76` (2026-04-16) removed Railway and deleted that file wholesale. Commit
-`861248e` (2026-04-24) added the Hugging Face `Dockerfile`, whose start command
+`e4cb7e2` (2026-04-16) removed Railway and deleted that file wholesale. Commit
+`a6be75d` (2026-04-24) added the Hugging Face `Dockerfile`, whose start command
 was written fresh and never carried the setting. Between those two commits the
 deployment target changed, and the only place this decision had ever been
 recorded went with the old one.

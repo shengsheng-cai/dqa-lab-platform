@@ -12,7 +12,7 @@ English · [繁體中文](BUG-011-websocket-handshake-carried-a-long-lived-admin
 | **Environment** | Any deployment running Uvicorn with its access log enabled, which includes the container start command in `Dockerfile` |
 | **Found by** | Codex whole-project review, 2026-08-19 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `03291360f88ffd82f96a13cbc4ff8f8aba8717b5`. As with BUG-010, this report was written *after* the fix — noted here rather than left implicit |
+| **Fix commit** | `bff9e20672a40604f3163f59dcf7f30b6b7c0c5e`. As with BUG-010, this report was written *after* the fix — noted here rather than left implicit |
 
 ## Summary
 
@@ -83,7 +83,7 @@ rather than captured from a running deployment; see Evidence.
 
 ## Evidence
 
-- Pre-fix client: `git show 63e84b7:client/src/useDeviceWebSocket.js` —
+- Pre-fix client: `git show 332f9ea:client/src/useDeviceWebSocket.js` —
   `` const url = `${WS_BASE}/ws/devices${token ? `?token=${encodeURIComponent(token)}` : ""}` ``,
   with `getToken` returning `user_token` or `demo_password` from `localStorage`.
 - Pre-fix server: [`ws.py`](../../backend/app/ws.py) `_authenticate`, reached

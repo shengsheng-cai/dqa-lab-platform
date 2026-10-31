@@ -12,7 +12,7 @@
 | **環境** | DQA Lab Platform 後端、模擬設備、SQLite |
 | **發現方式** | 排程狀態風險審查，2026-07-18 |
 | **回報者** | 蔡聖生 |
-| **修正 commit** | `9a7116bd045ec4438c335ddf9f80795e1ae1b675` |
+| **修正 commit** | `36b4b6094175fdca000993b24f72f49ab9d5b98a` |
 
 ## 摘要
 
@@ -54,7 +54,7 @@
 
 ## 證據
 
-- 歷史修正：commit `9a7116bd045ec4438c335ddf9f80795e1ae1b675`。
+- 歷史修正：commit `36b4b6094175fdca000993b24f72f49ab9d5b98a`。
 - 目前的自動啟動守衛：
   [`start_schedule()` 與 `_apply_schedule_start()`](../../backend/app/schedule_service.py)。
 - 回歸測試：
@@ -91,7 +91,7 @@
 
 ## 後續強化（2026-07-25）
 
-commit `659396a` 把全部六條排定啟動的路徑都收斂到 `start_schedule(...)`。維護狀態
+commit `537eca9` 把全部六條排定啟動的路徑都收斂到 `start_schedule(...)`。維護狀態
 現在會產生一個具型別的提早回傳結果，並且在原子啟動交易**內部**再驗證一次，
 補掉「初次檢查」到「commit」之間的空窗。條件銜接也走同一道守衛。
 

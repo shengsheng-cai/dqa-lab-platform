@@ -9,10 +9,10 @@ English · [繁體中文](BUG-016-five-tests-stayed-green-after-the-behaviour-th
 | **Severity** | Medium |
 | **Priority** | High |
 | **Component** | The test suite itself — five tests across `backend/tests/` and `tests/e2e/specs/`, plus three production paths with no test at all |
-| **Environment** | Local suite at `e63e1e6`: 466 pytest, 152 Vitest, 91 Playwright |
+| **Environment** | Local suite at `e3f8d74`: 466 pytest, 152 Vitest, 91 Playwright |
 | **Found by** | Suite-wide audit by mutation testing, 2026-09-21 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `cf7e744` (backend: calibration classification, datetime update paths, LINE push payload and webhook signature, auto-assign exclusions) and `2f1d9db` (E2E: keyboard reachability, top-bar counts, three row-action groups) |
+| **Fix commit** | `a7ffa49` (backend: calibration classification, datetime update paths, LINE push payload and webhook signature, auto-assign exclusions) and `9b8b134` (E2E: keyboard reachability, top-bar counts, three row-action groups) |
 | **Recording order** | Pre-fix record. Every mutation below was applied to a clean tree, the suite was run, the output was captured, and the mutation was reverted — all before any repair was attempted. The captured output is the evidence. The repairs followed, and each was verified by replaying the mutation recorded here |
 
 ## Summary

@@ -12,7 +12,7 @@
 | **環境** | 任何以 lifespan 啟動的部署，包含 `Dockerfile` 裡的容器啟動指令 |
 | **發現方式** | Codex 全專案 review，2026-08-19 |
 | **回報者** | 蔡聖生 |
-| **修正 commit** | `159f54d24558d9c415212a77a87637bd86c4ff13`。與 BUG-010、BUG-011 一樣，這份報告是**先修再寫**——寫在這裡而不是含糊帶過 |
+| **修正 commit** | `7fcf16758e8c3f9d5edfb7095de2e1976eb5af12`。與 BUG-010、BUG-011 一樣，這份報告是**先修再寫**——寫在這裡而不是含糊帶過 |
 
 ## 摘要
 
@@ -45,7 +45,7 @@
 
 ## 在修正前的版本如何重現
 
-1. 切到修正 commit 之前的版本（`159f54d^`）。
+1. 切到修正 commit 之前的版本（`7fcf167^`）。
 2. 讓 `data_simulator` 在啟動後就拋出例外。實測是把它換成一個立刻 raise 的 coroutine，
    效果等同主迴圈有例外逃出去。
 3. 以正常 lifespan 啟動 app（`TestClient` 進 context，或直接跑 uvicorn）。
@@ -79,7 +79,7 @@ async generator 的區域變數裡（`sim_task`）。generator 掛在 `yield` �
 
 ## 證據
 
-- 修正前的探測：`git show 159f54d^:backend/app/main.py`，第 282–284 行，
+- 修正前的探測：`git show 7fcf167^:backend/app/main.py`，第 282–284 行，
   `async def health(): return {"status": "ok"}`，函式本體就這一行。
 - 修正前的工作保存方式：同一個檔案第 39 行的 `background_tasks = set()`，以及第 137、141、
   146 行三組 `add(...)` 搭配 `add_done_callback(background_tasks.discard)`。整個檔案沒有

@@ -12,8 +12,8 @@ English · [繁體中文](BUG-014-monthly-stocktake-silently-omitted-fixtures.zh
 | **Environment** | Admin fixture page; any deployment with loaned or reserved fixtures |
 | **Found by** | Codex whole-project UX review, 2026-08-19 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `f496d13969ba73bca6f631eb93578dc7653a0fa0` |
-| **Report timing** | Written after the fix; the pre-fix screen was recreated on 2026-08-24 in an isolated checkout of `4b566f46f616b9ce67dae885fcdb802e176e72c9` |
+| **Fix commit** | `d5a0cfb97b42bfdf3341c813aa91ceb0e819c0ee` |
+| **Report timing** | Written after the fix; the pre-fix screen was recreated on 2026-08-24 in an isolated checkout of `16c0e00308c6532e54f094e333e6eb41c687e9d1` |
 
 ## Summary
 
@@ -33,7 +33,7 @@ overwritten, but “not counted” was presented as “no difference”.
 
 ## Steps to reproduce on the pre-fix revision
 
-1. Start pre-fix commit `4b566f46f616b9ce67dae885fcdb802e176e72c9` with the demo seed.
+1. Start pre-fix commit `16c0e00308c6532e54f094e333e6eb41c687e9d1` with the demo seed.
 2. Sign in as an administrator and open Fixture Management.
 3. Confirm that the table contains six fixture types, several loaned or reserved.
 4. Select “Start monthly stocktake”.

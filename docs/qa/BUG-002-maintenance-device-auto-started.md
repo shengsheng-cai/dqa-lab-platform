@@ -12,7 +12,7 @@ English · [繁體中文](BUG-002-maintenance-device-auto-started.zh-TW.md)
 | **Environment** | DQA Lab Platform backend, simulated device, SQLite |
 | **Found by** | Schedule-state risk review, 2026-07-18 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `9a7116bd045ec4438c335ddf9f80795e1ae1b675` |
+| **Fix commit** | `36b4b6094175fdca000993b24f72f49ab9d5b98a` |
 
 ## Summary
 
@@ -62,7 +62,7 @@ The defect also applied when the unavailable period had no reason text.
 ## Evidence
 
 - Historical fix: commit
-  `9a7116bd045ec4438c335ddf9f80795e1ae1b675`.
+  `36b4b6094175fdca000993b24f72f49ab9d5b98a`.
 - Current automatic-start guard:
   [`start_schedule()` and `_apply_schedule_start()`](../../backend/app/schedule_service.py).
 - Regression tests:
@@ -108,7 +108,7 @@ unblocked.
 
 ## Subsequent hardening (2026-07-25)
 
-Commit `659396a` consolidated all six scheduled-start paths on
+Commit `537eca9` consolidated all six scheduled-start paths on
 `start_schedule(...)`. Maintenance now produces a typed early result and is
 revalidated inside the atomic start transaction, closing the gap between the
 initial check and commit. Next-condition continuation uses the same guard.

@@ -12,7 +12,7 @@ English · [繁體中文](BUG-003-execution-insert-failure-left-zombie-running-s
 | **Environment** | DQA Lab Platform backend, manual and automatic start paths |
 | **Found by** | Cross-module state-consistency review, 2026-07-18 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `fa709947d3fb6a39b36234398401b5cd907830c3` |
+| **Fix commit** | `7e6a309793690ac7eb0441aa6eb3cc8b8bcdc9cc` |
 
 ## Summary
 
@@ -60,7 +60,7 @@ reservation could also advance even though the execution did not exist.
 ## Evidence
 
 - Historical fix: commit
-  `fa709947d3fb6a39b36234398401b5cd907830c3`.
+  `7e6a309793690ac7eb0441aa6eb3cc8b8bcdc9cc`.
 - Current atomic state owner:
   [`device_state.py`](../../backend/app/device_state.py).
 - Current scheduled-start transaction:
@@ -101,10 +101,10 @@ The start operation therefore was not atomic from the business perspective.
 
 ## Subsequent hardening (2026-07-25)
 
-- Commit `401de42` introduced `DeviceStateManager` as the single owner of
+- Commit `3f7b562` introduced `DeviceStateManager` as the single owner of
   device-state persistence, cache publication, per-device locking, and
   `SopExecution` creation inside the start transaction.
-- Commit `659396a` made scheduled start write `DeviceState`, `SopExecution`,
+- Commit `537eca9` made scheduled start write `DeviceState`, `SopExecution`,
   `Schedule`, `FixtureLoan`, and `AuditLog` in one transaction. Cache is
   published only after a successful commit.
 - Cancellation now waits for the in-flight transaction even after repeated task

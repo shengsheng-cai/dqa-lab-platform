@@ -12,7 +12,7 @@ English · [繁體中文](BUG-010-concurrent-loan-and-schedule-both-claimed-the-
 | **Environment** | FastAPI backend on SQLite, any deployment; reproduced on the file-backed database the deployment actually uses |
 | **Found by** | Codex whole-project review, 2026-08-19 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `008927780e7f791f2197d7ef3147ac31964692ee`. Unlike BUG-009, this report was written *after* the fix — noted here rather than left implicit |
+| **Fix commit** | `1c8400d9b50d389340f1e4317088e8f3807db4af`. Unlike BUG-009, this report was written *after* the fix — noted here rather than left implicit |
 
 ## Summary
 

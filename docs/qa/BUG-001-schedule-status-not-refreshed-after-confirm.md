@@ -12,7 +12,7 @@ English · [繁體中文](BUG-001-schedule-status-not-refreshed-after-confirm.zh
 | **Environment** | DQA Lab Platform (local/demo), Chromium, React frontend + FastAPI backend |
 | **Found by** | Automated E2E (Playwright), 2026-07-20 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `8a115b3c5083fa12849c9f6adca4a65a28857ef9` |
+| **Fix commit** | `bc0ec7a1aca7ab6a2b2f68aab0f8879101591b6e` |
 
 ## Summary
 

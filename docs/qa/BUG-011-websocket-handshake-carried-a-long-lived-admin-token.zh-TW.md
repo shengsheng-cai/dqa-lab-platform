@@ -12,7 +12,7 @@
 | **環境** | 任何開著 Uvicorn access log 的部署，包含 `Dockerfile` 裡的容器啟動指令 |
 | **發現方式** | Codex 全專案 review，2026-08-19 |
 | **回報者** | 蔡聖生 |
-| **修正 commit** | `03291360f88ffd82f96a13cbc4ff8f8aba8717b5`。與 BUG-010 一樣，這份報告是**先修再寫**——寫在這裡而不是含糊帶過 |
+| **修正 commit** | `bff9e20672a40604f3163f59dcf7f30b6b7c0c5e`。與 BUG-010 一樣，這份報告是**先修再寫**——寫在這裡而不是含糊帶過 |
 
 ## 摘要
 
@@ -76,7 +76,7 @@ query string 是請求行的一部分，Uvicorn 的 access log 會把請求行�
 
 ## 證據
 
-- 修正前的前端：`git show 63e84b7:client/src/useDeviceWebSocket.js` —
+- 修正前的前端：`git show 332f9ea:client/src/useDeviceWebSocket.js` —
   `` const url = `${WS_BASE}/ws/devices${token ? `?token=${encodeURIComponent(token)}` : ""}` ``，
   其中 `getToken` 會從 `localStorage` 回傳 `user_token` 或 `demo_password`。
 - 修正前的後端：[`ws.py`](../../backend/app/ws.py) 的 `_authenticate`，入口是

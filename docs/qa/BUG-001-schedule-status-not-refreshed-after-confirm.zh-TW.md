@@ -12,7 +12,7 @@
 | **環境** | DQA Lab Platform（本機／Demo）、Chromium、React 前端 + FastAPI 後端 |
 | **發現方式** | 自動化 E2E（Playwright），2026-07-20 |
 | **回報者** | 蔡聖生 |
-| **修正 commit** | `8a115b3c5083fa12849c9f6adca4a65a28857ef9` |
+| **修正 commit** | `bc0ec7a1aca7ab6a2b2f68aab0f8879101591b6e` |
 
 ## 摘要
 

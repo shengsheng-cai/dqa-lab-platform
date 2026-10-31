@@ -12,7 +12,7 @@
 | **環境** | DQA Lab Platform 後端，手動與自動兩條啟動路徑 |
 | **發現方式** | 跨模組狀態一致性審查，2026-07-18 |
 | **回報者** | 蔡聖生 |
-| **修正 commit** | `fa709947d3fb6a39b36234398401b5cd907830c3` |
+| **修正 commit** | `7e6a309793690ac7eb0441aa6eb3cc8b8bcdc9cc` |
 
 ## 摘要
 
@@ -54,7 +54,7 @@
 
 ## 證據
 
-- 歷史修正：commit `fa709947d3fb6a39b36234398401b5cd907830c3`。
+- 歷史修正：commit `7e6a309793690ac7eb0441aa6eb3cc8b8bcdc9cc`。
 - 目前的原子狀態擁有者：
   [`device_state.py`](../../backend/app/device_state.py)。
 - 目前排定啟動的交易：
@@ -89,9 +89,9 @@
 
 ## 後續強化（2026-07-25）
 
-- commit `401de42` 引入 `DeviceStateManager`，成為設備狀態落盤、cache 發布、
+- commit `3f7b562` 引入 `DeviceStateManager`，成為設備狀態落盤、cache 發布、
   per-device 鎖，以及在啟動交易內建立 `SopExecution` 的唯一擁有者。
-- commit `659396a` 讓排定啟動在同一個交易內寫入 `DeviceState`、`SopExecution`、
+- commit `537eca9` 讓排定啟動在同一個交易內寫入 `DeviceState`、`SopExecution`、
   `Schedule`、`FixtureLoan` 與 `AuditLog`。cache 只在 commit 成功之後才發布。
 - 取消操作現在會等待進行中的交易完成（即使工作被反覆取消），在 commit 成功後才
   發布 cache，然後再重新拋出 `CancelledError`。

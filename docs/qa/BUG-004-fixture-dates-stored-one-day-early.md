@@ -12,7 +12,7 @@ English · [繁體中文](BUG-004-fixture-dates-stored-one-day-early.zh-TW.md)
 | **Environment** | React client, any timezone ahead of UTC; Demo and development baseline run in `Asia/Taipei` (UTC+8) |
 | **Found by** | Four-gate review backlog (`CLAUDE.local.md`), 2026-07-27 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `e62c73ed7eebee950f09bc9ba91e0bd6439edf43` |
+| **Fix commit** | `ca9c572e04b6a28d103229839df8069928803f71` |
 
 ## Summary
 
@@ -22,7 +22,7 @@ calendar date, not the operator's local one. Between 00:00 and 08:00 Taipei time
 the UTC date is still the previous day, so the client submitted — and the
 backend stored — a date one day earlier than the day the operator was working.
 
-Unlike the report-filename variant fixed in `b1dca47`, these three values are
+Unlike the report-filename variant fixed in `e775cd7`, these three values are
 submitted data: two reach the database directly, and one seeds a due date the
 operator is unlikely to re-check.
 
@@ -83,7 +83,7 @@ advanced, and the width of the window equals the UTC offset — eight hours in
 Taipei.
 
 The correct local-date helper, `localDateStamp()`, already existed in
-`utils/timezone.js` (added in `b1dca47` while fixing the same defect class in
+`utils/timezone.js` (added in `e775cd7` while fixing the same defect class in
 report filenames), but these three call sites were not migrated at that time.
 
 ## Impact

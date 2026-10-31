@@ -12,7 +12,7 @@ English · [繁體中文](BUG-008-report-summary-disagreed-with-uncertainty-anal
 | **Environment** | FastAPI backend, any deployment; affects every completed execution that has a temperature target and the normal ramp-then-dwell sensor profile — not an edge case |
 | **Found by** | ISO/IEC 17025 §7.8.3.1 compliance review, 2026-08-08. Extended by the four-gate review of the fix, 2026-08-09, which found the same contradiction reached the CSV report too |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `59188105590575114d666c315857f2fe9f8fff35` |
+| **Fix commit** | `b0343fa16c49b610e40aaa1330dcdbf86d5ae7f7` |
 
 ## Summary
 

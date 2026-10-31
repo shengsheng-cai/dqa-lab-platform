@@ -12,7 +12,7 @@ English · [繁體中文](BUG-005-fixture-day-deadlines-evaluated-in-utc.zh-TW.m
 | **Environment** | React client + FastAPI backend, any timezone ahead of UTC; Demo and development baseline run in `Asia/Taipei` (UTC+8) |
 | **Found by** | Four-gate review, 2026-07-27 (diff read and altitude pass) |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commits** | `5147eadbbeb851ebbdc2689a1f7ba0b7d378b40a`, `b8bd531e04cb7adfaaa34b925d5e340d6c1aa9e6` |
+| **Fix commits** | `446e2e49c046a0aef4ed3dcc4406d2d6ea3c11c3`, `6d6b715b8d59948213e842a8ce713e427902e7fd` |
 
 ## Summary
 

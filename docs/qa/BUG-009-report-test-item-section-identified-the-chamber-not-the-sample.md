@@ -12,7 +12,7 @@ English · [繁體中文](BUG-009-report-test-item-section-identified-the-chambe
 | **Environment** | FastAPI backend, any deployment; affects every CSV and PDF report ever produced |
 | **Found by** | ISO/IEC 17025 §7.8.2.1 compliance review, 2026-08-08 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `d01f68fb405d33bba8288663b4a8bf4d07fd1216` (report written before the fix, per the project's defect workflow) |
+| **Fix commit** | `d93855e8f1f4d40463fe9005e204aad1d03ce8e3` (report written before the fix, per the project's defect workflow) |
 
 ## Summary
 

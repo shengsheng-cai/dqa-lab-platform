@@ -12,7 +12,7 @@ English · [繁體中文](BUG-012-dead-simulator-task-still-reported-a-healthy-s
 | **Environment** | Any deployment started through the app lifespan, which includes the container start command in `Dockerfile` |
 | **Found by** | Codex whole-project review, 2026-08-19 |
 | **Reporter** | Sheng-Sheng Tsai |
-| **Fix commit** | `159f54d24558d9c415212a77a87637bd86c4ff13`. As with BUG-010 and BUG-011, this report was written *after* the fix — noted here rather than left implicit |
+| **Fix commit** | `7fcf16758e8c3f9d5edfb7095de2e1976eb5af12`. As with BUG-010 and BUG-011, this report was written *after* the fix — noted here rather than left implicit |
 
 ## Summary
 
@@ -49,7 +49,7 @@ code did something wrong; it is that nothing speaks up once it breaks.
 
 ## Steps to reproduce on the pre-fix revision
 
-1. Check out the revision before the fix commit (`159f54d^`).
+1. Check out the revision before the fix commit (`7fcf167^`).
 2. Make `data_simulator` raise shortly after start-up. The measurement here
    replaced it with a coroutine that raises immediately, which is equivalent to an
    exception escaping the main loop.
@@ -90,7 +90,7 @@ whole life behind a lying probe.
 
 ## Evidence
 
-- The pre-fix probe: `git show 159f54d^:backend/app/main.py`, lines 282–284,
+- The pre-fix probe: `git show 7fcf167^:backend/app/main.py`, lines 282–284,
   `async def health(): return {"status": "ok"}` — that one line was the body.
 - The pre-fix task bookkeeping: the same file, `background_tasks = set()` on line 39
   and three `add(...)` / `add_done_callback(background_tasks.discard)` pairs on
