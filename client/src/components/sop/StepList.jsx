@@ -104,7 +104,7 @@ const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin
                       fontSize: 10,
                       padding: "1px 6px",
                       background: "#21262d",
-                      color: "#484f58",
+                      color: "#8b949e",
                       borderRadius: 4,
                     }}
                   >

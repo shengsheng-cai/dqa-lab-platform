@@ -34,7 +34,7 @@ export const SIM_PHASE_LABEL = {
 // 只給同檔案的 deviceStatusZh 與 deviceStatusBadge 用，不對外：畫面一律走那兩支，
 // 不要自己查這張表（那會變成同一份代碼在兩個地方各翻一次）。
 const STATUS_CONFIG = {
-  OFFLINE:   { color: "#484f58", bg: "#21262d", zh: "離線" },
+  OFFLINE:   { color: "#8b949e", bg: "#21262d", zh: "離線" },
   IDLE:      { color: "#8b949e", bg: "#21262d", zh: "待機" },
   RUNNING:   { color: "#3fb950", bg: "#0f2318", zh: "執行中" },
   PAUSED:    { color: "#f0a500", bg: "#2d1f00", zh: "已暫停" },

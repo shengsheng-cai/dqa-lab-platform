@@ -428,7 +428,7 @@ function DemoTokenSection({ active, onUsersChanged }) {
                       <td style={{ padding: "8px 10px" }}>
                         <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: invalid ? "#8b949e" : "#58a6ff", letterSpacing: 1 }}>{t.token}</span>
                       </td>
-                      <td style={{ padding: "8px 10px", fontSize: 12, color: "#cdd9e5" }}>{t.label || <span style={{ color: "#484f58" }}>—</span>}</td>
+                      <td style={{ padding: "8px 10px", fontSize: 12, color: "#cdd9e5" }}>{t.label || <span style={{ color: C.textMuted }}>—</span>}</td>
                       <td style={{ padding: "8px 10px", fontSize: 12, color: t.expired ? "#f85149" : "#8b949e", whiteSpace: "nowrap" }}>
                         {t.expires_at ? fmtDate(t.expires_at) + (t.expired ? " 過期" : "") : "永不到期"}
                       </td>
@@ -449,7 +449,7 @@ function DemoTokenSection({ active, onUsersChanged }) {
               </tbody>
             </table>
             {hiddenCount > 0 && (
-              <div style={{ fontSize: 11, color: "#484f58", textAlign: "center", padding: "8px 0" }}>
+              <div style={{ fontSize: 11, color: C.textMuted, textAlign: "center", padding: "8px 0" }}>
                 已隱藏 {hiddenCount} 筆失效 Token
               </div>
             )}

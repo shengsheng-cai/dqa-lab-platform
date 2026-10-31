@@ -155,13 +155,13 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
               )}
             </span>
             {SIM_PHASE_LABEL[device.sim_phase] && (
-              <span style={{ fontSize: 10, color: isFinishing ? "#6e7681" : "#484f58" }}>
+              <span style={{ fontSize: 10, color: C.textMuted }}>
                 {SIM_PHASE_LABEL[device.sim_phase]}
               </span>
             )}
           </div>
           {device.running_sop_name && device.running_sop_name !== "STANDBY" && (
-            <div style={{ fontSize: 10, color: "#484f58", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 }}>
+            <div style={{ fontSize: 10, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 }}>
               {device.running_sop_name}
             </div>
           )}
@@ -185,7 +185,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
       )}
 
       {!isBlocked && scheduleNote && (
-        <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>
+        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
           {scheduleNote}
         </div>
       )}

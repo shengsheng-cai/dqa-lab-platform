@@ -132,7 +132,7 @@ export default function AuditLog({ active }) {
             <thead>
               <tr style={{ borderBottom: "1px solid #21262d" }}>
                 {["時間", "操作人", "動作", "對象", "說明"].map((h) => (
-                  <th key={h} style={{ textAlign: "left", padding: "4px 8px", color: "#484f58", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
+                  <th key={h} style={{ textAlign: "left", padding: "4px 8px", color: "#8b949e", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -143,7 +143,7 @@ export default function AuditLog({ active }) {
                     {fmtAuditTime(log.timestamp)}
                   </td>
                   <td style={{ padding: "5px 8px", color: "#cdd9e5" }}>
-                    {log.actor === "system:scheduler" ? <span style={{ color: "#484f58" }}>系統</span> : `#${log.actor}`}
+                    {log.actor === "system:scheduler" ? <span style={{ color: "#8b949e" }}>系統</span> : `#${log.actor}`}
                   </td>
                   <td style={{ padding: "5px 8px", whiteSpace: "nowrap" }}>
                     <span style={{

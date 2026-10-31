@@ -181,7 +181,7 @@ export default function ImportModal({ onClose, onSuccess }) {
           <div style={{ fontSize: 13, color: "#8b949e" }}>
             拖曳 Excel 到這裡
           </div>
-          <div style={{ fontSize: 11, color: "#484f58", marginTop: 4 }}>
+          <div style={{ fontSize: 11, color: "#8b949e", marginTop: 4 }}>
             支援 .xlsx / .xls
           </div>
         </>

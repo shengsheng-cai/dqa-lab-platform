@@ -71,7 +71,7 @@ export default function GanttChart({ schedules, blockedPeriods, rangeStart, rang
                       width: DAY_PX, height: HEADER_H,
                       display: "flex", alignItems: "center",
                       paddingLeft: 6, fontSize: 11,
-                      color: isToday ? "#58a6ff" : "#484f58",
+                      color: isToday ? "#58a6ff" : C.textMuted,
                       fontWeight: isToday ? 700 : 400,
                       borderLeft: "1px solid #21262d",
                       boxSizing: "border-box",

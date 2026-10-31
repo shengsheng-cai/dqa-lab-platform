@@ -16,7 +16,7 @@ export default function UsersSummaryPanel({ summary, loadError }) {
     <div style={{ padding: "0 8px", display: "flex", flexDirection: "column", gap: 4 }}>
       {items.map(({ label, value, color }) => (
         <div key={label} style={{ padding: "5px 8px", borderRadius: 5, background: "#161b22", border: "1px solid #30363d", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 10, color: "#484f58" }}>{label}</span>
+          <span style={{ fontSize: 10, color: "#8b949e" }}>{label}</span>
           {loadError ? (
             <UnknownStat label={label} error={loadError} style={{ fontSize: 14, fontWeight: 700 }} />
           ) : (

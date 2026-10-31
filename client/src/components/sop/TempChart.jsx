@@ -42,7 +42,7 @@ const TempChart = ({ sop, pvData, startedAt }) => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#484f58",
+          color: "#8b949e",
           fontSize: 11,
         }}
       >
@@ -70,7 +70,7 @@ const TempChart = ({ sop, pvData, startedAt }) => {
         />
         <XAxis
           dataKey="label"
-          tick={{ fontSize: 9, fill: "#484f58" }}
+          tick={{ fontSize: 9, fill: "#8b949e" }}
           tickLine={false}
           axisLine={{ stroke: "#30363d" }}
           interval={Math.max(1, Math.floor(merged.length / 8))}
@@ -79,7 +79,7 @@ const TempChart = ({ sop, pvData, startedAt }) => {
             position: "insideBottom",
             offset: -16,
             fontSize: 9,
-            fill: "#484f58",
+            fill: "#8b949e",
           }}
         />
         <YAxis

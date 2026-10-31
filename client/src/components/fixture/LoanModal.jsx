@@ -186,7 +186,7 @@ export default function LoanModal({ onClose, onSubmit, fixtures }) {
         {/* 送出時會換成當天 23:59，畫面上只看到日期會以為當天就要還。
             講「這一筆會被記成幾點」而不是「到期日都算到 23:59」——排程預約產生的
             借出是用排程結束時間當到期，那些不走這條規則。 */}
-        <div style={{ fontSize: 11, color: C.textFaint, marginTop: 3 }}>
+        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>
           送出後記為當日 23:59 到期
         </div>
       </div>

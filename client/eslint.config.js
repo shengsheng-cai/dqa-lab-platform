@@ -55,6 +55,11 @@ export default defineConfig([
           selector: "Property[key.name='outline'][value.value='none']",
           message: 'inline style 蓋得過樣式表，寫了 outline:"none" 那個欄位就再也沒有焦點指示。焦點外框由 index.css 的全域 :focus-visible 提供。',
         },
+        {
+          // 只擋直接寫死的值：停用中的文字寫成 loading ? "#484f58" : "#fff" 是刻意的，不會被擋
+          selector: "Property[key.name=/^(color|fill)$/][value.value=/^#(484f58|6e7681)$/i]",
+          message: '這兩個灰色在深色底上不到 4.5:1，當文字看不清楚。一般文字最暗用 C.textMuted（#8b949e），停用中的文字用 C.textDisabled。',
+        },
       ],
     },
   },

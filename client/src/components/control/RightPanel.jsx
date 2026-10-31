@@ -173,7 +173,7 @@ export default function RightPanel({ role, aiEnabled = true, onClose, onApplySch
               <span
                 style={{
                   fontSize: 11,
-                  color: "#484f58",
+                  color: C.textMuted,
                   minWidth: 28,
                   textAlign: "center",
                 }}
@@ -419,7 +419,7 @@ export default function RightPanel({ role, aiEnabled = true, onClose, onApplySch
 const navBtnS = (disabled) => ({
   background: "transparent",
   border: "none",
-  color: disabled ? "#30363d" : "#484f58",
+  color: disabled ? "#30363d" : C.textMuted,
   cursor: disabled ? "default" : "pointer",
   fontSize: 16,
   fontWeight: 600,

@@ -97,7 +97,7 @@ export default function StocktakeModal({ fixtures, onClose, onComplete }) {
         border: "1px dashed #30363d", borderRadius: 6,
       }}>
         沒有可盤點的項目：{excluded.length} 種治具目前有借出或預約在外，現場數不到完整數量。
-        <div style={{ fontSize: 12, marginTop: 6, color: "#6e7681" }}>
+        <div style={{ fontSize: 12, marginTop: 6, color: "#8b949e" }}>
           等治具歸還後再盤，或先處理下方列出的項目。
         </div>
       </div>
@@ -167,7 +167,7 @@ export default function StocktakeModal({ fixtures, onClose, onComplete }) {
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "7px 10px", borderRadius: 6,
                 background: "#0d1117", border: "1px dashed #30363d",
-                fontSize: 12, color: "#6e7681",
+                fontSize: 12, color: "#8b949e",
               }}
             >
               <span>{f.interface_type} / {f.form_factor}</span>

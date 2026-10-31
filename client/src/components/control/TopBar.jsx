@@ -50,7 +50,7 @@ export default function TopBar({ devices, fixtureSummary, displayName, role, onL
         <button
           onClick={onLogout}
           style={{ color: C.textMuted, background: "transparent", border: `1px solid ${C.border}`, fontSize: 11, padding: "3px 10px", borderRadius: 5, cursor: "pointer", transition: "color .15s, border-color .15s" }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = C.textPrimary; e.currentTarget.style.borderColor = C.textFaint; }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = C.textPrimary; e.currentTarget.style.borderColor = C.textMuted; }}
           onMouseLeave={(e) => { e.currentTarget.style.color = C.textMuted; e.currentTarget.style.borderColor = C.border; }}
         >
           登出

@@ -18,7 +18,7 @@ const MonitorSide = ({
     // 這個元件只有 SOP 頁的嵌入版面在用，embedded 是它唯一的樣式
     <aside className="monitor-side embedded">
       <div style={{ paddingBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 10, color: "#484f58" }}>updated {formatLocal(data.timestamp, "time")}</span>
+        <span style={{ fontSize: 10, color: "#8b949e" }}>updated {formatLocal(data.timestamp, "time")}</span>
       </div>
 
       {/* Current mission */}
@@ -58,7 +58,7 @@ const MonitorSide = ({
             marginBottom: 8,
           }}
         >
-          <label style={{ fontSize: 11, color: "#484f58", letterSpacing: 1 }}>
+          <label style={{ fontSize: 11, color: "#8b949e", letterSpacing: 1 }}>
             {ds.activeSop?.humidity_control ? "TEMP / HUMI TREND" : "TEMP TREND"}
           </label>
           <div style={{ display: "flex", gap: 10, fontSize: 10 }}>

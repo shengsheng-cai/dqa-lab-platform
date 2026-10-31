@@ -16,7 +16,7 @@ export default function DatePicker({ value, onChange, style, label = "" }) {
   const years  = [...new Set([curYear - 1, curYear, curYear + 1, curYear + 2, year])].sort((a, b) => a - b);
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
   const days   = Array.from({ length: new Date(year, month, 0).getDate() }, (_, i) => i + 1);
-  const lbl    = { color: "#6e7681", fontSize: 11 };
+  const lbl    = { color: "#8b949e", fontSize: 11 };
   const sel    = { ...style, padding: "4px 4px" };
 
   // 旁邊那三個「年月日」是給眼睛看的，沒有跟下拉關聯，所以用鍵盤 Tab 進來只會聽到

@@ -17,12 +17,12 @@ export default function ScheduleSummaryPanel({ devices, pendingByDevice, onConfi
       <div style={{ padding: "0 8px 6px", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
         {summaryItems.map(({ label, value, color }) => (
           <div key={label} style={{ padding: "5px 8px", borderRadius: 5, background: C.surface, border: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 10, color: C.textDim }}>{label}</span>
+            <span style={{ fontSize: 10, color: C.textMuted }}>{label}</span>
             <span style={{ fontSize: 18, fontWeight: 700, color }}>{value}</span>
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 9, color: C.textDim, padding: "4px 16px 4px", letterSpacing: 1, flexShrink: 0 }}>設備可用性</div>
+      <div style={{ fontSize: 9, color: C.textMuted, padding: "4px 16px 4px", letterSpacing: 1, flexShrink: 0 }}>設備可用性</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 8px", overflowY: "auto" }}>
         {devices.map(d => (
           <DeviceCard

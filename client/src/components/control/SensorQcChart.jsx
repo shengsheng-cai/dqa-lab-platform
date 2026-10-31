@@ -28,7 +28,7 @@ function ChartSection({ data, dataKey, anomalyKey, label, unit, color, mean, ucl
           <CartesianGrid strokeDasharray="3 3" stroke="#1c2128" vertical={false} />
           <XAxis
             dataKey="time"
-            tick={{ fontSize: 8, fill: "#484f58" }}
+            tick={{ fontSize: 8, fill: "#8b949e" }}
             tickLine={false}
             axisLine={{ stroke: "#30363d" }}
             interval={interval}
@@ -50,7 +50,7 @@ function ChartSection({ data, dataKey, anomalyKey, label, unit, color, mean, ucl
           )}
           {mean != null && (
             <ReferenceLine y={mean} stroke="#484f58" strokeDasharray="2 4" strokeWidth={1}
-              label={{ value: `μ ${mean}${unit.includes("%") ? "%" : "°"}`, position: "right", fontSize: 8, fill: "#484f58" }} />
+              label={{ value: `μ ${mean}${unit.includes("%") ? "%" : "°"}`, position: "right", fontSize: 8, fill: "#8b949e" }} />
           )}
           {lcl != null && (
             <ReferenceLine y={lcl} stroke="#f85149" strokeDasharray="4 3" strokeWidth={1.5}
@@ -85,7 +85,7 @@ const SensorQcChart = ({ stats, onViewDeviceStatus }) => {
     return (
       <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-          <div style={{ color: "#484f58", fontSize: 12 }}>最近 24 小時無感測器資料</div>
+          <div style={{ color: "#8b949e", fontSize: 12 }}>最近 24 小時無感測器資料</div>
           {onViewDeviceStatus && (
             <button
               onClick={onViewDeviceStatus}
@@ -109,7 +109,7 @@ const SensorQcChart = ({ stats, onViewDeviceStatus }) => {
 
   if (!stats.data || stats.data.length < 5) {
     return (
-      <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "#484f58", fontSize: 12 }}>
+      <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "#8b949e", fontSize: 12 }}>
         資料不足（需 ≥ 5 筆），無法計算控制線
       </div>
     );

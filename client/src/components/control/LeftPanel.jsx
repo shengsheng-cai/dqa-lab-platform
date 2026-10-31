@@ -13,7 +13,7 @@ export default function LeftPanel({ devices, selectedDevice, onSelectDevice, act
 
   return (
     <div style={{ width: 155, flexShrink: 0, borderRight: "1px solid #30363d", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "7px 10px 4px", fontSize: 10, color: "#6e7681", fontWeight: 600, letterSpacing: 0.5, flexShrink: 0 }}>
+      <div style={{ padding: "7px 10px 4px", fontSize: 10, color: "#8b949e", fontWeight: 600, letterSpacing: 0.5, flexShrink: 0 }}>
         {title}
       </div>
 

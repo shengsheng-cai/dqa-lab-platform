@@ -28,7 +28,7 @@ function RetryButton({ onClick, style }) {
 }
 
 function StateBody({ loading, error, empty, onRetry }) {
-  if (loading) return <span style={{ color: C.textDim }}>載入中…</span>;
+  if (loading) return <span style={{ color: C.textMuted }}>載入中…</span>;
   if (error) {
     return (
       <>
@@ -37,7 +37,7 @@ function StateBody({ loading, error, empty, onRetry }) {
       </>
     );
   }
-  return <span style={{ color: C.textDim }}>{empty}</span>;
+  return <span style={{ color: C.textMuted }}>{empty}</span>;
 }
 
 /** 放在一般容器裡的版本 */

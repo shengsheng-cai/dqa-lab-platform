@@ -23,7 +23,7 @@ export default function DateTimePicker({ value, onChange, style, label = "" }) {
     .sort((a, b) => a - b);
 
   const sel = { ...style, padding: "4px 4px" };
-  const lbl = { color: "#6e7681", fontSize: 11 };
+  const lbl = { color: "#8b949e", fontSize: 11 };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

@@ -129,10 +129,10 @@ export default function ManageBlockedPeriodsModal({ onClose, onChanged }) {
             <button onClick={openNew} style={primaryBtn}>+ 新增</button>
           </div>
 
-          {loading ? (
-            <div style={{ color: C.textMuted, fontSize: 13, textAlign: "center", padding: 20 }}>載入中...</div>
-          ) : list.length === 0 ? (
-            <div style={{ color: C.textDim, fontSize: 13, textAlign: "center", padding: 20 }}>目前無不可用時段</div>
+          {loading || list.length === 0 ? (
+            <div style={{ color: C.textMuted, fontSize: 13, textAlign: "center", padding: 20 }}>
+              {loading ? "載入中..." : "目前無不可用時段"}
+            </div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>

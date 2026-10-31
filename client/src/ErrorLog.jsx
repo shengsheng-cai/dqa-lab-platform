@@ -226,7 +226,7 @@ const ErrorLog = ({ active = true }) => {
             <tbody>
               {logs.map((log) => (
                 <tr key={log.id} style={{ borderBottom: "1px solid #21262d" }}>
-                  <td style={{ padding: "10px 12px", color: "#484f58" }}>
+                  <td style={{ padding: "10px 12px", color: "#8b949e" }}>
                     #{log.id}
                   </td>
                   <td
@@ -278,7 +278,7 @@ const ErrorLog = ({ active = true }) => {
                   <td style={{ padding: "10px 12px", color: "#8b949e" }}>
                     {log.note || "—"}
                   </td>
-                  <td style={{ padding: "10px 12px", color: "#484f58" }}>
+                  <td style={{ padding: "10px 12px", color: "#8b949e" }}>
                     {fmtDatetime(log.created_at)}
                   </td>
                 </tr>

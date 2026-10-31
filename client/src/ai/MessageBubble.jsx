@@ -217,7 +217,7 @@ const S = {
   },
   disclaimer: {
     fontSize: 11,
-    color: "#6e7681",
+    color: C.textMuted,
     lineHeight: 1.5,
     marginTop: 6,
     borderLeft: "2px solid #21262d",
@@ -300,7 +300,7 @@ const S = {
     gap: 6,
     background: "transparent",
     border: "1px solid #30363d",
-    color: "#6e7681",
+    color: C.textMuted,
     fontSize: 12,
     fontWeight: 600,
     padding: "5px 12px",

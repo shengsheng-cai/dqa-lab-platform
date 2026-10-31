@@ -249,7 +249,7 @@ const S = {
   },
   emptyDisclaimer: {
     fontSize: 11,
-    color: "#6e7681",
+    color: "#8b949e",
     lineHeight: 1.6,
     border: "1px solid #21262d",
     borderRadius: 6,

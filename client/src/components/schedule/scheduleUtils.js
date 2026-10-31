@@ -8,7 +8,7 @@ export const HEADER_H = 48;
 export const LABEL_W = 68;
 
 export const STATUS_COLOR = {
-  待審核: { bg: C.border,        text: C.textMuted,    border: C.textDim },
+  待審核: { bg: C.border,        text: C.textMuted,    border: C.textDisabled },
   已確認: { bg: C.accentSurface,   text: C.accentLight,  border: C.accentLink },
   進行中: { bg: C.successBgDeep, text: C.successText,  border: C.success },
   已完成: { bg: C.violetBg,      text: C.violetText,   border: C.violet },

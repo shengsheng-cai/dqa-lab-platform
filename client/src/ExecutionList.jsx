@@ -98,7 +98,7 @@ export default function ExecutionList({ active, role }) {
             {executions.map((ex) => (
               <Fragment key={ex.id}>
                 <tr style={{ borderBottom: expandedId === ex.id ? "none" : "1px solid #21262d" }}>
-                  <td style={{ ...tdStyle, color: "#484f58" }}>#{ex.id}</td>
+                  <td style={{ ...tdStyle, color: "#8b949e" }}>#{ex.id}</td>
                   <td style={{ ...tdStyle, color: "#cdd9e5" }}><span title={ex.sop_id}>{ex.sop_name || ex.sop_id}</span></td>
                   <td style={{ ...tdStyle, color: "#8b949e", fontFamily: "monospace" }}>{ex.device_id || "—"}</td>
                   <td style={{ ...tdStyle, color: "#8b949e" }}>{role === "guest" ? "—" : (ex.operator || "—")}</td>
@@ -145,7 +145,7 @@ export default function ExecutionList({ active, role }) {
                             <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(ex.id, type, f); e.target.value = ""; }} />
                           </label>
                         ))}
-                        <span style={{ fontSize: 10, color: "#484f58" }}>照片以相機 EXIF 時間為準</span>
+                        <span style={{ fontSize: 10, color: "#8b949e" }}>照片以相機 EXIF 時間為準</span>
                       </div>
                     </td>
                   </tr>

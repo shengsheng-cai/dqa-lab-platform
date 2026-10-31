@@ -1,9 +1,11 @@
 export const C = {
   // text
   textPrimary:   "#cdd9e5",
+  // 一般文字最暗只到這一階：這幾種深色底上要達到 4.5:1，再暗就看不清楚（themeContrast.test.js 守著）
   textMuted:     "#8b949e",
-  textDim:       "#484f58",
-  textFaint:     "#6e7681",
+  // 停用中的文字刻意暗下來，讓人看得出按不下去；WCAG 不要求停用元件的對比度。
+  // 也給不是文字的細框線用。一般文字不要用它
+  textDisabled:  "#484f58",
 
   // accent
   accent:        "#58a6ff",

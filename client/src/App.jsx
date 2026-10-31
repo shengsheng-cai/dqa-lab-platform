@@ -149,7 +149,7 @@ function LoginPage({ onLogin }) {
         <span style={{ color: "#58a6ff", fontWeight: 700, fontSize: 28, letterSpacing: -0.5 }}>
           DQA Lab
         </span>
-        <span style={{ color: "#6e7681", fontSize: 12, marginTop: -6 }}>
+        <span style={{ color: "#8b949e", fontSize: 12, marginTop: -6 }}>
           環境測試實驗室管理平台
         </span>
 
@@ -189,7 +189,7 @@ function LoginPage({ onLogin }) {
               style={{
                 padding: "7px",
                 background: "transparent",
-                color: "#484f58",
+                color: "#8b949e",
                 border: "1px solid #30363d",
                 borderRadius: 6,
                 cursor: "pointer",
@@ -369,7 +369,7 @@ function LoginPage({ onLogin }) {
                 >
                   {loading ? "驗證中..." : "進入系統"}
                 </button>
-                <span style={{ color: "#484f58", fontSize: 11 }}>
+                <span style={{ color: "#8b949e", fontSize: 11 }}>
                   Token 由管理者生成，Session 有效期限：8 小時
                 </span>
               </div>

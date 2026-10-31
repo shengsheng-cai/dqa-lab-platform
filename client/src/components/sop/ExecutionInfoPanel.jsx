@@ -54,7 +54,7 @@ const ExecutionInfoPanel = ({ sop, startedAt, estimatedEndAt, simCycle, doneCnt 
             borderBottom: "1px solid #161b22",
           }}
         >
-          <span style={{ color: "#484f58", fontSize: 11 }}>{label}</span>
+          <span style={{ color: "#8b949e", fontSize: 11 }}>{label}</span>
           <span style={{ color: "#cdd9e5", fontSize: 11, fontWeight: 600 }}>
             {value}
           </span>

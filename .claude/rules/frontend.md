@@ -205,6 +205,7 @@
 ## 色彩 Token 與共用 Style
 
 - 色彩 token 集中在 `client/src/styles/theme.js`，export `C` 物件
+- **一般文字最暗只能用到 `textMuted`（`#8b949e`）**：這幾種深色底上 WCAG 要求 4.5:1，它已經是最暗的合格值。以前有兩階更暗的灰（`#484f58` 只有 2:1 上下、`#6e7681` 只有 3.3～4.1:1），左欄 9～10px 的標籤用它們幾乎看不見，而畫面上只是「比較淡」，沒有東西會紅。`textDisabled` 只給停用中的文字（WCAG 不要求停用元件的對比度）與不是文字的細框線用。`client/src/__tests__/themeContrast.test.js` 驗的是 token；寫死在元件裡的色碼它看不到，那一半由 `client/eslint.config.js` 擋住把這兩個灰色直接寫成 `color`／`fill`（停用時的三元式不會被擋）。lint 只認得這兩個已知的灰色，所以新文字一律用 token
 - 共用 style 物件在 `client/src/styles/common.js`：`thStyle`、`tdStyle`、`btnPrimary`、`btnRowAction`（表格列裡的動作鈕）、`btnRowDanger`（列裡的刪除，由 `btnRowAction` 衍生）、`rowActions`（放那一組按鈕的容器）、`btnBare`（長得像純文字的按鈕用這支；以前各自 inline 寫，同一批改動裡四個呼叫點就出現三種寫法）
 - schedule/ 元件的 modal 共用 style（`inputStyle`、`labelStyle`、`primaryBtn`、`cancelBtn`、`STATUS_COLOR` 等）在 `scheduleUtils.js`，已引用 `C`
 - 停用外觀（`opacity: 0.5` + `cursor: not-allowed`）在 schedule/ 元件用 `scheduleUtils.js` 的 `disabledStyle`。站內其他地方目前各寫各的（`ConfirmModal` 用 0.6、`FixturePage` 用 0.7），沒有統一，不要以為有一份全站共用的

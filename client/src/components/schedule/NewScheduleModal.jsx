@@ -201,8 +201,8 @@ export default function NewScheduleModal({ standardsTree, sopIdMap, initialCondi
                       transition: "opacity .15s",
                     }}
                   >
-                    <span style={{ fontSize: 14, color: C.textDim, cursor: "grab", userSelect: "none" }}>⠿</span>
-                    <span style={{ fontSize: 11, color: C.textDim, width: 18 }}>{i + 1}.</span>
+                    <span style={{ fontSize: 14, color: C.textMuted, cursor: "grab", userSelect: "none" }}>⠿</span>
+                    <span style={{ fontSize: 11, color: C.textMuted, width: 18 }}>{i + 1}.</span>
                     <span style={{ fontSize: 12, color: C.textPrimary, flex: 1 }}>{conditionDisplayName(t?.name, sop_id)}</span>
                     <span style={{ fontSize: 11, color: C.success }}>≈ {t?.estimated_hours}h</span>
                     <button

@@ -16,7 +16,7 @@ function InfoRow({ label, value, muted }) {
   return (
     <div style={{ display: "flex", gap: 8, fontSize: 13 }}>
       <span style={{ color: C.textMuted, minWidth: 80, flexShrink: 0 }}>{label}</span>
-      <span style={{ color: muted ? C.textFaint : C.textPrimary, wordBreak: "break-word", fontStyle: muted ? "italic" : "normal" }}>{value}</span>
+      <span style={{ color: muted ? C.textMuted : C.textPrimary, wordBreak: "break-word", fontStyle: muted ? "italic" : "normal" }}>{value}</span>
     </div>
   );
 }
@@ -433,7 +433,7 @@ export default function ScheduleDetailModal({ schedule, schedules = [], role, de
 
           {isPending && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 11, color: C.textDim }}>
+              <span style={{ fontSize: 11, color: C.textMuted }}>
                 {previewState.updatedAt
                   ? `預覽計算於 ${previewState.updatedAt.getHours().toString().padStart(2,"0")}:${previewState.updatedAt.getMinutes().toString().padStart(2,"0")}:${previewState.updatedAt.getSeconds().toString().padStart(2,"0")}，確認前建議刷新`
                   : "預覽計算中..."}

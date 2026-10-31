@@ -529,7 +529,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                           >
                             <span>{f.loaned_quantity}</span>
                             <span style={{ fontSize: 11 }}>{isExpanded ? "收合" : "明細"}</span>
-                            <span aria-hidden="true" style={{ fontSize: 9, color: C.textDim }}>
+                            <span aria-hidden="true" style={{ fontSize: 9, color: C.textMuted }}>
                               {isExpanded ? "▲" : "▼"}
                             </span>
                           </button>
@@ -570,7 +570,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                       </td>
                       <td style={tdStyle}>
                         {(() => {
-                          if (!f.estimated_replacement_date) return <span style={{ color: C.textDim }}>—</span>;
+                          if (!f.estimated_replacement_date) return <span style={{ color: C.textMuted }}>—</span>;
                           const today = new Date();
                           today.setHours(0, 0, 0, 0);
                           const due = parseDateOnlyLocal(f.estimated_replacement_date);
@@ -582,7 +582,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
                           return <span style={{ color, fontWeight: daysLeft <= 30 ? 600 : 400 }}>{f.estimated_replacement_date}</span>;
                         })()}
                       </td>
-                      <td style={{ ...tdStyle, color: keeperUnlinked ? C.warning : f.keeper_name ? C.accent : C.textDim }}>
+                      <td style={{ ...tdStyle, color: keeperUnlinked ? C.warning : f.keeper_name ? C.accent : C.textMuted }}>
                         {f.keeper_name || "未設定"}
                         {keeperUnlinked && (
                           <span style={{ fontSize: 11, marginLeft: 4 }} title="這個名字沒有連到系統裡的人員，開啟「保管人」可以連起來">
@@ -1180,7 +1180,7 @@ function InventoryLogTab({ refreshKey, allFixtures, onChanged }) {
           onChange={(e) => setFilterFixture(e.target.value)}
           style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${C.border}`, background: C.bg, color: C.textPrimary, fontSize: 12, width: 180 }}
         />
-        <span style={{ fontSize: 12, color: C.textDim }}>{batchKeys.length} 次盤點 · 共 {logs.length} 筆</span>
+        <span style={{ fontSize: 12, color: C.textMuted }}>{batchKeys.length} 次盤點 · 共 {logs.length} 筆</span>
       </div>
       {loading || batchKeys.length === 0 ? (
         <ListState
@@ -1217,7 +1217,7 @@ function InventoryLogTab({ refreshKey, allFixtures, onChanged }) {
               >
                 {i === 0 ? "最新　" : ""}{batchTime}
               </button>
-              <span style={{ fontSize: 11, color: C.textDim }}>{rows.length} 筆</span>
+              <span style={{ fontSize: 11, color: C.textMuted }}>{rows.length} 筆</span>
               {diffCount > 0 && <span style={{ fontSize: 11, color: C.error, fontWeight: 600 }}>差異 {diffCount} 筆</span>}
               <button
                 onClick={(e) => handleDeleteBatch(e, key, allBatchRows)}
@@ -1225,12 +1225,12 @@ function InventoryLogTab({ refreshKey, allFixtures, onChanged }) {
                 style={{
                   ...btnRowDanger,
                   marginLeft: "auto",
-                  ...(isDeleting && { color: C.textDim, cursor: "not-allowed" }),
+                  ...(isDeleting && { color: C.textDisabled, cursor: "not-allowed" }),
                 }}
               >
                 {isDeleting ? "刪除中..." : "刪除此批次"}
               </button>
-              <span style={{ color: C.textDim, fontSize: 12 }}>{isOpen ? "▲" : "▼"}</span>
+              <span style={{ color: C.textMuted, fontSize: 12 }}>{isOpen ? "▲" : "▼"}</span>
             </div>
             <div id={`stocktake-batch-${i}`}>
               {isOpen && <BatchTable rows={rows} setLogs={setLogs} allFixtures={allFixtures} onChanged={onChanged} />}

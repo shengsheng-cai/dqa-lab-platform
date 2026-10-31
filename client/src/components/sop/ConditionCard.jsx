@@ -81,7 +81,7 @@ const ConditionCard = ({ test }) => {
           </div>
         ))}
       </div>
-      <div style={{ marginTop: 10, fontSize: 10, color: "#484f58" }}>
+      <div style={{ marginTop: 10, fontSize: 10, color: "#8b949e" }}>
         📖 {test.reference}
       </div>
     </div>
