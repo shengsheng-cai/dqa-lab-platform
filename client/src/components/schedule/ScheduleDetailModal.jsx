@@ -43,13 +43,14 @@ const NO_READINESS = { label: null, blocker: null };
 /**
  * 指定設備現在的樣子：label 給「指定設備」那列，blocker 有值就代表現在按「立即開始」
  * 一定會被後端擋回來。兩個都從這裡出來，畫面才不會出現「寫著維護中卻按得下去」。
+ * unavailable 只在維護時為 true：維護是「不可用」用紅色，其他兩種是「要等一下」用黃色。
  */
 function describeDeviceReadiness({ deviceId, status, freeAt, maintenance, openSchedule }) {
   if (!deviceId) return NO_READINESS;
   if (maintenance) {
     const reason = maintenance.reason ? `（${maintenance.reason}）` : "";
     const until = maintenance.end_time ? `${fmtDt(maintenance.end_time)} 結束前` : "維護期間";
-    return { label: "維護時段", blocker: `${deviceId} 在維護時段${reason}，${until}不能開始` };
+    return { label: "維護時段", blocker: `${deviceId} 在維護時段${reason}，${until}不能開始`, unavailable: true };
   }
   // 放在設備狀態之前：那筆在跑條件時設備不是待機，但等它回到待機也還不能開始，
   // 要講的是真正卡住的那件事。
@@ -491,8 +492,8 @@ export default function ScheduleDetailModal({ schedule, schedules = [], role, de
               </div>
 
               {schedule.rejection_note && (
-                <div style={{ padding: "8px 10px", borderRadius: 6, background: C.errorBg, border: `1px solid ${C.error}`, fontSize: 12, color: C.errorLight }}>
-                  <span style={{ fontWeight: 600 }}>取消原因：</span>{schedule.rejection_note}
+                <div style={{ padding: "8px 10px", borderRadius: 6, background: C.surfaceAlt, border: `1px solid ${C.border}`, fontSize: 12, color: C.textPrimary }}>
+                  <span style={{ fontWeight: 600, color: C.textMuted }}>取消原因：</span>{schedule.rejection_note}
                 </div>
               )}
 
@@ -517,10 +518,12 @@ export default function ScheduleDetailModal({ schedule, schedules = [], role, de
 
               {(schedule.status === "已確認" || showContinuation) && liveDevice.blocker && (
                 <div style={{
-                  fontSize: 12, color: C.warningAlt, background: C.warningBg,
-                  border: `1px solid ${C.warning}`, borderRadius: 6, padding: "8px 10px",
+                  fontSize: 12, borderRadius: 6, padding: "8px 10px",
+                  ...(liveDevice.unavailable
+                    ? { color: C.errorLight, background: C.errorBg, border: `1px solid ${C.error}` }
+                    : { color: C.warningAlt, background: C.warningBg, border: `1px solid ${C.warning}` }),
                 }}>
-                  ⏳ {liveDevice.blocker}
+                  {liveDevice.unavailable ? "🔒" : "⏳"} {liveDevice.blocker}
                 </div>
               )}
 

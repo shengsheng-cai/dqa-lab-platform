@@ -31,7 +31,8 @@ export default function TopBar({ devices, fixtureSummary, displayName, role, onL
         <Stat label="執行中" value={running} color="#3fb950" />
         <Stat label="緊急" value={emergency} color={emergency > 0 ? "#f85149" : "#8b949e"} />
         <Stat label="待機" value={idle} />
-        <Stat label="不可用" value={blocked} color={blocked > 0 ? "#f0a500" : "#8b949e"} />
+        {/* 跟設備卡上的「不可用」同一個紅色；以前這裡是橘色，同一件事有兩種說法 */}
+        <Stat label="不可用" value={blocked} color={blocked > 0 ? C.error : "#8b949e"} />
         <span style={{ color: "#30363d" }}>│</span>
         <Stat label="治具借出" value={fixtureSummary.total_loaned ?? "—"} color="#f0a500" />
         <Stat label="今日到期" value={fixtureSummary.due_today ?? "—"} color={(fixtureSummary.due_today ?? 0) > 0 ? "#f0a500" : "#8b949e"} />

@@ -67,7 +67,8 @@ const ControlPanel = ({
         </span>
       </div>
 
-      <p className="task-desc">{taskDesc()}</p>
+      {/* 維護中跟旁邊的「不可用」徽章同一個紅色；其他情況維持一般說明文字 */}
+      <p className="task-desc" style={isBlocked ? { color: sc.color } : undefined}>{taskDesc()}</p>
       {showIdleGuide && (
         <div
           style={{

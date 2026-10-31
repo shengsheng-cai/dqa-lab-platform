@@ -41,6 +41,10 @@ const ErrorLog = ({ active = true }) => {
   // 讀不到資料時這幾個數字全是 0 或「—」，跟「真的沒有異常」長得一模一樣。
   // 表格改成說實話之後，這裡就會是畫面上唯一還在給保證的地方。
   const statsUnknown = error && logs.length === 0;
+  const emergencyCount = logs.filter((l) => l.error_type === EMERGENCY_ERROR_TYPE).length;
+  // 跟站內其他計數一樣，大於 0 才用紅色：沒有異常時還一片紅字，等於在沒事的時候報警。
+  // 讀取失敗時 logs 是空的，所以這兩個自然是 false，不會在故障時亮紅
+  const logsAlarm = logs.length > 0;
 
   return (
     <div
@@ -76,9 +80,9 @@ const ErrorLog = ({ active = true }) => {
             borderRadius: 12,
             fontSize: 11,
             fontWeight: 700,
-            color: "#f85149",
-            background: "#2d0f0f",
-            border: "1px solid #f8514944",
+            color: logsAlarm ? "#f85149" : "#8b949e",
+            background: logsAlarm ? "#2d0f0f" : "#21262d",
+            border: `1px solid ${logsAlarm ? "#f8514944" : "#30363d"}`,
           }}
         >
           {statsUnknown
@@ -108,7 +112,7 @@ const ErrorLog = ({ active = true }) => {
           </div>
           <div
             style={{
-              color: "#f85149",
+              color: emergencyCount > 0 ? "#f85149" : "#8b949e",
               fontSize: 40,
               fontWeight: 800,
               lineHeight: 1.2,
@@ -117,7 +121,7 @@ const ErrorLog = ({ active = true }) => {
           >
             {statsUnknown
               ? <UnknownStat label="緊急停止次數" error={error} />
-              : logs.filter((l) => l.error_type === EMERGENCY_ERROR_TYPE).length}
+              : emergencyCount}
           </div>
         </div>
         <div style={card}>

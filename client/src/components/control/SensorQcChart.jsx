@@ -13,7 +13,8 @@ import {
 
 function AnomalyDot({ cx, cy }) {
   if (cx == null || cy == null) return null;
-  return <circle cx={cx} cy={cy} r={4} fill="#f85149" stroke="#ff7b72" strokeWidth={1} />;
+  // 白邊讓異常點疊在線上也分得出來
+  return <circle cx={cx} cy={cy} r={4} fill="#f85149" stroke="#ffffff" strokeWidth={1.5} />;
 }
 
 function ChartSection({ data, dataKey, anomalyKey, label, unit, color, mean, ucl, lcl, domain, height = 180 }) {
@@ -127,7 +128,8 @@ const SensorQcChart = ({ stats, onViewDeviceStatus }) => {
         anomalyKey="temp_anomaly"
         label="溫度"
         unit="°C"
-        color="#ff7b72"
+        // 管制圖的紅色只給超出管制的點與管制界限；溫度線若也是紅的，異常點會融進線裡
+        color="#ffa657"
         mean={stats.temp_mean}
         ucl={stats.temp_ucl}
         lcl={stats.temp_lcl}

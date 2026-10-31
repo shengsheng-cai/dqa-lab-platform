@@ -12,7 +12,8 @@ export const STATUS_COLOR = {
   已確認: { bg: C.accentSurface,   text: C.accentLight,  border: C.accentLink },
   進行中: { bg: C.successBgDeep, text: C.successText,  border: C.success },
   已完成: { bg: C.violetBg,      text: C.violetText,   border: C.violet },
-  已取消: { bg: C.errorSurface,   text: C.errorLight,   border: C.error },
+  // 取消是人員選的正常結案，不是錯誤，所以用中性灰；以前是紅色，看起來比真正出事的「異常」還嚴重
+  已取消: { bg: C.surfaceHover,   text: C.textMuted,    border: C.textMuted },
   異常:   { bg: C.magentaBg,     text: C.magentaText,  border: C.magenta },
 };
 

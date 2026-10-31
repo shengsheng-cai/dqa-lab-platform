@@ -8,7 +8,7 @@ export default function ScheduleSummaryPanel({ devices, pendingByDevice, onConfi
     { label: "已確認", value: counts.confirmed, color: counts.confirmed > 0 ? C.accent : C.textMuted },
     { label: "已完成", value: counts.done, color: counts.done > 0 ? C.violetText : C.textMuted },
     // 異常是例外狀態，正常營運為 0；只在真的有壞排程時顯示，避免長駐一個 0 增加雜訊
-    // 洋紅：與「待審核」金色、「已取消」紅色都明顯區隔，避免左側計數撞色
+    // 洋紅：與「待審核」金色、站內表示逾期與緊急的紅色都明顯區隔，避免左側計數撞色
     ...(counts.error > 0 ? [{ label: "異常", value: counts.error, color: C.magentaText }] : []),
   ];
 
