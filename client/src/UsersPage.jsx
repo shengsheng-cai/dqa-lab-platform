@@ -10,9 +10,10 @@ import { copyText } from "./utils/clipboard";
 import { ListStateRow, StaleBanner } from "./components/ListState";
 
 const ROLE_LABELS = { admin: "管理者" };
-const ROLE_COLORS = { admin: "#f85149" };
 const ADMIN_ONLY_ERROR = "此頁僅限管理者";
 
+// 角色是身分不是警示：站內的紅色代表逾期、緊急與刪除，以前「管理者」用紅色，每一列都像在報警。
+// 只畫框線不填色，跟旁邊有填色的啟用／停用狀態分得開
 function RoleBadge({ role }) {
   return (
     <span
@@ -21,9 +22,8 @@ function RoleBadge({ role }) {
         padding: "2px 8px",
         borderRadius: 4,
         fontWeight: 600,
-        background: ROLE_COLORS[role] + "22",
-        color: ROLE_COLORS[role] || "#8b949e",
-        border: `1px solid ${ROLE_COLORS[role] || "#30363d"}44`,
+        color: C.textMuted,
+        border: `1px solid ${C.border}`,
       }}
     >
       {ROLE_LABELS[role] || role}

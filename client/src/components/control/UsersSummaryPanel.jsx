@@ -8,7 +8,7 @@ import { UnknownStat } from "../ListState";
  */
 export default function UsersSummaryPanel({ summary, loadError }) {
   const items = [
-    { label: "管理者", value: summary.admin, color: "#f85149" },
+    { label: "管理者", value: summary.admin, color: "#cdd9e5" },
     { label: "有效 Token", value: summary.validTokens, color: summary.validTokens > 0 ? "#3fb950" : "#8b949e" },
   ];
 
