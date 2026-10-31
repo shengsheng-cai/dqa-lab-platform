@@ -8,10 +8,10 @@ import ManageBlockedPeriodsModal from "./components/schedule/ManageBlockedPeriod
 import {
   STATUS_COLOR, STATUS_LIST, HEADER_H, ROW_H,
   MS_PER_DAY, GANTT_PAST_DAYS, GANTT_FUTURE_DAYS,
-  fmtDt, fmtHours, primaryBtn, scheduleIconBtn,
+  fmtDt, fmtHours, scheduleIconBtn,
 } from "./components/schedule/scheduleUtils";
 import { C } from "./styles/theme";
-import { btnBare } from "./styles/common";
+import { btnBare, btnPrimary, btnSecondary } from "./styles/common";
 import { ListState, StaleBanner } from "./components/ListState";
 import { describeLoadError } from "./utils/loadError";
 
@@ -206,11 +206,11 @@ export default function SchedulePage({ active, role, initConditions, onInitConds
             {isAdmin && (
               <button
                 onClick={() => setShowBlockModal(true)}
-                style={scheduleIconBtn}
+                style={btnSecondary}
               >+ 不可用時段</button>
             )}
             {isAdmin && (
-              <button onClick={() => { setPendingInitConds(null); setShowNewModal(true); }} style={primaryBtn}>
+              <button onClick={() => { setPendingInitConds(null); setShowNewModal(true); }} style={btnPrimary}>
                 + 申請排程
               </button>
             )}

@@ -207,7 +207,8 @@
 - 色彩 token 集中在 `client/src/styles/theme.js`，export `C` 物件
 - **一般文字最暗只能用到 `textMuted`（`#8b949e`）**：這幾種深色底上 WCAG 要求 4.5:1，它已經是最暗的合格值。以前有兩階更暗的灰（`#484f58` 只有 2:1 上下、`#6e7681` 只有 3.3～4.1:1），左欄 9～10px 的標籤用它們幾乎看不見，而畫面上只是「比較淡」，沒有東西會紅。`textDisabled` 只給停用中的文字（WCAG 不要求停用元件的對比度）與不是文字的細框線用。`client/src/__tests__/themeContrast.test.js` 驗的是 token；寫死在元件裡的色碼它看不到，那一半由 `client/eslint.config.js` 擋住把這兩個灰色直接寫成 `color`／`fill`（停用時的三元式不會被擋）。lint 只認得這兩個已知的灰色，所以新文字一律用 token
 - **角色與一般計數不用紅色**：站內的紅色代表逾期、緊急、錯誤與刪除。人員頁的「管理者」以前是紅標籤、左欄的管理者人數也是紅字，每一列都像在報警，真正的警示反而被稀釋。頂部列的「管理者」是綠色、「訪客模式」是橘色，那是在區分目前的登入模式，不是同一件事
-- 共用 style 物件在 `client/src/styles/common.js`：`thStyle`、`tdStyle`、`btnPrimary`、`btnRowAction`（表格列裡的動作鈕）、`btnRowDanger`（列裡的刪除，由 `btnRowAction` 衍生）、`rowActions`（放那一組按鈕的容器）、`btnBare`（長得像純文字的按鈕用這支；以前各自 inline 寫，同一批改動裡四個呼叫點就出現三種寫法）
+- 共用 style 物件在 `client/src/styles/common.js`：`thStyle`、`tdStyle`、`btnPrimary`、`btnSecondary`（頁面上其餘的新增，見下一條）、`btnRowAction`（表格列裡的動作鈕）、`btnRowDanger`（列裡的刪除，由 `btnRowAction` 衍生）、`rowActions`（放那一組按鈕的容器）、`btnBare`（長得像純文字的按鈕用這支；以前各自 inline 寫，同一批改動裡四個呼叫點就出現三種寫法）
+- **頁面工具列上的「新增」類按鈕分兩級**：工具列上只放一顆實心的主要動作，用 `btnPrimary`（治具頁的「借出登記」、排程頁的「申請排程」），其餘新增一律用 `btnSecondary`（藍框）。以前同樣是新增有五種樣式（實心綠、實心藍、藍框、綠框、灰框），看不出哪一顆才是這一頁最主要的事。視窗內的按鈕（排程類視窗照用 `scheduleUtils.js` 的 `primaryBtn`）與表格編輯模式裡跟「取消／儲存」排成一組的按鈕（如批次盤點的「＋ 新增一筆」）不在這條範圍
 - schedule/ 元件的 modal 共用 style（`inputStyle`、`labelStyle`、`primaryBtn`、`cancelBtn`、`STATUS_COLOR` 等）在 `scheduleUtils.js`，已引用 `C`
 - 停用外觀（`opacity: 0.5` + `cursor: not-allowed`）在 schedule/ 元件用 `scheduleUtils.js` 的 `disabledStyle`。站內其他地方目前各寫各的（`ConfirmModal` 用 0.6、`FixturePage` 用 0.7），沒有統一，不要以為有一份全站共用的
 - 新增元件：用 `C.token` 取代 hex literal；用 `common.js` export 取代重複的 button/input style 定義

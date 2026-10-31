@@ -19,7 +19,7 @@ import StocktakeModal from "./components/fixture/StocktakeModal";
 import CreatePurchaseModal from "./components/fixture/CreatePurchaseModal";
 import ConfirmModal from "./components/ConfirmModal";
 import { C } from "./styles/theme";
-import { thStyle, tdStyle, btnPrimary, btnRowDanger, btnRowAction, rowActions, btnBare } from "./styles/common";
+import { thStyle, tdStyle, btnPrimary, btnSecondary, btnRowDanger, btnRowAction, rowActions, btnBare } from "./styles/common";
 import { isUnlinkedKeeper } from "./utils/keeper";
 import { fixtureBadgeStatus, isStocktakeCountable, matchesStatusFilter } from "./utils/fixtureStatus";
 
@@ -315,7 +315,7 @@ export default function FixturePage({ active, role, onFixtureChanged }) {
             </select>
             <button
               onClick={() => setEditTarget(false)}
-              style={{ padding: "5px 12px", borderRadius: 6, background: "transparent", color: C.accent, border: `1px solid ${C.accent}44`, cursor: "pointer", fontSize: 12 }}
+              style={btnSecondary}
             >
               + 新增治具
             </button>
@@ -1342,16 +1342,7 @@ function PurchaseTab({ orders, fixtures, canOperate, role, onRefresh, onNew, lis
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
           <button
             onClick={onNew}
-            style={{
-              padding: "6px 16px",
-              borderRadius: 6,
-              background: "#1f4a1f",
-              color: C.success,
-              border: `1px solid ${C.successDark}`,
-              cursor: "pointer",
-              fontSize: 13,
-              fontWeight: 600,
-            }}
+            style={btnSecondary}
           >
             + 新增採購單
           </button>

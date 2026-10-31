@@ -4,7 +4,7 @@ import { useToast } from "./components/useToast";
 import ConfirmModal from "./components/ConfirmModal";
 import ModalFrame from "./components/ModalFrame";
 import { C } from "./styles/theme";
-import { btnRowAction, btnRowDanger, rowActions } from "./styles/common";
+import { btnRowAction, btnRowDanger, btnSecondary, rowActions } from "./styles/common";
 import { describeLoadError } from "./utils/loadError";
 import { copyText } from "./utils/clipboard";
 import { ListStateRow, StaleBanner } from "./components/ListState";
@@ -403,7 +403,7 @@ function DemoTokenSection({ active, onUsersChanged }) {
                     </label>
                     <button
                       onClick={() => setShowForm((v) => !v)}
-                      style={{ padding: "2px 10px", borderRadius: 5, background: "#1f6feb", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+                      style={btnSecondary}
                     >
                       + 生成
                     </button>
@@ -595,7 +595,7 @@ export default function UsersPage({ active, role, onUsersChanged }) {
                     <span>操作</span>
                     <button
                       onClick={() => setModalUser(null)}
-                      style={{ padding: "2px 10px", borderRadius: 5, background: "#238636", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+                      style={btnSecondary}
                     >
                       + 新增
                     </button>

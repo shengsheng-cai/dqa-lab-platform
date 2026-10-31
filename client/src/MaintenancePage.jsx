@@ -18,7 +18,7 @@ import {
   toLocalDateTimeInput,
 } from "./utils/maintenance";
 import { C } from "./styles/theme";
-import { btnRowDanger, btnRowAction, rowActions } from "./styles/common";
+import { btnRowDanger, btnRowAction, btnSecondary, rowActions } from "./styles/common";
 import { describeLoadError } from "./utils/loadError";
 import { ListStateRow, StaleBanner } from "./components/ListState";
 
@@ -248,7 +248,6 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
   const tdS = { padding: "6px 10px", fontSize: 11, color: C.textPrimary, borderBottom: `1px solid ${C.surfaceHover}` };
   const sectionHeader = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0 6px" };
   const sectionTitle = { fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 1 };
-  const addBtn = { padding: "3px 10px", fontSize: 11, borderRadius: 5, cursor: "pointer", background: `${C.accentDark}22`, border: `1px solid ${C.accentDark}`, color: C.accent };
   const modalTitle = `${editItem ? "編輯" : "新增"}${modalType === "calibrations" ? "校驗紀錄" : "維護紀錄"} — ${selectedDevice}`;
 
   return (
@@ -267,7 +266,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
         <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px", borderRight: `1px solid ${C.border}` }}>
           <div style={sectionHeader}>
             <span style={sectionTitle}>校驗紀錄</span>
-            {role === "admin" && <button onClick={() => openCreate("calibrations")} style={addBtn}>+ 新增</button>}
+            {role === "admin" && <button onClick={() => openCreate("calibrations")} style={btnSecondary}>+ 新增</button>}
           </div>
           {calError && calibrations.length > 0 && (
             <StaleBanner error={calError} onRetry={fetchCalibrations} />
@@ -311,7 +310,7 @@ export default function MaintenancePage({ active, role, onCalibrationChange }) {
         <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
           <div style={sectionHeader}>
             <span style={sectionTitle}>維護紀錄</span>
-            {role === "admin" && <button onClick={() => openCreate("maintenances")} style={addBtn}>+ 新增</button>}
+            {role === "admin" && <button onClick={() => openCreate("maintenances")} style={btnSecondary}>+ 新增</button>}
           </div>
           {maintError && maintenances.length > 0 && (
             <StaleBanner error={maintError} onRetry={fetchMaintenances} />

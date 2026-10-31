@@ -41,6 +41,16 @@ export const btnPrimary = {
   transition: "background .15s, opacity .15s",
 };
 
+// 頁面上其餘的「新增」（分兩級的理由見 frontend.md）。內距比 btnPrimary 少 1px 是讓給外框，
+// 兩顆並排時才一樣高
+export const btnSecondary = {
+  ...btnPrimary,
+  padding: "4px 11px",
+  background: "transparent",
+  color: C.accent,
+  border: `1px solid ${C.accent}66`,
+};
+
 // 表格列裡的動作按鈕。列動作是整個站最容易點錯的地方，所以最小點擊高度釘在這一份，
 // 呼叫點只覆蓋顏色，不要再各自寫 padding 與字級——以前六個地方各寫一種尺寸，
 // 最小的一種只有 10px 字、上下 1px 內距。
