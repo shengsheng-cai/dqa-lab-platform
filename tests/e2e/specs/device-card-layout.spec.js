@@ -71,3 +71,38 @@ test("設備卡的校驗徽章不會把 QC 圖與狀態擠出卡片，也不會�
     }
   });
 });
+
+// 狀態字最長的是「收尾降溫中」。左欄以前只有 155px，那個狀態一出現，同一列的設備編號就被擠成
+// 「CH-」「01」兩行；只禁止編號換行的話，換成整列被撐出卡片 6px。待機與執行中的卡都不會出事，
+// 所以上面那條量不到。這條讓一台真的進入收尾再量。
+// 放在檔案最後：它會改掉 CH-01 的狀態，上一條「剛好兩台待機」的前提要先量完。
+test("收尾降溫中的卡片，設備編號維持一行、狀態不超出標題列", async ({ page }) => {
+  const DEVICE = "CH-01";   // demo 重灌後固定是 RUNNING（同 emergency-screen.spec.js）
+  const REFERENCE = "CH-05"; // 待機，編號一定是一行，拿來當單行高度的基準
+  await loginAsAdmin(page);
+
+  await page.getByRole("button", { name: DEVICE, exact: true }).click();
+  await page.getByRole("button", { name: "🚨 緊急停止" }).click();
+  await page.getByRole("button", { name: /確認安全，開始降溫/ }).click();
+  const status = page.getByText("收尾降溫中", { exact: true }).filter({ visible: true }).first();
+  await expect(status, `${DEVICE} 應該進入收尾降溫`).toBeVisible();
+
+  const id = await boxOf(page.getByRole("button", { name: DEVICE, exact: true }), `${DEVICE} 的編號`);
+  const ref = await boxOf(page.getByRole("button", { name: REFERENCE, exact: true }), `${REFERENCE} 的編號`);
+  expect(
+    id.height,
+    `${DEVICE} 的編號高 ${Math.round(id.height)}px，單行應該跟 ${REFERENCE} 一樣是 ${Math.round(ref.height)}px，代表被擠成兩行`,
+  ).toBeLessThanOrEqual(ref.height + ALIGN_TOLERANCE);
+
+  // 同時包住編號與狀態字的最內層元素就是標題列，不綁 DOM 巢狀層數
+  const header = page.locator("div")
+    .filter({ has: page.getByRole("button", { name: DEVICE, exact: true }) })
+    .filter({ has: status })
+    .last();
+  const row = await boxOf(header, `${DEVICE} 的標題列`);
+  const statusBox = await boxOf(status, `${DEVICE} 的狀態字`);
+  expect(
+    statusBox.x + statusBox.width,
+    `「收尾降溫中」超出 ${DEVICE} 的標題列 ${Math.round(statusBox.x + statusBox.width - (row.x + row.width))}px`,
+  ).toBeLessThanOrEqual(row.x + row.width + ALIGN_TOLERANCE);
+});

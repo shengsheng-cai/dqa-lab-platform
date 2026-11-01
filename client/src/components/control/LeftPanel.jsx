@@ -12,7 +12,7 @@ export default function LeftPanel({ devices, selectedDevice, onSelectDevice, act
     : "本欄：設備狀態";
 
   return (
-    <div style={{ width: 155, flexShrink: 0, borderRight: "1px solid #30363d", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ width: 180, flexShrink: 0, borderRight: "1px solid #30363d", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ padding: "7px 10px 4px", fontSize: 10, color: "#8b949e", fontWeight: 600, letterSpacing: 0.5, flexShrink: 0 }}>
         {title}
       </div>

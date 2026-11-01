@@ -111,7 +111,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#cdd9e5", display: "flex", alignItems: "center", gap: 4 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#cdd9e5", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
           {/* 整張卡不能直接當按鈕——裡面已經有 📊 與「確認」，按鈕不能包按鈕。
               所以把編號做成這張卡唯一的鍵盤入口，滑鼠點整張卡的行為維持不變。
               排程頁那欄是唯讀的（沒有 onClick），那裡就不要造出按了沒反應的焦點停留點。 */}
@@ -162,7 +162,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
             )}
           </div>
           {device.running_sop_name && device.running_sop_name !== "STANDBY" && (
-            <div style={{ fontSize: 10, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 }}>
+            <div style={{ fontSize: 10, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {device.running_sop_name}
             </div>
           )}
@@ -185,22 +185,10 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
         </div>
       )}
 
-      {!isBlocked && scheduleNote && (
+      {/* 等待確認時下面那塊已經說了要做什麼，這句「排程尚未結案」就是重複 */}
+      {!isBlocked && scheduleNote && !isWaiting && (
         <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
           {scheduleNote}
-        </div>
-      )}
-
-      {isEmergency && (
-        <div style={{ fontSize: 10, color: "#f85149", marginTop: 2 }}>
-          ⚠ 緊急停止
-        </div>
-      )}
-
-      {isFinishing && (
-        <div style={{ fontSize: 10, color: "#79c0ff", marginTop: 2 }}>
-          {device.temperature != null && <div>目前溫度: {device.temperature}°C</div>}
-          <div>⏳ 正在自動降溫到 25°C，請稍候...</div>
         </div>
       )}
 
