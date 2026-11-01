@@ -53,7 +53,7 @@ DQA Lab 把溫濕度試驗室的設備監控、SOP、排程、治具與報告串
 |---|---|---|
 | 後端單元／整合 | pytest + in-memory SQLite | API、設備狀態機、排程、治具生命週期、交易回滾、時間正規化 |
 | 前端邏輯 | Vitest | 日期時區、驗證、錯誤訊息、下載檔名、執行紀錄存檔欄位、測試條件的溫度設定點，以及主題文字色的對比度 |
-| 瀏覽器流程 | Playwright | 排程、權限、治具、維護、人員管理、AI 帶入排程，以及讀取失敗時畫面說不說實話 |
+| 瀏覽器流程 | Playwright | 排程、權限、治具、維護、人員管理、AI 帶入排程、讀取失敗時畫面說不說實話，以及鍵盤操作與版面幾何（按鈕點擊區、設備卡、視窗） |
 | 持續整合 | GitHub Actions | lint、後端、前端與 E2E 全數通過後才部署 Demo |
 
 ### 精選缺陷案例與回歸證據
@@ -70,6 +70,7 @@ DQA Lab 把溫濕度試驗室的設備監控、SOP、排程、治具與報告串
 | [BUG-012](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-012-dead-simulator-task-still-reported-a-healthy-service.zh-TW.md) | 模擬器停掉後溫度與排程全部停住，服務卻仍回報自己正常 | 探測跟著核心背景工作的存活走，工作的例外一定被讀取 |
 | [BUG-013](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-013-declared-foreign-keys-were-never-enforced.zh-TW.md) | 刪掉使用者或排程後，指向它的資料仍留著已不存在的 ID | 外鍵真的生效，並由 schema 說明父列被刪時子列怎麼辦 |
 | [BUG-015](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-015-login-lockout-counted-every-visitor-as-one-source.zh-TW.md) | 一個掃描機器人失敗五次，所有訪客一起被鎖十分鐘 | 信任的轉送網段寫進啟動指令，並用測試驗它實際信任誰 |
+| [BUG-016](https://github.com/shengsheng-cai/dqa-lab-platform/blob/main/docs/qa/BUG-016-five-tests-stayed-green-after-the-behaviour-they-guard-was-broken.zh-TW.md) | 沒有使用者受影響；但把行為改壞之後五條測試照樣通過，另有三條正式路徑沒有測試 | 斷言內容而不只是形狀，每一條修好後都重放改壞的情況確認會紅 |
 
 QA 文件皆為中英雙語，每份開頭可切換語言：
 
