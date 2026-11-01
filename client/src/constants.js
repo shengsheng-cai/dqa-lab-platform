@@ -29,6 +29,21 @@ export const SIM_PHASE_LABEL = {
   stabilize: "常溫穩定",
 };
 
+// 常溫。跟後端 backend/app/constants.py 的 AMBIENT_TEMP 必須一樣
+export const AMBIENT_TEMP = 25;
+
+/**
+ * 設備卡上的相位名稱，畫面一律走這支，不要直接查 SIM_PHASE_LABEL。
+ *
+ * 只有低溫的測試，模擬器把唯一那段保持也記成 dwell_high（simulator.py 的「單溫冷測」），
+ * 照表翻會在 -25°C 時寫「高溫保持」。設備清單不送溫度設定，所以用目前溫度分：保持階段的溫度
+ * 一定貼著設定值，而模擬器決定走不走低溫路線，看的也是設定值低不低於常溫。
+ */
+export const simPhaseLabel = (phase, temperature) =>
+  phase === "dwell_high" && temperature != null && temperature < AMBIENT_TEMP
+    ? SIM_PHASE_LABEL.dwell_low
+    : SIM_PHASE_LABEL[phase];
+
 // 每個狀態一列：zh 是畫面上顯示的名稱，徽章與解釋句子（「為什麼現在不能操作」）共用同一份，
 // 兩邊才不會一邊寫「收尾降溫中」一邊寫 FINISHING。原始狀態碼只留在 title 給除錯用。
 // 只給同檔案的 deviceStatusZh 與 deviceStatusBadge 用，不對外：畫面一律走那兩支，

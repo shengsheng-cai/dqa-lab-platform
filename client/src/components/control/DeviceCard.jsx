@@ -7,7 +7,7 @@ import {
   IDLE_STATUS,
   FINISHING_STATUS,
   EMERGENCY_STATUS,
-  SIM_PHASE_LABEL,
+  simPhaseLabel,
 } from "../../constants";
 import { conditionProgress, isWaitingForConfirm } from "../../utils/scheduleProgress";
 import useCountdown from "../../useCountdown";
@@ -73,6 +73,7 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
   const isActive = ACTIVE_STATUSES.includes(device.status);
   const isEmergency = device.status === EMERGENCY_STATUS;
   const isFinishing = device.status === FINISHING_STATUS;
+  const phaseLabel = simPhaseLabel(device.sim_phase, device.temperature);
   const [confirming, setConfirming] = useState(false);
 
   const isWaiting = isWaitingForConfirm(device, pendingSchedule) && !!onConfirmCondition;
@@ -154,9 +155,9 @@ export default function DeviceCard({ device, isSelected, onClick, pendingSchedul
                 <span style={{ marginLeft: 4 }}>{device.humidity}%</span>
               )}
             </span>
-            {SIM_PHASE_LABEL[device.sim_phase] && (
+            {phaseLabel && (
               <span style={{ fontSize: 10, color: C.textMuted }}>
-                {SIM_PHASE_LABEL[device.sim_phase]}
+                {phaseLabel}
               </span>
             )}
           </div>

@@ -29,7 +29,7 @@ idle → ramp_to_low → ramp_to_high → dwell_high → ramp_to_low2 → dwell_
 **這不是一條直線，有三個分岔和一個迴圈**（`simulator.py`）：
 
 - 起點看低溫設定：`low_temp` 有設且低於常溫才進 `ramp_to_low`，否則直接 `ramp_to_high`
-- `ramp_to_low` 有可能直接跳到 `dwell_high`，不一定經過 `ramp_to_high`
+- `ramp_to_low` 有可能直接跳到 `dwell_high`，不一定經過 `ramp_to_high`：只有低溫的測試，唯一那段保持也叫 `dwell_high`。相位名稱不等於高低溫，畫面上的名稱由前端 `constants.js` 的 `simPhaseLabel` 依溫度改說「低溫保持」；不要為了名稱改模擬器——`dwell_low` 結束後會檢查循環數跳回升溫，那是雙溫度的流程
 - `dwell_high` 之後只有雙溫度才進 `ramp_to_low2`；單溫度直接進 `ramp_to_ambient` 收尾
 - **迴圈**：`dwell_low` 結束時若 `sim_cycle < cycles`，回到 `ramp_to_high` 重跑下一個循環，跑完才進 `ramp_to_ambient`
 

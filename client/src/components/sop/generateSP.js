@@ -1,5 +1,5 @@
 // SP 波形計算（純函式）
-import { parseUtcDate } from "../../constants";
+import { AMBIENT_TEMP, parseUtcDate } from "../../constants";
 
 function fmtMin(min) {
   const h = Math.floor(min / 60);
@@ -19,11 +19,11 @@ export function toElapsedMin(startedAt, fullTime) {
 export function generateSP(sop) {
   if (!sop) return [];
   const ramp = sop.ramp_rate || 1;
-  const high = sop.high_temperature ?? sop.target_temperature ?? 25;
+  const high = sop.high_temperature ?? sop.target_temperature ?? AMBIENT_TEMP;
   const low = sop.low_temperature ?? null;
   const dwell = (sop.dwell_time_hours || 1) * 60;
   const cycles = sop.cycles || 1;
-  const ambientTemp = 25;
+  const ambientTemp = AMBIENT_TEMP;
   const humiVal = sop.humidity_rh_percent ?? null;
 
   const pts = [];

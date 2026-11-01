@@ -22,7 +22,9 @@
 這條擋的是「使用者得先看懂英文 enum 才知道現在怎麼了」。
 
 - **對照表放哪**：設備狀態與相位在 `constants.js`（它已經有 `SIM_PHASE_LABEL`、`deviceStatusZh`、
-  `deviceStatusBadge`；狀態那張 `STATUS_CONFIG` 只給同檔案那兩支包裝函式用，不對外）；其他領域
+  `deviceStatusBadge`；狀態那張 `STATUS_CONFIG` 只給同檔案那兩支包裝函式用，不對外。相位名稱一律走
+  `simPhaseLabel`，不要直接查 `SIM_PHASE_LABEL`：只有低溫的測試，保持階段也叫 `dwell_high`，照表翻
+  會在 -25°C 時寫「高溫保持」，那支函式用目前溫度改說「低溫保持」）；其他領域
   的放 `utils/`，`utils/maintenance.js` 與 `utils/errorTypes.js` 是範本。同一份代碼不要在兩個
   地方各翻一次——畫面一律走包裝函式，不要自己查表
 - **沒收錄的值要看得出來**，不能變空白、也不能只把原碼丟出去：寫成「其他異常（原碼）」「未知類型（原碼）」
