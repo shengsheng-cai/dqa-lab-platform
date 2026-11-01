@@ -1,13 +1,5 @@
 import React, { useMemo } from "react";
 
-const PHASE_LABELS = {
-  dwell_high: "高溫保持階段開始時",
-  ramp_to_low: "降溫段開始時",
-  ramp_to_ambient: "回溫段開始時",
-  dwell_low: "低溫保持階段開始時",
-  ramp_to_high: "升溫段開始時",
-};
-
 // 步驟名稱後面的補充說明（自動、選填）：純文字，不做成徽章
 const noteStyle = { marginLeft: 6, fontSize: 11, fontWeight: 400, color: "#8b949e" };
 
@@ -15,9 +7,13 @@ const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin
   const totalSteps = steps.length;
   const doneCnt = Object.values(completedSteps).filter(Boolean).length;
   const allStepsDone = totalSteps > 0 && doneCnt === totalSteps;
-  // 全部都是自動確認時，標題講一次就夠；每一步都掛同一個徽章只是在重複同一句話。
+  // 全部自動時標題講一次就夠，每一步都掛同一個標記只是在重複同一句話；全部人工時不提自動。
   // 有自動也有人工時，才需要逐步標出哪些是自動的
-  const allAuto = totalSteps > 0 && steps.every((s) => s.auto_trigger);
+  const autoCount = steps.filter((s) => s.auto_trigger).length;
+  const allAuto = totalSteps > 0 && autoCount === totalSteps;
+  const heading = allAuto ? "測試進度（各步驟由系統自動確認）："
+    : autoCount === 0 ? "測試進度："
+    : "測試進度（標「⚡ 自動」的步驟由系統自動確認）：";
 
   const unlockedMap = useMemo(() => {
     // 選填步驟不阻擋後續流程；只有前面尚未完成的必填步驟會鎖住目前步驟。
@@ -38,7 +34,7 @@ const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin
   return (
     <div>
       <p style={{ color: "#8b949e", fontSize: 12, marginBottom: 14 }}>
-        {allAuto ? "測試進度（各步驟由系統自動確認）：" : "測試進度（標「⚡ 自動」的步驟由系統自動確認）："}
+        {heading}
       </p>
 
       {steps.map((step, idx) => {
@@ -73,12 +69,7 @@ const StepList = ({ steps, completedSteps, onToggle, manualMode = false, isAdmin
               <div style={{ fontWeight: 700, fontSize: 12 }}>
                 Step {step.step_id}. {step.name}
                 {isAuto && !allAuto && (
-                  <span
-                    title={PHASE_LABELS[step.auto_trigger] || "系統自動確認"}
-                    style={{ ...noteStyle, cursor: "help" }}
-                  >
-                    ⚡ 自動
-                  </span>
+                  <span style={noteStyle}>⚡ 自動</span>
                 )}
                 {step.optional && (
                   <span style={noteStyle}>
